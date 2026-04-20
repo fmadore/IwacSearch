@@ -66,10 +66,55 @@ export interface IwacHit {
   text_match?: number;
 }
 
+export interface IwacFacetCount {
+  value: string;
+  count: number;
+  highlighted?: string;
+}
+
+export interface IwacFacet {
+  field_name: string;
+  counts: IwacFacetCount[];
+  /** Number of facet values found across all matches (not just the top N shown). */
+  stats?: { total_values?: number };
+}
+
 export interface IwacSearchResponse {
   found: number;
   page: number;
   request_params: { q?: string; per_page?: number };
   hits: IwacHit[];
+  facet_counts?: IwacFacet[];
   search_time_ms: number;
+}
+
+/**
+ * In-memory selection state for one facet. Field name is the schema
+ * field (e.g. `country_ss`); values are the user-picked tokens.
+ */
+export type ActiveFilters = Record<string, string[]>;
+
+/**
+ * Year range filter. Either bound may be omitted (open-ended on that
+ * side); a fully empty range is represented as `null`.
+ *
+ * Maps to a Typesense filter clause: `pub_year:>=X && pub_year:<=Y`.
+ * Kept separate from categorical `ActiveFilters` because it has range
+ * semantics, not set-membership semantics.
+ */
+export interface YearRange {
+  from?: number;
+  to?: number;
+}
+
+/**
+ * The full URL-syncable state for one mount instance. Standalone /search
+ * persists this to window.location; page blocks keep it in memory only.
+ */
+export interface SearchState {
+  q: string;
+  page: number;
+  sort: string; // e.g. "_text_match:desc", "date:desc"
+  filters: ActiveFilters;
+  yearRange: YearRange | null;
 }

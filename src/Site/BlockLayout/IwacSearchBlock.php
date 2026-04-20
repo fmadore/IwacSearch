@@ -85,7 +85,19 @@ class IwacSearchBlock extends AbstractBlockLayout
         $title            = $data['title']            ?? '';
         $introHtml        = $data['intro_html']       ?? '';
         $lockedFilters    = $data['locked_filters']   ?? '';
-        $prominentFacets  = $data['prominent_facets'] ?? ['country_ss', 'newspaper_ss', 'date_decade_ss'];
+        // Default mirrors what the standalone /search route shows. Block
+        // admin can override per-instance via the form below.
+        $prominentFacets  = $data['prominent_facets']
+            ?? [
+                'type_s',
+                'country_ss',
+                'newspaper_ss',
+                'places_ss',
+                'persons_ss',
+                'organisations_ss',
+                'topics_ss',
+                'gemini_polarite_ss',
+            ];
         $defaultSort      = $data['default_sort']     ?? '_text_match:desc';
         $resultsPerPage   = (int) ($data['results_per_page'] ?? 10);
 

@@ -42,7 +42,19 @@ class SearchController extends AbstractActionController
             'block_id'         => 'standalone',
             'mode'             => 'full',
             'locked_filters'   => '',
-            'prominent_facets' => ['country_ss', 'newspaper_ss', 'date_decade_ss'],
+            // Curatorial choice, ordered coarse → fine. The year range
+            // slider (DateRangeSlider.svelte) renders separately; it's
+            // not a categorical facet so it doesn't appear in this list.
+            'prominent_facets' => [
+                'type_s',                // article | publication | document | audiovisual
+                'country_ss',            // country
+                'newspaper_ss',          // publisher
+                'places_ss',             // locations
+                'persons_ss',            // persons
+                'organisations_ss',      // organisations
+                'topics_ss',             // subjects
+                'gemini_polarite_ss',    // sentiment (Gemini default; chatgpt/mistral available as alt)
+            ],
             'default_sort'     => '_text_match:desc',
             'results_per_page' => 10,
             'collection_alias' => $aliasName,

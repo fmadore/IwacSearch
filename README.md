@@ -10,14 +10,15 @@ on Omeka.
 
 ## Status
 
-**M1 — Minimal search page.** Working public search at `/search` and on every page block: scoped-key endpoint live, single Svelte input, debounced query, paginated load-more results with thumbnail + date + snippet. Facets, URL sync, and snippet polish land in M2.
+**M2 — Facets + URL state + sort + year range.** Eight categorical facets (type / country / publisher / locations / persons / organisations / subjects / sentiment) with collapsible groups, post-filter live counts, and active-filter chips. Two-handle year range slider. Bidirectional URL sync — back/forward gives meaningful history; query strings are shareable. Sort dropdown (relevance / newest / oldest). Semantic search is wired into `query_by` automatically (hybrid keyword + vector via `ts/multilingual-e5-small`).
 
 | Milestone | Status  | Highlights                                                                        |
 | --------- | :-----: | --------------------------------------------------------------------------------- |
 | M0        | ✅ done | Schema, indexer pipeline (4 mappers + ACL overlay + stopwords), atomic alias swap |
 | M1        | ✅ done | `/search`, `/discovery/token`, page block, Svelte 5 client, alias-spelling search |
-| M2        |  next   | Facets, URL state, snippets polish, sort controls                                 |
-| M3 → M6   | planned | Curated browse pages, incremental indexing, polish, cutover                       |
+| M2        | ✅ done | Facet panel, year range slider, URL state, sort, hybrid keyword+vector search    |
+| M3        |  next   | Curated browse pages (replaces FacetedBrowse)                                     |
+| M4 → M6   | planned | Incremental indexing, polish, cutover                                             |
 
 Full roadmap: [IWAC-docker/docs/iwac-search-roadmap.md](https://github.com/fmadore/IWAC-docker/blob/main/docs/iwac-search-roadmap.md).
 
@@ -66,9 +67,20 @@ IwacSearch/
 │   │   └── Reindexer.php                       #   orchestrates with atomic alias swap
 │   ├── Site/BlockLayout/IwacSearchBlock.php    # Page block — drop into any Site page
 │   ├── svelte/                                 # Svelte 5 + TS client source
-│   │   ├── App.svelte                          #   per-mount root component
-│   │   ├── components/{SearchInput,ResultsList,ResultItem}.svelte
-│   │   ├── lib/{typesense,types}.ts            #   thin Typesense REST wrapper + types
+│   │   ├── App.svelte                          #   per-mount root, owns search state
+│   │   ├── components/
+│   │   │   ├── SearchInput.svelte              #   debounced text input
+│   │   │   ├── FacetPanel.svelte               #   sticky left column + active-filter chips
+│   │   │   ├── FacetGroup.svelte               #   one collapsible facet (checkboxes + show-more)
+│   │   │   ├── DateRangeSlider.svelte          #   two-handle year range
+│   │   │   ├── SortSelect.svelte               #   relevance | newest | oldest
+│   │   │   ├── ResultsList.svelte              #   paginated load-more
+│   │   │   └── ResultItem.svelte               #   title + date + snippet + thumbnail
+│   │   ├── lib/
+│   │   │   ├── typesense.ts                    #   thin REST wrapper, scoped-key cache
+│   │   │   ├── types.ts                        #   IwacBootstrap, SearchState, etc.
+│   │   │   ├── urlState.ts                     #   bidirectional URL ↔ memory sync
+│   │   │   └── labels.ts                       #   schema field → display label
 │   │   └── main.ts                             #   IIFE entry; auto-mounts on every root
 │   └── Service/
 │       ├── SearchControllerFactory.php
@@ -108,6 +120,63 @@ the dominant Omeka search-module convention. We're single-backend
 (Typesense), so the EngineAdapter abstraction is implicit — but the
 naming stays consistent so editors who know AdvancedSearch can navigate
 this codebase without surprise.
+
+### Default facets
+
+Standalone `/search` and freshly-dropped page blocks ship with this
+facet set, ordered coarse → fine:
+
+| Field | What it filters |
+|---|---|
+| `type_s` | Article / Publication / Document / Audiovisual |
+| `country_ss` | Country (Bénin, Burkina Faso, Côte d'Ivoire, Niger, Togo, Nigeria) |
+| `newspaper_ss` | Publisher (newspaper / magazine title) |
+| `places_ss` | Mentioned locations |
+| `persons_ss` | Mentioned persons |
+| `organisations_ss` | Mentioned organisations |
+| `topics_ss` | Subjects (controlled vocabulary from the `index` HF subset) |
+| `gemini_polarite_ss` | Sentiment polarity (Gemini model — ChatGPT/Mistral are alternates available via the block admin form) |
+
+Plus a dedicated `pub_year` two-handle range slider (1960..2025 default
+bounds) — kept separate from the categorical list because numeric range
+semantics don't fit the checkbox UI.
+
+Block admins can override the visible facets per-instance via the page
+block form (12 facetable fields are exposed in total — see
+`src/Site/BlockLayout/IwacSearchBlock.php`).
+
+### URL state
+
+Standalone `/search` syncs every observable to the URL so any search
+view is shareable / bookmarkable / back-button-able:
+
+```
+/search?q=ramadan
+       &page=2
+       &sort=date:desc
+       &f.country_ss=Burkina+Faso
+       &f.country_ss=Niger
+       &f.newspaper_ss=Sidwaya
+       &date.from=1990
+       &date.to=2010
+```
+
+Defaults are omitted (clean URL on a fresh `/search`). Pagination uses
+`replaceState` to avoid history spam; everything else uses `pushState`.
+Page blocks intentionally skip URL sync — multiple block instances on
+one page would clobber each other.
+
+### Semantic search
+
+Every search is hybrid: the `query_by` includes the `embedding` field
+alongside `title_txt`, `ocr_text`, and `entity_aliases_txt`. Typesense
+fuses keyword and vector scores automatically — typing
+`"laïcité au Burkina"` matches docs about secularism in Burkina Faso
+even when the exact words don't appear. No toggle needed; it just
+works.
+
+The embedding model is `ts/multilingual-e5-small` (384d, in-process
+ONNX) — no external API calls at query time.
 
 ## Running the bulk reindex
 

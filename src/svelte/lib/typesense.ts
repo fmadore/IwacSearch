@@ -1,4 +1,10 @@
-import type { IwacBootstrap, IwacSearchResponse, ScopedKeyResponse } from './types';
+import type {
+  ActiveFilters,
+  IwacBootstrap,
+  IwacSearchResponse,
+  ScopedKeyResponse,
+  YearRange,
+} from './types';
 
 /**
  * Thin wrapper over the Typesense REST API for the public client.
@@ -20,16 +26,32 @@ export class TypesenseClient {
   constructor(private readonly bootstrap: IwacBootstrap) {}
 
   /**
-   * Run a search. Empty query returns nothing — the public scoped key
-   * still has `filter_by: is_public:=true` baked in, so we'd technically
-   * see all public docs, but a 14K-doc dump is never what the user wants.
+   * Run a search.
+   *
+   * Empty query returns an empty response (the public scoped key still
+   * carries `filter_by: is_public:=true` baked in, so a `q=*` would
+   * happily dump all 14 K public docs — never what the user wants).
+   *
+   * `activeFilters` are the in-memory selections from the facet panel,
+   * one entry per facet field. They're combined with the block's
+   * locked_filters using `&&`. Selections within a single field use OR
+   * semantics — `country_ss:=[\`Burkina Faso\`,\`Niger\`]` matches docs
+   * in either country.
    */
   async search(args: {
     q: string;
     page?: number;
     perPage?: number;
     sortBy?: string;
-    extraFilter?: string;
+    activeFilters?: ActiveFilters;
+    /** Numeric year range. Either bound may be omitted. */
+    yearRange?: YearRange | null;
+    /**
+     * Names of facet fields to request counts for. We always request the
+     * UNION of (prominent_facets ∪ currently selected) so a selection
+     * on a non-prominent facet still shows its current values in the UI.
+     */
+    facetBy?: string[];
   }): Promise<IwacSearchResponse> {
     if (!args.q.trim()) {
       return emptyResponse(args.page ?? 1);
@@ -37,7 +59,14 @@ export class TypesenseClient {
 
     const key = await this.getKey();
     const collection = this.bootstrap.collection_alias ?? key.collection;
-    const filter = combineFilters(this.bootstrap.locked_filters, args.extraFilter);
+
+    const filterBy = combineFilters(
+      this.bootstrap.locked_filters,
+      buildFilterBy(args.activeFilters ?? {}),
+      buildYearRangeFilter(args.yearRange ?? null),
+    );
+
+    const facets = args.facetBy ?? this.bootstrap.prominent_facets;
 
     const body = {
       searches: [
@@ -50,7 +79,7 @@ export class TypesenseClient {
           query_by: 'title_txt,ocr_text,entity_aliases_txt,embedding',
           // Stopwords keep "le", "la", "des" etc. from polluting matches
           stopwords: 'fr_default',
-          filter_by: filter || undefined,
+          filter_by: filterBy || undefined,
           sort_by: args.sortBy ?? this.bootstrap.default_sort,
           page: args.page ?? 1,
           per_page: args.perPage ?? this.bootstrap.results_per_page,
@@ -61,7 +90,10 @@ export class TypesenseClient {
           // Cap total hits we'll page through — protects from runaway
           // crawler-style requests.
           limit_hits: 250,
-          facet_by: this.bootstrap.prominent_facets.join(','),
+          facet_by: facets.length > 0 ? facets.join(',') : undefined,
+          // Show up to 50 values per facet — enough for "show more" inside
+          // a facet group without paging the facet API.
+          max_facet_values: 50,
         },
       ],
     };
@@ -119,6 +151,44 @@ export class TypesenseClient {
   }
 }
 
+/**
+ * Build a Typesense `filter_by` string from the active facet selections.
+ *
+ *   { country_ss: ['Burkina Faso', 'Niger'], newspaper_ss: ['Sidwaya'] }
+ *     →  country_ss:=[`Burkina Faso`,`Niger`] && newspaper_ss:=[`Sidwaya`]
+ *
+ * Backticks around values escape spaces and most punctuation. We
+ * defensively strip backticks from values themselves (no IWAC entity
+ * name contains one, but better safe than sorry).
+ */
+function buildFilterBy(filters: ActiveFilters): string {
+  const parts: string[] = [];
+  for (const [field, values] of Object.entries(filters)) {
+    if (!values || values.length === 0) continue;
+    const escaped = values.map((v) => v.replaceAll('`', '')).map((v) => `\`${v}\``);
+    parts.push(`${field}:=[${escaped.join(',')}]`);
+  }
+  return parts.join(' && ');
+}
+
+/**
+ * Build the pub_year range filter clause. Returns "" when no bounds.
+ *   { from: 1990, to: 2010 }  →  pub_year:>=1990 && pub_year:<=2010
+ *   { from: 1990 }            →  pub_year:>=1990
+ *   { to: 2010 }              →  pub_year:<=2010
+ */
+function buildYearRangeFilter(range: YearRange | null): string {
+  if (!range) return '';
+  const parts: string[] = [];
+  if (typeof range.from === 'number' && Number.isFinite(range.from)) {
+    parts.push(`pub_year:>=${Math.trunc(range.from)}`);
+  }
+  if (typeof range.to === 'number' && Number.isFinite(range.to)) {
+    parts.push(`pub_year:<=${Math.trunc(range.to)}`);
+  }
+  return parts.join(' && ');
+}
+
 function combineFilters(...parts: Array<string | undefined | null>): string {
   return parts
     .map((p) => p?.trim())
@@ -140,6 +210,7 @@ function emptyResponse(page: number): IwacSearchResponse {
     page,
     request_params: {},
     hits: [],
+    facet_counts: [],
     search_time_ms: 0,
   };
 }
