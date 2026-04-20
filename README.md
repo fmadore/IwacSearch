@@ -16,7 +16,7 @@ on Omeka.
 | --------- | :-----: | --------------------------------------------------------------------------------- |
 | M0        | ✅ done | Schema, indexer pipeline (4 mappers + ACL overlay + stopwords), atomic alias swap |
 | M1        | ✅ done | `/search`, `/discovery/token`, page block, Svelte 5 client, alias-spelling search |
-| M2        | ✅ done | Facet panel, year range slider, URL state, sort, hybrid keyword+vector search    |
+| M2        | ✅ done | Facet panel, year range slider, URL state, sort, hybrid keyword+vector search     |
 | M3        |  next   | Curated browse pages (replaces FacetedBrowse)                                     |
 | M4 → M6   | planned | Incremental indexing, polish, cutover                                             |
 
@@ -126,15 +126,15 @@ this codebase without surprise.
 Standalone `/search` and freshly-dropped page blocks ship with this
 facet set, ordered coarse → fine:
 
-| Field | What it filters |
-|---|---|
-| `type_s` | Article / Publication / Document / Audiovisual |
-| `country_ss` | Country (Bénin, Burkina Faso, Côte d'Ivoire, Niger, Togo, Nigeria) |
-| `newspaper_ss` | Publisher (newspaper / magazine title) |
-| `places_ss` | Mentioned locations |
-| `persons_ss` | Mentioned persons |
-| `organisations_ss` | Mentioned organisations |
-| `topics_ss` | Subjects (controlled vocabulary from the `index` HF subset) |
+| Field                | What it filters                                                                                       |
+| -------------------- | ----------------------------------------------------------------------------------------------------- |
+| `type_s`             | Article / Publication / Document / Audiovisual                                                        |
+| `country_ss`         | Country (Bénin, Burkina Faso, Côte d'Ivoire, Niger, Togo, Nigeria)                                    |
+| `newspaper_ss`       | Publisher (newspaper / magazine title)                                                                |
+| `places_ss`          | Mentioned locations                                                                                   |
+| `persons_ss`         | Mentioned persons                                                                                     |
+| `organisations_ss`   | Mentioned organisations                                                                               |
+| `topics_ss`          | Subjects (controlled vocabulary from the `index` HF subset)                                           |
 | `gemini_polarite_ss` | Sentiment polarity (Gemini model — ChatGPT/Mistral are alternates available via the block admin form) |
 
 Plus a dedicated `pub_year` two-handle range slider (1960..2025 default
