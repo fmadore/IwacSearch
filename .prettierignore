@@ -1,0 +1,7 @@
+asset/dist/
+node_modules/
+vendor/
+data/
+language/
+*.lock
+*.log

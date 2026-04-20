@@ -3,75 +3,111 @@ declare(strict_types=1);
 
 namespace IwacSearch\Controller;
 
+use IwacSearch\Service\TypesenseSearchKeyProvider;
+use Laminas\Http\Response;
 use Laminas\Mvc\Controller\AbstractActionController;
 use Laminas\View\Model\JsonModel;
 use Laminas\View\Model\ViewModel;
+use Throwable;
 
 /**
  * Public discovery controller.
  *
- * In M0 every action is a placeholder so the route table is real and the
- * module is activatable. The Svelte bundle, scoped-key minting, and browse
- * config rendering all land in later milestones.
+ *   GET /search             — HTML shell + Svelte bundle (standalone surface)
+ *   GET /discovery/token    — mints a 1h scoped key for the browser
+ *   GET /browse[/:slug]     — curated browse pages (M3 placeholder)
+ *
+ * Same root + state script contract as IwacSearchBlock so the same
+ * Svelte client mounts on either surface.
  */
 class SearchController extends AbstractActionController
 {
     public function __construct(
-        // Service deps come in via the controller factory in M1+:
-        //   private TypesenseClientInterface $typesense,
-        //   private array $config,
+        private readonly TypesenseSearchKeyProvider $keyProvider,
+        /** @var array<string, mixed> */
+        private readonly array $config = []
     ) {
     }
 
     /**
-     * GET /search — serves the HTML shell that bootstraps the Svelte client.
-     * In M0 returns a plain placeholder; the real shell lands in M1 along with
-     * the asset pipeline.
+     * GET /search — HTML shell. Emits the same root + state script the
+     * page block uses, so the Svelte bundle treats both surfaces
+     * identically.
      */
     public function indexAction(): ViewModel
     {
-        $view = new ViewModel();
+        $aliasName = $this->config['typesense']['collection_alias'] ?? 'iwac_current';
+
+        $bootstrap = [
+            'block_id'         => 'standalone',
+            'mode'             => 'full',
+            'locked_filters'   => '',
+            'prominent_facets' => ['country_ss', 'newspaper_ss', 'date_decade_ss'],
+            'default_sort'     => '_text_match:desc',
+            'results_per_page' => 10,
+            'collection_alias' => $aliasName,
+            'endpoints' => [
+                // basePath() is set by the renderer at view time; we'd
+                // prefer to compute these in the view, but pre-baking them
+                // here keeps the renderer dumb.
+                'token'  => '/discovery/token',
+                'search' => '/search-api/multi_search',
+            ],
+        ];
+
+        $view = new ViewModel(['bootstrap' => $bootstrap]);
         $view->setTemplate('iwac-search/search/index');
-        $view->setVariables([
-            'placeholder' => true,
-            // M1: $view->setVariable('initial_state', json_encode([...]));
-        ]);
         return $view;
     }
 
     /**
-     * GET /discovery/token — mints a short-lived Typesense scoped key.
+     * GET /discovery/token — mints a short-lived public scoped key.
      *
-     * Public scoped keys carry both `filter_by: is_public:=true` AND
-     * `exclude_fields: ocr_text` — these are belt-and-suspenders security
-     * controls, not UX dials. Admin sessions get a key without exclude_fields.
+     * No CSRF check needed: the response is a key with constraints
+     * already baked in (filter_by + exclude_fields + expires_at). A
+     * malicious form submission can only get the same public-shaped key
+     * any anonymous visitor would receive.
      *
-     * Wired up in M1.
+     * M4 will read the Omeka session here and return an admin-shaped key
+     * (no exclude_fields) for authenticated admin users.
      */
     public function tokenAction(): JsonModel
     {
-        // Placeholder. Returns a 503 so callers fail loudly instead of silently
-        // querying with an empty key.
-        $this->getResponse()->setStatusCode(503);
-        return new JsonModel([
-            'error' => 'Token endpoint not yet implemented (see roadmap M1).',
-        ]);
+        try {
+            $aliasName = $this->config['typesense']['collection_alias'] ?? 'iwac_current';
+            $expiresIn = (int) ($this->config['public_search_key']['expires_at_seconds'] ?? 3600);
+
+            $minted = $this->keyProvider->mintPublicScopedKey(
+                collectionAlias:  $aliasName,
+                expiresInSeconds: $expiresIn
+            );
+
+            // No-store: scoped keys are short-lived and per-request; if a
+            // proxy cached this, every visitor would share one key.
+            $this->getResponse()->getHeaders()
+                ->addHeaderLine('Cache-Control', 'no-store, max-age=0')
+                ->addHeaderLine('Pragma', 'no-cache');
+
+            return new JsonModel($minted);
+        } catch (Throwable $e) {
+            $this->getResponse()->setStatusCode(Response::STATUS_CODE_503);
+            return new JsonModel([
+                'error'   => 'token_unavailable',
+                'message' => 'Typesense scoped-key minting failed. Is the typesense service up?',
+                // Surface the underlying message for ops; not sensitive.
+                'detail'  => $e->getMessage(),
+            ]);
+        }
     }
 
     /**
-     * GET /browse[/:slug] — curated browse page (M3).
-     *
-     * Without slug: lists all browse configs.
-     * With slug:   loads the named iwac_browse_config row, passes its locked
-     *              filters + facet list into the Svelte shell.
+     * GET /browse[/:slug] — curated browse page (M3 placeholder).
      */
     public function browseAction(): ViewModel
     {
         $slug = $this->params()->fromRoute('slug');
-        $view = new ViewModel();
+        $view = new ViewModel(['slug' => $slug, 'placeholder' => true]);
         $view->setTemplate('iwac-search/search/browse');
-        $view->setVariable('slug', $slug);
-        $view->setVariable('placeholder', true);
         return $view;
     }
 }

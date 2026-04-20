@@ -76,17 +76,17 @@ The CSS in `asset/css/iwac-search.css` consumes
 [IWAC-theme](https://github.com/fmadore/IWAC-theme)'s CSS custom
 properties. Token vocabulary used:
 
-| Tokens | Purpose |
-|---|---|
-| `--space-{xs,sm,md,lg,xl}`, `--space-{2,4,6}` | Spacing |
-| `--primary`, `--ink`, `--muted` | Foreground colors |
-| `--surface`, `--surface-raised`, `--surface-sunken` | Backgrounds |
-| `--border`, `--border-strong` | Separators |
-| `--radius-{sm,md,lg}` | Rounded corners |
-| `--text-{sm,base,lg,xl,2xl}` | Fluid type scale |
-| `--ring-focus` | Focus ring |
-| `--measure-{narrow,wide}` | Reading line lengths |
-| `--size-control-{md,lg}` | Form control sizes |
+| Tokens                                              | Purpose              |
+| --------------------------------------------------- | -------------------- |
+| `--space-{xs,sm,md,lg,xl}`, `--space-{2,4,6}`       | Spacing              |
+| `--primary`, `--ink`, `--muted`                     | Foreground colors    |
+| `--surface`, `--surface-raised`, `--surface-sunken` | Backgrounds          |
+| `--border`, `--border-strong`                       | Separators           |
+| `--radius-{sm,md,lg}`                               | Rounded corners      |
+| `--text-{sm,base,lg,xl,2xl}`                        | Fluid type scale     |
+| `--ring-focus`                                      | Focus ring           |
+| `--measure-{narrow,wide}`                           | Reading line lengths |
+| `--size-control-{md,lg}`                            | Form control sizes   |
 
 All selectors are scoped under `.iwac-search-block` / standalone shell —
 no global rules — so the module never collides with theme styles. When

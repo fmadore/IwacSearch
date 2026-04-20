@@ -1,30 +1,54 @@
 <?php
 /**
  * @var \Laminas\View\Renderer\PhpRenderer $this
- * @var bool $placeholder
+ * @var array $bootstrap
  *
- * M0 placeholder. M1 swaps this for a minimal HTML shell that:
- *   - renders a noscript fallback (graceful degradation)
- *   - injects the initial query/filter state from the URL into a <script id="iwac-search-state">
- *   - mounts <div id="iwac-search-root"></div> for the Svelte bundle
- *   - <?= $this->headLink()->appendStylesheet(...) ?> for the compiled CSS
- *   - <?= $this->headScript()->appendFile(...) ?> for the compiled JS
+ * Standalone /search shell. Mirrors the page block contract:
+ *   - <div data-iwac-search-root data-iwac-block-id="standalone">
+ *   - <script type="application/json" id="iwac-search-state-standalone">
+ *
+ * Asset injection is centralised in Module.php (attachListeners on the
+ * site layout) — the bundle loads automatically on this route.
  */
 
 $this->headTitle('Search · Islam West Africa Collection');
+
+// basePath() needs a runtime call here — the controller pre-baked URL
+// stems but didn't know the site mount prefix at construction time.
+$bootstrap['endpoints']['token']  = $this->basePath($bootstrap['endpoints']['token']);
+$bootstrap['endpoints']['search'] = $this->basePath($bootstrap['endpoints']['search']);
 ?>
 <main class="iwac-search-shell" role="main">
-    <h1>IWAC Search</h1>
-    <?php if ($placeholder): ?>
-        <p>
-            <em>Module scaffold loaded successfully — search UI lands in M1.</em>
-        </p>
-        <p>
-            See the
-            <a href="https://github.com/fmadore/IWAC-docker/blob/main/docs/iwac-search-roadmap.md">
-                IwacSearch roadmap
+    <h1 class="iwac-search-block__title">Search the IWAC archive</h1>
+
+    <noscript>
+        <p>This search requires JavaScript. Browse the
+            <a href="<?= $this->escapeHtmlAttr($this->basePath('/s/afrique_ouest')) ?>">
+                French
             </a>
-            for the milestone plan.
+            or
+            <a href="<?= $this->escapeHtmlAttr($this->basePath('/s/westafrica')) ?>">
+                English
+            </a>
+            site instead.
         </p>
-    <?php endif; ?>
+    </noscript>
+
+    <div data-iwac-search-root
+         data-iwac-block-id="standalone"
+         class="iwac-search-block iwac-search-block--full iwac-search-block__root"
+         id="iwac-search-root-standalone">
+        <div class="iwac-search-block__skeleton" aria-hidden="true">
+            <div class="iwac-search-block__skeleton-input"></div>
+            <div class="iwac-search-block__skeleton-results">
+                <?php for ($i = 0; $i < 5; $i++): ?>
+                    <div class="iwac-search-block__skeleton-row"></div>
+                <?php endfor; ?>
+            </div>
+        </div>
+    </div>
+
+    <script type="application/json" id="iwac-search-state-standalone">
+        <?= json_encode($bootstrap, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>
+    </script>
 </main>

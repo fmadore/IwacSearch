@@ -1,0 +1,74 @@
+# CI: lint, type-check, and build the Svelte client on every PR + push to main.
+#
+# We deliberately do NOT run PHP tests here yet — the indexer requires a
+# live Typesense instance to integration-test, and unit-testable seams
+# (the mappers, the authority resolver) don't have a test harness yet.
+# Adding php-test-runner is a follow-up task.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  client:
+    name: Svelte client (lint + check + build)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - name: Install
+        run: npm ci --no-audit --no-fund
+
+      - name: Lint (eslint + prettier)
+        run: npm run lint
+
+      - name: Type-check (svelte-check)
+        run: npm run check
+
+      - name: Build
+        run: npm run build
+
+      - name: Verify build output exists
+        run: |
+          test -f asset/dist/iwac-search.js
+          test -f asset/dist/iwac-search.css
+
+  php:
+    name: PHP module (syntax check)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: shivammathur/setup-php@v3
+        with:
+          php-version: '8.4'
+          coverage: none
+          tools: composer:v2
+
+      - name: Validate composer.json
+        run: composer validate --strict
+
+      - name: Install composer deps
+        run: composer install --no-interaction --no-progress --prefer-dist
+
+      - name: PHP syntax check (lint pass)
+        run: |
+          find Module.php cli src -name '*.php' -print0 \
+            | xargs -0 -n1 php -l > /tmp/php-lint.log 2>&1 \
+            || (cat /tmp/php-lint.log && exit 1)
