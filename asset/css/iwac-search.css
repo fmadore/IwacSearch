@@ -1,0 +1,91 @@
+/*
+ * IwacSearch — block + standalone surface styles.
+ *
+ * Designed to consume IWAC-theme's CSS custom properties (see
+ * IWAC-theme/asset/sass/abstracts/variables/_tokens.scss and _colors.scss).
+ * If used outside that theme, the var() fallbacks degrade gracefully.
+ *
+ * Token vocabulary used here:
+ *   spacing  --space-{xs,sm,md,lg,xl}, --space-{2,4,6}
+ *   color    --primary, --ink, --muted, --surface, --surface-raised, --border
+ *   radius   --radius-{sm,md,lg}
+ *   text     --text-{sm,base,lg,xl}
+ *   focus    --ring-focus
+ *   measure  --measure-wide
+ *
+ * No global selectors — everything scoped under .iwac-search-block / the
+ * standalone shell — so the module never collides with theme styles.
+ */
+
+.iwac-search-block {
+  margin-block: var(--space-xl, 2rem);
+  max-width: var(--measure-wide, 72.5rem);
+}
+
+.iwac-search-block__title {
+  font-size: var(--text-2xl, 1.75rem);
+  color: var(--ink-strong, var(--ink, #222));
+  margin-block-end: var(--space-md, 1rem);
+}
+
+.iwac-search-block__intro {
+  font-size: var(--text-base, 1rem);
+  color: var(--ink-light, var(--ink, #444));
+  margin-block-end: var(--space-lg, 1.5rem);
+  max-width: var(--measure-narrow, 44rem);
+}
+
+.iwac-search-block__root {
+  background: var(--surface, #fff);
+  border: 1px solid var(--border, #e5e5e5);
+  border-radius: var(--radius-lg, 1rem);
+  padding: var(--space-lg, 1.5rem);
+  min-height: 6rem;
+}
+
+.iwac-search-block__root:focus-within {
+  box-shadow: var(--ring-focus, 0 0 0 3px rgba(0, 0, 0, 0.1));
+}
+
+/* Skeleton — visible until the Svelte bundle takes over. */
+.iwac-search-block__skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md, 1rem);
+}
+
+.iwac-search-block__skeleton-input {
+  height: var(--size-control-lg, 2.75rem);
+  background: var(--surface-sunken, #f5f5f5);
+  border-radius: var(--radius-md, 0.75rem);
+}
+
+.iwac-search-block__skeleton-results {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm, 0.5rem);
+}
+
+.iwac-search-block__skeleton-row {
+  height: 3rem;
+  background: var(--surface-raised, #fafafa);
+  border-radius: var(--radius-sm, 0.375rem);
+}
+
+/* Render-mode variants */
+.iwac-search-block--compact .iwac-search-block__skeleton-results,
+.iwac-search-block--compact .iwac-search-block__skeleton-row {
+  display: none;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .iwac-search-block__skeleton-input,
+  .iwac-search-block__skeleton-row {
+    animation: iwac-search-pulse 1.6s ease-in-out infinite;
+  }
+}
+
+@keyframes iwac-search-pulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.6; }
+}

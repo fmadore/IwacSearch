@@ -59,8 +59,43 @@ provides the Typesense container, nginx `/search-api/` proxy, and backups.
    collection, verifies, then atomic-swaps the `iwac_current` alias.
 5. Update the Svelte client if the field is user-visible.
 
+## Architectural references
+
+- **Triad (EngineAdapter / Indexer / Querier).** Mirrors
+  [Daniel-KM's AdvancedSearch module](https://github.com/Daniel-KM/Omeka-S-module-AdvancedSearch).
+  We're single-backend (Typesense), so EngineAdapter is implicit, but
+  `src/Indexer/` and `src/Querier/` follow the same naming so editors who
+  know AdvancedSearch can navigate this codebase.
+- **AbstractBlockLayout pattern** for the page block — standard Omeka S
+  4.x convention. Block data is persisted as JSON in `site_block.data`;
+  multiple block instances per page are supported.
+
+## Visual design
+
+The CSS in `asset/css/iwac-search.css` consumes
+[IWAC-theme](https://github.com/fmadore/IWAC-theme)'s CSS custom
+properties. Token vocabulary used:
+
+| Tokens | Purpose |
+|---|---|
+| `--space-{xs,sm,md,lg,xl}`, `--space-{2,4,6}` | Spacing |
+| `--primary`, `--ink`, `--muted` | Foreground colors |
+| `--surface`, `--surface-raised`, `--surface-sunken` | Backgrounds |
+| `--border`, `--border-strong` | Separators |
+| `--radius-{sm,md,lg}` | Rounded corners |
+| `--text-{sm,base,lg,xl,2xl}` | Fluid type scale |
+| `--ring-focus` | Focus ring |
+| `--measure-{narrow,wide}` | Reading line lengths |
+| `--size-control-{md,lg}` | Form control sizes |
+
+All selectors are scoped under `.iwac-search-block` / standalone shell —
+no global rules — so the module never collides with theme styles. When
+adding new component CSS, **prefer existing tokens** over hard-coded
+values; var() fallbacks degrade gracefully if the theme is swapped out.
+
 ## Linked repos
 
-- [IWAC-docker](https://github.com/fmadore/IWAC-docker) — Typesense + nginx + backup
+- [IWAC-docker](https://github.com/fmadore/IWAC-docker) — Typesense + nginx + backup (private)
+- [IWAC-theme](https://github.com/fmadore/IWAC-theme) — Omeka S theme (defines the design tokens this module consumes)
 - [IWAC-Hugging-Face](https://github.com/fmadore/IWAC-Hugging-Face) — Omeka → HF pipeline
 - [IwacVisualizations](https://github.com/fmadore/IwacVisualizations) — Omeka analytics module

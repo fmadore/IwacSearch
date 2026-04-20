@@ -1,0 +1,62 @@
+<?php
+/**
+ * @var \Laminas\View\Renderer\PhpRenderer $this
+ * @var \Omeka\Api\Representation\SitePageBlockRepresentation $block
+ * @var array $data        Raw block data (site_block.data).
+ * @var array $bootstrap   Config blob the Svelte client reads on mount.
+ * @var string $title
+ * @var string $intro_html Already-validated HTML — admin-provided, not user.
+ *
+ * Mounts: <div data-iwac-search-root data-iwac-block-id="N"></div>
+ *         <script type="application/json" id="iwac-search-state-N">{...}</script>
+ *
+ * The Svelte bundle (loaded once per page via headScript) walks every
+ * [data-iwac-search-root] element and reads the sibling state script.
+ */
+
+$blockId = (int) $block->id();
+?>
+<section class="iwac-search-block iwac-search-block--<?= $this->escapeHtmlAttr($data['mode'] ?? 'full') ?>"
+         aria-labelledby="iwac-search-heading-<?= $blockId ?>">
+    <?php if ($title !== ''): ?>
+        <h2 id="iwac-search-heading-<?= $blockId ?>" class="iwac-search-block__title">
+            <?= $this->escapeHtml($title) ?>
+        </h2>
+    <?php endif; ?>
+
+    <?php if (trim($intro_html) !== ''): ?>
+        <div class="iwac-search-block__intro">
+            <?php // intro_html is admin-authored; surface as raw HTML. ?>
+            <?= $intro_html ?>
+        </div>
+    <?php endif; ?>
+
+    <noscript>
+        <p>
+            <?= $this->translate('Search requires JavaScript.') ?>
+            <a href="<?= $this->escapeHtmlAttr($this->basePath('/search')) ?>">
+                <?= $this->translate('Open the standalone search page.') ?>
+            </a>
+        </p>
+    </noscript>
+
+    <div data-iwac-search-root
+         data-iwac-block-id="<?= $blockId ?>"
+         class="iwac-search-block__root"
+         id="iwac-search-root-<?= $blockId ?>">
+        <!-- Svelte bundle mounts here. Static skeleton is intentionally tiny
+             so the block doesn't reflow when the client takes over. -->
+        <div class="iwac-search-block__skeleton" aria-hidden="true">
+            <div class="iwac-search-block__skeleton-input"></div>
+            <div class="iwac-search-block__skeleton-results">
+                <?php for ($i = 0; $i < 3; $i++): ?>
+                    <div class="iwac-search-block__skeleton-row"></div>
+                <?php endfor; ?>
+            </div>
+        </div>
+    </div>
+
+    <script type="application/json" id="iwac-search-state-<?= $blockId ?>">
+        <?= json_encode($bootstrap, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>
+    </script>
+</section>

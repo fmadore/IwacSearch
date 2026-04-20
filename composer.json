@@ -5,6 +5,9 @@
     "license": "GPL-3.0-or-later",
     "require": {
         "php": ">=8.2",
+        "ext-curl": "*",
+        "ext-json": "*",
+        "ext-mbstring": "*",
         "typesense/typesense-php": "^5.0",
         "symfony/yaml": "^7.0"
     },
