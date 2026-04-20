@@ -3,7 +3,7 @@ declare(strict_types=1);
 
 namespace IwacSearch\Indexer;
 
-use Generator;
+use IwacSearch\Indexer\Mapper\MapperRegistry;
 use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
 use RuntimeException;
@@ -13,51 +13,88 @@ use Typesense\Client as TypesenseClient;
 /**
  * Orchestrates a full bulk reindex.
  *
- * Flow:
- *   1. Build authority lookup from HF `index` subset (~4.7K rows, in-memory).
- *   2. Load + version the schema (e.g. iwac_v1 → iwac_v1_20260420_143015).
- *   3. Create the new collection.
- *   4. Stream each content subset through DocumentMapper, batch-import.
- *   5. Atomic-swap the iwac_current alias to point at the new collection.
- *   6. Drop the previous collection (if any).
+ * Pure orchestration. All real work is delegated:
+ *   - SchemaLoader      → schema versioning
+ *   - HfDatasetLoader   → row streaming
+ *   - AuthorityResolver → entity join
+ *   - MapperRegistry    → row → doc per subset
+ *   - OmekaAclLoader    → is_public overlay (lazy)
+ *   - StopwordsSync     → ensure fr_default stopword set exists
  *
- * The alias swap is the critical safety property: the public scoped key
- * always queries `iwac_current`, so search keeps serving the OLD data
- * uninterruptedly until the swap completes. A failed reindex never affects
- * live search.
+ * Flow:
+ *   1. Sync stopwords (idempotent — safe under retries)
+ *   2. Build authority lookup from HF `index` subset
+ *   3. Prime the Omeka ACL cache
+ *   4. Create the new versioned collection (e.g. iwac_v1_<UTC>)
+ *   5. Stream → map → ACL-overlay → batch-import each subset
+ *   6. Atomic-swap iwac_current alias → new collection
+ *   7. Drop the previous collection
+ *
+ * Safety property: a failed reindex never affects live search. The alias
+ * still points at the previous (good) collection until step 6 succeeds;
+ * the half-built collection is dropped on error.
  */
 final class Reindexer
 {
-    private const SUBSETS_TO_INDEX = ['articles']; // M0: articles only.
-                                                    // M0+: add publications, documents, audiovisual.
-
     private const BATCH_SIZE = 200;
 
     public function __construct(
         private readonly TypesenseClient $typesense,
         private readonly SchemaLoader $schemaLoader,
         private readonly HfDatasetLoader $hfLoader,
+        private readonly MapperRegistry $mappers,
+        // The same AuthorityResolver instance is held by every mapper in
+        // the registry. Reindexer populates it via build() inside run(),
+        // and the mappers see the data through the shared reference.
+        // This is the one mutable shared singleton in the indexer.
+        private readonly AuthorityResolver $authority,
+        private readonly OmekaAclLoader $aclLoader,
+        private readonly StopwordsSync $stopwordsSync,
         private readonly LoggerInterface $logger = new NullLogger()
     ) {
     }
 
     /**
-     * Run a full reindex. Returns stats for the CLI to print.
+     * Run a full reindex.
      *
-     * @return array{collection: string, alias: string, indexed: int, errors: int, duration_seconds: float}
+     * @return array{
+     *     collection: string, alias: string,
+     *     indexed: int, errors: int, public_items: int,
+     *     subsets: array<string, array{indexed: int, errors: int}>,
+     *     stopwords: array{set: string, locale: string, count: int},
+     *     duration_seconds: float
+     * }
      */
     public function run(): array
     {
         $start = microtime(true);
 
-        // ── 1. Authority lookup ──────────────────────────────────────────
+        // ── 1. Stopwords (Typesense-wide, not per-collection) ────────────
+        $stopwordsResult = $this->stopwordsSync->sync();
+
+        // ── 2. Authority lookup ──────────────────────────────────────────
+        // Mutates the shared AuthorityResolver in-place. Mappers in the
+        // registry already hold a reference and will see the new data on
+        // their first map() call.
         $this->logger->info('Building authority resolver from HF `index` subset');
-        $authority = (new AuthorityResolver())->build($this->hfLoader->stream('index'));
-        $this->logger->info('Authority resolver built', ['entities' => $authority->size()]);
+        $this->authority->build($this->hfLoader->stream('index'));
+        $this->logger->info('Authority resolver built', ['entities' => $this->authority->size()]);
 
-        $mapper = new DocumentMapper($authority);
+        $subsetsToIndex = array_values(array_filter(
+            $this->mappers->subsets(),
+            // 'index' is consumed for authority; any future "non-content"
+            // subset belongs in this skip list.
+            static fn(string $s): bool => $s !== 'index'
+        ));
+        $this->logger->info('Subsets to index', [
+            'count'   => count($subsetsToIndex),
+            'subsets' => $subsetsToIndex,
+        ]);
 
-        // ── 2. Schema + collection ───────────────────────────────────────
+        // ── 3. Omeka ACL cache (eager — fail fast if Omeka is down) ──────
+        $this->aclLoader->prime();
+
+        // ── 4. New collection ────────────────────────────────────────────
         $schema   = $this->schemaLoader->loadForReindex();
         $newName  = $schema['name'];
         $alias    = $schema['_alias_target'];
@@ -68,20 +105,19 @@ final class Reindexer
         unset($createPayload['_alias_target'], $createPayload['_base_name']);
         $this->typesense->collections->create($createPayload);
 
-        // ── 3. Stream + batch import ─────────────────────────────────────
+        // ── 5. Stream + map + overlay + import ───────────────────────────
         $totalIndexed = 0;
         $totalErrors  = 0;
+        $perSubset    = [];
 
         try {
-            foreach (self::SUBSETS_TO_INDEX as $subset) {
-                [$indexed, $errors] = $this->indexSubset($newName, $subset, $mapper);
+            foreach ($subsetsToIndex as $subset) {
+                [$indexed, $errors] = $this->indexSubset($newName, $subset);
+                $perSubset[$subset] = ['indexed' => $indexed, 'errors' => $errors];
                 $totalIndexed += $indexed;
                 $totalErrors  += $errors;
             }
         } catch (Throwable $e) {
-            // Reindex failed. Drop the half-built collection so we don't
-            // leave stale collections lying around. Live alias still points
-            // at the previous (good) collection, so users see no impact.
             $this->logger->error('Reindex failed; dropping half-built collection', [
                 'collection' => $newName,
                 'error'      => $e->getMessage(),
@@ -90,11 +126,11 @@ final class Reindexer
             throw $e;
         }
 
-        // ── 4. Atomic alias swap ─────────────────────────────────────────
+        // ── 6. Atomic alias swap ─────────────────────────────────────────
         $this->logger->info('Swapping alias', ['alias' => $alias, 'to' => $newName]);
         $this->typesense->aliases->upsert($alias, ['collection_name' => $newName]);
 
-        // ── 5. Drop the previous collection ──────────────────────────────
+        // ── 7. Drop the previous collection ──────────────────────────────
         if ($previous !== null && $previous !== $newName) {
             $this->logger->info('Dropping previous collection', ['name' => $previous]);
             $this->safelyDropCollection($previous);
@@ -105,31 +141,41 @@ final class Reindexer
             'alias'            => $alias,
             'indexed'          => $totalIndexed,
             'errors'           => $totalErrors,
+            'public_items'     => $this->aclLoader->size(),
+            'subsets'          => $perSubset,
+            'stopwords'        => $stopwordsResult,
             'duration_seconds' => round(microtime(true) - $start, 2),
         ];
     }
 
     /**
-     * Index a single subset. @return array{0: int, 1: int} [indexed, errors]
+     * Index one subset. Returns [indexed, errors].
+     *
+     * @return array{0: int, 1: int}
      */
-    private function indexSubset(string $collection, string $subset, DocumentMapper $mapper): array
+    private function indexSubset(string $collection, string $subset): array
     {
         $this->logger->info('Indexing subset', ['subset' => $subset]);
+        $mapper = $this->mappers->get($subset);
 
-        $batch    = [];
-        $indexed  = 0;
-        $errors   = 0;
+        $batch   = [];
+        $indexed = 0;
+        $errors  = 0;
 
         foreach ($this->hfLoader->stream($subset) as $row) {
-            $doc = match ($subset) {
-                'articles' => $mapper->mapArticle($row),
-                default    => null, // M0: only articles. Other subsets: M0+.
-            };
+            $doc = $mapper->map($row);
             if ($doc === null) {
                 continue;
             }
-            $batch[] = $doc;
 
+            // ACL overlay — the mapper defaulted is_public=false; flip to
+            // true if the Omeka API confirms the item is publicly visible.
+            $omekaId = (int) ($doc['id'] ?? 0);
+            if ($omekaId > 0 && $this->aclLoader->isPublic($omekaId)) {
+                $doc['is_public'] = true;
+            }
+
+            $batch[] = $doc;
             if (count($batch) >= self::BATCH_SIZE) {
                 [$ok, $err] = $this->flushBatch($collection, $batch);
                 $indexed += $ok;
@@ -143,7 +189,11 @@ final class Reindexer
             $errors  += $err;
         }
 
-        $this->logger->info('Subset indexed', ['subset' => $subset, 'indexed' => $indexed, 'errors' => $errors]);
+        $this->logger->info('Subset indexed', [
+            'subset'  => $subset,
+            'indexed' => $indexed,
+            'errors'  => $errors,
+        ]);
         return [$indexed, $errors];
     }
 
@@ -160,14 +210,11 @@ final class Reindexer
             $jsonl .= json_encode($doc, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . "\n";
         }
 
-        // action=upsert is idempotent — safe under retries. batch_size on the
-        // server side controls how Typesense parallelizes ingestion.
         $response = $this->typesense->collections[$collection]->documents->import(
             $jsonl,
             ['action' => 'upsert', 'batch_size' => 100]
         );
 
-        // Response is JSONL: one {"success": bool, ...} per row.
         $ok = $err = 0;
         foreach (preg_split("/\r?\n/", trim((string) $response)) as $line) {
             if ($line === '') { continue; }
@@ -177,8 +224,6 @@ final class Reindexer
             } else {
                 $err++;
                 if ($err <= 3) {
-                    // Log first few errors verbatim — silently dropping them
-                    // would mask schema mismatches.
                     $this->logger->warning('Document import failed', ['response' => $row]);
                 }
             }
@@ -186,10 +231,6 @@ final class Reindexer
         return [$ok, $err];
     }
 
-    /**
-     * Returns the collection currently pointed at by the alias, or null if
-     * the alias doesn't exist yet (first-ever reindex).
-     */
     private function resolveAliasTarget(string $alias): ?string
     {
         try {
@@ -205,9 +246,10 @@ final class Reindexer
         try {
             $this->typesense->collections[$name]->delete();
         } catch (Throwable $e) {
-            // Logged but not raised — the new collection + alias are already
-            // live, so an orphan old collection is just wasted disk.
-            $this->logger->warning('Failed to drop collection', ['name' => $name, 'error' => $e->getMessage()]);
+            $this->logger->warning('Failed to drop collection', [
+                'name'  => $name,
+                'error' => $e->getMessage(),
+            ]);
         }
     }
 }

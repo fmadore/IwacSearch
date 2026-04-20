@@ -76,19 +76,44 @@ hashmap keyed by `Titre`. For each content item, split `subject` /
 - `events_ss` for `Type == "Événements"`
 - `entity_ids` (int32[]) — the `o:id` of each matched entity, for
   outbound links
+- **`entity_aliases_txt`** (string[], FTS-only) — every alternative
+  spelling of every resolved entity, joined for query-time recall
 
 This pre-resolves the join at index time so faceting is a single
 Typesense round trip, not N lookups per search.
 
+### Alternative-spelling search
+
+Entities in the `index` subset carry a pipe-separated `Titre alternatif`
+field. The `AuthorityResolver` reads it twice:
+
+1. **Input matching** — when an HF row's `subject` or `spatial` field uses
+   an alias (e.g. `Côte d'Ivoire` instead of the canonical
+   `République de Côte d'Ivoire`), we still resolve to the right entity.
+2. **Query expansion** — for every entity referenced in a doc, we collect
+   ALL its known aliases into the doc's `entity_aliases_txt` field. The
+   public search calls `query_by` with this field included, so:
+   - typing `RCI` finds docs about `Radio Côte d'Ivoire`
+   - typing `AOF` finds docs about `Afrique-Occidentale française`
+   - typing `OCAM` finds docs about `Organisation commune africaine et malgache`
+
+   Aliases stay out of the canonical `*_ss` facet fields so faceting UIs
+   show the curated label, not every variant.
+
 ## Subset coverage
 
-| HF subset | Rows | Goes into `iwac_v1` as `type_s` | Has OCR | Has HF embedding |
-|---|---:|---|:---:|:---:|
-| `articles` | 12,287 | `article` | yes | yes (ignored) |
-| `publications` | 1,501 | `publication` | yes | yes (ignored, on tableOfContents) |
-| `documents` | 26 | `document` | yes | no |
-| `audiovisual` | 45 | `audiovisual` | no | no |
-| `references` | 864 | (skipped — bibliographic only) | no | no |
-| `index` | 4,697 | (used as authority hashmap, not indexed as items) | no | no |
+| HF subset | Rows | Goes into `iwac_v1` as `type_s` | Has OCR | Has HF embedding | Mapper |
+|---|---:|---|:---:|:---:|---|
+| `articles` | 12,287 | `article` | yes | yes (ignored) | `Mapper\ArticleMapper` |
+| `publications` | 1,501 | `publication` | yes | yes (ignored) | `Mapper\PublicationMapper` |
+| `documents` | 26 | `document` | yes | no | `Mapper\DocumentMapper` |
+| `audiovisual` | 45 | `audiovisual` | no | no | `Mapper\AudiovisualMapper` |
+| `references` | 864 | (skipped — bibliographic only) | no | no | — |
+| `index` | 4,697 | (consumed by `AuthorityResolver`, not indexed) | no | no | — |
 
 Total content items: **13,859** indexed into Typesense.
+
+Adding a new subset = drop a `MyMapper extends AbstractMapper` in
+`src/Indexer/Mapper/`, register it in `cli/reindex.php`'s
+`MapperRegistry`. Reindexer iterates `MapperRegistry::subsets()`, so no
+edit to the orchestrator is needed.

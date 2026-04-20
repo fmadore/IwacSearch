@@ -11,20 +11,30 @@ declare(strict_types=1);
  *   docker compose -f services/omeka-cli/docker-compose.yml run --rm \
  *       omeka-cli discovery:reindex
  *
+ * Env overrides (all optional — defaults match the IWAC-docker stack):
+ *   IWAC_TYPESENSE_HOST       default: typesense
+ *   IWAC_TYPESENSE_PORT       default: 8108
+ *   IWAC_TYPESENSE_PROTOCOL   default: http
+ *   IWAC_TYPESENSE_KEY_FILE   default: /run/secrets/typesense_api_key
+ *   IWAC_OMEKA_API_URL        default: https://islam.zmo.de/api
+ *
  * Exit codes:
  *   0  success
  *   1  reindex failed (collection dropped, alias unchanged — safe state)
- *   2  setup error (missing secret, schema, or composer deps)
- *
- * The script intentionally does NOT bootstrap Omeka itself — it talks
- * directly to HF and Typesense. This keeps the reindex independent of
- * Omeka being healthy and lets the same code run from a separate cron
- * sidecar later if desired.
+ *   2  setup error (missing secret, schema, composer deps)
  */
 
+use IwacSearch\Indexer\AuthorityResolver;
 use IwacSearch\Indexer\HfDatasetLoader;
+use IwacSearch\Indexer\Mapper\ArticleMapper;
+use IwacSearch\Indexer\Mapper\AudiovisualMapper;
+use IwacSearch\Indexer\Mapper\DocumentMapper;
+use IwacSearch\Indexer\Mapper\MapperRegistry;
+use IwacSearch\Indexer\Mapper\PublicationMapper;
+use IwacSearch\Indexer\OmekaAclLoader;
 use IwacSearch\Indexer\Reindexer;
 use IwacSearch\Indexer\SchemaLoader;
+use IwacSearch\Indexer\StopwordsSync;
 use IwacSearch\Service\TypesenseClientFactory;
 
 // ── Bootstrap autoloader ──────────────────────────────────────────────────
@@ -36,7 +46,7 @@ if (!is_readable($autoload)) {
 }
 require $autoload;
 
-// ── Minimal stderr logger ─────────────────────────────────────────────────
+// ── Minimal stderr logger (PSR-3) ─────────────────────────────────────────
 $logger = new class extends \Psr\Log\AbstractLogger {
     public function log($level, $message, array $context = []): void
     {
@@ -45,22 +55,18 @@ $logger = new class extends \Psr\Log\AbstractLogger {
     }
 };
 
-// ── Wire dependencies (the controller normally goes through a service
-// container; the CLI does it manually since it doesn't load Omeka) ────────
 try {
-    // Mock the container interface enough for TypesenseClientFactory to work.
-    $config = [
-        'iwac_search' => [
-            'typesense' => [
-                'host'         => getenv('IWAC_TYPESENSE_HOST') ?: 'typesense',
-                'port'         => (int) (getenv('IWAC_TYPESENSE_PORT') ?: 8108),
-                'protocol'     => getenv('IWAC_TYPESENSE_PROTOCOL') ?: 'http',
-                'api_key_file' => getenv('IWAC_TYPESENSE_KEY_FILE') ?: '/run/secrets/typesense_api_key',
-            ],
-        ],
+    // ── Config ─────────────────────────────────────────────────────────────
+    $tsConfig = [
+        'host'         => getenv('IWAC_TYPESENSE_HOST')     ?: 'typesense',
+        'port'         => (int) (getenv('IWAC_TYPESENSE_PORT') ?: 8108),
+        'protocol'     => getenv('IWAC_TYPESENSE_PROTOCOL') ?: 'http',
+        'api_key_file' => getenv('IWAC_TYPESENSE_KEY_FILE') ?: '/run/secrets/typesense_api_key',
     ];
+    $omekaApiUrl = getenv('IWAC_OMEKA_API_URL') ?: 'https://islam.zmo.de/api';
 
-    $container = new class($config) implements \Psr\Container\ContainerInterface {
+    // ── Typesense client (factory needs a minimal Config-providing container)
+    $container = new class(['iwac_search' => ['typesense' => $tsConfig]]) implements \Psr\Container\ContainerInterface {
         public function __construct(private readonly array $config) {}
         public function get(string $id): mixed
         {
@@ -69,13 +75,40 @@ try {
         }
         public function has(string $id): bool { return $id === 'Config'; }
     };
-
     $typesense = (new TypesenseClientFactory())($container, '');
-    $schema    = new SchemaLoader($moduleRoot . '/data/schema.yaml');
-    $hf        = new HfDatasetLoader();
-    $reindexer = new Reindexer($typesense, $schema, $hf, $logger);
 
-    $logger->info('Starting reindex');
+    // ── Indexer dependencies ───────────────────────────────────────────────
+    // Authority resolver is a singleton injected into every mapper. Built
+    // empty here; the Reindexer builds it from the `index` subset before
+    // any mapping happens.
+    $authority = new AuthorityResolver();
+
+    $registry = new MapperRegistry([
+        new ArticleMapper($authority),
+        new PublicationMapper($authority),
+        new DocumentMapper($authority),
+        new AudiovisualMapper($authority),
+    ]);
+
+    $reindexer = new Reindexer(
+        typesense:     $typesense,
+        schemaLoader:  new SchemaLoader($moduleRoot . '/data/schema.yaml'),
+        hfLoader:      new HfDatasetLoader(),
+        mappers:       $registry,
+        // Same instance held by every mapper in the registry. Reindexer
+        // populates it via build() in run(); mappers see the data through
+        // the shared reference. The only mutable singleton in the
+        // indexer; everything else is immutable after construction.
+        authority:     $authority,
+        aclLoader:     new OmekaAclLoader($omekaApiUrl, $logger),
+        stopwordsSync: new StopwordsSync($typesense, $moduleRoot . '/data/stopwords-fr.json', $logger),
+        logger:        $logger
+    );
+
+    $logger->info('Starting reindex', [
+        'typesense_host' => $tsConfig['host'],
+        'omeka_api'      => $omekaApiUrl,
+    ]);
     $stats = $reindexer->run();
     $logger->info('Reindex complete', $stats);
 

@@ -69,6 +69,13 @@ fields:
   - { name: events_ss,         type: "string[]", facet: true, optional: true }
   - { name: entity_ids,        type: "int32[]",  facet: false, optional: true }  # for outbound links
 
+  # Alternative spellings of every resolved entity, indexed for FTS only.
+  # Examples: typing "RCI" finds docs about "Radio Côte d'Ivoire";
+  # typing "AOF" finds docs about "Afrique-Occidentale française".
+  # Sourced from the `Titre alternatif` field on the HF `index` subset.
+  # NOT a facet — querying via this field expands recall transparently.
+  - { name: entity_aliases_txt, type: "string[]", locale: fr, facet: false, optional: true }
+
   # ── Time ──────────────────────────────────────────────────────────────
   - { name: date,           type: int64, facet: false, sort: true, optional: true }   # epoch seconds
   - { name: date_decade_ss, type: "string[]", facet: true, optional: true }              # ["1990s"]
