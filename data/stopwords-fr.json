@@ -1,0 +1,17 @@
+{
+  "_comment": "Curated French stopword set for IwacSearch. Loaded via PUT /stopwords/fr_default at module activation (or via the discovery:reindex CLI). Public scoped keys reference it as `stopwords: fr_default` so the public client cannot omit it.",
+  "_source": "Standard French stopwords + IWAC-specific noise terms (e.g. 'apr\u00e8s', 'avant'). Trimmed to high-impact tokens; over-aggressive lists harm recall.",
+  "locale": "fr",
+  "stopwords": [
+    "le", "la", "les", "l", "un", "une", "des", "de", "du", "d",
+    "et", "ou", "mais", "donc", "or", "ni", "car",
+    "\u00e0", "au", "aux", "en", "dans", "sur", "sous", "par", "pour", "avec", "sans", "chez", "vers", "contre", "entre",
+    "ce", "cet", "cette", "ces", "celui", "celle", "ceux", "celles",
+    "qui", "que", "quoi", "dont", "o\u00f9", "lequel", "laquelle",
+    "il", "elle", "ils", "elles", "on", "nous", "vous",
+    "mon", "ma", "mes", "ton", "ta", "tes", "son", "sa", "ses", "notre", "nos", "votre", "vos", "leur", "leurs",
+    "est", "sont", "\u00eatre", "\u00e9t\u00e9", "ait", "avait", "ont",
+    "ne", "pas", "ne pas", "non", "plus", "tr\u00e8s", "trop", "peu",
+    "comme", "ainsi", "aussi", "alors", "tout", "tous", "toute", "toutes"
+  ]
+}

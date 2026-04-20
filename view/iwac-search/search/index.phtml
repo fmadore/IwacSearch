@@ -1,0 +1,30 @@
+<?php
+/**
+ * @var \Laminas\View\Renderer\PhpRenderer $this
+ * @var bool $placeholder
+ *
+ * M0 placeholder. M1 swaps this for a minimal HTML shell that:
+ *   - renders a noscript fallback (graceful degradation)
+ *   - injects the initial query/filter state from the URL into a <script id="iwac-search-state">
+ *   - mounts <div id="iwac-search-root"></div> for the Svelte bundle
+ *   - <?= $this->headLink()->appendStylesheet(...) ?> for the compiled CSS
+ *   - <?= $this->headScript()->appendFile(...) ?> for the compiled JS
+ */
+
+$this->headTitle('Search · Islam West Africa Collection');
+?>
+<main class="iwac-search-shell" role="main">
+    <h1>IWAC Search</h1>
+    <?php if ($placeholder): ?>
+        <p>
+            <em>Module scaffold loaded successfully — search UI lands in M1.</em>
+        </p>
+        <p>
+            See the
+            <a href="https://github.com/fmadore/IWAC-docker/blob/main/docs/iwac-search-roadmap.md">
+                IwacSearch roadmap
+            </a>
+            for the milestone plan.
+        </p>
+    <?php endif; ?>
+</main>

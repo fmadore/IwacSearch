@@ -1,0 +1,121 @@
+# IwacSearch — Typesense collection schema
+#
+# This file is the contract between the indexer and the search UI. Every
+# downstream artefact (Svelte facet panel, scoped-key rules, browse configs)
+# derives from it. Edit with care.
+#
+# Conventions:
+#   - Names ending in `_ss` are multi-valued strings (facets).
+#   - Names ending in `_s`  are single-valued strings (sort keys).
+#   - Names ending in `_txt` are full-text indexed with the French analyser.
+#   - `embedding` uses Typesense's in-process ts/multilingual-e5-small ONNX
+#     model (384d). Re-embedded at index AND query time, so no external API
+#     dependency at search time.
+#
+# Versioning:
+#   - The actual collection is named `iwac_v1` and aliased as `iwac_current`.
+#   - Schema changes ⇒ build `iwac_v2`, atomic-swap the alias. The browser
+#     only ever queries the alias, so swaps are zero-downtime.
+#
+# Source-of-truth for content fields:
+#   - Bulk fields (title, ocr_text, sentiment, topic labels, ...) come from
+#     the HuggingFace dataset (fmadore/islam-west-africa-collection) on the
+#     bulk reindex path. See docs/data-sources.md.
+#   - is_public and the IIIF/thumbnail URLs come from the Omeka S API on the
+#     incremental update path (M4). HF does not expose Omeka ACL state.
+
+name: iwac_v1
+default_sorting_field: date
+
+# Token separators: Typesense splits on these in addition to whitespace.
+# Including ' (apostrophe) keeps "Côte d'Ivoire" and "l'islam" indexable as
+# expected; · (middle dot) handles older typesetting.
+token_separators:
+  - "'"
+  - "·"
+  - "-"
+
+# Symbols treated as part of tokens (not separators). Keep accented chars
+# intact and let the French locale handle accent folding at query time.
+symbols_to_index: []
+
+fields:
+  # ── Identity ──────────────────────────────────────────────────────────
+  - { name: id,          type: string }                       # Omeka o:id
+  - { name: identifier,  type: string, optional: true }       # citation key
+  - { name: omeka_url,   type: string, index: false, optional: true }
+  - { name: source_url,  type: string, index: false, optional: true }  # original publisher
+
+  # ── Display + sort ────────────────────────────────────────────────────
+  - { name: title,       type: string, sort: true }            # display + sort
+  - { name: title_txt,   type: string, locale: fr }            # FTS, French analyser
+  - { name: thumbnail_url, type: string, index: false, optional: true }
+  - { name: iiif_manifest, type: string, index: false, optional: true }
+
+  # ── Authority + facets ────────────────────────────────────────────────
+  - { name: creator_ss,   type: "string[]", facet: true, optional: true }
+  - { name: country_ss,   type: "string[]", facet: true, optional: true }
+  - { name: newspaper_ss, type: "string[]", facet: true, optional: true }
+  - { name: language_ss,  type: "string[]", facet: true, optional: true }
+  - { name: type_s,       type: string,   facet: true, optional: true }   # article|publication|document|audiovisual
+
+  # Pre-resolved entity references (joined against the `index` HF subset at
+  # index time). Strings are entity Titre; o:ids are also kept for stable
+  # links into Omeka.
+  - { name: topics_ss,         type: "string[]", facet: true, optional: true }   # subjects
+  - { name: persons_ss,        type: "string[]", facet: true, optional: true }
+  - { name: places_ss,         type: "string[]", facet: true, optional: true }
+  - { name: organisations_ss,  type: "string[]", facet: true, optional: true }
+  - { name: events_ss,         type: "string[]", facet: true, optional: true }
+  - { name: entity_ids,        type: "int32[]",  facet: false, optional: true }  # for outbound links
+
+  # ── Time ──────────────────────────────────────────────────────────────
+  - { name: date,           type: int64, facet: false, sort: true, optional: true }   # epoch seconds
+  - { name: date_decade_ss, type: "string[]", facet: true, optional: true }              # ["1990s"]
+  - { name: pub_year,       type: int32, facet: true, sort: true, optional: true }
+
+  # ── Body / OCR ────────────────────────────────────────────────────────
+  # ocr_text is INDEXED (so matches work) but EXCLUDED from public results
+  # via the scoped key (exclude_fields: ocr_text). Highlights still ship.
+  # Loosening this requires licensing sign-off — see roadmap "Security model".
+  - { name: ocr_text,    type: string, locale: fr, optional: true }
+  - { name: nb_words,    type: int32,  facet: false, optional: true }
+  - { name: lda_topic_label, type: string, facet: true, optional: true }
+
+  # ── AI sentiment (3 models — keep all three for cross-model queries) ──
+  # `centralite` and `polarite` are categorical → facets.
+  # `subjectivite` is 1–5 float → range facet + sort.
+  - { name: gemini_centralite_ss,    type: "string[]", facet: true, optional: true }
+  - { name: gemini_polarite_ss,      type: "string[]", facet: true, optional: true }
+  - { name: gemini_subjectivite,     type: float,    facet: true, sort: true, optional: true }
+  - { name: chatgpt_centralite_ss,   type: "string[]", facet: true, optional: true }
+  - { name: chatgpt_polarite_ss,     type: "string[]", facet: true, optional: true }
+  - { name: chatgpt_subjectivite,    type: float,    facet: true, sort: true, optional: true }
+  - { name: mistral_centralite_ss,   type: "string[]", facet: true, optional: true }
+  - { name: mistral_polarite_ss,     type: "string[]", facet: true, optional: true }
+  - { name: mistral_subjectivite,    type: float,    facet: true, sort: true, optional: true }
+
+  # ── ACL ───────────────────────────────────────────────────────────────
+  # Sourced from Omeka, NOT HF. Public scoped keys carry filter_by:is_public:=true
+  # as a hard filter. Even if the indexer briefly lags an Omeka ACL change,
+  # the public key cannot return private docs.
+  - { name: is_public,    type: bool, facet: false }
+  - { name: item_set_ids, type: "int32[]", facet: false, optional: true }
+
+  # ── Semantic search ───────────────────────────────────────────────────
+  # Auto-embedded by Typesense from title_txt + ocr_text using the in-process
+  # multilingual-e5-small ONNX model. Same model encodes user queries at
+  # search time, so no external API needed.
+  #
+  # Memory note: the model resident set is ~500 MB. The IWAC-docker stack
+  # bumps the typesense container limits to 4 GiB before this lands.
+  - name: embedding
+    type: "float[]"
+    num_dim: 384
+    optional: true
+    embed:
+      from:
+        - title_txt
+        - ocr_text
+      model_config:
+        model_name: ts/multilingual-e5-small
