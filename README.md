@@ -10,14 +10,17 @@ on Omeka.
 
 ## Status
 
-**M2 — Facets + URL state + sort + year range.** Eight categorical facets (type / country / publisher / locations / persons / organisations / subjects / sentiment) with collapsible groups, post-filter live counts, and active-filter chips. Two-handle year range slider. Bidirectional URL sync — back/forward gives meaningful history; query strings are shareable. Sort dropdown (relevance / newest / oldest). Semantic search is wired into `query_by` automatically (hybrid keyword + vector via `ts/multilingual-e5-small`).
+**M3 — Curated browse pages.** Six country pages auto-seeded on install: `/browse/benin`, `/browse/burkina-faso`, `/browse/cote-divoire`, `/browse/niger`, `/browse/nigeria`, `/browse/togo`. Each pre-applies a locked `country_ss` filter at scoped-key mint time (server-side enforcement, not just a UI suggestion) and ships with a curated facet list that drops country (since it's locked) and adds language. Landing page at `/browse` lists all configured surfaces as cards. Same Svelte client mounts on `/browse/{slug}` as on `/search` and page blocks — only the bootstrap differs.
+
+Admin CRUD UI to edit titles / intros / facets without code changes is M3.5 (next).
 
 | Milestone | Status  | Highlights                                                                        |
 | --------- | :-----: | --------------------------------------------------------------------------------- |
 | M0        | ✅ done | Schema, indexer pipeline (4 mappers + ACL overlay + stopwords), atomic alias swap |
 | M1        | ✅ done | `/search`, `/discovery/token`, page block, Svelte 5 client, alias-spelling search |
 | M2        | ✅ done | Facet panel, year range slider, URL state, sort, hybrid keyword+vector search     |
-| M3        |  next   | Curated browse pages (replaces FacetedBrowse)                                     |
+| M3        | ✅ done | `iwac_browse_config` table + 6 auto-seeded country pages + `/browse` landing      |
+| M3.5      |  next   | Admin CRUD UI for browse configs (titles, intros, prominent facets)               |
 | M4 → M6   | planned | Incremental indexing, polish, cutover                                             |
 
 Full roadmap: [IWAC-docker/docs/iwac-search-roadmap.md](https://github.com/fmadore/IWAC-docker/blob/main/docs/iwac-search-roadmap.md).
@@ -65,6 +68,10 @@ IwacSearch/
 │   │   │   ├── AudiovisualMapper.php
 │   │   │   └── MapperRegistry.php
 │   │   └── Reindexer.php                       #   orchestrates with atomic alias swap
+│   ├── Browse/                                 # Curated /browse/{slug} surfaces
+│   │   ├── BrowseConfig.php                    #   read-only DTO
+│   │   ├── BrowseConfigRepository.php          #   DBAL CRUD against iwac_browse_config
+│   │   └── CountrySeeder.php                   #   seeds 6 country pages on install
 │   ├── Site/BlockLayout/IwacSearchBlock.php    # Page block — drop into any Site page
 │   ├── svelte/                                 # Svelte 5 + TS client source
 │   │   ├── App.svelte                          #   per-mount root, owns search state
@@ -177,6 +184,30 @@ works.
 
 The embedding model is `ts/multilingual-e5-small` (384d, in-process
 ONNX) — no external API calls at query time.
+
+### Curated browse pages
+
+Each row in the module-owned `iwac_browse_config` table renders as a
+public surface at `/browse/{slug}`. The Svelte client mounts with the
+row's `locked_filters` baked into the bootstrap — those filters become
+part of the scoped key the server mints, so they're enforced
+server-side and can't be removed by client tampering.
+
+Six country pages are auto-seeded on install (`CountrySeeder.php`):
+
+| Slug           | URL                    | Locked filter                     |
+| -------------- | ---------------------- | --------------------------------- |
+| `benin`        | `/browse/benin`        | `` country_ss:=`Bénin` ``         |
+| `burkina-faso` | `/browse/burkina-faso` | `` country_ss:=`Burkina Faso` ``  |
+| `cote-divoire` | `/browse/cote-divoire` | `` country_ss:=`Côte d'Ivoire` `` |
+| `niger`        | `/browse/niger`        | `` country_ss:=`Niger` ``         |
+| `nigeria`      | `/browse/nigeria`      | `` country_ss:=`Nigeria` ``       |
+| `togo`         | `/browse/togo`         | `` country_ss:=`Togo` ``          |
+
+The seeder is idempotent — `existsBySlug()` skips configs that already
+exist, so a future re-install never clobbers admin edits. Add a new
+country = add one row to `CountrySeeder::COUNTRIES` and re-run the
+install (or wait for the M3.5 admin CRUD UI).
 
 ## Running the bulk reindex
 

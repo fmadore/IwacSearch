@@ -74,16 +74,34 @@ class Module extends AbstractModule
         );
     }
 
+    /**
+     * Install: create iwac_browse_config table + seed 6 country pages.
+     *
+     * Idempotent — `CREATE TABLE IF NOT EXISTS` and the seeder's
+     * existsBySlug() guard mean re-running install (after an uninstall
+     * + reinstall, or as part of an upgrade path) never clobbers data.
+     */
     public function install(ServiceLocatorInterface $services): void
     {
-        // M3 will create iwac_browse_config here. Empty for M0–M2.
+        $connection = $services->get('Omeka\Connection');
+        $connection->executeStatement(Browse\BrowseConfigRepository::createTableSql());
+
+        $repository = new Browse\BrowseConfigRepository($connection);
+        $logger = $services->has('Omeka\Logger') ? $services->get('Omeka\Logger') : new \Psr\Log\NullLogger();
+        $seeder = new Browse\CountrySeeder($repository, $logger);
+        $stats = $seeder->seed();
+        $logger->info('IwacSearch country browse pages seeded', $stats);
     }
 
     public function uninstall(ServiceLocatorInterface $services): void
     {
+        $connection = $services->get('Omeka\Connection');
         // Drop module-owned tables only — never touches Typesense data,
         // since that may be shared with a parallel install.
-        // Optional: clean up the cached search-only key.
+        $connection->executeStatement(Browse\BrowseConfigRepository::dropTableSql());
+
+        // Clean up the cached search-only key so a fresh install bootstraps
+        // a new one rather than reusing a key the previous install owned.
         $settings = $services->get('Omeka\Settings');
         $settings->delete('iwac_search_typesense_search_key');
     }

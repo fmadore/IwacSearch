@@ -1,0 +1,133 @@
+<?php
+/**
+ * @var \Laminas\View\Renderer\PhpRenderer $this
+ * @var \IwacSearch\Browse\BrowseConfig[] $configs
+ * @var ?string $missing_slug  Set when the user hit /browse/<unknown-slug>.
+ *
+ * Landing page for curated browse surfaces. One card per config row,
+ * ordered by the `position` column. The 6 country pages are seeded on
+ * module install (CountrySeeder); admin CRUD lands in M3.5.
+ */
+
+$this->headTitle('Browse · Islam West Africa Collection');
+$missingSlug = $missing_slug ?? null;
+?>
+<main class="iwac-browse-list" role="main">
+    <header class="iwac-browse-list__header">
+        <h1>Browse</h1>
+        <p class="iwac-browse-list__intro">
+            Curated entry points into the IWAC archive. Each page pre-applies
+            a locked filter so you can search within a focused subset.
+        </p>
+    </header>
+
+    <?php if ($missingSlug): ?>
+        <div class="iwac-browse-list__notice" role="alert">
+            <strong>No browse page named <code><?= $this->escapeHtml($missingSlug) ?></code>.</strong>
+            Pick one below.
+        </div>
+    <?php endif; ?>
+
+    <?php if (empty($configs)): ?>
+        <p class="iwac-browse-list__empty">
+            No curated browse pages have been configured yet.
+        </p>
+    <?php else: ?>
+        <ul class="iwac-browse-list__cards">
+            <?php foreach ($configs as $config): ?>
+                <li class="iwac-browse-list__card">
+                    <a class="iwac-browse-list__card-link"
+                       href="<?= $this->escapeHtmlAttr($this->basePath('/browse/' . $config->slug)) ?>">
+                        <h2 class="iwac-browse-list__card-title">
+                            <?= $this->escapeHtml($config->title) ?>
+                        </h2>
+                        <?php if ($config->introHtml !== ''): ?>
+                            <div class="iwac-browse-list__card-intro">
+                                <?= $config->introHtml /* admin-authored, intentional raw HTML */ ?>
+                            </div>
+                        <?php endif; ?>
+                    </a>
+                </li>
+            <?php endforeach; ?>
+        </ul>
+    <?php endif; ?>
+</main>
+
+<style>
+    /* Scoped to this page only; consumes the same IWAC-theme tokens as
+       the rest of the module. Inline because there are no other browse-
+       list views and pulling this into the global iwac-search.css would
+       load it on /search too. */
+    .iwac-browse-list {
+        max-width: var(--measure-wide, 72.5rem);
+        margin-inline: auto;
+        padding-block: var(--space-xl, 2rem);
+    }
+    .iwac-browse-list__header h1 {
+        font-size: var(--text-3xl, 2.25rem);
+        color: var(--ink-strong, var(--ink, #222));
+        margin-block-end: var(--space-sm, 0.5rem);
+    }
+    .iwac-browse-list__intro {
+        color: var(--ink-light, var(--ink, #444));
+        max-width: var(--measure-narrow, 44rem);
+    }
+    .iwac-browse-list__notice {
+        background: color-mix(in srgb, var(--primary, #c66) 12%, var(--surface, #fff));
+        border: 1px solid color-mix(in srgb, var(--primary, #c66) 35%, transparent);
+        border-radius: var(--radius-md, 0.75rem);
+        padding: var(--space-md, 1rem);
+        margin-block: var(--space-md, 1rem);
+        color: var(--ink-strong, var(--ink, #222));
+    }
+    .iwac-browse-list__cards {
+        list-style: none;
+        margin: var(--space-lg, 1.5rem) 0 0;
+        padding: 0;
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+        gap: var(--space-md, 1rem);
+    }
+    .iwac-browse-list__card {
+        margin: 0;
+    }
+    .iwac-browse-list__card-link {
+        display: block;
+        height: 100%;
+        padding: var(--space-lg, 1.5rem);
+        background: var(--surface, #fff);
+        border: 1px solid var(--border, #ccc);
+        border-radius: var(--radius-lg, 1rem);
+        text-decoration: none;
+        color: inherit;
+        transition:
+            border-color 120ms ease,
+            transform 120ms ease,
+            box-shadow 120ms ease;
+    }
+    .iwac-browse-list__card-link:hover {
+        border-color: var(--primary, #c66);
+        transform: translateY(var(--lift-xs, -2px));
+        box-shadow: 0 4px 16px color-mix(in srgb, var(--primary, #c66) 12%, transparent);
+    }
+    .iwac-browse-list__card-link:focus-visible {
+        outline: none;
+        box-shadow: var(--ring-focus, 0 0 0 3px rgba(0, 0, 0, 0.1));
+    }
+    .iwac-browse-list__card-title {
+        font-size: var(--text-xl, 1.5rem);
+        margin: 0 0 var(--space-xs, 0.25rem);
+        color: var(--ink-strong, var(--ink, #222));
+    }
+    .iwac-browse-list__card-intro {
+        color: var(--ink-light, var(--muted, #666));
+        font-size: var(--text-sm, 0.9rem);
+    }
+    .iwac-browse-list__card-intro p {
+        margin: 0;
+    }
+    .iwac-browse-list__empty {
+        color: var(--muted, #666);
+        font-style: italic;
+    }
+</style>

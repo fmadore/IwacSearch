@@ -19,6 +19,8 @@ return [
             // /run/secrets/typesense_api_key Docker secret. Never read
             // from app config or env vars in production.
             TypesenseClient::class => Service\TypesenseClientFactory::class,
+            // Browse-config repository, talks to Omeka's shared DBAL connection.
+            Browse\BrowseConfigRepository::class => Service\BrowseConfigRepositoryFactory::class,
         ],
     ],
 

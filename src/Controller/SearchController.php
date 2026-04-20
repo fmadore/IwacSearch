@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace IwacSearch\Controller;
 
+use IwacSearch\Browse\BrowseConfigRepository;
 use IwacSearch\Service\TypesenseSearchKeyProvider;
 use Laminas\Http\Response;
 use Laminas\Mvc\Controller\AbstractActionController;
@@ -15,15 +16,17 @@ use Throwable;
  *
  *   GET /search             — HTML shell + Svelte bundle (standalone surface)
  *   GET /discovery/token    — mints a 1h scoped key for the browser
- *   GET /browse[/:slug]     — curated browse pages (M3 placeholder)
+ *   GET /browse             — landing page listing curated browse configs
+ *   GET /browse/:slug       — one curated browse page (Svelte mounted with locked filters)
  *
  * Same root + state script contract as IwacSearchBlock so the same
- * Svelte client mounts on either surface.
+ * Svelte client mounts on every surface.
  */
 class SearchController extends AbstractActionController
 {
     public function __construct(
         private readonly TypesenseSearchKeyProvider $keyProvider,
+        private readonly BrowseConfigRepository $browseRepository,
         /** @var array<string, mixed> */
         private readonly array $config = []
     ) {
@@ -113,12 +116,53 @@ class SearchController extends AbstractActionController
     }
 
     /**
-     * GET /browse[/:slug] — curated browse page (M3 placeholder).
+     * GET /browse[/:slug]
+     *
+     * Without a slug — landing page listing every curated browse config
+     * as a card linking to its detail page.
+     *
+     * With a slug — load the matching config row, render the same
+     * root + state script that /search uses, with locked filters and
+     * curated facet picks baked into the bootstrap. The Svelte client
+     * doesn't know it's on a curated page; it just sees a different
+     * bootstrap.
      */
     public function browseAction(): ViewModel
     {
         $slug = $this->params()->fromRoute('slug');
-        $view = new ViewModel(['slug' => $slug, 'placeholder' => true]);
+        $aliasName = $this->config['typesense']['collection_alias'] ?? 'iwac_current';
+
+        if ($slug === null || $slug === '') {
+            $configs = $this->browseRepository->findAll();
+            $view = new ViewModel(['configs' => $configs]);
+            $view->setTemplate('iwac-search/search/browse-list');
+            return $view;
+        }
+
+        $config = $this->browseRepository->findBySlug((string) $slug);
+        if ($config === null) {
+            // Soft 404 — render the landing page with a banner. Avoids a
+            // bare framework error page; gives the user navigation.
+            $this->getResponse()->setStatusCode(Response::STATUS_CODE_404);
+            $configs = $this->browseRepository->findAll();
+            $view = new ViewModel([
+                'configs'        => $configs,
+                'missing_slug'   => $slug,
+            ]);
+            $view->setTemplate('iwac-search/search/browse-list');
+            return $view;
+        }
+
+        $bootstrap = $config->toBootstrap(
+            collectionAlias: $aliasName,
+            tokenEndpoint:   '/discovery/token',
+            searchEndpoint:  '/search-api/multi_search'
+        );
+
+        $view = new ViewModel([
+            'config'    => $config,
+            'bootstrap' => $bootstrap,
+        ]);
         $view->setTemplate('iwac-search/search/browse');
         return $view;
     }
