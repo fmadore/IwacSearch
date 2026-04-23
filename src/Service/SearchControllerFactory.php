@@ -5,7 +5,7 @@ namespace IwacSearch\Service;
 
 use IwacSearch\Browse\BrowseConfigRepository;
 use IwacSearch\Controller\SearchController;
-use Laminas\Log\PsrLoggerAdapter;
+use IwacSearch\Log\OmekaPsrLogger;
 use Laminas\ServiceManager\Factory\FactoryInterface;
 use Psr\Container\ContainerInterface;
 use Typesense\Client as TypesenseClient;
@@ -28,9 +28,10 @@ class SearchControllerFactory implements FactoryInterface
     {
         $config = $container->get('Config')['iwac_search'] ?? [];
 
-        // Omeka\Logger is a Laminas\Log\Logger, not PSR-3 — wrap for the provider.
+        // Omeka\Logger is a Laminas\Log\Logger, not PSR-3 — wrap via our own
+        // adapter (Omeka's PsrLoggerAdapter is incompatible with psr/log 3.x).
         $logger = $container->has('Omeka\Logger')
-            ? new PsrLoggerAdapter($container->get('Omeka\Logger'))
+            ? new OmekaPsrLogger($container->get('Omeka\Logger'))
             : new \Psr\Log\NullLogger();
 
         $keyProvider = new TypesenseSearchKeyProvider(
