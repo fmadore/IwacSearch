@@ -26,6 +26,7 @@ require_once __DIR__ . '/vendor/autoload.php';
 
 use Laminas\EventManager\Event;
 use Laminas\EventManager\SharedEventManagerInterface;
+use Laminas\Log\PsrLoggerAdapter;
 use Laminas\ServiceManager\ServiceLocatorInterface;
 use Omeka\Module\AbstractModule;
 
@@ -93,7 +94,11 @@ class Module extends AbstractModule
         $connection->executeStatement(Browse\BrowseConfigRepository::createTableSql());
 
         $repository = new Browse\BrowseConfigRepository($connection);
-        $logger = $services->has('Omeka\Logger') ? $services->get('Omeka\Logger') : new \Psr\Log\NullLogger();
+        // Omeka\Logger is a Laminas\Log\Logger, not PSR-3. Wrap it so the
+        // seeder (and any future PSR-3 consumer) gets the interface it expects.
+        $logger = $services->has('Omeka\Logger')
+            ? new PsrLoggerAdapter($services->get('Omeka\Logger'))
+            : new \Psr\Log\NullLogger();
         $seeder = new Browse\CountrySeeder($repository, $logger);
         $stats = $seeder->seed();
         $logger->info('IwacSearch country browse pages seeded', $stats);
