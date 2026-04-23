@@ -234,14 +234,16 @@ class IwacSearchBlock extends AbstractBlockLayout
 
         // Append the compiled Svelte bundle once per request. headScript and
         // headLink dedupe identical URLs, so calling this from N blocks on
-        // the same page still results in one <script>/<link>.
-        $view->headScript()->appendFile(
-            $view->assetUrl('js/iwac-search.js', 'IwacSearch'),
-            'text/javascript',
-            ['defer' => true]
-        );
+        // the same page still results in one <script>/<link>. Matches the
+        // standalone /search route (see Module::injectSvelteAssets) — the
+        // .js import-loads its sibling dist/iwac-search.css automatically.
         $view->headLink()->appendStylesheet(
             $view->assetUrl('css/iwac-search.css', 'IwacSearch')
+        );
+        $view->headScript()->appendFile(
+            $view->assetUrl('dist/iwac-search.js', 'IwacSearch'),
+            'text/javascript',
+            ['defer' => true]
         );
 
         // The bootstrap config the Svelte client reads on mount. Same shape
