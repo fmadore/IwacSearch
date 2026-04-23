@@ -20,6 +20,7 @@ namespace IwacSearch;
 
 use Laminas\EventManager\Event;
 use Laminas\EventManager\SharedEventManagerInterface;
+use Laminas\ModuleManager\ModuleManager;
 use Laminas\ServiceManager\ServiceLocatorInterface;
 use Omeka\Module\AbstractModule;
 
@@ -28,6 +29,21 @@ class Module extends AbstractModule
     public function getConfig(): array
     {
         return include __DIR__ . '/config/module.config.php';
+    }
+
+    /**
+     * Load the module's Composer autoloader before any IwacSearch\… class
+     * is referenced. Omeka's main autoloader only maps Omeka\\ → application,
+     * so per-module namespaces (BrowseConfigRepository, CountrySeeder, the
+     * Typesense SDK, etc.) need their own autoload wired in here.
+     *
+     * ModuleManager calls init() earlier than onBootstrap/install/
+     * attachListeners, so this fires before any class resolution inside
+     * this file. Matches the pattern used by SearchSolr/Module.php.
+     */
+    public function init(ModuleManager $moduleManager): void
+    {
+        require_once __DIR__ . '/vendor/autoload.php';
     }
 
     /**
