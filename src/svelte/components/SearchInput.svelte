@@ -8,6 +8,8 @@
    * to keep this component standalone-testable.
    */
 
+  import { untrack } from 'svelte';
+
   interface Props {
     value: string;
     placeholder?: string;
@@ -23,8 +25,11 @@
   let timer = $state<number | null>(null);
 
   // Keep `local` in sync if the parent resets us (e.g. URL state push).
+  // Read `local` via untrack so typing into the input — which updates
+  // `local` — does not re-trigger this effect and wipe the keystroke
+  // during the 250 ms debounce window before the parent's `value` catches up.
   $effect(() => {
-    if (value !== local) {
+    if (value !== untrack(() => local)) {
       local = value;
     }
   });
