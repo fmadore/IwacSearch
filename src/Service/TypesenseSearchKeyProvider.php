@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace IwacSearch\Service;
 
+use Closure;
 use Omeka\Settings\SettingsInterface;
 use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
@@ -42,14 +43,30 @@ final class TypesenseSearchKeyProvider
     private const SETTINGS_KEY    = 'iwac_search_typesense_search_key';
     private const KEY_DESCRIPTION = 'IwacSearch public search-only parent (auto-created)';
 
+    /**
+     * Lazily-resolved Typesense client, cached per instance. The factory
+     * closure is invoked on first use — deferring construction so any
+     * missing Docker secret / unreachable Typesense surfaces inside
+     * mintPublicScopedKey(), where SearchController::tokenAction can
+     * catch and return a clean JSON 503 (instead of a 500 HTML page
+     * from an exception escaping the Laminas dispatcher).
+     */
+    private ?TypesenseClient $cachedClient = null;
+
     public function __construct(
-        private readonly TypesenseClient $typesense,
+        /** @var Closure(): TypesenseClient */
+        private readonly Closure $clientFactory,
         private readonly SettingsInterface $settings,
         private readonly LoggerInterface $logger = new NullLogger(),
         // Optional override file for production deployments that prefer
         // not to keep the search-only key in the database.
         private readonly string $searchKeyFile = '/run/secrets/typesense_search_key'
     ) {
+    }
+
+    private function client(): TypesenseClient
+    {
+        return $this->cachedClient ??= ($this->clientFactory)();
     }
 
     /**
@@ -70,7 +87,7 @@ final class TypesenseSearchKeyProvider
         $parent    = $this->resolveSearchOnlyKey();
         $expiresAt = time() + max(60, $expiresInSeconds);
 
-        $scoped = $this->typesense->keys->generateScopedSearchKey($parent, [
+        $scoped = $this->client()->keys->generateScopedSearchKey($parent, [
             'filter_by'      => 'is_public:=true',
             'exclude_fields' => 'ocr_text',
             'expires_at'     => $expiresAt,
@@ -114,7 +131,7 @@ final class TypesenseSearchKeyProvider
         $this->logger->info('Bootstrapping Typesense search-only parent key');
 
         try {
-            $response = $this->typesense->keys->create([
+            $response = $this->client()->keys->create([
                 'description' => self::KEY_DESCRIPTION,
                 // documents:search is the ONLY allowed action — anything
                 // else (e.g. documents:create) would let scoped keys derived

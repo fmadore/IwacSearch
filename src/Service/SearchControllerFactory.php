@@ -34,10 +34,15 @@ class SearchControllerFactory implements FactoryInterface
             ? new OmekaPsrLogger($container->get('Omeka\Logger'))
             : new \Psr\Log\NullLogger();
 
+        // Lazy factory closure — we resolve the TypesenseClient only when
+        // someone actually mints a key. That way a missing Docker secret or
+        // an unreachable Typesense server throws inside tokenAction (which
+        // returns 503 JSON) rather than here (which would 500 an HTML page
+        // before the action runs, hiding the actual error from the client).
         $keyProvider = new TypesenseSearchKeyProvider(
-            typesense: $container->get(TypesenseClient::class),
-            settings:  $container->get('Omeka\Settings'),
-            logger:    $logger
+            clientFactory: fn(): TypesenseClient => $container->get(TypesenseClient::class),
+            settings:      $container->get('Omeka\Settings'),
+            logger:        $logger
         );
 
         return new SearchController(
