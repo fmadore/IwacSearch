@@ -3,42 +3,68 @@ import { svelte } from '@sveltejs/vite-plugin-svelte';
 import { resolve } from 'node:path';
 
 /**
- * Build the Svelte client as a self-contained IIFE that any HTML page
- * can drop in via a single <script defer src=".../iwac-search.js"></script>.
+ * Two independent IIFE bundles, emitted side by side into asset/dist/:
  *
- * Why IIFE and not ESM:
- *   - Omeka pages are server-rendered without a module bundler; an IIFE
- *     loads with a plain <script> tag and immediately executes its
- *     auto-mount logic (walking [data-iwac-search-root] elements).
- *   - The CSS extracted from .svelte components is emitted alongside as
- *     iwac-search.css; Module.php injects the JS via headScript and the
- *     bundle imports its own stylesheet at runtime.
+ *   iwac-search.{js,css}       — public discovery client
+ *                                (mounts on /search, /browse/{slug}, and
+ *                                 page blocks via [data-iwac-search-root])
  *
- * The bundle is intentionally NOT split into chunks — a single ~80 KB
- * gzipped file is faster than parallel small loads on a fresh page,
- * especially over the warm IIIF FastCGI cache common to IWAC visitors.
+ *   iwac-search-admin.{js,css} — admin CRUD app for curated browse pages
+ *                                (mounts under /admin/iwac-search/...
+ *                                 via [data-iwac-admin-root])
+ *
+ * Why separate bundles instead of one admin + public SPA:
+ *   - Public pages should not ship admin-CRUD code the anonymous visitor
+ *     can't use anyway. ~25 KB gzipped saved per public page.
+ *   - Different mount contracts, different state shapes, different
+ *     security tradeoffs (admin needs CSRF, public doesn't).
+ *   - Build failures in one don't block the other.
+ *
+ * Both bundles are IIFE for the same reasons the public client was:
+ * Omeka pages are server-rendered HTML, no module loader, the
+ * compiled file auto-mounts on DOMContentLoaded.
  */
+
+const bundles = [
+  {
+    entry: 'src/svelte/main.ts',
+    fileName: 'iwac-search',
+    name: 'IwacSearch',
+  },
+  {
+    entry: 'src/svelte-admin/main.ts',
+    fileName: 'iwac-search-admin',
+    name: 'IwacSearchAdmin',
+  },
+];
+
+// Vite's lib mode takes a single entry, so we select one per build via
+// the `--mode` flag (`vite build --mode admin`) or an env var. The npm
+// scripts drive both in sequence; CI runs them in parallel via matrix.
+const activeBundleName = process.env.IWAC_BUNDLE ?? 'public';
+const active = activeBundleName === 'admin' ? bundles[1] : bundles[0];
+
 export default defineConfig({
   plugins: [svelte()],
   build: {
     outDir: 'asset/dist',
-    emptyOutDir: true,
+    // Don't wipe the sibling bundle's output on each build.
+    emptyOutDir: false,
     cssCodeSplit: false,
     sourcemap: false,
     target: 'es2022',
     lib: {
-      entry: resolve(__dirname, 'src/svelte/main.ts'),
+      entry: resolve(__dirname, active.entry),
       formats: ['iife'],
-      // The IIFE wrapper exposes a single global; nobody calls into it
-      // directly (auto-mount runs from main.ts), but Vite requires a name.
-      name: 'IwacSearch',
-      fileName: () => 'iwac-search.js',
+      name: active.name,
+      fileName: () => `${active.fileName}.js`,
     },
     rollupOptions: {
       output: {
-        // Force a stable CSS filename — Module.php expects iwac-search.css
+        // Force a stable CSS filename per bundle — Module.php + the
+        // admin controller both reference these by literal path.
         assetFileNames: (asset) =>
-          asset.name?.endsWith('.css') ? 'iwac-search.css' : 'assets/[name][extname]',
+          asset.name?.endsWith('.css') ? `${active.fileName}.css` : 'assets/[name][extname]',
       },
     },
   },

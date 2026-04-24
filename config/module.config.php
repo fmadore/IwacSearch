@@ -26,7 +26,8 @@ return [
 
     'controllers' => [
         'factories' => [
-            Controller\SearchController::class => Service\SearchControllerFactory::class,
+            Controller\SearchController::class                => Service\SearchControllerFactory::class,
+            Controller\Admin\BrowseConfigController::class    => Service\Controller\BrowseConfigControllerFactory::class,
         ],
     ],
 
@@ -41,6 +42,53 @@ return [
 
     'router' => [
         'routes' => [
+            // Admin CRUD for curated browse configs (M3.5). One HTML shell +
+            // two JSON endpoints. All three nest under /admin/iwac-search
+            // so the AdminModule nav entry has a single parent to target.
+            'admin' => [
+                'child_routes' => [
+                    'iwac-search' => [
+                        'type'    => \Laminas\Router\Http\Literal::class,
+                        'options' => [
+                            'route'    => '/iwac-search',
+                            'defaults' => [
+                                '__NAMESPACE__' => 'IwacSearch\Controller\Admin',
+                                'controller'    => Controller\Admin\BrowseConfigController::class,
+                                'action'        => 'browse',
+                            ],
+                        ],
+                        'may_terminate' => true,
+                        'child_routes' => [
+                            // HTML shell: /admin/iwac-search/browse-config
+                            'browse-config' => [
+                                'type'    => \Laminas\Router\Http\Literal::class,
+                                'options' => [
+                                    'route'    => '/browse-config',
+                                    'defaults' => ['action' => 'browse'],
+                                ],
+                            ],
+                            // JSON collection endpoint — GET (list) + POST (create)
+                            'browse-config-api-list' => [
+                                'type'    => \Laminas\Router\Http\Literal::class,
+                                'options' => [
+                                    'route'    => '/browse-config/api',
+                                    'defaults' => ['action' => 'apiList'],
+                                ],
+                            ],
+                            // JSON item endpoint — GET / PATCH / DELETE
+                            'browse-config-api-item' => [
+                                'type'    => \Laminas\Router\Http\Segment::class,
+                                'options' => [
+                                    'route'       => '/browse-config/api/:id',
+                                    'constraints' => ['id' => '\d+'],
+                                    'defaults'    => ['action' => 'apiItem'],
+                                ],
+                            ],
+                        ],
+                    ],
+                ],
+            ],
+
             // Public search page — HTML shell + (M1) compiled Svelte bundle.
             'iwac-search' => [
                 'type' => \Laminas\Router\Http\Literal::class,
@@ -86,6 +134,24 @@ return [
     'view_manager' => [
         'template_path_stack' => [
             __DIR__ . '/../view',
+        ],
+    ],
+
+    // Sidebar entry under Omeka's "Modules" admin menu.
+    'navigation' => [
+        'AdminModule' => [
+            [
+                'label'    => 'IWAC Search', // @translate
+                'route'    => 'admin/iwac-search/browse-config',
+                'resource' => Controller\Admin\BrowseConfigController::class,
+                'class'    => 'o-icon-search',
+                // Child routes stay off the visible sidebar but still let
+                // Omeka highlight the parent when a sub-page is active.
+                'pages' => [
+                    ['route' => 'admin/iwac-search/browse-config-api-list', 'visible' => false],
+                    ['route' => 'admin/iwac-search/browse-config-api-item', 'visible' => false],
+                ],
+            ],
         ],
     ],
 

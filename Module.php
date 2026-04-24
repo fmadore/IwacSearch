@@ -27,8 +27,10 @@ require_once __DIR__ . '/vendor/autoload.php';
 use IwacSearch\Log\OmekaPsrLogger;
 use Laminas\EventManager\Event;
 use Laminas\EventManager\SharedEventManagerInterface;
+use Laminas\Mvc\MvcEvent;
 use Laminas\ServiceManager\ServiceLocatorInterface;
 use Omeka\Module\AbstractModule;
+use Omeka\Permissions\Acl;
 
 class Module extends AbstractModule
 {
@@ -38,11 +40,44 @@ class Module extends AbstractModule
     }
 
     /**
+     * Register ACL rules before the dispatch reaches the controller.
+     *
+     * Editors, site-admins, and global-admins can all use the curated
+     * browse-config admin — it's a content operation, not a system
+     * setting. The `admin/` parent route already guarantees the user
+     * is authenticated, so null-role (anonymous) access is never
+     * possible here; this `allow()` call merely narrows *which* roles
+     * pass the check inside the admin session.
+     */
+    public function onBootstrap(MvcEvent $event): void
+    {
+        parent::onBootstrap($event);
+
+        /** @var Acl $acl */
+        $acl = $event->getApplication()->getServiceManager()->get('Omeka\Acl');
+        $acl->allow(
+            [
+                Acl::ROLE_EDITOR,
+                Acl::ROLE_SITE_ADMIN,
+                Acl::ROLE_GLOBAL_ADMIN,
+            ],
+            [Controller\Admin\BrowseConfigController::class],
+            // Actions on the admin controller — all four CRUD actions + the
+            // HTML shell. Listed explicitly so adding a future privilege
+            // (e.g. 'reorder') is a conscious change, not a silent grant.
+            ['browse', 'apiList', 'apiItem']
+        );
+    }
+
+    /**
      * Subscribe to Omeka events.
      *
      * For M1 we only need asset injection on the standalone /search and
      * /browse routes — the page block injects assets in its own render()
      * (idempotent via headScript dedup) so no listener is needed for blocks.
+     *
+     * M3.5 adds the admin CRUD surface, which loads its own bundle via
+     * the view template (asset/dist/iwac-search-admin.js).
      *
      * M4 will add api.create/update/delete.post listeners here for
      * incremental indexing.

@@ -37,7 +37,9 @@ export default [
   },
   {
     // The Svelte plugin needs the .svelte parser explicitly per-file.
-    files: ['**/*.svelte'],
+    // `.svelte.ts` / `.svelte.js` are Svelte 5's rune-in-TS files —
+    // svelte-eslint-parser v1+ handles them via the nested ts parser.
+    files: ['**/*.svelte', '**/*.svelte.ts', '**/*.svelte.js'],
     languageOptions: {
       parser: svelteParser,
       parserOptions: {

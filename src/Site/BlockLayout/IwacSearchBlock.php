@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace IwacSearch\Site\BlockLayout;
 
+use IwacSearch\Browse\FacetCatalog;
 use Laminas\View\Renderer\PhpRenderer;
 use Omeka\Api\Representation\SitePageBlockRepresentation;
 use Omeka\Api\Representation\SitePageRepresentation;
@@ -36,34 +37,6 @@ use Omeka\Site\BlockLayout\AbstractBlockLayout;
  */
 class IwacSearchBlock extends AbstractBlockLayout
 {
-    /** Facet fields the block UI lets editors mark as prominent. */
-    private const FACETABLE_FIELDS = [
-        'country_ss'        => 'Country',
-        'newspaper_ss'      => 'Newspaper',
-        'language_ss'       => 'Language',
-        'topics_ss'         => 'Topics',
-        'persons_ss'        => 'Persons',
-        'places_ss'         => 'Places',
-        'organisations_ss'  => 'Organisations',
-        'events_ss'         => 'Events',
-        'date_decade_ss'    => 'Decade',
-        'lda_topic_label'   => 'LDA topic',
-        'gemini_polarite_ss'=> 'Sentiment (Gemini)',
-        'type_s'            => 'Type',
-    ];
-
-    private const RENDER_MODES = [
-        'full'         => 'Full (search box + facets + results)',
-        'compact'      => 'Compact (search box only — links to /search)',
-        'results-only' => 'Results only (curated grid, no search box)',
-    ];
-
-    private const SORT_OPTIONS = [
-        '_text_match:desc' => 'Relevance',
-        'date:desc'        => 'Newest first',
-        'date:asc'         => 'Oldest first',
-    ];
-
     public function getLabel()
     {
         return 'IWAC Search'; // @translate
@@ -118,7 +91,7 @@ class IwacSearchBlock extends AbstractBlockLayout
             </div>
             <div class="inputs">
                 <select id="iwac-search-mode" name="<?= $escAttr($namePrefix) ?>[mode]">
-                    <?php foreach (self::RENDER_MODES as $key => $label): ?>
+                    <?php foreach (FacetCatalog::RENDER_MODES as $key => $label): ?>
                         <option value="<?= $escAttr($key) ?>"<?= $key === $mode ? ' selected' : '' ?>>
                             <?= $esc($t($label)) ?>
                         </option>
@@ -174,7 +147,7 @@ class IwacSearchBlock extends AbstractBlockLayout
                 </div>
             </div>
             <div class="inputs">
-                <?php foreach (self::FACETABLE_FIELDS as $field => $label): ?>
+                <?php foreach (FacetCatalog::FACETABLE_FIELDS as $field => $label): ?>
                     <label class="iwac-facet-pick" style="display:block;">
                         <input type="checkbox"
                                name="<?= $escAttr($namePrefix) ?>[prominent_facets][]"
@@ -193,7 +166,7 @@ class IwacSearchBlock extends AbstractBlockLayout
             </div>
             <div class="inputs">
                 <select id="iwac-search-sort" name="<?= $escAttr($namePrefix) ?>[default_sort]">
-                    <?php foreach (self::SORT_OPTIONS as $key => $label): ?>
+                    <?php foreach (FacetCatalog::SORT_OPTIONS as $key => $label): ?>
                         <option value="<?= $escAttr($key) ?>"<?= $key === $defaultSort ? ' selected' : '' ?>>
                             <?= $esc($t($label)) ?>
                         </option>

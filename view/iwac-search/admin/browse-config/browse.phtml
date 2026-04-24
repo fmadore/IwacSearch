@@ -1,0 +1,52 @@
+<?php
+/**
+ * Admin CRUD shell for curated browse configs.
+ *
+ * Server does exactly three things:
+ *   1. Renders the page chrome (title + nav + empty container div)
+ *   2. Inlines the full initial state as a JSON script tag so the
+ *      Svelte app paints on first frame with no fetch roundtrip.
+ *   3. Loads the iwac-search-admin bundle (IIFE, self-mounting).
+ *
+ * Everything else — tables, drawers, forms, delete confirms — lives in
+ * the Svelte bundle. The server only sees the JSON API under /api/…
+ * after the page is live.
+ *
+ * @var \Laminas\View\Renderer\PhpRenderer $this
+ * @var array<string, mixed> $bootstrap
+ */
+
+$translate = $this->plugin('translate');
+$this->htmlElement('body')->appendAttribute('class', 'iwac-search admin browse');
+
+// Inject the admin bundle + its CSS. Both files live alongside the
+// public iwac-search.* bundle in asset/dist, built from the second
+// Vite entry (src/svelte-admin/main.ts).
+$this->headLink()->appendStylesheet(
+    $this->assetUrl('dist/iwac-search-admin.css', 'IwacSearch')
+);
+$this->headScript()->appendFile(
+    $this->assetUrl('dist/iwac-search-admin.js', 'IwacSearch'),
+    'text/javascript',
+    ['defer' => true]
+);
+?>
+<?php echo $this->pageTitle($translate('IWAC Search: curated browse pages'), 1); ?>
+
+<p class="description">
+    <?php echo $translate('Each row appears as a public browse surface at /browse/{slug}. The locked filters baked into the scoped key are enforced server-side, so a curated page can\'t be widened by client tampering.'); ?>
+</p>
+
+<!--
+    Mount target + inline bootstrap. The Svelte app (main.ts) looks up
+    [data-iwac-admin-root] and its sibling script by id.
+-->
+<div
+    data-iwac-admin-root
+    data-iwac-admin-surface="browse-config"
+    class="iwac-admin-root"
+></div>
+
+<script type="application/json" id="iwac-admin-state-browse-config">
+<?php echo json_encode($bootstrap, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>
+</script>
