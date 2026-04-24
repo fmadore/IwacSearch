@@ -62,9 +62,31 @@
   let filters = $state<ActiveFilters>(initial.filters);
   let yearRange = $state<YearRange | null>(initial.yearRange);
 
-  let response = $state<IwacSearchResponse | null>(null);
+  // Hydrate from the SSR'd first page when present. The server inlines
+  // a `initial_response` in the bootstrap JSON for curated browse pages,
+  // page blocks with locked filters, and the standalone /search shell —
+  // so `response` is already set on first frame and the user sees real
+  // content, not a spinner. Falls back to null (client-side fetch path)
+  // when the server couldn't pre-render.
+  // svelte-ignore state_referenced_locally
+  let response = $state<IwacSearchResponse | null>(bootstrap.initial_response ?? null);
   let isLoading = $state(false);
   let error = $state<string | null>(null);
+
+  // First $effect run skips its fetch when the live state matches the
+  // state the server used for SSR (empty q, page 1, default sort, no
+  // filters, no year range). Any URL-hydrated non-pristine state (e.g.
+  // /search?q=ramadan) triggers a real fetch so the user sees what they
+  // asked for, not the "browse everything" SSR snapshot. Plain `let`
+  // (not $state) — reading it inside the effect doesn't create a
+  // reactive dependency, so mutating it doesn't re-trigger the effect.
+  // svelte-ignore state_referenced_locally
+  let skipNextFetch =
+    bootstrap.initial_response != null &&
+    initial.q === '' &&
+    initial.page === 1 &&
+    Object.keys(initial.filters).length === 0 &&
+    initial.yearRange === null;
 
   // Previous snapshot for URL-sync diffing (pushState vs replaceState).
   let prevState: SearchState | null = null;
@@ -112,6 +134,14 @@
     // vanish from the UI even if they fall outside the top-N prominent
     // list.
     const facetBy = Array.from(new Set([...bootstrap.prominent_facets, ...Object.keys(f)]));
+
+    // First run with a fresh SSR snapshot that matches the current
+    // state? Don't refetch — we already have the right data. Any
+    // subsequent state change falls through to the normal fetch.
+    if (skipNextFetch) {
+      skipNextFetch = false;
+      return;
+    }
 
     isLoading = true;
     error = null;

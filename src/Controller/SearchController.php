@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace IwacSearch\Controller;
 
 use IwacSearch\Browse\BrowseConfigRepository;
+use IwacSearch\Search\InitialResponseRenderer;
 use IwacSearch\Service\TypesenseSearchKeyProvider;
 use Laminas\Http\Response;
 use Laminas\Mvc\Controller\AbstractActionController;
@@ -27,6 +28,7 @@ class SearchController extends AbstractActionController
     public function __construct(
         private readonly TypesenseSearchKeyProvider $keyProvider,
         private readonly BrowseConfigRepository $browseRepository,
+        private readonly InitialResponseRenderer $initialRenderer,
         /** @var array<string, mixed> */
         private readonly array $config = []
     ) {
@@ -69,6 +71,15 @@ class SearchController extends AbstractActionController
                 'search' => '/search-api/multi_search',
             ],
         ];
+
+        // SSR the first page of results + facets so the Svelte client
+        // paints real content on first frame. If Typesense is down, the
+        // renderer returns null and the client falls back to its own
+        // scoped-key fetch — same end-state, one extra flash.
+        $initial = $this->initialRenderer->render($bootstrap);
+        if ($initial !== null) {
+            $bootstrap['initial_response'] = $initial;
+        }
 
         $view = new ViewModel(['bootstrap' => $bootstrap]);
         $view->setTemplate('iwac-search/search/index');
@@ -158,6 +169,14 @@ class SearchController extends AbstractActionController
             tokenEndpoint:   '/discovery/token',
             searchEndpoint:  '/search-api/multi_search'
         );
+
+        // Curated browse pages are the biggest SSR win: the corpus is
+        // already filtered by locked_filters, so inlining the first page
+        // is cheap and users see their country's items instantly.
+        $initial = $this->initialRenderer->render($bootstrap);
+        if ($initial !== null) {
+            $bootstrap['initial_response'] = $initial;
+        }
 
         $view = new ViewModel([
             'config'    => $config,

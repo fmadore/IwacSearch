@@ -6,6 +6,7 @@ namespace IwacSearch\Service;
 use IwacSearch\Browse\BrowseConfigRepository;
 use IwacSearch\Controller\SearchController;
 use IwacSearch\Log\OmekaPsrLogger;
+use IwacSearch\Search\InitialResponseRenderer;
 use Laminas\ServiceManager\Factory\FactoryInterface;
 use Psr\Container\ContainerInterface;
 use Typesense\Client as TypesenseClient;
@@ -48,6 +49,7 @@ class SearchControllerFactory implements FactoryInterface
         return new SearchController(
             keyProvider:        $keyProvider,
             browseRepository:   $container->get(BrowseConfigRepository::class),
+            initialRenderer:    $container->get(InitialResponseRenderer::class),
             config:             $config
         );
     }

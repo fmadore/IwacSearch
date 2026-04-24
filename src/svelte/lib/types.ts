@@ -14,6 +14,16 @@ export interface IwacBootstrap {
     token: string; // /discovery/token (server-mounted)
     search: string; // /search-api/multi_search (proxied)
   };
+  /**
+   * First-page results + facet counts pre-rendered server-side by
+   * InitialResponseRenderer. When present, the Svelte client uses it
+   * to seed its `response` state and skips the initial fetch — so the
+   * page paints real content on first frame instead of a spinner. The
+   * server omits this field if Typesense is unreachable or the response
+   * was malformed; the client then falls back to its normal scoped-key
+   * + fetch flow, same end state with one extra roundtrip.
+   */
+  initial_response?: IwacSearchResponse;
 }
 
 /**

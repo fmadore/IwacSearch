@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace IwacSearch\Site\BlockLayout;
 
 use IwacSearch\Browse\FacetCatalog;
+use IwacSearch\Search\InitialResponseRenderer;
 use Laminas\View\Renderer\PhpRenderer;
 use Omeka\Api\Representation\SitePageBlockRepresentation;
 use Omeka\Api\Representation\SitePageRepresentation;
@@ -37,6 +38,11 @@ use Omeka\Site\BlockLayout\AbstractBlockLayout;
  */
 class IwacSearchBlock extends AbstractBlockLayout
 {
+    public function __construct(
+        private readonly InitialResponseRenderer $initialRenderer
+    ) {
+    }
+
     public function getLabel()
     {
         return 'IWAC Search'; // @translate
@@ -236,6 +242,15 @@ class IwacSearchBlock extends AbstractBlockLayout
                 'search' => $view->basePath('/search-api/multi_search'),
             ],
         ];
+
+        // SSR the first page so blocks with locked filters (e.g. "latest
+        // from Sidwaya" on a Welcome page) show items immediately instead
+        // of flashing empty for ~500 ms while the client mints a scoped
+        // key and fetches. Null return → fall through to client-side fetch.
+        $initial = $this->initialRenderer->render($bootstrap);
+        if ($initial !== null) {
+            $bootstrap['initial_response'] = $initial;
+        }
 
         return $view->partial($templateViewScript, [
             'block'      => $block,

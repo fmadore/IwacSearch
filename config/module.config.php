@@ -21,6 +21,10 @@ return [
             TypesenseClient::class => Service\TypesenseClientFactory::class,
             // Browse-config repository, talks to Omeka's shared DBAL connection.
             Browse\BrowseConfigRepository::class => Service\BrowseConfigRepositoryFactory::class,
+            // Server-side pre-renderer — calls Typesense during PHP dispatch
+            // so the first page of results is inlined into the bootstrap JSON
+            // and the Svelte client paints without any mount-time fetch.
+            Search\InitialResponseRenderer::class => Service\Search\InitialResponseRendererFactory::class,
         ],
     ],
 
@@ -33,10 +37,11 @@ return [
 
     // Page block — lets editors drop the search surface onto any Site page.
     // Same Svelte bundle as the standalone /search route, different bootstrap
-    // config blob per block instance.
+    // config blob per block instance. Factory (not invokable) so the block
+    // can pull the server-side renderer that inlines first-page results.
     'block_layouts' => [
-        'invokables' => [
-            'iwacSearch' => Site\BlockLayout\IwacSearchBlock::class,
+        'factories' => [
+            'iwacSearch' => Service\BlockLayout\IwacSearchBlockFactory::class,
         ],
     ],
 

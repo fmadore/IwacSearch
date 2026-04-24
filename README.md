@@ -10,16 +10,42 @@ on Omeka.
 
 ## Status
 
-**M3.5 — Admin CRUD for curated browse pages.** Second Svelte bundle (`iwac-search-admin.{js,css}`, 20.5 KB gzipped) mounted under `/admin/iwac-search/browse-config`, with a JSON API under `…/api/…` (GET list · POST create · GET/PATCH/DELETE item). The initial config list is inlined server-side from MySQL via Doctrine DBAL and baked into the page's bootstrap JSON — zero fetches on mount, paints like FacetedBrowse. Mutations are optimistic (row appears / updates / disappears immediately) with rollback on server error. Editors + site-admins + global-admins all have access via ACL allow-rules in `Module::onBootstrap`.
+**M3.5 + public SSR.** Both discovery surfaces (public `/search`, `/browse/{slug}`, page blocks) and the admin CRUD (`/admin/iwac-search/browse-config`) now paint results on first frame. The server calls Typesense during PHP dispatch, inlines the first-page response + facet counts into the bootstrap JSON, and the Svelte client seeds its `response` state at mount without any fetch roundtrip. If Typesense is unreachable the SSR quietly returns null and the client falls back to its normal scoped-key flow — same end state, one extra flash.
 
-| Milestone | Status  | Highlights                                                                        |
-| --------- | :-----: | --------------------------------------------------------------------------------- |
-| M0        | ✅ done | Schema, indexer pipeline (4 mappers + ACL overlay + stopwords), atomic alias swap |
-| M1        | ✅ done | `/search`, `/discovery/token`, page block, Svelte 5 client, alias-spelling search |
-| M2        | ✅ done | Facet panel, year range slider, URL state, sort, hybrid keyword+vector search     |
-| M3        | ✅ done | `iwac_browse_config` table + 6 auto-seeded country pages + `/browse` landing      |
-| M3.5      | ✅ done | Admin CRUD UI (Svelte, optimistic, SSR-inlined initial state, JSON API)           |
-| M4 → M6   | planned | Incremental indexing, polish, cutover                                             |
+Admin CRUD mutations are optimistic (row appears / updates / disappears immediately) with rollback on server error. Editors + site-admins + global-admins have access via ACL rules in `Module::onBootstrap`.
+
+| Milestone  | Status  | Highlights                                                                        |
+| ---------- | :-----: | --------------------------------------------------------------------------------- |
+| M0         | ✅ done | Schema, indexer pipeline (4 mappers + ACL overlay + stopwords), atomic alias swap |
+| M1         | ✅ done | `/search`, `/discovery/token`, page block, Svelte 5 client, alias-spelling search |
+| M2         | ✅ done | Facet panel, year range slider, URL state, sort, hybrid keyword+vector search     |
+| M3         | ✅ done | `iwac_browse_config` table + 6 auto-seeded country pages + `/browse` landing      |
+| M3.5       | ✅ done | Admin CRUD UI (Svelte, optimistic, SSR-inlined initial state, JSON API)           |
+| Public SSR | ✅ done | PHP-side Typesense call inlines first page + facets into every public surface     |
+| M4         |  next   | Incremental indexing via `api.*.post` — Omeka edits propagate to Typesense live   |
+| M5 → M6    | planned | Polish, typeahead, cutover from AdvancedSearch / SearchSolr                       |
+
+## Testing checklist (after each deploy)
+
+Changes below this line are **not yet verified on the live site**. Tick
+as you confirm; remove rows once they've been through a full cycle.
+
+- [ ] **Install / upgrade path**: visit `/admin/module/browse`, confirm IwacSearch is at `0.1.0`; click Configure → empty page renders (expected — no settings form yet). Green "installed" banner gone on refresh.
+- [ ] **Admin sidebar entry**: left sidebar shows **IWAC Search** under the Modules group. Click it, land on the browse-config table.
+- [ ] **Admin: instant paint**: 6 seeded country rows visible on first frame (no spinner). Network tab shows zero XHR on mount.
+- [ ] **Admin: create**: click _+ New browse page_, fill in slug / title / locked filter / pick 3 facets, hit Create. Row appears with pulsing optimistic style → settles once server responds. CSRF header is sent (check request headers).
+- [ ] **Admin: edit**: click Edit on any row, change title + reorder facets, Save. Drawer closes, row updates in place.
+- [ ] **Admin: delete + confirm**: click Delete → "Confirm?" button appears → click Confirm → row disappears. No modal. Confirm on server log that the DELETE request returned `{deleted: true}`.
+- [ ] **Admin: slug validation**: try to create with uppercase slug, with spaces, with starting digit — each should show the red error banner _and_ leave the drawer open.
+- [ ] **Admin: duplicate slug**: try to create `benin` (already exists) — server returns 409 with `slug_taken`; banner shows the detail; row rolls back.
+- [ ] **Admin: ACL**: log in as an editor (non-admin). Can they reach `/admin/iwac-search/browse-config`? Expected: yes. Log out → expected: Omeka redirects to login.
+- [ ] **Public: `/search` SSR**: arrive with an empty URL. First 10 items visible in view-source (HTML, not just JS). No flash of empty state.
+- [ ] **Public: `/browse/benin` SSR**: same. Country-filtered results in view-source.
+- [ ] **Public: page block with locked filter**: any site page with the IWAC Search block. Results in view-source, not flashed after mount.
+- [ ] **Public: `/search?q=ramadan` still fetches**: URL-hydrated query differs from SSR snapshot; client fetches and replaces within ~200ms.
+- [ ] **Public: year slider**: drag either handle, see results update. Inline range display updates. Reset restores bounds.
+- [ ] **Public: token endpoint resilience**: temporarily rename `/run/secrets/typesense_api_key`, refresh `/search`. Page still loads (SSR gracefully returns null), error banner shows actual reason.
+- [ ] **Public: search input**: typing is debounced, not wiped mid-keystroke (regression from the earlier `$effect` self-retrigger bug).
 
 Full roadmap: [IWAC-docker/docs/iwac-search-roadmap.md](https://github.com/fmadore/IWAC-docker/blob/main/docs/iwac-search-roadmap.md).
 
@@ -278,10 +304,10 @@ never affects production.
 
 Two Vite builds emit two IIFE bundles side by side:
 
-| Bundle                         | Source              | Mounted on                                          |
-| ------------------------------ | ------------------- | --------------------------------------------------- |
-| `iwac-search.{js,css}`         | `src/svelte/`       | `/search`, `/browse/{slug}`, page blocks            |
-| `iwac-search-admin.{js,css}`   | `src/svelte-admin/` | `/admin/iwac-search/browse-config`                  |
+| Bundle                       | Source              | Mounted on                               |
+| ---------------------------- | ------------------- | ---------------------------------------- |
+| `iwac-search.{js,css}`       | `src/svelte/`       | `/search`, `/browse/{slug}`, page blocks |
+| `iwac-search-admin.{js,css}` | `src/svelte-admin/` | `/admin/iwac-search/browse-config`       |
 
 Both compiled bundles (`asset/dist/*`) are committed so production
 deployments work with no Node toolchain. To rebuild after changing
