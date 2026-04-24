@@ -72,15 +72,20 @@ class Module extends AbstractModule
     /**
      * Subscribe to Omeka events.
      *
-     * For M1 we only need asset injection on the standalone /search and
-     * /browse routes — the page block injects assets in its own render()
-     * (idempotent via headScript dedup) so no listener is needed for blocks.
+     *   - view.layout on SearchController → asset injection for /search,
+     *     /browse, /browse/{slug} (M1).
+     *   - api.update.post on ItemAdapter → sync is_public changes + any
+     *     future incremental doc refresh to Typesense (M4).
+     *   - api.delete.post on ItemAdapter → remove the doc from Typesense
+     *     so stale hits don't survive a resource delete (M4).
      *
-     * M3.5 adds the admin CRUD surface, which loads its own bundle via
-     * the view template (asset/dist/iwac-search-admin.js).
+     * NOT attached: api.create.post. New items need the full mapper
+     * pipeline (authorities, OCR overlay, embeddings) that only the
+     * bulk reindex provides — a half-indexed doc ranks worse than no
+     * doc. New items wait for the next nightly / monthly reindex.
      *
-     * M4 will add api.create/update/delete.post listeners here for
-     * incremental indexing.
+     * The admin CRUD surface (M3.5) doesn't need event wiring; it loads
+     * its own bundle via the view template.
      */
     public function attachListeners(SharedEventManagerInterface $sharedEventManager): void
     {
@@ -89,6 +94,85 @@ class Module extends AbstractModule
             'view.layout',
             [$this, 'injectSvelteAssets']
         );
+
+        // api.update.post fires *after* the DB write succeeds, so we
+        // only push to Typesense for saves the user actually completed.
+        $sharedEventManager->attach(
+            \Omeka\Api\Adapter\ItemAdapter::class,
+            'api.update.post',
+            [$this, 'onItemUpdate']
+        );
+        $sharedEventManager->attach(
+            \Omeka\Api\Adapter\ItemAdapter::class,
+            'api.delete.post',
+            [$this, 'onItemDelete']
+        );
+    }
+
+    /**
+     * Push is_public changes to Typesense after an Omeka item save.
+     *
+     * Kept cheap: one partial PATCH per save, wrapped in a try/catch
+     * that logs-and-swallows so a flaky Typesense never blocks the
+     * admin's save workflow.
+     */
+    public function onItemUpdate(Event $event): void
+    {
+        $response = $event->getParam('response');
+        if (!$response instanceof \Omeka\Api\Response) {
+            return;
+        }
+        $representation = $response->getContent();
+        if (!$representation instanceof \Omeka\Api\Representation\ItemRepresentation) {
+            return;
+        }
+
+        $itemId = (int) $representation->id();
+        $isPublic = (bool) $representation->isPublic();
+
+        $this->getIncrementalIndexer()
+            ?->updateItemPublicState($itemId, $isPublic);
+    }
+
+    /**
+     * Remove the item's doc from Typesense after an Omeka delete.
+     *
+     * Laminas passes the pre-delete representation as `response` →
+     * `getContent()`; we only need the id.
+     */
+    public function onItemDelete(Event $event): void
+    {
+        $response = $event->getParam('response');
+        if (!$response instanceof \Omeka\Api\Response) {
+            return;
+        }
+        $representation = $response->getContent();
+        if (!$representation instanceof \Omeka\Api\Representation\ItemRepresentation) {
+            return;
+        }
+
+        $this->getIncrementalIndexer()
+            ?->deleteItem((int) $representation->id());
+    }
+
+    /**
+     * Pull the IncrementalIndexer out of the service manager lazily.
+     * Returns null if the service isn't resolvable for any reason —
+     * listeners should no-op rather than 500 the admin save.
+     */
+    private function getIncrementalIndexer(): ?Indexer\IncrementalIndexer
+    {
+        try {
+            $sl = $this->getServiceLocator();
+            if ($sl === null) {
+                return null;
+            }
+            /** @var Indexer\IncrementalIndexer $indexer */
+            $indexer = $sl->get(Indexer\IncrementalIndexer::class);
+            return $indexer;
+        } catch (\Throwable) {
+            return null;
+        }
     }
 
     /**

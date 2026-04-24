@@ -14,16 +14,18 @@ on Omeka.
 
 Admin CRUD mutations are optimistic (row appears / updates / disappears immediately) with rollback on server error. Editors + site-admins + global-admins have access via ACL rules in `Module::onBootstrap`.
 
-| Milestone  | Status  | Highlights                                                                        |
-| ---------- | :-----: | --------------------------------------------------------------------------------- |
-| M0         | ✅ done | Schema, indexer pipeline (4 mappers + ACL overlay + stopwords), atomic alias swap |
-| M1         | ✅ done | `/search`, `/discovery/token`, page block, Svelte 5 client, alias-spelling search |
-| M2         | ✅ done | Facet panel, year range slider, URL state, sort, hybrid keyword+vector search     |
-| M3         | ✅ done | `iwac_browse_config` table + 6 auto-seeded country pages + `/browse` landing      |
-| M3.5       | ✅ done | Admin CRUD UI (Svelte, optimistic, SSR-inlined initial state, JSON API)           |
-| Public SSR | ✅ done | PHP-side Typesense call inlines first page + facets into every public surface     |
-| M4         |  next   | Incremental indexing via `api.*.post` — Omeka edits propagate to Typesense live   |
-| M5 → M6    | planned | Polish, typeahead, cutover from AdvancedSearch / SearchSolr                       |
+| Milestone  |   Status   | Highlights                                                                        |
+| ---------- | :--------: | --------------------------------------------------------------------------------- |
+| M0         |  ✅ done   | Schema, indexer pipeline (4 mappers + ACL overlay + stopwords), atomic alias swap |
+| M1         |  ✅ done   | `/search`, `/discovery/token`, page block, Svelte 5 client, alias-spelling search |
+| M2         |  ✅ done   | Facet panel, year range slider, URL state, sort, hybrid keyword+vector search     |
+| M3         |  ✅ done   | `iwac_browse_config` table + 6 auto-seeded country pages + `/browse` landing      |
+| M3.5       |  ✅ done   | Admin CRUD UI (Svelte, optimistic, SSR-inlined initial state, JSON API)           |
+| Public SSR |  ✅ done   | PHP-side Typesense call inlines first page + facets into every public surface     |
+| M4         | 🟡 partial | is_public sync + delete sync via `api.update/delete.post` on ItemAdapter          |
+| M5 → M6    |  planned   | Polish, typeahead, cutover from AdvancedSearch / SearchSolr                       |
+
+**M4 coverage (partial):** Toggling an item's visibility in the Omeka admin item editor now syncs the `is_public` flag to Typesense within the same request — a just-made-private item stops appearing in public search immediately, not "some time in the next 30 days". Item deletes also remove the corresponding Typesense doc. Metadata edits (title / subject / date) and new items **still require a bulk reindex** to propagate — they go through the HF dataset pipeline, and an on-demand Omeka-to-Typesense mapper would duplicate that work with a different source of truth. Deferring until the lag becomes painful in practice.
 
 ## Testing checklist (after each deploy)
 
@@ -46,6 +48,9 @@ as you confirm; remove rows once they've been through a full cycle.
 - [ ] **Public: year slider**: drag either handle, see results update. Inline range display updates. Reset restores bounds.
 - [ ] **Public: token endpoint resilience**: temporarily rename `/run/secrets/typesense_api_key`, refresh `/search`. Page still loads (SSR gracefully returns null), error banner shows actual reason.
 - [ ] **Public: search input**: typing is debounced, not wiped mid-keystroke (regression from the earlier `$effect` self-retrigger bug).
+- [ ] **M4: is_public toggle**: take any item currently showing on `/browse/benin`. In the Omeka item admin, flip visibility to private. Save. Refresh `/browse/benin` within 5 s — the item must be gone. Flip back to public, refresh — it reappears. Check `/var/log/...` for an `IwacSearch: is_public updated in Typesense` info line per save.
+- [ ] **M4: item delete**: create a throwaway item in Omeka admin, confirm it appears in Typesense (via `GET /search-api/collections/iwac_current/documents/<id>` or by showing up in a search). Delete the item. The Typesense doc should also be gone (`404` from the same GET). Log shows `IwacSearch: item deleted from Typesense`.
+- [ ] **M4: failure mode**: temporarily block Typesense (e.g. `docker compose stop typesense`). Toggle an item's visibility — the save should complete normally, the admin shouldn't see an error, and the log should show `IwacSearch: failed to update is_public in Typesense`. Restart Typesense; subsequent saves should succeed again without any intervention.
 
 Full roadmap: [IWAC-docker/docs/iwac-search-roadmap.md](https://github.com/fmadore/IWAC-docker/blob/main/docs/iwac-search-roadmap.md).
 

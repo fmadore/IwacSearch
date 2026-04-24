@@ -25,6 +25,10 @@ return [
             // so the first page of results is inlined into the bootstrap JSON
             // and the Svelte client paints without any mount-time fetch.
             Search\InitialResponseRenderer::class => Service\Search\InitialResponseRendererFactory::class,
+            // Live sync for is_public toggles + deletes (M4). Hooked into
+            // the Omeka item api.update.post / api.delete.post events by
+            // Module::attachListeners.
+            Indexer\IncrementalIndexer::class => Service\Indexer\IncrementalIndexerFactory::class,
         ],
     ],
 
