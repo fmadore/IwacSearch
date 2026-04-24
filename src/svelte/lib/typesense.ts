@@ -28,9 +28,12 @@ export class TypesenseClient {
   /**
    * Run a search.
    *
-   * Empty query returns an empty response (the public scoped key still
-   * carries `filter_by: is_public:=true` baked in, so a `q=*` would
-   * happily dump all 14 K public docs — never what the user wants).
+   * Empty query issues a browse request (Typesense `q=*` wildcard), so
+   * curated browse surfaces, page blocks with locked_filters, and the
+   * standalone /search route all show results + facet counts immediately
+   * on mount. The public scoped key still carries `filter_by:is_public:=true`,
+   * so this never leaks private docs. `exclude_fields: ocr_text` is also
+   * baked in at mint time, so browse responses stay lean.
    *
    * `activeFilters` are the in-memory selections from the facet panel,
    * one entry per facet field. They're combined with the block's
@@ -53,10 +56,6 @@ export class TypesenseClient {
      */
     facetBy?: string[];
   }): Promise<IwacSearchResponse> {
-    if (!args.q.trim()) {
-      return emptyResponse(args.page ?? 1);
-    }
-
     const key = await this.getKey();
     const collection = this.bootstrap.collection_alias ?? key.collection;
 
@@ -68,19 +67,32 @@ export class TypesenseClient {
 
     const facets = args.facetBy ?? this.bootstrap.prominent_facets;
 
+    // Browse mode: empty query becomes Typesense's wildcard `*`. Text-match
+    // scoring is meaningless without a query, so fall back to date:desc
+    // (newest first) unless the caller explicitly set a sort.
+    const isBrowse = !args.q.trim();
+    const q = isBrowse ? '*' : args.q;
+    const sortBy =
+      args.sortBy && args.sortBy !== '_text_match:desc'
+        ? args.sortBy
+        : isBrowse
+          ? 'date:desc'
+          : (this.bootstrap.default_sort ?? '_text_match:desc');
+
     const body = {
       searches: [
         {
           collection,
-          q: args.q,
+          q,
           // Same query_by everywhere: full-text on title + ocr (highlights
           // only via exclude_fields), entity aliases for spelling tolerance,
-          // and the embedding field for semantic recall.
+          // and the embedding field for semantic recall. Typesense ignores
+          // query_by when q=* so browse mode drops straight through.
           query_by: 'title_txt,ocr_text,entity_aliases_txt,embedding',
           // Stopwords keep "le", "la", "des" etc. from polluting matches
           stopwords: 'fr_default',
           filter_by: filterBy || undefined,
-          sort_by: args.sortBy ?? this.bootstrap.default_sort,
+          sort_by: sortBy,
           page: args.page ?? 1,
           per_page: args.perPage ?? this.bootstrap.results_per_page,
           highlight_fields: 'title_txt,ocr_text',
@@ -202,15 +214,4 @@ async function safeText(res: Response): Promise<string> {
   } catch {
     return '<unreadable body>';
   }
-}
-
-function emptyResponse(page: number): IwacSearchResponse {
-  return {
-    found: 0,
-    page,
-    request_params: {},
-    hits: [],
-    facet_counts: [],
-    search_time_ms: 0,
-  };
 }

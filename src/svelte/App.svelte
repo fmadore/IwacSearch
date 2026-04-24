@@ -96,18 +96,16 @@
   });
 
   // Query → search. Tracks every reactive state field by reading it.
+  // Always fires on mount (including with an empty query) so browse
+  // surfaces — curated pages, blocks with locked_filters, or just a
+  // bare /search arrival — show items + facets immediately. The
+  // typesense client translates an empty query into `q=*` browse mode.
   $effect(() => {
     const q = query;
     const p = page;
     const s = sort;
     const f = filters;
     const y = yearRange;
-
-    if (!q.trim()) {
-      response = null;
-      error = null;
-      return;
-    }
 
     // Facet union: always request counts for prominent facets + any
     // facet the user has currently selected, so selected values don't
@@ -239,8 +237,6 @@
           <p class="iwac-search__status" aria-live="polite">Searching…</p>
         {:else if response}
           <ResultsList {response} onLoadMore={loadMore} {isLoading} />
-        {:else if query.trim() === ''}
-          <p class="iwac-search__hint">Type a search term to query the IWAC archive.</p>
         {/if}
       </div>
     </div>
@@ -248,8 +244,6 @@
     <p class="iwac-search__status" aria-live="polite">Searching…</p>
   {:else if response}
     <ResultsList {response} onLoadMore={loadMore} {isLoading} />
-  {:else if query.trim() === '' && bootstrap.mode !== 'compact'}
-    <p class="iwac-search__hint">Type a search term to query the IWAC archive.</p>
   {/if}
 </div>
 
@@ -306,8 +300,7 @@
     flex-direction: column;
     gap: var(--space-xs, 0.25rem);
   }
-  .iwac-search__status,
-  .iwac-search__hint {
+  .iwac-search__status {
     color: var(--muted, #666);
     font-size: var(--text-sm, 0.9rem);
     margin: 0;
