@@ -24,7 +24,7 @@ Admin CRUD mutations are optimistic (row appears / updates / disappears immediat
 | Public SSR |  ✅ done   | PHP-side Typesense call inlines first page + facets into every public surface     |
 | M4         | 🟡 partial | is_public sync + delete sync via `api.update/delete.post` on ItemAdapter          |
 | M5         |  ✅ done   | Typeahead dropdown — prefix search, keyboard nav, click-to-navigate               |
-| M6         |  planned   | Polish, mobile drawer, cutover from AdvancedSearch / SearchSolr                   |
+| M6         | 🟡 partial | Mobile filter drawer + result count + empty-state polish; cutover still planned   |
 
 **M4 coverage (partial):** Toggling an item's visibility in the Omeka admin item editor now syncs the `is_public` flag to Typesense within the same request — a just-made-private item stops appearing in public search immediately, not "some time in the next 30 days". Item deletes also remove the corresponding Typesense doc. Metadata edits (title / subject / date) and new items **still require a bulk reindex** to propagate — they go through the HF dataset pipeline, and an on-demand Omeka-to-Typesense mapper would duplicate that work with a different source of truth. Deferring until the lag becomes painful in practice.
 
@@ -58,6 +58,13 @@ as you confirm; remove rows once they've been through a full cycle.
 - [ ] **M5: blur close**: click anywhere outside the search box → dropdown disappears. Click inside the dropdown → does NOT close (no premature blur).
 - [ ] **M5: scoped suggestions**: on `/browse/benin`, type a prefix that matches docs from another country (e.g. an entity unique to Niger). The dropdown should show only Bénin docs — `locked_filters` is honored on the suggest call too.
 - [ ] **M5: graceful failure**: stop Typesense, type into the box. The dropdown stays empty (no error popup); the main search shows its existing error banner. Restart Typesense, keep typing — suggestions resume without a page reload.
+- [ ] **M6: mobile drawer trigger**: load `/search` on a phone (or DevTools mobile emulation < 768 px). The facet column should be **hidden**; a "Filters" button appears in the results toolbar instead.
+- [ ] **M6: drawer open + close**: tap the Filters button → panel slides in from the right with a backdrop fade. Apply a filter → results update behind the drawer. Tap × / backdrop / press Esc → drawer slides out.
+- [ ] **M6: active-count badge**: with a couple of filters selected, the Filters button shows a red pill with the count (e.g. `Filters [3]`). Clearing all filters removes the badge.
+- [ ] **M6: body scroll lock**: drawer open on a long page → scrolling the backdrop doesn't move the underlying results. Closing the drawer restores normal scroll.
+- [ ] **M6: result count display**: above the results, on every surface, a "142 results" line is visible (or "1 result" / "No results"). Updates in real-time as filters change.
+- [ ] **M6: empty state**: search for `xyzzyx` (or apply mutually-exclusive filters). The results pane shows a dashed empty state with "Clear all filters" if filters are active, or a "try a broader query" message if just the query missed. No "Type a search term…" hint.
+- [ ] **M6: desktop unchanged**: viewport ≥ 768 px, the facet column is back to its sticky two-pane layout — Filters button is hidden, drawer chrome is suppressed. No regressions on desktop.
 
 Full roadmap: [IWAC-docker/docs/iwac-search-roadmap.md](https://github.com/fmadore/IWAC-docker/blob/main/docs/iwac-search-roadmap.md).
 

@@ -211,6 +211,48 @@
     }
   }
 
+  // ── Mobile filter drawer ────────────────────────────────────────────
+  // On wide screens the FacetPanel sits in a sticky left column.
+  // On narrow screens it hides behind a "Filters" toggle and slides in
+  // from the right when opened — same pattern as the admin drawer.
+  let filterDrawerOpen = $state(false);
+
+  function openFilterDrawer(): void {
+    filterDrawerOpen = true;
+  }
+  function closeFilterDrawer(): void {
+    filterDrawerOpen = false;
+  }
+
+  // Number of currently-active filters (categorical chips + year range).
+  // Drives the badge on the mobile Filters button.
+  const activeFilterCount = $derived(
+    Object.values(filters).reduce((n, vs) => n + (vs?.length ?? 0), 0) + (yearRange ? 1 : 0),
+  );
+
+  // Esc closes the drawer if open.
+  function handleGlobalKeydown(e: KeyboardEvent): void {
+    if (e.key === 'Escape' && filterDrawerOpen) {
+      e.preventDefault();
+      closeFilterDrawer();
+    }
+  }
+
+  // Lock body scroll while the drawer is open — otherwise touch users
+  // can scroll the underlying page through the drawer's backdrop.
+  $effect(() => {
+    if (typeof document === 'undefined') return;
+    const wasLocked = document.body.style.overflow;
+    if (filterDrawerOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = wasLocked === 'hidden' ? '' : wasLocked;
+    }
+    return () => {
+      document.body.style.overflow = wasLocked;
+    };
+  });
+
   function handleSortChange(next: string): void {
     sort = next;
     page = 1;
@@ -313,26 +355,90 @@
 
   {#if bootstrap.mode === 'full'}
     <div class="iwac-search__layout">
-      <div class="iwac-search__facets">
-        <FacetPanel
-          {facets}
-          selected={filters}
-          {yearRange}
-          onToggle={handleFacetToggle}
-          onClearAll={handleClearAll}
-          onClearField={handleClearField}
-          onYearRangeChange={handleYearRangeChange}
-        />
+      <!--
+        On wide screens this column shows inline; on narrow screens it
+        becomes a slide-in overlay (CSS handles the visual switch via
+        media queries + the data-open attribute).
+      -->
+      <div
+        class="iwac-search__facets"
+        data-open={filterDrawerOpen ? 'true' : 'false'}
+        aria-hidden={!filterDrawerOpen ? 'true' : 'false'}
+      >
+        <!-- Backdrop only renders / clicks-through on mobile. -->
+        <div
+          class="iwac-search__facets-backdrop"
+          onclick={closeFilterDrawer}
+          role="presentation"
+        ></div>
+
+        <div class="iwac-search__facets-panel">
+          <header class="iwac-search__facets-mobile-head">
+            <h2 class="iwac-search__facets-title">Filters</h2>
+            <button
+              type="button"
+              class="iwac-search__facets-close"
+              aria-label="Close filters"
+              onclick={closeFilterDrawer}
+            >
+              ×
+            </button>
+          </header>
+          <FacetPanel
+            {facets}
+            selected={filters}
+            {yearRange}
+            onToggle={handleFacetToggle}
+            onClearAll={handleClearAll}
+            onClearField={handleClearField}
+            onYearRangeChange={handleYearRangeChange}
+          />
+        </div>
       </div>
 
       <div class="iwac-search__results">
+        <!-- Toolbar: result count + Filters trigger (mobile-only) + sort -->
         {#if response}
           <div class="iwac-search__results-head">
+            <span class="iwac-search__results-count" aria-live="polite">
+              {#if response.found > 0}
+                {response.found.toLocaleString()}
+                {response.found === 1 ? 'result' : 'results'}
+              {:else}
+                No results
+              {/if}
+            </span>
+            <button
+              type="button"
+              class="iwac-search__filters-trigger"
+              onclick={openFilterDrawer}
+              aria-label="Open filters"
+            >
+              Filters
+              {#if activeFilterCount > 0}
+                <span class="iwac-search__filters-trigger-badge">{activeFilterCount}</span>
+              {/if}
+            </button>
             <SortSelect value={sort} onChange={handleSortChange} />
           </div>
         {/if}
+
         {#if isLoading && !response}
           <p class="iwac-search__status" aria-live="polite">Searching…</p>
+        {:else if response && response.found === 0}
+          <div class="iwac-search__empty" role="status">
+            <strong>No results.</strong>
+            {#if activeFilterCount > 0}
+              <p>Try removing a filter or two.</p>
+              <button type="button" class="iwac-search__clear-link" onclick={handleClearAll}>
+                Clear all filters
+              </button>
+            {:else if query.trim() !== ''}
+              <p>Try a broader query, or check your spelling.</p>
+            {:else}
+              <p>The corpus seems empty — please contact the site administrator.</p>
+            {/if}
+          </div>
         {:else if response}
           <ResultsList {response} onLoadMore={loadMore} {isLoading} />
         {/if}
@@ -344,6 +450,8 @@
     <ResultsList {response} onLoadMore={loadMore} {isLoading} />
   {/if}
 </div>
+
+<svelte:window onkeydown={handleGlobalKeydown} />
 
 <style>
   .iwac-search {
@@ -363,12 +471,8 @@
     gap: var(--space-lg, 1.5rem);
     align-items: start;
   }
-  @media (max-width: 48rem) {
-    /* Stack on mobile. A proper drawer comes in M5. */
-    .iwac-search__layout {
-      grid-template-columns: 1fr;
-    }
-  }
+
+  /* Desktop: facet column sits inline; the drawer chrome is suppressed. */
   .iwac-search__facets {
     position: sticky;
     top: var(--space-md, 1rem);
@@ -376,10 +480,120 @@
     max-height: calc(100vh - var(--space-xl, 2rem));
     overflow-y: auto;
   }
+  .iwac-search__facets-backdrop {
+    display: none;
+  }
+  .iwac-search__facets-mobile-head {
+    display: none;
+  }
+  .iwac-search__filters-trigger {
+    display: none;
+  }
+
   @media (max-width: 48rem) {
+    /* Mobile: results take the full width; facets become an overlay. */
+    .iwac-search__layout {
+      grid-template-columns: 1fr;
+    }
     .iwac-search__facets {
-      position: static;
+      position: fixed;
+      inset: 0;
       max-height: none;
+      overflow: visible;
+      z-index: 50;
+      pointer-events: none;
+      visibility: hidden;
+    }
+    .iwac-search__facets[data-open='true'] {
+      pointer-events: auto;
+      visibility: visible;
+    }
+    .iwac-search__facets-backdrop {
+      display: block;
+      position: absolute;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.4);
+      opacity: 0;
+      transition: opacity 180ms ease;
+    }
+    .iwac-search__facets[data-open='true'] .iwac-search__facets-backdrop {
+      opacity: 1;
+    }
+    .iwac-search__facets-panel {
+      position: absolute;
+      inset-block: 0;
+      inset-inline-end: 0;
+      width: min(22rem, 92vw);
+      background: var(--surface, #fff);
+      box-shadow: -8px 0 24px rgba(0, 0, 0, 0.12);
+      overflow-y: auto;
+      transform: translateX(100%);
+      transition: transform 200ms cubic-bezier(0.2, 0, 0, 1);
+    }
+    .iwac-search__facets[data-open='true'] .iwac-search__facets-panel {
+      transform: translateX(0);
+    }
+    .iwac-search__facets-mobile-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: var(--space-md, 1rem);
+      border-bottom: 1px solid var(--border-light, #eee);
+      position: sticky;
+      top: 0;
+      background: var(--surface, #fff);
+      z-index: 1;
+    }
+    .iwac-search__facets-title {
+      margin: 0;
+      font-size: var(--text-lg, 1.125rem);
+      color: var(--ink, #222);
+    }
+    .iwac-search__facets-close {
+      width: 2rem;
+      height: 2rem;
+      border: none;
+      background: transparent;
+      color: var(--muted, #666);
+      font-size: var(--text-2xl, 1.5rem);
+      line-height: 1;
+      border-radius: var(--radius-full, 9999px);
+      cursor: pointer;
+    }
+    .iwac-search__facets-close:hover {
+      background: var(--surface-sunken, #f0f0f0);
+      color: var(--ink, #222);
+    }
+    .iwac-search__filters-trigger {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--space-xs, 0.25rem);
+      padding: 0.4rem 0.75rem;
+      border: 1px solid var(--border, #ccc);
+      border-radius: var(--radius-md, 0.75rem);
+      background: var(--surface, #fff);
+      color: var(--ink, #222);
+      font-size: var(--text-sm, 0.9rem);
+      font-weight: 500;
+      cursor: pointer;
+    }
+    .iwac-search__filters-trigger:hover {
+      border-color: var(--primary, #c66);
+      color: var(--primary, #c66);
+    }
+    .iwac-search__filters-trigger-badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 1.25rem;
+      height: 1.25rem;
+      padding: 0 0.375rem;
+      background: var(--primary, #c66);
+      color: var(--surface, #fff);
+      border-radius: var(--radius-full, 9999px);
+      font-size: var(--text-xs, 0.75rem);
+      font-weight: 600;
+      font-variant-numeric: tabular-nums;
     }
   }
   .iwac-search__results {
@@ -390,7 +604,50 @@
   }
   .iwac-search__results-head {
     display: flex;
-    justify-content: flex-end;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-sm, 0.5rem);
+    flex-wrap: wrap;
+  }
+  .iwac-search__results-count {
+    color: var(--muted, #666);
+    font-size: var(--text-sm, 0.9rem);
+    font-variant-numeric: tabular-nums;
+    /* Push the trigger + sort to the end on a single line. */
+    margin-inline-end: auto;
+  }
+  .iwac-search__empty {
+    background: var(--surface-sunken, #f9f9f9);
+    border: 1px dashed var(--border, #ccc);
+    border-radius: var(--radius-md, 0.75rem);
+    padding: var(--space-xl, 2rem) var(--space-lg, 1.5rem);
+    text-align: center;
+    color: var(--muted, #666);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--space-sm, 0.5rem);
+  }
+  .iwac-search__empty strong {
+    color: var(--ink, #222);
+    font-size: var(--text-lg, 1.125rem);
+  }
+  .iwac-search__empty p {
+    margin: 0;
+  }
+  .iwac-search__clear-link {
+    background: none;
+    border: 1px solid var(--primary, #c66);
+    color: var(--primary, #c66);
+    border-radius: var(--radius-md, 0.75rem);
+    padding: 0.4rem 0.75rem;
+    font-size: var(--text-sm, 0.9rem);
+    cursor: pointer;
+    margin-top: var(--space-xs, 0.25rem);
+  }
+  .iwac-search__clear-link:hover {
+    background: var(--primary, #c66);
+    color: var(--surface, #fff);
   }
   .iwac-search__error {
     background: color-mix(in srgb, var(--primary, #c66) 12%, var(--surface, #fff));
