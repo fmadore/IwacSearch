@@ -24,7 +24,7 @@ namespace IwacSearch;
 // (so init() wouldn't fire yet). Matches the ImageServer / IiifServer pattern.
 require_once __DIR__ . '/vendor/autoload.php';
 
-use IwacSearch\Log\OmekaPsrLogger;
+use IwacSearch\Log\LoggerResolver;
 use Laminas\EventManager\Event;
 use Laminas\EventManager\SharedEventManagerInterface;
 use Laminas\Mvc\MvcEvent;
@@ -213,12 +213,7 @@ class Module extends AbstractModule
         $connection->executeStatement(Browse\BrowseConfigRepository::createTableSql());
 
         $repository = new Browse\BrowseConfigRepository($connection);
-        // Omeka\Logger is a Laminas\Log\Logger, not PSR-3. Wrap via our own
-        // adapter — Omeka's bundled Laminas\Log\PsrLoggerAdapter fatals under
-        // psr/log 3.x (which typesense-php / Guzzle pull into our vendor tree).
-        $logger = $services->has('Omeka\Logger')
-            ? new OmekaPsrLogger($services->get('Omeka\Logger'))
-            : new \Psr\Log\NullLogger();
+        $logger = LoggerResolver::fromContainer($services);
         $seeder = new Browse\CountrySeeder($repository, $logger);
         $stats = $seeder->seed();
         $logger->info('IwacSearch country browse pages seeded', $stats);

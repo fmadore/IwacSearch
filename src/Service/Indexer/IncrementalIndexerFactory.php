@@ -4,10 +4,9 @@ declare(strict_types=1);
 namespace IwacSearch\Service\Indexer;
 
 use IwacSearch\Indexer\IncrementalIndexer;
-use IwacSearch\Log\OmekaPsrLogger;
+use IwacSearch\Log\LoggerResolver;
 use Laminas\ServiceManager\Factory\FactoryInterface;
 use Psr\Container\ContainerInterface;
-use Psr\Log\NullLogger;
 use Typesense\Client as TypesenseClient;
 
 /**
@@ -25,14 +24,10 @@ final class IncrementalIndexerFactory implements FactoryInterface
         $config = $container->get('Config')['iwac_search']['typesense'] ?? [];
         $alias  = (string) ($config['collection_alias'] ?? 'iwac_current');
 
-        $logger = $container->has('Omeka\Logger')
-            ? new OmekaPsrLogger($container->get('Omeka\Logger'))
-            : new NullLogger();
-
         return new IncrementalIndexer(
             clientFactory:   fn(): TypesenseClient => $container->get(TypesenseClient::class),
             collectionAlias: $alias,
-            logger:          $logger
+            logger:          LoggerResolver::fromContainer($container)
         );
     }
 }

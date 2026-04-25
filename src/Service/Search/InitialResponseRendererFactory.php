@@ -3,11 +3,10 @@ declare(strict_types=1);
 
 namespace IwacSearch\Service\Search;
 
-use IwacSearch\Log\OmekaPsrLogger;
+use IwacSearch\Log\LoggerResolver;
 use IwacSearch\Search\InitialResponseRenderer;
 use Laminas\ServiceManager\Factory\FactoryInterface;
 use Psr\Container\ContainerInterface;
-use Psr\Log\NullLogger;
 use Typesense\Client as TypesenseClient;
 
 /**
@@ -22,10 +21,6 @@ final class InitialResponseRendererFactory implements FactoryInterface
         $requestedName,
         ?array $options = null
     ): InitialResponseRenderer {
-        $logger = $container->has('Omeka\Logger')
-            ? new OmekaPsrLogger($container->get('Omeka\Logger'))
-            : new NullLogger();
-
         $defaultCollection = (string) (
             $container->get('Config')['iwac_search']['typesense']['collection_alias']
             ?? 'iwac_current'
@@ -33,7 +28,7 @@ final class InitialResponseRendererFactory implements FactoryInterface
 
         return new InitialResponseRenderer(
             clientFactory:     fn(): TypesenseClient => $container->get(TypesenseClient::class),
-            logger:            $logger,
+            logger:            LoggerResolver::fromContainer($container),
             defaultCollection: $defaultCollection
         );
     }

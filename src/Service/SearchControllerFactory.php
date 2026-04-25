@@ -5,7 +5,7 @@ namespace IwacSearch\Service;
 
 use IwacSearch\Browse\BrowseConfigRepository;
 use IwacSearch\Controller\SearchController;
-use IwacSearch\Log\OmekaPsrLogger;
+use IwacSearch\Log\LoggerResolver;
 use IwacSearch\Search\InitialResponseRenderer;
 use Laminas\ServiceManager\Factory\FactoryInterface;
 use Psr\Container\ContainerInterface;
@@ -29,11 +29,7 @@ class SearchControllerFactory implements FactoryInterface
     {
         $config = $container->get('Config')['iwac_search'] ?? [];
 
-        // Omeka\Logger is a Laminas\Log\Logger, not PSR-3 — wrap via our own
-        // adapter (Omeka's PsrLoggerAdapter is incompatible with psr/log 3.x).
-        $logger = $container->has('Omeka\Logger')
-            ? new OmekaPsrLogger($container->get('Omeka\Logger'))
-            : new \Psr\Log\NullLogger();
+        $logger = LoggerResolver::fromContainer($container);
 
         // Lazy factory closure — we resolve the TypesenseClient only when
         // someone actually mints a key. That way a missing Docker secret or
