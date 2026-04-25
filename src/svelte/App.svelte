@@ -9,6 +9,7 @@
   import { TypesenseClient } from './lib/typesense';
   import { onUrlPop, readUrlState, syncToUrl } from './lib/urlState';
   import SearchInput from './components/SearchInput.svelte';
+  import SuggestDropdown from './components/SuggestDropdown.svelte';
   import ResultsList from './components/ResultsList.svelte';
   import FacetPanel from './components/FacetPanel.svelte';
   import SortSelect from './components/SortSelect.svelte';
@@ -172,6 +173,42 @@
   function handleQueryChange(next: string): void {
     query = next;
     page = 1; // any new query resets pagination
+    // Re-arm the dropdown whenever the query mutates — even if the
+    // user has just blurred the input, fresh keystrokes should reopen
+    // suggestions.
+    suggestOpen = true;
+  }
+
+  // ── Typeahead state ─────────────────────────────────────────────────
+  // Open while the search box has focus AND the user has typed at least
+  // 2 chars. Closes on blur (after a tick to let dropdown clicks land),
+  // on Esc, after picking a suggestion, or on result navigation.
+  let suggestOpen = $state(false);
+  let suggestRef: SuggestDropdown | undefined = $state();
+
+  function handleSearchFocus(): void {
+    suggestOpen = true;
+  }
+  function handleSearchBlur(): void {
+    // Defer the close so a click on a suggestion item registers before
+    // the dropdown is unmounted. The dropdown also blocks the parent
+    // blur via preventBlur on mousedown — both belts make this robust.
+    window.setTimeout(() => {
+      suggestOpen = false;
+    }, 120);
+  }
+  function handleSuggestClose(): void {
+    suggestOpen = false;
+  }
+  function handleSuggestPickQuery(text: string): void {
+    handleQueryChange(text);
+    suggestOpen = false;
+  }
+  function handleSearchKeydown(e: KeyboardEvent): void {
+    if (suggestRef?.handleKeydown(e)) {
+      // Dropdown consumed it (arrow / enter / escape).
+      return;
+    }
   }
 
   function handleSortChange(next: string): void {
@@ -229,11 +266,42 @@
 
 <div class="iwac-search" class:iwac-search--compact={bootstrap.mode === 'compact'}>
   {#if bootstrap.mode !== 'results-only'}
-    <SearchInput
-      value={query}
-      placeholder="Rechercher dans les archives IWAC…"
-      onChange={handleQueryChange}
-    />
+    <!--
+      <form role="search"> is the canonical container for a search UI.
+      onfocusin / onfocusout bubble (unlike onfocus / onblur), so the
+      wrapper catches focus state for the inner <input> without
+      SearchInput having to expose any event props. onkeydown does the
+      same for arrow/enter/escape navigation in the SuggestDropdown.
+      Submit is suppressed because the search runs reactively on every
+      keystroke — Enter shouldn't reload the page.
+
+      svelte-check flags listeners on a "non-interactive" form, but
+      these are bubbling delegations from the inner <input> (which IS
+      interactive), so the warning is a false positive here.
+    -->
+    <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+    <form
+      class="iwac-search__searchbox"
+      role="search"
+      onfocusin={handleSearchFocus}
+      onfocusout={handleSearchBlur}
+      onkeydown={handleSearchKeydown}
+      onsubmit={(e) => e.preventDefault()}
+    >
+      <SearchInput
+        value={query}
+        placeholder="Rechercher dans les archives IWAC…"
+        onChange={handleQueryChange}
+      />
+      <SuggestDropdown
+        bind:this={suggestRef}
+        {query}
+        {client}
+        enabled={suggestOpen}
+        onPickQuery={handleSuggestPickQuery}
+        onClose={handleSuggestClose}
+      />
+    </form>
   {/if}
 
   {#if error}
@@ -284,6 +352,10 @@
     gap: var(--space-md, 1rem);
     color: var(--ink, #222);
     font-size: var(--text-base, 1rem);
+  }
+  /* Anchors the floating SuggestDropdown — must be positioned. */
+  .iwac-search__searchbox {
+    position: relative;
   }
   .iwac-search__layout {
     display: grid;

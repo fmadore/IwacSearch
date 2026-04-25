@@ -23,7 +23,8 @@ Admin CRUD mutations are optimistic (row appears / updates / disappears immediat
 | M3.5       |  ✅ done   | Admin CRUD UI (Svelte, optimistic, SSR-inlined initial state, JSON API)           |
 | Public SSR |  ✅ done   | PHP-side Typesense call inlines first page + facets into every public surface     |
 | M4         | 🟡 partial | is_public sync + delete sync via `api.update/delete.post` on ItemAdapter          |
-| M5 → M6    |  planned   | Polish, typeahead, cutover from AdvancedSearch / SearchSolr                       |
+| M5         |  ✅ done   | Typeahead dropdown — prefix search, keyboard nav, click-to-navigate               |
+| M6         |  planned   | Polish, mobile drawer, cutover from AdvancedSearch / SearchSolr                   |
 
 **M4 coverage (partial):** Toggling an item's visibility in the Omeka admin item editor now syncs the `is_public` flag to Typesense within the same request — a just-made-private item stops appearing in public search immediately, not "some time in the next 30 days". Item deletes also remove the corresponding Typesense doc. Metadata edits (title / subject / date) and new items **still require a bulk reindex** to propagate — they go through the HF dataset pipeline, and an on-demand Omeka-to-Typesense mapper would duplicate that work with a different source of truth. Deferring until the lag becomes painful in practice.
 
@@ -51,6 +52,12 @@ as you confirm; remove rows once they've been through a full cycle.
 - [ ] **M4: is_public toggle**: take any item currently showing on `/browse/benin`. In the Omeka item admin, flip visibility to private. Save. Refresh `/browse/benin` within 5 s — the item must be gone. Flip back to public, refresh — it reappears. Check `/var/log/...` for an `IwacSearch: is_public updated in Typesense` info line per save.
 - [ ] **M4: item delete**: create a throwaway item in Omeka admin, confirm it appears in Typesense (via `GET /search-api/collections/iwac_current/documents/<id>` or by showing up in a search). Delete the item. The Typesense doc should also be gone (`404` from the same GET). Log shows `IwacSearch: item deleted from Typesense`.
 - [ ] **M4: failure mode**: temporarily block Typesense (e.g. `docker compose stop typesense`). Toggle an item's visibility — the save should complete normally, the admin shouldn't see an error, and the log should show `IwacSearch: failed to update is_public in Typesense`. Restart Typesense; subsequent saves should succeed again without any intervention.
+- [ ] **M5: typeahead dropdown**: focus the search input on `/search`, type `ram` (or any 2+ char prefix). A dropdown with up to 6 hits should appear within ~150 ms. Each row shows the highlighted title plus a type chip.
+- [ ] **M5: keyboard nav**: with the dropdown open, ↓ highlights the first row, ↓↓ the second; ↑ wraps. Esc closes. Enter on a highlighted row navigates to its `omeka_url` (or seeds the query if no URL).
+- [ ] **M5: click-to-navigate**: clicking a suggestion opens its Omeka detail page. Cmd/Ctrl-click opens in a new tab. Plain click closes the dropdown.
+- [ ] **M5: blur close**: click anywhere outside the search box → dropdown disappears. Click inside the dropdown → does NOT close (no premature blur).
+- [ ] **M5: scoped suggestions**: on `/browse/benin`, type a prefix that matches docs from another country (e.g. an entity unique to Niger). The dropdown should show only Bénin docs — `locked_filters` is honored on the suggest call too.
+- [ ] **M5: graceful failure**: stop Typesense, type into the box. The dropdown stays empty (no error popup); the main search shows its existing error banner. Restart Typesense, keep typing — suggestions resume without a page reload.
 
 Full roadmap: [IWAC-docker/docs/iwac-search-roadmap.md](https://github.com/fmadore/IWAC-docker/blob/main/docs/iwac-search-roadmap.md).
 
@@ -110,6 +117,7 @@ IwacSearch/
 │   │   ├── App.svelte                          #   per-mount root, owns search state
 │   │   ├── components/
 │   │   │   ├── SearchInput.svelte              #   debounced text input
+│   │   │   ├── SuggestDropdown.svelte          #   typeahead — prefix-search dropdown (M5)
 │   │   │   ├── FacetPanel.svelte               #   sticky left column + active-filter chips
 │   │   │   ├── FacetGroup.svelte               #   one collapsible facet (checkboxes + show-more)
 │   │   │   ├── DateRangeSlider.svelte          #   two-handle year range

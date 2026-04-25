@@ -129,6 +129,78 @@ export class TypesenseClient {
   }
 
   /**
+   * Run a typeahead/suggest query for a short prefix string.
+   *
+   * Tuned differently from the main search:
+   *   - `prefix=true` so each query token does prefix matching (Typesense
+   *     default, but explicit here in case future versions change).
+   *   - `query_by` is narrower (title + entity_aliases) — OCR fulltext
+   *     prefix-matching produces too much noise for a dropdown.
+   *   - per_page is small (default 6) and we ignore facets — the whole
+   *     point is one cheap call per keystroke.
+   *   - The same scoped key + same locked_filters apply, so suggestions
+   *     respect the surface's curatorial scope (a /browse/benin
+   *     suggestion never leaks docs from another country).
+   *
+   * Returns up to `perPage` hits with `title_txt` highlighting, ready to
+   * render in a dropdown. Empty / very short prefixes resolve to an empty
+   * response without hitting the network — saves the cheapest fetch.
+   *
+   * Errors are translated to a thrown Error like search() — caller
+   * decides whether to surface in the UI or swallow.
+   */
+  async suggest(prefix: string, perPage = 6): Promise<IwacSearchResponse> {
+    const trimmed = prefix.trim();
+    if (trimmed.length < 2) {
+      return emptySuggestResponse();
+    }
+
+    const key = await this.getKey();
+    const collection = this.bootstrap.collection_alias ?? key.collection;
+    const filterBy = this.bootstrap.locked_filters?.trim() || undefined;
+
+    const body = {
+      searches: [
+        {
+          collection,
+          q: trimmed,
+          // Narrower than the main search query_by — dropdown should
+          // surface clear title hits, not fuzzy OCR matches that wouldn't
+          // make sense out of context.
+          query_by: 'title_txt,entity_aliases_txt',
+          prefix: true,
+          filter_by: filterBy,
+          // Newest first feels right for a typeahead (recent docs surface
+          // before older ones even when match scores are similar).
+          sort_by: '_text_match:desc,date:desc',
+          page: 1,
+          per_page: Math.max(1, Math.min(15, perPage)),
+          highlight_fields: 'title_txt',
+          highlight_full_fields: 'title_txt',
+          // No facets, no snippet — keeps the response tiny and the
+          // dropdown render fast.
+          exclude_fields: 'ocr_text,embedding',
+          limit_hits: 50,
+        },
+      ],
+    };
+
+    const res = await fetch(this.bootstrap.endpoints.search, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-TYPESENSE-API-KEY': key.key,
+      },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) {
+      throw new Error(`Suggest HTTP ${res.status}: ${await safeText(res)}`);
+    }
+    const json = (await res.json()) as { results: IwacSearchResponse[] };
+    return json.results?.[0] ?? emptySuggestResponse();
+  }
+
+  /**
    * Get a valid scoped key, refreshing in-flight requests get coalesced
    * so a burst of debounced searches doesn't N-amplify token requests.
    */
@@ -206,6 +278,17 @@ function combineFilters(...parts: Array<string | undefined | null>): string {
     .map((p) => p?.trim())
     .filter((p): p is string => !!p)
     .join(' && ');
+}
+
+function emptySuggestResponse(): IwacSearchResponse {
+  return {
+    found: 0,
+    page: 1,
+    request_params: {},
+    hits: [],
+    facet_counts: [],
+    search_time_ms: 0,
+  };
 }
 
 async function safeText(res: Response): Promise<string> {
