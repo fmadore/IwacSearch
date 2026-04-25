@@ -65,6 +65,10 @@ as you confirm; remove rows once they've been through a full cycle.
 - [ ] **M6: result count display**: above the results, on every surface, a "142 results" line is visible (or "1 result" / "No results"). Updates in real-time as filters change.
 - [ ] **M6: empty state**: search for `xyzzyx` (or apply mutually-exclusive filters). The results pane shows a dashed empty state with "Clear all filters" if filters are active, or a "try a broader query" message if just the query missed. No "Type a search term…" hint.
 - [ ] **M6: desktop unchanged**: viewport ≥ 768 px, the facet column is back to its sticky two-pane layout — Filters button is hidden, drawer chrome is suppressed. No regressions on desktop.
+- [ ] **Drawer extraction: admin form regression**: open `/admin/iwac-search/browse-config`, click Edit on any row. Drawer slides in from right, header shows `Edit: …`, × button closes, ESC closes, backdrop click closes. Body scroll locks while open, restores on close. (Same behaviour as before; just verifying the move to shared `<Drawer>` didn't break it.)
+- [ ] **Drawer extraction: mobile filter regression**: same set of behaviours on the public `/search` page in a narrow viewport. Open Filters → close via × / Esc / backdrop. No layout flicker, no double-rendered FacetPanel.
+- [ ] **Drawer extraction: viewport resize**: open the mobile filter drawer, then drag DevTools to widen past 48rem. Drawer should auto-close (no orphan overlay floating over the desktop layout). Narrow back down — Filters trigger reappears, drawer state defaults to closed.
+- [ ] **Drawer extraction: scroll lock cleanup**: open drawer on a long page → `document.body.style.overflow` is `hidden`. Close → it's back to `''`. Refresh mid-open → no leaked overflow lock on next load.
 
 Full roadmap: [IWAC-docker/docs/iwac-search-roadmap.md](https://github.com/fmadore/IWAC-docker/blob/main/docs/iwac-search-roadmap.md).
 
@@ -141,13 +145,16 @@ IwacSearch/
 │   │   ├── App.svelte                          #   list + drawer + error banner
 │   │   ├── components/
 │   │   │   ├── ConfigTable.svelte              #   rows + inline delete-confirm
-│   │   │   ├── ConfigFormDrawer.svelte         #   slide-in create/edit panel
+│   │   │   ├── ConfigFormDrawer.svelte         #   create/edit form (uses shared <Drawer>)
 │   │   │   └── FacetPicker.svelte              #   reorderable checkbox grid
 │   │   ├── lib/
 │   │   │   ├── api.ts                          #   JSON CRUD client + error envelope
 │   │   │   ├── store.svelte.ts                 #   optimistic state (Svelte 5 runes)
 │   │   │   └── types.ts                        #   BrowseConfig, ApiError, Bootstrap
 │   │   └── main.ts                             #   IIFE entry; mounts on [data-iwac-admin-root]
+│   ├── svelte-shared/                          # Reusable widgets used by BOTH bundles
+│   │   └── components/
+│   │       └── Drawer.svelte                   #   slide-in overlay (animation, ESC, scroll lock)
 │   └── Service/
 │       ├── SearchControllerFactory.php
 │       ├── TypesenseClientFactory.php          # Admin client (reads Docker secret)

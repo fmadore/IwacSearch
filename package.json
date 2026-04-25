@@ -10,9 +10,9 @@
     "build:public": "cross-env IWAC_BUNDLE=public vite build",
     "build:admin": "cross-env IWAC_BUNDLE=admin vite build",
     "check": "svelte-check --tsconfig ./tsconfig.json",
-    "lint": "eslint src/svelte src/svelte-admin && prettier --check \"src/svelte/**/*.{ts,svelte}\" \"src/svelte-admin/**/*.{ts,svelte}\" \"*.{ts,json,md}\"",
-    "lint:fix": "eslint src/svelte src/svelte-admin --fix && prettier --write \"src/svelte/**/*.{ts,svelte}\" \"src/svelte-admin/**/*.{ts,svelte}\" \"*.{ts,json,md}\"",
-    "format": "prettier --write \"src/svelte/**/*.{ts,svelte}\" \"src/svelte-admin/**/*.{ts,svelte}\" \"*.{ts,json,md}\""
+    "lint": "eslint src/svelte src/svelte-admin src/svelte-shared && prettier --check \"src/svelte/**/*.{ts,svelte}\" \"src/svelte-admin/**/*.{ts,svelte}\" \"src/svelte-shared/**/*.{ts,svelte}\" \"*.{ts,json,md}\"",
+    "lint:fix": "eslint src/svelte src/svelte-admin src/svelte-shared --fix && prettier --write \"src/svelte/**/*.{ts,svelte}\" \"src/svelte-admin/**/*.{ts,svelte}\" \"src/svelte-shared/**/*.{ts,svelte}\" \"*.{ts,json,md}\"",
+    "format": "prettier --write \"src/svelte/**/*.{ts,svelte}\" \"src/svelte-admin/**/*.{ts,svelte}\" \"src/svelte-shared/**/*.{ts,svelte}\" \"*.{ts,json,md}\""
   },
   "devDependencies": {
     "@eslint/js": "^10.0.0",

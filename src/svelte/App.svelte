@@ -13,6 +13,7 @@
   import ResultsList from './components/ResultsList.svelte';
   import FacetPanel from './components/FacetPanel.svelte';
   import SortSelect from './components/SortSelect.svelte';
+  import Drawer from '../svelte-shared/components/Drawer.svelte';
 
   /**
    * One App instance per mount target. Owns the full search state:
@@ -213,9 +214,32 @@
 
   // ── Mobile filter drawer ────────────────────────────────────────────
   // On wide screens the FacetPanel sits in a sticky left column.
-  // On narrow screens it hides behind a "Filters" toggle and slides in
-  // from the right when opened — same pattern as the admin drawer.
+  // On narrow screens it hides behind a "Filters" trigger and slides
+  // in from the right inside the shared <Drawer> component — same
+  // chrome (animation, backdrop, ESC, scroll lock) as the admin uses.
+  //
+  // matchMedia gives us a reactive boolean for "narrow viewport" so
+  // the conditional render below picks the right shell. FacetPanel
+  // re-mounts on a resize across the breakpoint; that's acceptable
+  // because the only state worth preserving is FacetGroup's expand
+  // memory, and resizing across breakpoints mid-session is rare.
   let filterDrawerOpen = $state(false);
+  let isNarrow = $state(false);
+
+  $effect(() => {
+    if (typeof window === 'undefined') return;
+    const mq = window.matchMedia('(max-width: 48rem)');
+    const update = (): void => {
+      isNarrow = mq.matches;
+      // Desktop should never have the drawer "open" — close it
+      // proactively on resize so the next narrow→wide→narrow cycle
+      // doesn't snap an already-open overlay back into view.
+      if (!mq.matches) filterDrawerOpen = false;
+    };
+    update();
+    mq.addEventListener('change', update);
+    return () => mq.removeEventListener('change', update);
+  });
 
   function openFilterDrawer(): void {
     filterDrawerOpen = true;
@@ -225,33 +249,10 @@
   }
 
   // Number of currently-active filters (categorical chips + year range).
-  // Drives the badge on the mobile Filters button.
+  // Drives the badge on the mobile Filters trigger.
   const activeFilterCount = $derived(
     Object.values(filters).reduce((n, vs) => n + (vs?.length ?? 0), 0) + (yearRange ? 1 : 0),
   );
-
-  // Esc closes the drawer if open.
-  function handleGlobalKeydown(e: KeyboardEvent): void {
-    if (e.key === 'Escape' && filterDrawerOpen) {
-      e.preventDefault();
-      closeFilterDrawer();
-    }
-  }
-
-  // Lock body scroll while the drawer is open — otherwise touch users
-  // can scroll the underlying page through the drawer's backdrop.
-  $effect(() => {
-    if (typeof document === 'undefined') return;
-    const wasLocked = document.body.style.overflow;
-    if (filterDrawerOpen) {
-      document.body.style.overflow = 'hidden';
-    } else {
-      document.body.style.overflow = wasLocked === 'hidden' ? '' : wasLocked;
-    }
-    return () => {
-      document.body.style.overflow = wasLocked;
-    };
-  });
 
   function handleSortChange(next: string): void {
     sort = next;
@@ -355,35 +356,31 @@
 
   {#if bootstrap.mode === 'full'}
     <div class="iwac-search__layout">
-      <!--
-        On wide screens this column shows inline; on narrow screens it
-        becomes a slide-in overlay (CSS handles the visual switch via
-        media queries + the data-open attribute).
-      -->
-      <div
-        class="iwac-search__facets"
-        data-open={filterDrawerOpen ? 'true' : 'false'}
-        aria-hidden={!filterDrawerOpen ? 'true' : 'false'}
-      >
-        <!-- Backdrop only renders / clicks-through on mobile. -->
-        <div
-          class="iwac-search__facets-backdrop"
-          onclick={closeFilterDrawer}
-          role="presentation"
-        ></div>
-
-        <div class="iwac-search__facets-panel">
-          <header class="iwac-search__facets-mobile-head">
-            <h2 class="iwac-search__facets-title">Filters</h2>
-            <button
-              type="button"
-              class="iwac-search__facets-close"
-              aria-label="Close filters"
-              onclick={closeFilterDrawer}
-            >
-              ×
-            </button>
-          </header>
+      {#if isNarrow}
+        <!-- Narrow viewport: facets live behind the Filters trigger,
+             rendered into the shared Drawer when opened. -->
+        <Drawer
+          open={filterDrawerOpen}
+          onClose={closeFilterDrawer}
+          title="Filters"
+          side="right"
+          width="min(22rem, 92vw)"
+        >
+          <div class="iwac-search__facets-body">
+            <FacetPanel
+              {facets}
+              selected={filters}
+              {yearRange}
+              onToggle={handleFacetToggle}
+              onClearAll={handleClearAll}
+              onClearField={handleClearField}
+              onYearRangeChange={handleYearRangeChange}
+            />
+          </div>
+        </Drawer>
+      {:else}
+        <!-- Wide viewport: classic sticky left column. -->
+        <aside class="iwac-search__facets-inline" aria-label="Filters">
           <FacetPanel
             {facets}
             selected={filters}
@@ -393,8 +390,8 @@
             onClearField={handleClearField}
             onYearRangeChange={handleYearRangeChange}
           />
-        </div>
-      </div>
+        </aside>
+      {/if}
 
       <div class="iwac-search__results">
         <!-- Toolbar: result count + Filters trigger (mobile-only) + sort -->
@@ -451,8 +448,6 @@
   {/if}
 </div>
 
-<svelte:window onkeydown={handleGlobalKeydown} />
-
 <style>
   .iwac-search {
     display: flex;
@@ -472,97 +467,31 @@
     align-items: start;
   }
 
-  /* Desktop: facet column sits inline; the drawer chrome is suppressed. */
-  .iwac-search__facets {
+  /*
+   * Wide viewport: facets sit in a sticky left column.
+   * Narrow viewport: column collapses; FacetPanel is rendered inside
+   * the shared <Drawer>, no positioning needed here. The "Filters"
+   * trigger button is hidden on wide and shown on narrow.
+   */
+  .iwac-search__facets-inline {
     position: sticky;
     top: var(--space-md, 1rem);
     align-self: start;
     max-height: calc(100vh - var(--space-xl, 2rem));
     overflow-y: auto;
   }
-  .iwac-search__facets-backdrop {
-    display: none;
-  }
-  .iwac-search__facets-mobile-head {
-    display: none;
+  .iwac-search__facets-body {
+    /* Padding inside the drawer body. The drawer header already has
+       its own padding from src/svelte-shared/components/Drawer.svelte. */
+    padding: var(--space-md, 1rem);
   }
   .iwac-search__filters-trigger {
     display: none;
   }
 
   @media (max-width: 48rem) {
-    /* Mobile: results take the full width; facets become an overlay. */
     .iwac-search__layout {
       grid-template-columns: 1fr;
-    }
-    .iwac-search__facets {
-      position: fixed;
-      inset: 0;
-      max-height: none;
-      overflow: visible;
-      z-index: 50;
-      pointer-events: none;
-      visibility: hidden;
-    }
-    .iwac-search__facets[data-open='true'] {
-      pointer-events: auto;
-      visibility: visible;
-    }
-    .iwac-search__facets-backdrop {
-      display: block;
-      position: absolute;
-      inset: 0;
-      background: rgba(0, 0, 0, 0.4);
-      opacity: 0;
-      transition: opacity 180ms ease;
-    }
-    .iwac-search__facets[data-open='true'] .iwac-search__facets-backdrop {
-      opacity: 1;
-    }
-    .iwac-search__facets-panel {
-      position: absolute;
-      inset-block: 0;
-      inset-inline-end: 0;
-      width: min(22rem, 92vw);
-      background: var(--surface, #fff);
-      box-shadow: -8px 0 24px rgba(0, 0, 0, 0.12);
-      overflow-y: auto;
-      transform: translateX(100%);
-      transition: transform 200ms cubic-bezier(0.2, 0, 0, 1);
-    }
-    .iwac-search__facets[data-open='true'] .iwac-search__facets-panel {
-      transform: translateX(0);
-    }
-    .iwac-search__facets-mobile-head {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: var(--space-md, 1rem);
-      border-bottom: 1px solid var(--border-light, #eee);
-      position: sticky;
-      top: 0;
-      background: var(--surface, #fff);
-      z-index: 1;
-    }
-    .iwac-search__facets-title {
-      margin: 0;
-      font-size: var(--text-lg, 1.125rem);
-      color: var(--ink, #222);
-    }
-    .iwac-search__facets-close {
-      width: 2rem;
-      height: 2rem;
-      border: none;
-      background: transparent;
-      color: var(--muted, #666);
-      font-size: var(--text-2xl, 1.5rem);
-      line-height: 1;
-      border-radius: var(--radius-full, 9999px);
-      cursor: pointer;
-    }
-    .iwac-search__facets-close:hover {
-      background: var(--surface-sunken, #f0f0f0);
-      color: var(--ink, #222);
     }
     .iwac-search__filters-trigger {
       display: inline-flex;
