@@ -3,20 +3,15 @@
  * @var \Laminas\View\Renderer\PhpRenderer $this
  * @var array $bootstrap
  *
- * Standalone /search shell. Mirrors the page block contract:
- *   - <div data-iwac-search-root data-iwac-block-id="standalone">
- *   - <script type="application/json" id="iwac-search-state-standalone">
+ * Standalone /search shell. The mount + state contract is rendered by
+ * the shared common/iwac-search-mount partial, so this template only
+ * carries the page-specific chrome (title, noscript fallback).
  *
  * Asset injection is centralised in Module.php (attachListeners on the
- * site layout) — the bundle loads automatically on this route.
+ * site layout) — the Svelte bundle loads automatically on this route.
  */
 
 $this->headTitle('Search · Islam West Africa Collection');
-
-// basePath() needs a runtime call here — the controller pre-baked URL
-// stems but didn't know the site mount prefix at construction time.
-$bootstrap['endpoints']['token']  = $this->basePath($bootstrap['endpoints']['token']);
-$bootstrap['endpoints']['search'] = $this->basePath($bootstrap['endpoints']['search']);
 ?>
 <main class="iwac-search-shell" role="main">
     <h1 class="iwac-search-block__title">Search the IWAC archive</h1>
@@ -34,21 +29,9 @@ $bootstrap['endpoints']['search'] = $this->basePath($bootstrap['endpoints']['sea
         </p>
     </noscript>
 
-    <div data-iwac-search-root
-         data-iwac-block-id="standalone"
-         class="iwac-search-block iwac-search-block--full iwac-search-block__root"
-         id="iwac-search-root-standalone">
-        <div class="iwac-search-block__skeleton" aria-hidden="true">
-            <div class="iwac-search-block__skeleton-input"></div>
-            <div class="iwac-search-block__skeleton-results">
-                <?php for ($i = 0; $i < 5; $i++): ?>
-                    <div class="iwac-search-block__skeleton-row"></div>
-                <?php endfor; ?>
-            </div>
-        </div>
-    </div>
-
-    <script type="application/json" id="iwac-search-state-standalone">
-        <?= json_encode($bootstrap, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>
-    </script>
+    <?= $this->partial('common/iwac-search-mount', [
+        'bootstrap'      => $bootstrap,
+        'block_id'       => 'standalone',
+        'skeleton_rows'  => 5,
+    ]) ?>
 </main>

@@ -1,0 +1,56 @@
+<?php
+/**
+ * Shared Svelte mount point for the public discovery surfaces.
+ *
+ *   - /search standalone shell  (block_id = 'standalone')
+ *   - /browse/{slug} curated    (block_id = 'browse-N' from BrowseConfig)
+ *   - page block instances      (block_id = numeric, the SitePageBlock id)
+ *
+ * Renders three things, in order, that the Svelte client (src/svelte/main.ts)
+ * relies on as a contract:
+ *
+ *   1. A <div data-iwac-search-root data-iwac-block-id="..."> mount target.
+ *   2. A static skeleton inside it so the page doesn't reflow when Svelte
+ *      replaces the content.
+ *   3. A sibling <script type="application/json" id="iwac-search-state-...">
+ *      whose contents are parsed by main.ts to build the IwacBootstrap.
+ *
+ * Touching this file means re-checking the mount contract in:
+ *   - src/svelte/main.ts (`readBootstrap`)
+ *   - the block layout PHTML, /search PHTML, /browse PHTML
+ *
+ * @var \Laminas\View\Renderer\PhpRenderer $this
+ * @var array<string, mixed> $bootstrap          Server-built config blob.
+ * @var int|string $block_id                     The mount instance id.
+ * @var int $skeleton_rows                       How many placeholder rows to show.
+ *                                               Tuned per surface (block: 3, full
+ *                                               shells: 5).
+ */
+
+// Resolve mount-prefix-sensitive endpoints at view time. The controller
+// pre-bakes URL stems but doesn't know the site mount prefix at construction.
+$bootstrap['endpoints']['token']  = $this->basePath($bootstrap['endpoints']['token']);
+$bootstrap['endpoints']['search'] = $this->basePath($bootstrap['endpoints']['search']);
+
+$rows = isset($skeleton_rows) ? max(0, (int) $skeleton_rows) : 3;
+$id   = (string) $block_id;
+?>
+<div
+    data-iwac-search-root
+    data-iwac-block-id="<?= $this->escapeHtmlAttr($id) ?>"
+    class="iwac-search-block__root"
+    id="iwac-search-root-<?= $this->escapeHtmlAttr($id) ?>"
+>
+    <div class="iwac-search-block__skeleton" aria-hidden="true">
+        <div class="iwac-search-block__skeleton-input"></div>
+        <div class="iwac-search-block__skeleton-results">
+            <?php for ($i = 0; $i < $rows; $i++): ?>
+                <div class="iwac-search-block__skeleton-row"></div>
+            <?php endfor; ?>
+        </div>
+    </div>
+</div>
+
+<script type="application/json" id="iwac-search-state-<?= $this->escapeHtmlAttr($id) ?>">
+<?= $this->iwacBootstrapJson($bootstrap) ?>
+</script>

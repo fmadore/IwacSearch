@@ -150,6 +150,15 @@ return [
         ],
     ],
 
+    // Module-scoped view helpers. Used by every mount-point PHTML to
+    // serialise the bootstrap blob with one consistent set of JSON flags
+    // (security-relevant — see View\Helper\IwacBootstrapJson docblock).
+    'view_helpers' => [
+        'invokables' => [
+            'iwacBootstrapJson' => View\Helper\IwacBootstrapJson::class,
+        ],
+    ],
+
     // Sidebar entry under Omeka's "Modules" admin menu.
     'navigation' => [
         'AdminModule' => [
