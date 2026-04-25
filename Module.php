@@ -89,87 +89,53 @@ class Module extends AbstractModule
      */
     public function attachListeners(SharedEventManagerInterface $sharedEventManager): void
     {
+        // view.layout for the SearchController stays inline because
+        // injectSvelteAssets has nothing to inject from a service —
+        // it's a plain view-helper composition.
         $sharedEventManager->attach(
             Controller\SearchController::class,
             'view.layout',
             [$this, 'injectSvelteAssets']
         );
 
-        // api.update.post fires *after* the DB write succeeds, so we
-        // only push to Typesense for saves the user actually completed.
-        $sharedEventManager->attach(
-            \Omeka\Api\Adapter\ItemAdapter::class,
-            'api.update.post',
-            [$this, 'onItemUpdate']
-        );
-        $sharedEventManager->attach(
-            \Omeka\Api\Adapter\ItemAdapter::class,
-            'api.delete.post',
-            [$this, 'onItemDelete']
-        );
+        // M4 incremental indexing — handler bodies live in
+        // Indexer\ItemEventListener so they're testable + so Module.php
+        // doesn't accumulate listener logic. Resolving the listener
+        // here (rather than at fire time) is fine because the listener
+        // itself holds the IncrementalIndexer, which lazy-resolves the
+        // TypesenseClient on first use.
+        $listener = $this->resolveItemEventListener();
+        if ($listener !== null) {
+            $sharedEventManager->attach(
+                \Omeka\Api\Adapter\ItemAdapter::class,
+                'api.update.post',
+                [$listener, 'onItemUpdate']
+            );
+            $sharedEventManager->attach(
+                \Omeka\Api\Adapter\ItemAdapter::class,
+                'api.delete.post',
+                [$listener, 'onItemDelete']
+            );
+        }
     }
 
     /**
-     * Push is_public changes to Typesense after an Omeka item save.
-     *
-     * Kept cheap: one partial PATCH per save, wrapped in a try/catch
-     * that logs-and-swallows so a flaky Typesense never blocks the
-     * admin's save workflow.
+     * Resolve the ItemEventListener from the service manager, returning
+     * null if the SL isn't available yet (extreme bootstrap edge cases).
+     * `attachListeners` runs after `init` and after the SL is built, so
+     * in normal operation this returns a real listener; the null branch
+     * is just defensive — a missing SL means we can't attach, full stop.
      */
-    public function onItemUpdate(Event $event): void
-    {
-        $response = $event->getParam('response');
-        if (!$response instanceof \Omeka\Api\Response) {
-            return;
-        }
-        $representation = $response->getContent();
-        if (!$representation instanceof \Omeka\Api\Representation\ItemRepresentation) {
-            return;
-        }
-
-        $itemId = (int) $representation->id();
-        $isPublic = (bool) $representation->isPublic();
-
-        $this->getIncrementalIndexer()
-            ?->updateItemPublicState($itemId, $isPublic);
-    }
-
-    /**
-     * Remove the item's doc from Typesense after an Omeka delete.
-     *
-     * Laminas passes the pre-delete representation as `response` →
-     * `getContent()`; we only need the id.
-     */
-    public function onItemDelete(Event $event): void
-    {
-        $response = $event->getParam('response');
-        if (!$response instanceof \Omeka\Api\Response) {
-            return;
-        }
-        $representation = $response->getContent();
-        if (!$representation instanceof \Omeka\Api\Representation\ItemRepresentation) {
-            return;
-        }
-
-        $this->getIncrementalIndexer()
-            ?->deleteItem((int) $representation->id());
-    }
-
-    /**
-     * Pull the IncrementalIndexer out of the service manager lazily.
-     * Returns null if the service isn't resolvable for any reason —
-     * listeners should no-op rather than 500 the admin save.
-     */
-    private function getIncrementalIndexer(): ?Indexer\IncrementalIndexer
+    private function resolveItemEventListener(): ?Indexer\ItemEventListener
     {
         try {
             $sl = $this->getServiceLocator();
             if ($sl === null) {
                 return null;
             }
-            /** @var Indexer\IncrementalIndexer $indexer */
-            $indexer = $sl->get(Indexer\IncrementalIndexer::class);
-            return $indexer;
+            /** @var Indexer\ItemEventListener $listener */
+            $listener = $sl->get(Indexer\ItemEventListener::class);
+            return $listener;
         } catch (\Throwable) {
             return null;
         }

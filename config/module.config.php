@@ -29,6 +29,10 @@ return [
             // the Omeka item api.update.post / api.delete.post events by
             // Module::attachListeners.
             Indexer\IncrementalIndexer::class => Service\Indexer\IncrementalIndexerFactory::class,
+            // Event-handler class that owns the api.*.post bodies. Module.php
+            // attaches its methods directly; this keeps lifecycle code in
+            // Module.php separate from the listener business logic.
+            Indexer\ItemEventListener::class => Service\Indexer\ItemEventListenerFactory::class,
         ],
     ],
 
