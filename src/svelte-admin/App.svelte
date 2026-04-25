@@ -3,6 +3,7 @@
   import { AdminStore } from './lib/store.svelte';
   import ConfigTable from './components/ConfigTable.svelte';
   import ConfigFormDrawer from './components/ConfigFormDrawer.svelte';
+  import Button from '../svelte-shared/components/Button.svelte';
 
   /**
    * Root of the admin CRUD app.
@@ -79,9 +80,7 @@
       {store.configs.length}
       {store.configs.length === 1 ? 'browse page' : 'browse pages'}
     </div>
-    <button type="button" class="iwac-btn iwac-btn--primary" onclick={openCreate}>
-      + New browse page
-    </button>
+    <Button variant="primary" onclick={openCreate}>+ New browse page</Button>
   </header>
 
   {#if store.lastError}

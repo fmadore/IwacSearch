@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { BrowseConfig, FacetOption, SortOption } from '../lib/types';
   import Drawer from '../../svelte-shared/components/Drawer.svelte';
+  import Button from '../../svelte-shared/components/Button.svelte';
   import FacetPicker from './FacetPicker.svelte';
 
   /**
@@ -191,10 +192,8 @@
     </fieldset>
 
     <footer class="iwac-config-form__footer">
-      <button type="button" class="iwac-btn iwac-btn--ghost" onclick={onClose} disabled={inFlight}>
-        Cancel
-      </button>
-      <button type="submit" class="iwac-btn iwac-btn--primary" disabled={inFlight}>
+      <Button variant="ghost" onclick={onClose} disabled={inFlight}>Cancel</Button>
+      <Button type="submit" variant="primary" disabled={inFlight}>
         {#if inFlight}
           Saving…
         {:else if isCreate}
@@ -202,7 +201,7 @@
         {:else}
           Save changes
         {/if}
-      </button>
+      </Button>
     </footer>
   </form>
 </Drawer>
@@ -311,44 +310,5 @@
     border-top: 1px solid var(--border-light, #eee);
     margin-top: auto;
   }
-
-  /* Shared admin button styles — only the admin bundle uses these. */
-  :global(.iwac-btn) {
-    padding: var(--space-sm, 0.5rem) var(--space-md, 1rem);
-    border-radius: var(--radius-sm, 0.375rem);
-    font-size: var(--text-sm, 0.9rem);
-    font-weight: 500;
-    cursor: pointer;
-    transition: all 120ms ease;
-    border: 1px solid transparent;
-  }
-  :global(.iwac-btn:disabled) {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
-  :global(.iwac-btn--primary) {
-    background: var(--primary, #c66);
-    color: var(--surface, #fff);
-    border-color: var(--primary, #c66);
-  }
-  :global(.iwac-btn--primary:hover:not(:disabled)) {
-    filter: brightness(1.08);
-  }
-  :global(.iwac-btn--ghost) {
-    background: transparent;
-    color: var(--ink, #222);
-    border-color: var(--border, #ccc);
-  }
-  :global(.iwac-btn--ghost:hover:not(:disabled)) {
-    background: var(--surface-sunken, #f5f5f5);
-  }
-  :global(.iwac-btn--danger) {
-    background: transparent;
-    color: var(--primary, #c66);
-    border-color: var(--primary, #c66);
-  }
-  :global(.iwac-btn--danger:hover:not(:disabled)) {
-    background: var(--primary, #c66);
-    color: var(--surface, #fff);
-  }
+  /* `.iwac-btn` styles now live in src/svelte-shared/components/Button.svelte. */
 </style>

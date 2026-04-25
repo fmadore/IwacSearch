@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { BrowseConfig } from '../lib/types';
+  import Button from '../../svelte-shared/components/Button.svelte';
 
   /**
    * Table of browse configs with inline actions.
@@ -90,49 +91,38 @@
             {#if confirmingId === config.id}
               <div class="iwac-table__confirm" role="group" aria-label="Confirm delete">
                 <span class="iwac-table__confirm-label">Delete {config.title}?</span>
-                <button
-                  type="button"
-                  class="iwac-btn iwac-btn--danger iwac-btn--sm"
+                <Button
+                  variant="danger"
+                  size="sm"
                   onclick={() => handleDelete(config)}
                   disabled={inFlight || isOptimistic}
                 >
                   Confirm
-                </button>
-                <button
-                  type="button"
-                  class="iwac-btn iwac-btn--ghost iwac-btn--sm"
-                  onclick={cancelConfirm}
-                >
-                  Cancel
-                </button>
+                </Button>
+                <Button variant="ghost" size="sm" onclick={cancelConfirm}>Cancel</Button>
               </div>
             {:else}
               <div class="iwac-table__actions">
-                <button
-                  type="button"
-                  class="iwac-btn iwac-btn--ghost iwac-btn--sm"
+                <Button
+                  variant="ghost"
+                  size="sm"
                   onclick={() => onEdit(config)}
                   disabled={isOptimistic}
                 >
                   Edit
-                </button>
-                <a
-                  class="iwac-btn iwac-btn--ghost iwac-btn--sm"
-                  href={publicUrl(config.slug)}
-                  target="_blank"
-                  rel="noopener"
-                >
+                </Button>
+                <Button variant="ghost" size="sm" href={publicUrl(config.slug)} target="_blank">
                   View
-                </a>
-                <button
-                  type="button"
-                  class="iwac-btn iwac-btn--danger iwac-btn--sm"
+                </Button>
+                <Button
+                  variant="danger"
+                  size="sm"
                   onclick={() => handleDelete(config)}
                   disabled={inFlight || isOptimistic}
-                  aria-label={`Delete ${config.title}`}
+                  ariaLabel={`Delete ${config.title}`}
                 >
                   Delete
-                </button>
+                </Button>
               </div>
             {/if}
           </td>
@@ -249,11 +239,8 @@
     margin-inline-end: var(--space-xs, 0.25rem);
   }
 
-  /* Compact variant of the global btn style for inline table actions. */
-  :global(.iwac-btn--sm) {
-    padding: 0.25rem 0.625rem;
-    font-size: var(--text-xs, 0.75rem);
-  }
+  /* `.iwac-btn--sm` and the rest of the button chrome live in
+     src/svelte-shared/components/Button.svelte. */
 
   .iwac-empty {
     padding: var(--space-2xl, 3rem) var(--space-lg, 1.5rem);
