@@ -5,7 +5,7 @@ namespace IwacSearch\Controller;
 
 use IwacSearch\Browse\BrowseConfigRepository;
 use IwacSearch\Search\InitialResponseRenderer;
-use IwacSearch\Service\TypesenseSearchKeyProvider;
+use IwacSearch\Search\TypesenseSearchKeyProvider;
 use Laminas\Http\Response;
 use Laminas\Mvc\Controller\AbstractActionController;
 use Laminas\View\Model\JsonModel;

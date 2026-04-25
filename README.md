@@ -123,7 +123,13 @@ IwacSearch/
 │   │   ├── CountrySeeder.php                   #   seeds 6 country pages on install
 │   │   └── FacetCatalog.php                    #   shared facet/sort/mode constants
 │   ├── Site/BlockLayout/IwacSearchBlock.php    # Page block — drop into any Site page
-│   ├── Log/OmekaPsrLogger.php                  # PSR-3 ↔ Laminas\Log adapter (psr/log 3.x-safe)
+│   ├── Log/
+│   │   ├── OmekaPsrLogger.php                  # PSR-3 ↔ Laminas\Log adapter (psr/log 3.x-safe)
+│   │   └── LoggerResolver.php                  # static helper: container → wrapped PSR-3 logger
+│   ├── View/Helper/IwacBootstrapJson.php       # encodes bootstrap blob with the canonical JSON flag set
+│   ├── Search/
+│   │   ├── InitialResponseRenderer.php         # SSR: PHP→Typesense, inlines first page into bootstrap
+│   │   └── TypesenseSearchKeyProvider.php      # mints scoped keys for the browser
 │   ├── svelte/                                 # Svelte 5 + TS client source — public bundle
 │   │   ├── App.svelte                          #   per-mount root, owns search state
 │   │   ├── components/
@@ -155,12 +161,15 @@ IwacSearch/
 │   ├── svelte-shared/                          # Reusable widgets used by BOTH bundles
 │   │   └── components/
 │   │       └── Drawer.svelte                   #   slide-in overlay (animation, ESC, scroll lock)
-│   └── Service/
+│   └── Service/                                # Service-locator factories only (services live elsewhere)
 │       ├── SearchControllerFactory.php
 │       ├── TypesenseClientFactory.php          # Admin client (reads Docker secret)
-│       ├── TypesenseSearchKeyProvider.php      # Mints scoped keys for the browser
-│       └── Controller/
-│           └── BrowseConfigControllerFactory.php
+│       ├── TypesenseClientLazy.php             # static helper: container → Closure(): TypesenseClient
+│       ├── BrowseConfigRepositoryFactory.php
+│       ├── BlockLayout/IwacSearchBlockFactory.php
+│       ├── Controller/BrowseConfigControllerFactory.php
+│       ├── Indexer/{IncrementalIndexerFactory,ItemEventListenerFactory}.php
+│       └── Search/InitialResponseRendererFactory.php
 ├── cli/
 │   └── reindex.php                             # `discovery:reindex` entry point
 ├── data/
@@ -169,6 +178,7 @@ IwacSearch/
 ├── view/
 │   ├── iwac-search/search/{index,browse,browse-list}.phtml
 │   ├── iwac-search/admin/browse-config/browse.phtml   # Admin CRUD shell (M3.5)
+│   ├── common/iwac-search-mount.phtml                 # Shared Svelte mount partial (one source of truth)
 │   └── common/block-layout/iwac-search-block.phtml
 ├── asset/
 │   ├── css/iwac-search.css                     # Block container + skeleton (consumes IWAC-theme tokens)

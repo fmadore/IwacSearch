@@ -1,7 +1,7 @@
 <?php
 declare(strict_types=1);
 
-namespace IwacSearch\Service;
+namespace IwacSearch\Search;
 
 use Closure;
 use Omeka\Settings\SettingsInterface;

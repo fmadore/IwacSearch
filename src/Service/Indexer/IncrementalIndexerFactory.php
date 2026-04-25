@@ -5,9 +5,9 @@ namespace IwacSearch\Service\Indexer;
 
 use IwacSearch\Indexer\IncrementalIndexer;
 use IwacSearch\Log\LoggerResolver;
+use IwacSearch\Service\TypesenseClientLazy;
 use Laminas\ServiceManager\Factory\FactoryInterface;
 use Psr\Container\ContainerInterface;
-use Typesense\Client as TypesenseClient;
 
 /**
  * Lazy TypesenseClient so the indexer never blocks Omeka startup if
@@ -25,7 +25,7 @@ final class IncrementalIndexerFactory implements FactoryInterface
         $alias  = (string) ($config['collection_alias'] ?? 'iwac_current');
 
         return new IncrementalIndexer(
-            clientFactory:   fn(): TypesenseClient => $container->get(TypesenseClient::class),
+            clientFactory:   TypesenseClientLazy::fromContainer($container),
             collectionAlias: $alias,
             logger:          LoggerResolver::fromContainer($container)
         );

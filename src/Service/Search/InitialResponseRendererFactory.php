@@ -5,9 +5,9 @@ namespace IwacSearch\Service\Search;
 
 use IwacSearch\Log\LoggerResolver;
 use IwacSearch\Search\InitialResponseRenderer;
+use IwacSearch\Service\TypesenseClientLazy;
 use Laminas\ServiceManager\Factory\FactoryInterface;
 use Psr\Container\ContainerInterface;
-use Typesense\Client as TypesenseClient;
 
 /**
  * Builds the SSR renderer with a lazy TypesenseClient factory so a
@@ -27,7 +27,7 @@ final class InitialResponseRendererFactory implements FactoryInterface
         );
 
         return new InitialResponseRenderer(
-            clientFactory:     fn(): TypesenseClient => $container->get(TypesenseClient::class),
+            clientFactory:     TypesenseClientLazy::fromContainer($container),
             logger:            LoggerResolver::fromContainer($container),
             defaultCollection: $defaultCollection
         );

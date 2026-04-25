@@ -7,9 +7,9 @@ use IwacSearch\Browse\BrowseConfigRepository;
 use IwacSearch\Controller\SearchController;
 use IwacSearch\Log\LoggerResolver;
 use IwacSearch\Search\InitialResponseRenderer;
+use IwacSearch\Search\TypesenseSearchKeyProvider;
 use Laminas\ServiceManager\Factory\FactoryInterface;
 use Psr\Container\ContainerInterface;
-use Typesense\Client as TypesenseClient;
 
 /**
  * Builds the SearchController with its real dependencies in M1+.
@@ -31,13 +31,11 @@ class SearchControllerFactory implements FactoryInterface
 
         $logger = LoggerResolver::fromContainer($container);
 
-        // Lazy factory closure — we resolve the TypesenseClient only when
-        // someone actually mints a key. That way a missing Docker secret or
-        // an unreachable Typesense server throws inside tokenAction (which
-        // returns 503 JSON) rather than here (which would 500 an HTML page
-        // before the action runs, hiding the actual error from the client).
+        // Lazy TypesenseClient (see TypesenseClientLazy docblock) so a
+        // missing Docker secret surfaces inside tokenAction's 503 path
+        // instead of as a 500 HTML page before the action even runs.
         $keyProvider = new TypesenseSearchKeyProvider(
-            clientFactory: fn(): TypesenseClient => $container->get(TypesenseClient::class),
+            clientFactory: TypesenseClientLazy::fromContainer($container),
             settings:      $container->get('Omeka\Settings'),
             logger:        $logger
         );
