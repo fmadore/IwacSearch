@@ -9,7 +9,10 @@
     "ext-json": "*",
     "ext-mbstring": "*",
     "typesense/typesense-php": "^5.0",
-    "symfony/yaml": "^7.0"
+    "symfony/yaml": "^7.0",
+    "guzzlehttp/guzzle": "^7.10",
+    "php-http/guzzle7-adapter": "^1.1",
+    "http-interop/http-factory-guzzle": "^1.2"
   },
   "autoload": {
     "psr-4": {
