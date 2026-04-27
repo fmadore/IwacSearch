@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace IwacSearch\Search;
 
 use Closure;
+use IwacSearch\Util\ExceptionMessage;
 use Omeka\Settings\SettingsInterface;
 use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
@@ -143,8 +144,14 @@ final class TypesenseSearchKeyProvider
                 'collections' => ['*'],
             ]);
         } catch (Throwable $e) {
+            // Flatten the whole exception chain into the message so
+            // tokenAction's 503 JSON `detail` field exposes the root
+            // cause (e.g. Laminas wraps `ServiceNotCreatedException`
+            // around the real "secret file not readable" or
+            // "connection refused" error — surfacing only the wrapper
+            // forces ops to dig into log files that may not exist).
             throw new RuntimeException(
-                'Failed to bootstrap Typesense search-only key: ' . $e->getMessage(),
+                'Failed to bootstrap Typesense search-only key: ' . ExceptionMessage::chain($e),
                 0,
                 $e
             );

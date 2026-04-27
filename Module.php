@@ -40,14 +40,27 @@ class Module extends AbstractModule
     }
 
     /**
-     * Register ACL rules before the dispatch reaches the controller.
+     * Register ACL rules before dispatch reaches a controller.
      *
-     * Editors, site-admins, and global-admins can all use the curated
-     * browse-config admin — it's a content operation, not a system
-     * setting. The `admin/` parent route already guarantees the user
-     * is authenticated, so null-role (anonymous) access is never
-     * possible here; this `allow()` call merely narrows *which* roles
-     * pass the check inside the admin session.
+     * Two zones:
+     *
+     *   1. Public discovery (SearchController) — index / token / browse.
+     *      Granted to the null role so anonymous site visitors can hit
+     *      /search, /browse[/{slug}], and /discovery/token. Without this,
+     *      Omeka's default deny-by-default ACL throws
+     *      PermissionDeniedException for every anonymous request and the
+     *      Svelte client shows "Search unavailable. Token HTTP 500" on
+     *      every public surface (including page blocks on Site pages,
+     *      because the block JS still calls /discovery/token).
+     *
+     *   2. Admin CRUD (Admin\BrowseConfigController) — restricted to
+     *      editor + site-admin + global-admin. The /admin/ parent route
+     *      already guarantees authentication, so this `allow` only
+     *      narrows *which* admin roles pass the check.
+     *
+     * Pass `null` as the first arg to allow EVERY role (anonymous +
+     * authenticated). Listing privileges explicitly means adding a
+     * future action is a conscious decision rather than a silent grant.
      */
     public function onBootstrap(MvcEvent $event): void
     {
@@ -55,6 +68,16 @@ class Module extends AbstractModule
 
         /** @var Acl $acl */
         $acl = $event->getApplication()->getServiceManager()->get('Omeka\Acl');
+
+        // Public — anonymous visitors are the primary audience for
+        // /search, /browse, and the page block's /discovery/token call.
+        $acl->allow(
+            null,
+            [Controller\SearchController::class],
+            ['index', 'token', 'browse']
+        );
+
+        // Admin CRUD — editors and above only.
         $acl->allow(
             [
                 Acl::ROLE_EDITOR,
@@ -62,9 +85,6 @@ class Module extends AbstractModule
                 Acl::ROLE_GLOBAL_ADMIN,
             ],
             [Controller\Admin\BrowseConfigController::class],
-            // Actions on the admin controller — all four CRUD actions + the
-            // HTML shell. Listed explicitly so adding a future privilege
-            // (e.g. 'reorder') is a conscious change, not a silent grant.
             ['browse', 'apiList', 'apiItem']
         );
     }

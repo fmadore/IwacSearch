@@ -6,6 +6,7 @@ namespace IwacSearch\Controller;
 use IwacSearch\Browse\BrowseConfigRepository;
 use IwacSearch\Search\InitialResponseRenderer;
 use IwacSearch\Search\TypesenseSearchKeyProvider;
+use IwacSearch\Util\ExceptionMessage;
 use Laminas\Http\Response;
 use Laminas\Mvc\Controller\AbstractActionController;
 use Laminas\View\Model\JsonModel;
@@ -120,8 +121,12 @@ class SearchController extends AbstractActionController
             return new JsonModel([
                 'error'   => 'token_unavailable',
                 'message' => 'Typesense scoped-key minting failed. Is the typesense service up?',
-                // Surface the underlying message for ops; not sensitive.
-                'detail'  => $e->getMessage(),
+                // Walk the previous-chain so the response carries the
+                // actual root cause (Laminas wraps factory failures in
+                // ServiceNotCreatedException; surfacing only the wrapper
+                // hides the real "X not readable" or "Connection refused"
+                // line that ops actually need.)
+                'detail'  => ExceptionMessage::chain($e),
             ]);
         }
     }
