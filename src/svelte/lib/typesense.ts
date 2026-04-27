@@ -79,7 +79,10 @@ export class TypesenseClient {
           ? 'date:desc'
           : (this.bootstrap.default_sort ?? '_text_match:desc');
 
-    const body = {
+    // The body is built as a function so we can re-issue the request
+    // without the `stopwords` field if Typesense 404s with "stopword set
+    // missing" (recovery path further down).
+    const buildBody = (includeStopwords: boolean) => ({
       searches: [
         {
           collection,
@@ -89,8 +92,9 @@ export class TypesenseClient {
           // and the embedding field for semantic recall. Typesense ignores
           // query_by when q=* so browse mode drops straight through.
           query_by: 'title_txt,ocr_text,entity_aliases_txt,embedding',
-          // Stopwords keep "le", "la", "des" etc. from polluting matches
-          stopwords: 'fr_default',
+          // Stopwords keep "le", "la", "des" etc. from polluting matches.
+          // Conditionally included so the recovery retry can drop it.
+          ...(includeStopwords ? { stopwords: 'fr_default' } : {}),
           filter_by: filterBy || undefined,
           sort_by: sortBy,
           page: args.page ?? 1,
@@ -108,18 +112,37 @@ export class TypesenseClient {
           max_facet_values: 50,
         },
       ],
-    };
-
-    const res = await fetch(this.bootstrap.endpoints.search, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-TYPESENSE-API-KEY': key.key,
-      },
-      body: JSON.stringify(body),
     });
+
+    const post = (body: ReturnType<typeof buildBody>) =>
+      fetch(this.bootstrap.endpoints.search, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-TYPESENSE-API-KEY': key.key,
+        },
+        body: JSON.stringify(body),
+      });
+
+    let res = await post(buildBody(true));
     if (!res.ok) {
-      throw new Error(await formatHttpError('Search', res));
+      const message = await formatHttpError('Search', res);
+      // Recover from a missing stopword set on the Typesense server.
+      // Without `fr_default` provisioned, the entire search 404s; drop
+      // the field and retry rather than fail the whole UI. Operator
+      // should run `discovery:reindex` (or the stopwords-sync CLI) to
+      // restore the set so French stopword filtering works again.
+      if (res.status === 404 && /stopword set/i.test(message)) {
+        console.warn(
+          '[iwac-search] Typesense stopword set missing; retrying without stopwords. Run discovery:reindex (or cli/stopwords-sync.php) to provision.',
+        );
+        res = await post(buildBody(false));
+        if (!res.ok) {
+          throw new Error(await formatHttpError('Search', res));
+        }
+      } else {
+        throw new Error(message);
+      }
     }
     const json = (await res.json()) as {
       results: Array<IwacSearchResponse | TypesensePerSearchError>;

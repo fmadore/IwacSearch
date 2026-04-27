@@ -123,14 +123,40 @@ final class InitialResponseRenderer
         try {
             $response = $this->client()->multiSearch->perform($body);
         } catch (Throwable $e) {
-            // Never fail the page render because Typesense is flaky.
-            // The Svelte client will still try on its own and surface a
-            // concrete error via /discovery/token if the problem persists.
-            $this->logger->warning('IwacSearch SSR: Typesense multi_search failed, falling back to client-side fetch', [
-                'error'     => $e->getMessage(),
-                'collection' => $collection,
-            ]);
-            return null;
+            // Recover from a missing stopword set on the Typesense
+            // server: drop the `stopwords` field and retry once. Stopwords
+            // are an enhancement (filter "le", "la", "des" out of matches)
+            // — never a correctness requirement — so degrading gracefully
+            // beats a blank SSR page that falls through to a client-side
+            // fetch which would hit the same error. Operator should
+            // provision the set via `discovery:reindex` or
+            // `cli/stopwords-sync.php`.
+            if (stripos($e->getMessage(), 'stopword set') !== false) {
+                $this->logger->warning(
+                    'IwacSearch SSR: Typesense stopword set missing; retrying without stopwords. Run discovery:reindex (or cli/stopwords-sync.php) to provision.',
+                    ['error' => $e->getMessage()]
+                );
+                unset($body['searches'][0]['stopwords']);
+                try {
+                    $response = $this->client()->multiSearch->perform($body);
+                } catch (Throwable $retryError) {
+                    $this->logger->warning('IwacSearch SSR: Typesense multi_search still failing after stopwords drop', [
+                        'error'      => $retryError->getMessage(),
+                        'collection' => $collection,
+                    ]);
+                    return null;
+                }
+            } else {
+                // Never fail the page render because Typesense is flaky.
+                // The Svelte client will still try on its own and surface
+                // a concrete error via /discovery/token if the problem
+                // persists.
+                $this->logger->warning('IwacSearch SSR: Typesense multi_search failed, falling back to client-side fetch', [
+                    'error'      => $e->getMessage(),
+                    'collection' => $collection,
+                ]);
+                return null;
+            }
         }
 
         $first = $response['results'][0] ?? null;
