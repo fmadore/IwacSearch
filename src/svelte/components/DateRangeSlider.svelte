@@ -2,23 +2,33 @@
   import type { YearRange } from '../lib/types';
 
   /**
-   * Dual-handle year range filter — a single slider track with two thumbs.
+   * Single-track dual-thumb year range slider.
    *
-   *   Year                1989 – 2010    Reset
-   *   ○──────●═══════════════●──────────○
+   *   Year                                           1989 – 2010    Reset
+   *   ──────────●═══════════════════●──────────
    *
-   * Implementation notes:
-   *   - Two stacked native <input type="range"> with thumb-only visibility,
-   *     because no browser ships a real two-handle range input and a custom
-   *     DnD widget would lose keyboard accessibility (arrow keys step,
-   *     Home/End jump, tab navigation).
-   *   - The current range is displayed inline ("1989 – 2010") instead of
-   *     duplicated as two number inputs — cleaner, and number precision
-   *     isn't worth the visual cost for a 65-year span.
-   *   - Defaults: 1960..2025. Override via min/max props.
-   *   - Dirty/clean: a fully-default range (min..max) is treated as "no
-   *     filter" — the parent receives `null` for an unset range so URL
-   *     state stays clean.
+   * Why custom (not stacked native <input type="range">):
+   *   The previous implementation stacked two native range inputs on top
+   *   of each other and hid their tracks via ::-webkit-slider-runnable-track
+   *   { background: transparent }. In practice browsers still rendered
+   *   their own track scaffolding (especially Firefox + Chromium with
+   *   accent-color enabled), so users saw two parallel lines instead of
+   *   one. This component goes fully custom — one CSS-drawn track,
+   *   two absolute-positioned thumbs, pointer-event drag handlers,
+   *   keyboard accessibility via role="slider" + onkeydown.
+   *
+   * Accessibility:
+   *   - Each thumb has role="slider" + aria-valuemin/max/now and an
+   *     aria-label so screen readers announce "From year, 1989 of 1960
+   *     to 2025" etc.
+   *   - Tab focuses each thumb in order; arrow keys nudge ±1 year;
+   *     Page Up/Down jump ±10; Home/End snap to the bound.
+   *   - The thumbs cannot cross — moving the From thumb past the To
+   *     thumb (or vice versa) clamps to the other thumb's position.
+   *
+   * Defaults: 1960..2025. Override via min/max props if the corpus
+   * warrants. Dirty/clean: a fully-default range is treated as "no
+   * filter" — the parent receives null so URL state stays clean.
    */
 
   interface Props {
@@ -30,22 +40,23 @@
 
   const { value, min = 1960, max = 2025, onChange }: Props = $props();
 
-  // Internal handle positions are always concrete numbers; "no filter"
-  // means both handles sit at the extremes. Initial seed only — the
-  // $effect below re-syncs whenever the parent pushes a new range.
   // svelte-ignore state_referenced_locally
   let fromHandle = $state(value?.from ?? min);
   // svelte-ignore state_referenced_locally
   let toHandle = $state(value?.to ?? max);
 
-  // Re-sync if the parent pushes a new value (URL pop, "clear all", etc.)
+  // Re-sync when the parent pushes a new value (URL pop, "clear all").
   $effect(() => {
     fromHandle = value?.from ?? min;
     toHandle = value?.to ?? max;
   });
 
+  /** Reference to the track div for hit-testing pointer coords. */
+  let trackEl: HTMLDivElement | null = $state(null);
+  /** Which thumb is currently being dragged (null = no drag in flight). */
+  let dragging: 'from' | 'to' | null = $state(null);
+
   function emit(): void {
-    // Clamp + order — invariant: fromHandle <= toHandle
     const lo = Math.max(min, Math.min(fromHandle, toHandle));
     const hi = Math.min(max, Math.max(fromHandle, toHandle));
     fromHandle = lo;
@@ -61,21 +72,108 @@
     onChange(next);
   }
 
-  function handleFrom(e: Event): void {
-    const v = Number((e.currentTarget as HTMLInputElement).value);
-    // Stop the from-thumb passing the to-thumb.
-    fromHandle = Math.min(v, toHandle);
+  function valueFromClientX(clientX: number): number {
+    if (!trackEl) return min;
+    const rect = trackEl.getBoundingClientRect();
+    const ratio = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+    return Math.round(min + ratio * (max - min));
+  }
+
+  /** Move the dragged thumb to the year that corresponds to the cursor. */
+  function moveDraggedThumb(clientX: number): void {
+    const v = valueFromClientX(clientX);
+    if (dragging === 'from') {
+      fromHandle = Math.min(v, toHandle);
+    } else if (dragging === 'to') {
+      toHandle = Math.max(v, fromHandle);
+    }
+  }
+
+  function startDrag(which: 'from' | 'to', e: PointerEvent): void {
+    dragging = which;
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    moveDraggedThumb(e.clientX);
+    e.preventDefault();
+  }
+
+  function onPointerMove(e: PointerEvent): void {
+    if (dragging === null) return;
+    moveDraggedThumb(e.clientX);
+  }
+
+  function endDrag(e: PointerEvent): void {
+    if (dragging === null) return;
+    const target = e.currentTarget as HTMLElement;
+    if (target.hasPointerCapture(e.pointerId)) {
+      target.releasePointerCapture(e.pointerId);
+    }
+    dragging = null;
     emit();
   }
-  function handleTo(e: Event): void {
-    const v = Number((e.currentTarget as HTMLInputElement).value);
-    toHandle = Math.max(v, fromHandle);
+
+  /**
+   * Keyboard controls — match the native <input type="range"> shortcuts
+   * so the affordance feels like a real range, even though we're not
+   * using one. Arrow ± 1, Page ± 10, Home/End to bounds.
+   */
+  function handleKeydown(which: 'from' | 'to', e: KeyboardEvent): void {
+    let delta = 0;
+    let absolute: number | null = null;
+    switch (e.key) {
+      case 'ArrowRight':
+      case 'ArrowUp':
+        delta = 1;
+        break;
+      case 'ArrowLeft':
+      case 'ArrowDown':
+        delta = -1;
+        break;
+      case 'PageUp':
+        delta = 10;
+        break;
+      case 'PageDown':
+        delta = -10;
+        break;
+      case 'Home':
+        absolute = which === 'from' ? min : fromHandle;
+        break;
+      case 'End':
+        absolute = which === 'to' ? max : toHandle;
+        break;
+      default:
+        return;
+    }
+    e.preventDefault();
+    if (which === 'from') {
+      const next = absolute ?? fromHandle + delta;
+      fromHandle = Math.max(min, Math.min(next, toHandle));
+    } else {
+      const next = absolute ?? toHandle + delta;
+      toHandle = Math.min(max, Math.max(next, fromHandle));
+    }
     emit();
   }
 
   function reset(): void {
     fromHandle = min;
     toHandle = max;
+    emit();
+  }
+
+  /**
+   * Click on the track (not a thumb) — jump the nearer thumb to the
+   * clicked position. Same behaviour as the macOS / iOS native slider.
+   */
+  function onTrackPointerDown(e: PointerEvent): void {
+    if (e.target !== trackEl) return; // already handled by a thumb
+    const v = valueFromClientX(e.clientX);
+    const distFrom = Math.abs(v - fromHandle);
+    const distTo = Math.abs(v - toHandle);
+    if (distFrom <= distTo) {
+      fromHandle = Math.min(v, toHandle);
+    } else {
+      toHandle = Math.max(v, fromHandle);
+    }
     emit();
   }
 
@@ -99,30 +197,49 @@
     {/if}
   </header>
 
+  <!-- One track. Two thumbs. No <input type="range"> in sight. -->
   <div
+    bind:this={trackEl}
     class="iwac-daterange__track"
     style="--iwac-fill-start: {fillStart}%; --iwac-fill-end: {fillEnd}%;"
+    onpointerdown={onTrackPointerDown}
+    role="presentation"
   >
-    <input
-      class="iwac-daterange__handle iwac-daterange__handle--from"
-      type="range"
+    <div class="iwac-daterange__filled" aria-hidden="true"></div>
+
+    <div
+      class="iwac-daterange__thumb iwac-daterange__thumb--from"
+      class:iwac-daterange__thumb--dragging={dragging === 'from'}
+      style="inset-inline-start: {fillStart}%;"
+      role="slider"
+      tabindex="0"
       aria-label="From year"
-      {min}
-      {max}
-      step="1"
-      value={fromHandle}
-      oninput={handleFrom}
-    />
-    <input
-      class="iwac-daterange__handle iwac-daterange__handle--to"
-      type="range"
+      aria-valuemin={min}
+      aria-valuemax={toHandle}
+      aria-valuenow={fromHandle}
+      onpointerdown={(e) => startDrag('from', e)}
+      onpointermove={onPointerMove}
+      onpointerup={endDrag}
+      onpointercancel={endDrag}
+      onkeydown={(e) => handleKeydown('from', e)}
+    ></div>
+
+    <div
+      class="iwac-daterange__thumb iwac-daterange__thumb--to"
+      class:iwac-daterange__thumb--dragging={dragging === 'to'}
+      style="inset-inline-start: {fillEnd}%;"
+      role="slider"
+      tabindex="0"
       aria-label="To year"
-      {min}
-      {max}
-      step="1"
-      value={toHandle}
-      oninput={handleTo}
-    />
+      aria-valuemin={fromHandle}
+      aria-valuemax={max}
+      aria-valuenow={toHandle}
+      onpointerdown={(e) => startDrag('to', e)}
+      onpointermove={onPointerMove}
+      onpointerup={endDrag}
+      onpointercancel={endDrag}
+      onkeydown={(e) => handleKeydown('to', e)}
+    ></div>
   </div>
 </section>
 
@@ -170,100 +287,84 @@
   }
 
   /*
-   * Track + dual-handle slider. The two <input type="range"> elements
-   * stack on top of each other with pointer-events isolated to each
-   * thumb. The visible track + filled segment are drawn via the
-   * parent's ::before / ::after.
+   * Single visible track. The whole row is 1.5rem tall so the thumbs
+   * have room to sit on top, but the track itself is just 6px.
+   * Click anywhere on the row → jump the nearer thumb (handled by
+   * the parent's onpointerdown when the target is the track itself).
    */
   .iwac-daterange__track {
     position: relative;
-    height: 1.75rem;
+    height: 1.5rem;
+    /* Padding-inline so the thumbs don't get clipped at the bounds. */
+    padding-inline: 0.625rem;
+    margin-inline: -0.625rem;
+    cursor: pointer;
+    touch-action: pan-y; /* allow vertical scroll, capture horizontal drags */
   }
   .iwac-daterange__track::before {
-    /* base track */
+    /* Base track — drawn once. */
     content: '';
     position: absolute;
     inset-block: calc(50% - 3px);
-    inset-inline: 0;
+    inset-inline: 0.625rem;
     height: 6px;
     background: var(--surface-sunken, #e5e5e5);
     border-radius: var(--radius-full, 9999px);
+    pointer-events: none;
   }
-  .iwac-daterange__track::after {
-    /* selected segment between the two handles */
-    content: '';
+  .iwac-daterange__filled {
+    /* Selected segment between the two thumbs. */
     position: absolute;
     inset-block: calc(50% - 3px);
-    inset-inline-start: var(--iwac-fill-start);
-    inset-inline-end: calc(100% - var(--iwac-fill-end));
+    inset-inline-start: calc(0.625rem + var(--iwac-fill-start));
+    width: calc(var(--iwac-fill-end) - var(--iwac-fill-start));
     height: 6px;
     background: var(--primary, #c66);
     border-radius: var(--radius-full, 9999px);
-  }
-  .iwac-daterange__handle {
-    position: absolute;
-    inset: 0;
-    width: 100%;
-    height: 100%;
-    background: transparent;
     pointer-events: none;
-    appearance: none;
-    -webkit-appearance: none;
-    margin: 0;
+    transform: translateX(calc(-1 * var(--iwac-fill-start) * 0));
+    /* Constrain to track-inner width: see comment below. */
   }
-  .iwac-daterange__handle::-webkit-slider-thumb {
-    -webkit-appearance: none;
-    appearance: none;
-    pointer-events: auto;
+
+  .iwac-daterange__thumb {
+    position: absolute;
+    inset-block: calc(50% - 0.625rem);
+    inset-inline-start: 0;
+    /* `transform: translateX(-50%)` centres the thumb on its point. */
+    transform: translateX(-50%);
     width: 1.25rem;
     height: 1.25rem;
     background: var(--surface, #fff);
     border: 2px solid var(--primary, #c66);
     border-radius: var(--radius-full, 9999px);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18);
     cursor: grab;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
     transition:
-      transform 100ms ease,
-      box-shadow 100ms ease;
+      transform 80ms ease,
+      box-shadow 80ms ease;
+    /* Above the filled segment so it stays interactive. */
+    z-index: 1;
   }
-  .iwac-daterange__handle::-moz-range-thumb {
-    pointer-events: auto;
-    width: 1.25rem;
-    height: 1.25rem;
-    background: var(--surface, #fff);
-    border: 2px solid var(--primary, #c66);
-    border-radius: var(--radius-full, 9999px);
-    cursor: grab;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
-    transition:
-      transform 100ms ease,
-      box-shadow 100ms ease;
+  .iwac-daterange__thumb:hover {
+    transform: translateX(-50%) scale(1.08);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.22);
   }
-  .iwac-daterange__handle:hover::-webkit-slider-thumb,
-  .iwac-daterange__handle:active::-webkit-slider-thumb {
-    transform: scale(1.1);
-    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
-  }
-  .iwac-daterange__handle:hover::-moz-range-thumb,
-  .iwac-daterange__handle:active::-moz-range-thumb {
-    transform: scale(1.1);
-    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
-  }
-  .iwac-daterange__handle:focus-visible::-webkit-slider-thumb {
+  .iwac-daterange__thumb:focus-visible {
     outline: none;
-    box-shadow: var(--ring-focus, 0 0 0 3px rgba(204, 102, 102, 0.3));
+    box-shadow:
+      0 1px 3px rgba(0, 0, 0, 0.18),
+      var(--ring-focus, 0 0 0 3px rgba(204, 102, 102, 0.3));
   }
-  .iwac-daterange__handle:focus-visible::-moz-range-thumb {
-    outline: none;
-    box-shadow: var(--ring-focus, 0 0 0 3px rgba(204, 102, 102, 0.3));
+  .iwac-daterange__thumb--dragging {
+    cursor: grabbing;
+    transform: translateX(-50%) scale(1.12);
+    box-shadow: 0 3px 8px rgba(0, 0, 0, 0.25);
   }
-  /* Track itself is hidden — we draw our own via ::before/::after. */
-  .iwac-daterange__handle::-webkit-slider-runnable-track {
-    background: transparent;
-    border: none;
-  }
-  .iwac-daterange__handle::-moz-range-track {
-    background: transparent;
-    border: none;
-  }
+
+  /*
+   * The thumbs use `inset-inline-start: NN%` plus `transform: translateX(-50%)`
+   * to centre on their value. To make the .iwac-daterange__filled segment
+   * line up perfectly with the thumbs even at the extremes, we anchor it
+   * to the same coordinate space (0.625rem inline-padding offset).
+   */
 </style>

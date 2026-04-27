@@ -119,7 +119,7 @@ export class TypesenseClient {
       body: JSON.stringify(body),
     });
     if (!res.ok) {
-      throw new Error(`Search HTTP ${res.status}: ${await safeText(res)}`);
+      throw new Error(await formatHttpError('Search', res));
     }
     const json = (await res.json()) as { results: IwacSearchResponse[] };
     if (!json.results?.[0]) {
@@ -194,7 +194,7 @@ export class TypesenseClient {
       body: JSON.stringify(body),
     });
     if (!res.ok) {
-      throw new Error(`Suggest HTTP ${res.status}: ${await safeText(res)}`);
+      throw new Error(await formatHttpError('Suggest', res));
     }
     const json = (await res.json()) as { results: IwacSearchResponse[] };
     return json.results?.[0] ?? emptySuggestResponse();
@@ -219,7 +219,7 @@ export class TypesenseClient {
           headers: { Accept: 'application/json' },
         });
         if (!res.ok) {
-          throw new Error(`Token HTTP ${res.status}: ${await safeText(res)}`);
+          throw new Error(await formatHttpError('Token', res));
         }
         const key = (await res.json()) as ScopedKeyResponse;
         if (!key.key) {
@@ -291,10 +291,53 @@ function emptySuggestResponse(): IwacSearchResponse {
   };
 }
 
-async function safeText(res: Response): Promise<string> {
+/**
+ * Build a useful error string for an HTTP failure on one of our JSON
+ * endpoints. Tries hard to surface server-emitted detail:
+ *
+ *   1. If the body is JSON with our `{error, message, detail}` envelope,
+ *      use `${message} — ${detail}` so the user sees the *root* cause
+ *      (e.g. "Failed to bootstrap … ← caused by: Connection refused")
+ *      not just the wrapper.
+ *   2. If the body is JSON without our envelope (e.g. a Typesense error),
+ *      fall back to the most informative-looking field.
+ *   3. Otherwise (HTML error page, plain text), include the body raw —
+ *      capped at 1024 chars so a multi-megabyte HTML 500 doesn't fill
+ *      the user's console.
+ *
+ * The previous helper sliced any body to 200 chars, which silently
+ * truncated the chain-walked `detail` field and made the diagnostic
+ * useless. The fix is to parse first, slice last, and only slice
+ * non-JSON bodies.
+ */
+async function formatHttpError(label: string, res: Response): Promise<string> {
+  let raw: string;
   try {
-    return (await res.text()).slice(0, 200);
+    raw = await res.text();
   } catch {
-    return '<unreadable body>';
+    return `${label} HTTP ${res.status}: <unreadable body>`;
   }
+
+  try {
+    const body: unknown = JSON.parse(raw);
+    if (body && typeof body === 'object') {
+      const obj = body as Record<string, unknown>;
+      const message = typeof obj.message === 'string' ? obj.message : undefined;
+      const detail = typeof obj.detail === 'string' ? obj.detail : undefined;
+      if (message && detail) {
+        return `${label} HTTP ${res.status}: ${message} — ${detail}`;
+      }
+      if (message) {
+        return `${label} HTTP ${res.status}: ${message}`;
+      }
+      // typesense-style errors put the message under `error`.
+      if (typeof obj.error === 'string') {
+        return `${label} HTTP ${res.status}: ${obj.error}`;
+      }
+    }
+  } catch {
+    // Not JSON — fall through to the raw-text branch.
+  }
+
+  return `${label} HTTP ${res.status}: ${raw.slice(0, 1024)}`;
 }
