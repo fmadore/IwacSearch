@@ -44,7 +44,8 @@ class SearchControllerFactory implements FactoryInterface
             keyProvider:        $keyProvider,
             browseRepository:   $container->get(BrowseConfigRepository::class),
             initialRenderer:    $container->get(InitialResponseRenderer::class),
-            config:             $config
+            config:             $config,
+            logger:             $logger
         );
     }
 }

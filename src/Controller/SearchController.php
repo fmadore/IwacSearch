@@ -11,6 +11,8 @@ use Laminas\Http\Response;
 use Laminas\Mvc\Controller\AbstractActionController;
 use Laminas\View\Model\JsonModel;
 use Laminas\View\Model\ViewModel;
+use Psr\Log\LoggerInterface;
+use Psr\Log\NullLogger;
 use Throwable;
 
 /**
@@ -31,7 +33,8 @@ class SearchController extends AbstractActionController
         private readonly BrowseConfigRepository $browseRepository,
         private readonly InitialResponseRenderer $initialRenderer,
         /** @var array<string, mixed> */
-        private readonly array $config = []
+        private readonly array $config = [],
+        private readonly LoggerInterface $logger = new NullLogger()
     ) {
     }
 
@@ -117,16 +120,24 @@ class SearchController extends AbstractActionController
 
             return new JsonModel($minted);
         } catch (Throwable $e) {
+            $detail = ExceptionMessage::chain($e);
+            // Belt-and-suspenders: also log the full chain to Omeka's
+            // log file so ops can grep `journalctl` / `omeka.log` when
+            // the response body has been swallowed by an intermediate
+            // tool (a paste, a curl pipe, an error-tracking aggregator
+            // that truncates at 256 chars). Same string shipped to the
+            // browser, just a second sink.
+            $this->logger->error('IwacSearch token mint failed', ['detail' => $detail]);
+
             $this->getResponse()->setStatusCode(Response::STATUS_CODE_503);
             return new JsonModel([
                 'error'   => 'token_unavailable',
                 'message' => 'Typesense scoped-key minting failed. Is the typesense service up?',
-                // Walk the previous-chain so the response carries the
-                // actual root cause (Laminas wraps factory failures in
-                // ServiceNotCreatedException; surfacing only the wrapper
-                // hides the real "X not readable" or "Connection refused"
-                // line that ops actually need.)
-                'detail'  => ExceptionMessage::chain($e),
+                // The full chain, joined with " ← caused by: " separators,
+                // bypasses Laminas's ServiceNotCreatedException wrapper so
+                // the response carries the actual root cause (e.g.
+                // "Connection refused" from the SDK's HTTP client).
+                'detail'  => $detail,
             ]);
         }
     }
