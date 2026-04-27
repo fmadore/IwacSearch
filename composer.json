@@ -8,7 +8,7 @@
     "ext-curl": "*",
     "ext-json": "*",
     "ext-mbstring": "*",
-    "typesense/typesense-php": "^5.0",
+    "typesense/typesense-php": "^6.0",
     "symfony/yaml": "^7.0",
     "guzzlehttp/guzzle": "^7.10",
     "php-http/guzzle7-adapter": "^1.1",
