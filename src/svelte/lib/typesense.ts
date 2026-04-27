@@ -121,11 +121,10 @@ export class TypesenseClient {
     if (!res.ok) {
       throw new Error(await formatHttpError('Search', res));
     }
-    const json = (await res.json()) as { results: IwacSearchResponse[] };
-    if (!json.results?.[0]) {
-      throw new Error('Search response missing results[0]');
-    }
-    return json.results[0];
+    const json = (await res.json()) as {
+      results: Array<IwacSearchResponse | TypesensePerSearchError>;
+    };
+    return validateSearchResult('Search', json.results?.[0]);
   }
 
   /**
@@ -196,8 +195,14 @@ export class TypesenseClient {
     if (!res.ok) {
       throw new Error(await formatHttpError('Suggest', res));
     }
-    const json = (await res.json()) as { results: IwacSearchResponse[] };
-    return json.results?.[0] ?? emptySuggestResponse();
+    const json = (await res.json()) as {
+      results: Array<IwacSearchResponse | TypesensePerSearchError>;
+    };
+    const first = json.results?.[0];
+    if (!first) {
+      return emptySuggestResponse();
+    }
+    return validateSearchResult('Suggest', first);
   }
 
   /**
@@ -289,6 +294,49 @@ function emptySuggestResponse(): IwacSearchResponse {
     facet_counts: [],
     search_time_ms: 0,
   };
+}
+
+/**
+ * Per-search error envelope Typesense embeds inside multi_search results.
+ *
+ * `multi_search` always returns HTTP 200 even when individual searches
+ * fail — so a 422 ("Could not find a field named X" / bad filter syntax /
+ * missing collection) shows up as `{code: 422, error: "..."}` inside
+ * `results[i]` rather than as a non-2xx HTTP status.
+ */
+interface TypesensePerSearchError {
+  code: number;
+  error: string;
+}
+
+/**
+ * Surface per-search errors as thrown errors so the existing error UI
+ * catches them. Returning the raw envelope to callers would let
+ * `response.hits.length` blow up downstream when ResultsList /
+ * SuggestDropdown try to render hits that aren't there.
+ *
+ * Two failure modes detected:
+ *   1. The server reported an error inside the result envelope
+ *      (`{code, error}`) — surface its message verbatim.
+ *   2. The result is shaped like a success but lacks `hits` — defensive
+ *      catch-all for unexpected response shapes that would otherwise
+ *      trigger an opaque undefined-property crash on render.
+ */
+function validateSearchResult(
+  label: string,
+  result: IwacSearchResponse | TypesensePerSearchError | undefined,
+): IwacSearchResponse {
+  if (!result) {
+    throw new Error(`${label} response missing results[0]`);
+  }
+  if ('error' in result && typeof result.error === 'string') {
+    const code = 'code' in result ? result.code : '';
+    throw new Error(`${label} HTTP ${code}: ${result.error}`);
+  }
+  if (!Array.isArray((result as IwacSearchResponse).hits)) {
+    throw new Error(`${label} response missing hits[]`);
+  }
+  return result as IwacSearchResponse;
 }
 
 /**

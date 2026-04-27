@@ -69,9 +69,12 @@
   // page blocks with locked filters, and the standalone /search shell —
   // so `response` is already set on first frame and the user sees real
   // content, not a spinner. Falls back to null (client-side fetch path)
-  // when the server couldn't pre-render.
+  // when the server couldn't pre-render. The Array.isArray guard rejects
+  // malformed bootstraps that would otherwise crash ResultsList on its
+  // first render with `Cannot read properties of undefined (reading 'length')`.
   // svelte-ignore state_referenced_locally
-  let response = $state<IwacSearchResponse | null>(bootstrap.initial_response ?? null);
+  const initialResponse = deriveInitialResponse(bootstrap);
+  let response = $state<IwacSearchResponse | null>(initialResponse);
   let isLoading = $state(false);
   let error = $state<string | null>(null);
 
@@ -82,9 +85,8 @@
   // asked for, not the "browse everything" SSR snapshot. Plain `let`
   // (not $state) — reading it inside the effect doesn't create a
   // reactive dependency, so mutating it doesn't re-trigger the effect.
-  // svelte-ignore state_referenced_locally
   let skipNextFetch =
-    bootstrap.initial_response != null &&
+    initialResponse != null &&
     initial.q === '' &&
     initial.page === 1 &&
     Object.keys(initial.filters).length === 0 &&
@@ -305,6 +307,21 @@
   }
 
   const facets = $derived(response?.facet_counts ?? []);
+
+  /**
+   * SSR'd `initial_response` is only safe to hydrate when its shape is
+   * the one ResultsList expects (`hits` must be an array). A malformed
+   * bootstrap — pre-0.2.5 SSR could emit a per-search-error envelope
+   * via the bootstrap script — would otherwise blow up first render
+   * with `Cannot read properties of undefined (reading 'length')`.
+   * Pulled out of the script body so the read of `bootstrap.initial_response`
+   * doesn't trigger Svelte's `state_referenced_locally` warning.
+   */
+  function deriveInitialResponse(bs: IwacBootstrap): IwacSearchResponse | null {
+    return bs.initial_response && Array.isArray(bs.initial_response.hits)
+      ? bs.initial_response
+      : null;
+  }
 </script>
 
 <div class="iwac-search" class:iwac-search--compact={bootstrap.mode === 'compact'}>

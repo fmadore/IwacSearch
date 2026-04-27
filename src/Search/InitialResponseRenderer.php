@@ -151,6 +151,19 @@ final class InitialResponseRenderer
             return null;
         }
 
+        // Belt-and-suspenders: any well-formed success response has a
+        // `hits` array. If it's missing (unknown future error shape, or
+        // a typesense-php upgrade that changes the contract), fall back
+        // to the client-side fetch path rather than emitting a half-baked
+        // initial_response that crashes the Svelte client mid-render
+        // with `Cannot read properties of undefined (reading 'length')`.
+        if (!isset($first['hits']) || !is_array($first['hits'])) {
+            $this->logger->warning('IwacSearch SSR: Typesense response missing hits[]', [
+                'keys' => array_keys($first),
+            ]);
+            return null;
+        }
+
         return $first;
     }
 
