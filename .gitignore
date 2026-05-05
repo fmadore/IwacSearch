@@ -16,6 +16,7 @@ Thumbs.db
 .env
 .env.local
 *.log
+.claude/
 
 # Notes:
 # - asset/dist/ IS tracked. The compiled Svelte bundle ships in the repo
