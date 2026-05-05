@@ -44,6 +44,17 @@ if (!is_readable($autoload)) {
     fwrite(STDERR, "ERROR: vendor/autoload.php not found. Run 'composer install --no-dev' inside {$moduleRoot}.\n");
     exit(2);
 }
+
+// Omeka core vendor provides Laminas + PSR interfaces this CLI uses
+// (FactoryInterface, ContainerInterface). They are NOT bundled in the
+// module's own composer.json on purpose — bundling them collides with
+// Omeka's loaded versions at runtime. Path is the in-container Omeka
+// install; override with IWAC_OMEKA_VENDOR for non-Docker dev.
+$omekaVendor = getenv('IWAC_OMEKA_VENDOR') ?: '/var/www/html/vendor/autoload.php';
+if (is_readable($omekaVendor)) {
+    require_once $omekaVendor;
+}
+
 require $autoload;
 
 // ── Minimal stderr logger (PSR-3) ─────────────────────────────────────────

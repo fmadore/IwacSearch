@@ -12,9 +12,7 @@
     "symfony/yaml": "^7.0",
     "guzzlehttp/guzzle": "^7.10",
     "php-http/guzzle7-adapter": "^1.1",
-    "http-interop/http-factory-guzzle": "^1.2",
-    "psr/container": "^2.0",
-    "laminas/laminas-servicemanager": "^4.3"
+    "http-interop/http-factory-guzzle": "^1.2"
   },
   "autoload": {
     "psr-4": {
