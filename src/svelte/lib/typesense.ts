@@ -124,30 +124,58 @@ export class TypesenseClient {
         body: JSON.stringify(body),
       });
 
-    let res = await post(buildBody(true));
-    if (!res.ok) {
-      const message = await formatHttpError('Search', res);
-      // Recover from a missing stopword set on the Typesense server.
-      // Without `fr_default` provisioned, the entire search 404s; drop
-      // the field and retry rather than fail the whole UI. Operator
-      // should run `discovery:reindex` (or the stopwords-sync CLI) to
-      // restore the set so French stopword filtering works again.
-      if (res.status === 404 && /stopword set/i.test(message)) {
-        console.warn(
-          '[iwac-search] Typesense stopword set missing; retrying without stopwords. Run discovery:reindex (or cli/stopwords-sync.php) to provision.',
-        );
-        res = await post(buildBody(false));
-        if (!res.ok) {
-          throw new Error(await formatHttpError('Search', res));
-        }
-      } else {
-        throw new Error(message);
+    // Recovery path for a missing stopword set on the Typesense server.
+    // Typesense surfaces "stopword set not found" in TWO different shapes:
+    //   1. HTTP 404 at the multi_search wrapper (top-level)
+    //   2. HTTP 200 with `{code: 404, error: "..."}` inside results[0]
+    //      — the per-search error envelope (more common in practice; this
+    //      is what Typesense emits for newer versions when the missing
+    //      stopwords reference is on a per-search basis)
+    // Either way, drop the `stopwords` field and retry once. Stopwords
+    // are an enhancement, not a correctness requirement. Operator should
+    // run `discovery:reindex` (or the cli/stopwords-sync.php helper) to
+    // restore the set so French stopword filtering works again.
+    const tryOnce = async (
+      includeStopwords: boolean,
+    ): Promise<
+      | { ok: true; payload: { results: Array<IwacSearchResponse | TypesensePerSearchError> } }
+      | { ok: false; message: string; isStopwordError: boolean }
+    > => {
+      const res = await post(buildBody(includeStopwords));
+      if (!res.ok) {
+        const message = await formatHttpError('Search', res);
+        return {
+          ok: false,
+          message,
+          isStopwordError: res.status === 404 && /stopword set/i.test(message),
+        };
       }
-    }
-    const json = (await res.json()) as {
-      results: Array<IwacSearchResponse | TypesensePerSearchError>;
+      const payload = (await res.json()) as {
+        results: Array<IwacSearchResponse | TypesensePerSearchError>;
+      };
+      const first = payload.results?.[0];
+      if (first && 'error' in first && typeof first.error === 'string') {
+        const code = 'code' in first ? first.code : '';
+        return {
+          ok: false,
+          message: `Search HTTP ${code}: ${first.error}`,
+          isStopwordError: /stopword set/i.test(first.error),
+        };
+      }
+      return { ok: true, payload };
     };
-    return validateSearchResult('Search', json.results?.[0]);
+
+    let result = await tryOnce(true);
+    if (!result.ok && result.isStopwordError) {
+      console.warn(
+        '[iwac-search] Typesense stopword set missing; retrying without stopwords. Run discovery:reindex (or cli/stopwords-sync.php) to provision.',
+      );
+      result = await tryOnce(false);
+    }
+    if (!result.ok) {
+      throw new Error(result.message);
+    }
+    return validateSearchResult('Search', result.payload.results?.[0]);
   }
 
   /**

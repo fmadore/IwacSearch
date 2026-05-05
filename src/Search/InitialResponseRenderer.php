@@ -167,6 +167,37 @@ final class InitialResponseRenderer
             return null;
         }
 
+        // Per-search stopword recovery: Typesense returns HTTP 200 with
+        // the stopword-set-missing error embedded in results[0].error
+        // (alongside `code: 404`). The HTTP-level catch above only sees
+        // top-level errors, so this branch handles the more common
+        // per-search-envelope case. Drop the stopwords field and retry
+        // once before giving up.
+        if (
+            isset($first['error'])
+            && is_string($first['error'])
+            && stripos($first['error'], 'stopword set') !== false
+        ) {
+            $this->logger->warning(
+                'IwacSearch SSR: per-search stopword error; retrying without stopwords. Run discovery:reindex (or cli/stopwords-sync.php) to provision.',
+                ['error' => (string) $first['error']]
+            );
+            unset($body['searches'][0]['stopwords']);
+            try {
+                $response = $this->client()->multiSearch->perform($body);
+            } catch (Throwable $retryError) {
+                $this->logger->warning('IwacSearch SSR: stopwords-drop retry threw', [
+                    'error' => $retryError->getMessage(),
+                ]);
+                return null;
+            }
+            $first = $response['results'][0] ?? null;
+            if (!is_array($first)) {
+                $this->logger->warning('IwacSearch SSR: stopwords-drop retry returned unexpected shape');
+                return null;
+            }
+        }
+
         // Typesense sometimes returns per-search errors inside the
         // results array (HTTP 200 but `error` set). Treat those as
         // soft-fallback: let the client retry, don't SSR the error.
