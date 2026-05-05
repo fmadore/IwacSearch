@@ -87,6 +87,21 @@ class Module extends AbstractModule
             [Controller\Admin\BrowseConfigController::class],
             ['browse', 'apiList', 'apiItem']
         );
+
+        // Maintenance page — same role tier. Lets editors dispatch
+        // reindex / stopwords-sync jobs from the admin UI without
+        // needing docker exec access. The actions themselves are
+        // dispatched as Omeka background jobs, so a misclick can't
+        // hold up the request thread.
+        $acl->allow(
+            [
+                Acl::ROLE_EDITOR,
+                Acl::ROLE_SITE_ADMIN,
+                Acl::ROLE_GLOBAL_ADMIN,
+            ],
+            [Controller\Admin\MaintenanceController::class],
+            ['index', 'reindex', 'syncStopwords']
+        );
     }
 
     /**

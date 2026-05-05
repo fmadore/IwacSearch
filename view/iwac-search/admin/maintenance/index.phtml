@@ -1,0 +1,69 @@
+<?php
+/**
+ * Admin maintenance page for IwacSearch.
+ *
+ * Two POST forms — "Run reindex" and "Sync stopwords" — each carrying
+ * a fresh CSRF token. Plain server-rendered HTML; no Svelte bundle
+ * needed since this is just two buttons and a flash messenger.
+ *
+ * @var \Laminas\View\Renderer\PhpRenderer $this
+ * @var \IwacSearch\Form\MaintenanceForm $reindexForm
+ * @var \IwacSearch\Form\MaintenanceForm $stopwordsForm
+ */
+
+$translate = $this->plugin('translate');
+$escape    = $this->plugin('escapeHtml');
+$this->htmlElement('body')->appendAttribute('class', 'iwac-search admin maintenance');
+
+// Prepare forms — set their POST targets here so the view stays declarative.
+$reindexForm->setAttribute('action', $this->url('admin/iwac-search/maintenance-reindex'));
+$reindexForm->setAttribute('method', 'POST');
+$reindexForm->prepare();
+
+$stopwordsForm->setAttribute('action', $this->url('admin/iwac-search/maintenance-sync-stopwords'));
+$stopwordsForm->setAttribute('method', 'POST');
+$stopwordsForm->prepare();
+?>
+<?php echo $this->pageTitle($translate('IWAC Search: maintenance'), 1); ?>
+
+<p class="description">
+    <?php echo $translate('Trigger Typesense maintenance tasks without dropping into the docker container. Both actions dispatch as Omeka background jobs; track progress in the Jobs admin page.'); ?>
+</p>
+
+<div class="iwac-maintenance-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:1.5rem;margin-top:1.5rem;">
+
+    <section class="iwac-maintenance-card" style="border:1px solid #ddd;border-radius:6px;padding:1.5rem;background:#fff;">
+        <h3 style="margin-top:0;"><?php echo $translate('Run full reindex'); ?></h3>
+        <p>
+            <?php echo $translate('Pulls fresh data from the HuggingFace dataset, rebuilds the iwac_v1 collection, and atomic-swaps the iwac_current alias. Also re-syncs the fr_default stopword set as its first step.'); ?>
+        </p>
+        <p>
+            <strong><?php echo $translate('Duration:'); ?></strong>
+            <?php echo $translate('5–15 minutes for the full ~14K-doc corpus. Live search keeps serving the previous collection until the swap completes, so there is no downtime.'); ?>
+        </p>
+        <?php echo $this->form()->openTag($reindexForm); ?>
+            <?php echo $this->formCollection($reindexForm); ?>
+            <button type="submit" class="button" style="margin-top:0.5rem;">
+                <?php echo $translate('Run reindex'); ?>
+            </button>
+        <?php echo $this->form()->closeTag(); ?>
+    </section>
+
+    <section class="iwac-maintenance-card" style="border:1px solid #ddd;border-radius:6px;padding:1.5rem;background:#fff;">
+        <h3 style="margin-top:0;"><?php echo $translate('Sync French stopwords only'); ?></h3>
+        <p>
+            <?php echo $translate('Refreshes the fr_default stopword set in Typesense from data/stopwords-fr.json. Idempotent — safe to run repeatedly.'); ?>
+        </p>
+        <p>
+            <strong><?php echo $translate('When to use:'); ?></strong>
+            <?php echo $translate('After editing the stopword list, or to recover from a missing set without paying for a full reindex.'); ?>
+        </p>
+        <?php echo $this->form()->openTag($stopwordsForm); ?>
+            <?php echo $this->formCollection($stopwordsForm); ?>
+            <button type="submit" class="button" style="margin-top:0.5rem;">
+                <?php echo $translate('Sync stopwords'); ?>
+            </button>
+        <?php echo $this->form()->closeTag(); ?>
+    </section>
+
+</div>

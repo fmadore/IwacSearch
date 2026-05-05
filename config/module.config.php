@@ -40,6 +40,15 @@ return [
         'factories' => [
             Controller\SearchController::class                => Service\SearchControllerFactory::class,
             Controller\Admin\BrowseConfigController::class    => Service\Controller\BrowseConfigControllerFactory::class,
+            Controller\Admin\MaintenanceController::class     => Service\Controller\MaintenanceControllerFactory::class,
+        ],
+    ],
+
+    // Maintenance form (CSRF-only) used by the admin Maintenance page.
+    // Stateless, no constructor deps — `invokables` is enough.
+    'form_elements' => [
+        'invokables' => [
+            Form\MaintenanceForm::class => Form\MaintenanceForm::class,
         ],
     ],
 
@@ -95,6 +104,39 @@ return [
                                     'route'       => '/browse-config/api/:id',
                                     'constraints' => ['id' => '\d+'],
                                     'defaults'    => ['action' => 'apiItem'],
+                                ],
+                            ],
+                            // Maintenance HTML page: /admin/iwac-search/maintenance
+                            'maintenance' => [
+                                'type'    => \Laminas\Router\Http\Literal::class,
+                                'options' => [
+                                    'route'    => '/maintenance',
+                                    'defaults' => [
+                                        'controller' => Controller\Admin\MaintenanceController::class,
+                                        'action'     => 'index',
+                                    ],
+                                ],
+                            ],
+                            // POST handler: /admin/iwac-search/maintenance/reindex
+                            'maintenance-reindex' => [
+                                'type'    => \Laminas\Router\Http\Literal::class,
+                                'options' => [
+                                    'route'    => '/maintenance/reindex',
+                                    'defaults' => [
+                                        'controller' => Controller\Admin\MaintenanceController::class,
+                                        'action'     => 'reindex',
+                                    ],
+                                ],
+                            ],
+                            // POST handler: /admin/iwac-search/maintenance/sync-stopwords
+                            'maintenance-sync-stopwords' => [
+                                'type'    => \Laminas\Router\Http\Literal::class,
+                                'options' => [
+                                    'route'    => '/maintenance/sync-stopwords',
+                                    'defaults' => [
+                                        'controller' => Controller\Admin\MaintenanceController::class,
+                                        'action'     => 'syncStopwords',
+                                    ],
                                 ],
                             ],
                         ],
@@ -167,11 +209,20 @@ return [
                 'route'    => 'admin/iwac-search/browse-config',
                 'resource' => Controller\Admin\BrowseConfigController::class,
                 'class'    => 'o-icon-search',
-                // Child routes stay off the visible sidebar but still let
-                // Omeka highlight the parent when a sub-page is active.
                 'pages' => [
-                    ['route' => 'admin/iwac-search/browse-config-api-list', 'visible' => false],
-                    ['route' => 'admin/iwac-search/browse-config-api-item', 'visible' => false],
+                    // Maintenance — visible sub-entry, lets editors trigger
+                    // reindex / stopwords-sync without docker exec access.
+                    [
+                        'label'    => 'Maintenance', // @translate
+                        'route'    => 'admin/iwac-search/maintenance',
+                        'resource' => Controller\Admin\MaintenanceController::class,
+                    ],
+                    // Hidden child routes — let Omeka highlight the parent
+                    // entry when one of these sub-pages is active.
+                    ['route' => 'admin/iwac-search/browse-config-api-list',     'visible' => false],
+                    ['route' => 'admin/iwac-search/browse-config-api-item',     'visible' => false],
+                    ['route' => 'admin/iwac-search/maintenance-reindex',        'visible' => false],
+                    ['route' => 'admin/iwac-search/maintenance-sync-stopwords', 'visible' => false],
                 ],
             ],
         ],
@@ -186,6 +237,11 @@ return [
             'api_key_file'     => '/run/secrets/typesense_api_key',
             'collection_alias' => 'iwac_current',
         ],
+        // Public Omeka API base — used by the OmekaAclLoader inside
+        // BulkReindex jobs to fetch is_public state for each indexed
+        // doc. Override at runtime via the IWAC_OMEKA_API_URL env var
+        // if you need a different host (e.g. local API in dev).
+        'omeka_api_url' => 'https://islam.zmo.de/api',
         'public_search_key' => [
             // Constraints baked into every public scoped key. See "Security
             // model" in the roadmap. Loosening any of these requires sign-off.
