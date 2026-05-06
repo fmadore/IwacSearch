@@ -52,13 +52,20 @@
   }
   .iwac-sort__select {
     height: var(--size-control-md, 2.5rem);
-    padding: 0 var(--space-md, 1rem) 0 var(--space-sm, 0.5rem);
+    padding: 0 var(--space-lg, 1.5rem) 0 var(--space-sm, 0.5rem);
     background: var(--surface, #fff);
     color: var(--ink, #222);
     border: 1px solid var(--border, #ccc);
     border-radius: var(--radius-md, 0.75rem);
     font: inherit;
+    font-size: var(--text-sm, 0.9rem);
     cursor: pointer;
+    transition:
+      border-color var(--transition-fast, 150ms ease),
+      box-shadow var(--transition-fast, 150ms ease);
+  }
+  .iwac-sort__select:hover {
+    border-color: var(--border-strong, var(--border, #ccc));
   }
   .iwac-sort__select:focus-visible {
     outline: none;

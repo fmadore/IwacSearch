@@ -93,9 +93,16 @@
     background: var(--surface, #fff);
     border: 1px solid var(--border, #ccc);
     border-radius: var(--radius-md, 0.75rem);
+    box-shadow: var(--shadow-xs, 0 1px 2px rgba(0, 0, 0, 0.04));
     transition:
-      border-color 120ms ease,
-      box-shadow 120ms ease;
+      border-color var(--transition-fast, 150ms ease),
+      box-shadow var(--transition-fast, 150ms ease);
+  }
+  .iwac-input__field::placeholder {
+    color: var(--muted, #888);
+  }
+  .iwac-input__field:hover {
+    border-color: var(--border-strong, var(--border, #ccc));
   }
   .iwac-input__field:focus {
     outline: none;

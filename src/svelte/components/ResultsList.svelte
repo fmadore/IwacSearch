@@ -1,41 +1,49 @@
-<script module lang="ts">
-  function formatCount(n: number): string {
-    return new Intl.NumberFormat().format(n);
-  }
-</script>
-
 <script lang="ts">
   import type { IwacSearchResponse } from '../lib/types';
   import ResultItem from './ResultItem.svelte';
+  import Pagination from './Pagination.svelte';
 
   /**
-   * Renders the result list + the load-more affordance.
+   * Renders the result list and the numbered pagination bar.
    *
-   * Pagination strategy: load-more (cursor-style append) rather than
-   * numbered pages. Search results are usually scanned top-to-bottom;
-   * paged UIs cause visitors to lose their place if they accidentally
-   * back-navigate. Numbered pagination lands in M2 alongside facets.
+   * The result count + sort dropdown live in App.svelte's toolbar so
+   * they sit on the same line and never duplicate. This component
+   * focuses on rendering hits and paging through them.
+   *
+   * Pagination strategy: numbered (1 … 4 [5] 6 … 12  ‹ ›). The earlier
+   * "Load more" affordance was scrapped because:
+   *   - users couldn't jump to a specific page (e.g. share a deep link
+   *     to "page 5 of the Nigeria results"),
+   *   - long-running browse sessions accumulated DOM as they paged,
+   *   - the URL state already carried `page` for back-button support
+   *     but the UI never surfaced the page number. Numbered pagination
+   *     finishes that loop.
+   *
+   * Typesense's `limit_hits` cap (250 in lib/typesense.ts) bounds the
+   * deepest page the user can request. We compute totalPages from the
+   * lesser of `found` and that cap so the bar never invites a click
+   * that would 422.
    */
 
   interface Props {
     response: IwacSearchResponse;
-    onLoadMore: () => void;
-    isLoading: boolean;
+    perPage: number;
+    /**
+     * Match the `limit_hits` value sent in the search request so the
+     * deepest page is always within Typesense's reach. App.svelte
+     * passes the same constant the typesense client uses (250).
+     */
+    hitsCap: number;
+    onPageChange: (next: number) => void;
   }
 
-  const { response, onLoadMore, isLoading }: Props = $props();
+  const { response, perPage, hitsCap, onPageChange }: Props = $props();
 
-  const totalShown = $derived(response.hits.length);
-  const hasMore = $derived(totalShown < response.found);
+  const reachable = $derived(Math.min(response.found, hitsCap));
+  const totalPages = $derived(Math.max(1, Math.ceil(reachable / Math.max(1, perPage))));
 </script>
 
 <div class="iwac-results">
-  <header class="iwac-results__meta" aria-live="polite">
-    <strong>{formatCount(response.found)}</strong>
-    {response.found === 1 ? 'result' : 'results'}
-    <span class="iwac-results__timing">({response.search_time_ms} ms)</span>
-  </header>
-
   {#if response.hits.length === 0}
     <p class="iwac-results__empty">No matches. Try a different word or remove a filter.</p>
   {:else}
@@ -47,12 +55,12 @@
       {/each}
     </ol>
 
-    {#if hasMore}
-      <button type="button" class="iwac-results__more" onclick={onLoadMore} disabled={isLoading}>
-        {isLoading
-          ? 'Loading…'
-          : `Load more (${formatCount(response.found - totalShown)} remaining)`}
-      </button>
+    <Pagination currentPage={response.page} {totalPages} {onPageChange} />
+
+    {#if response.found > hitsCap}
+      <p class="iwac-results__cap-note" role="note">
+        Showing the first {hitsCap.toLocaleString()} matches — narrow your search to reach the rest.
+      </p>
     {/if}
   {/if}
 </div>
@@ -62,14 +70,6 @@
     display: flex;
     flex-direction: column;
     gap: var(--space-md, 1rem);
-  }
-  .iwac-results__meta {
-    color: var(--muted, #666);
-    font-size: var(--text-sm, 0.9rem);
-  }
-  .iwac-results__timing {
-    margin-inline-start: var(--space-xs, 0.25rem);
-    opacity: 0.7;
   }
   .iwac-results__list {
     list-style: none;
@@ -89,30 +89,10 @@
     border-radius: var(--radius-md, 0.75rem);
     margin: 0;
   }
-  .iwac-results__more {
-    align-self: center;
-    height: var(--size-control-lg, 2.75rem);
-    padding-inline: var(--space-lg, 1.5rem);
-    background: var(--surface-raised, #fafafa);
-    color: var(--ink, #222);
-    border: 1px solid var(--border, #ccc);
-    border-radius: var(--radius-md, 0.75rem);
-    font-size: var(--text-base, 1rem);
-    cursor: pointer;
-    transition:
-      background 120ms ease,
-      transform 120ms ease;
-  }
-  .iwac-results__more:hover:not(:disabled) {
-    background: var(--surface, #fff);
-    transform: translateY(var(--lift-xxs, -1px));
-  }
-  .iwac-results__more:disabled {
-    opacity: 0.6;
-    cursor: not-allowed;
-  }
-  .iwac-results__more:focus-visible {
-    outline: none;
-    box-shadow: var(--ring-focus, 0 0 0 3px rgba(0, 0, 0, 0.1));
+  .iwac-results__cap-note {
+    margin: 0;
+    text-align: center;
+    color: var(--muted, #888);
+    font-size: var(--text-xs, 0.75rem);
   }
 </style>

@@ -1,3 +1,12 @@
+<script module lang="ts">
+  /**
+   * Match the `limit_hits` cap sent in lib/typesense.ts. Kept here so
+   * ResultsList can build a pagination bar that never invites a click
+   * past the deepest page Typesense will return.
+   */
+  const HITS_CAP = 250;
+</script>
+
 <script lang="ts">
   import type {
     ActiveFilters,
@@ -27,6 +36,11 @@
    * listens for popstate so back/forward gives a meaningful history.
    * Page blocks keep everything in memory — multiple block instances
    * on one page would clash if they all fought over the URL.
+   *
+   * Modularity note: this component is the orchestrator. It owns state
+   * and wires events. The actual UI is in small focused components
+   * (SearchInput, FacetPanel, ResultsList, Pagination, ResultItem,
+   * SortSelect, …) so styling and behaviour stay scoped.
    */
 
   interface Props {
@@ -94,6 +108,11 @@
 
   // Previous snapshot for URL-sync diffing (pushState vs replaceState).
   let prevState: SearchState | null = null;
+
+  // Anchor element above the result list — page changes scroll back
+  // to this so the new page lands at the top. Bound via bind:this on
+  // the toolbar header below.
+  let resultsAnchor: HTMLElement | null = $state(null);
 
   // Push state → URL whenever anything observable changes.
   $effect(() => {
@@ -300,13 +319,31 @@
     page = 1;
   }
 
-  function loadMore(): void {
-    if (!response) return;
-    if (response.hits.length >= response.found) return;
-    page += 1;
+  /**
+   * Pagination handler. Sets the page state (which kicks the search
+   * effect) and scrolls back to the toolbar so the user lands at the
+   * top of the new page rather than midway through the previous one.
+   *
+   * Smooth scroll is opt-in via prefers-reduced-motion: callers who
+   * disable motion still get the navigation, just instantly.
+   */
+  function handlePageChange(next: number): void {
+    if (next === page) return;
+    page = next;
+    if (resultsAnchor) {
+      const reduced =
+        typeof window !== 'undefined' &&
+        window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      resultsAnchor.scrollIntoView({
+        behavior: reduced ? 'auto' : 'smooth',
+        block: 'start',
+      });
+    }
   }
 
   const facets = $derived(response?.facet_counts ?? []);
+  const perPage = $derived(response?.request_params?.per_page ?? bootstrap.results_per_page ?? 20);
+  const searchTimeMs = $derived(response?.search_time_ms ?? 0);
 
   /**
    * SSR'd `initial_response` is only safe to hydrate when its shape is
@@ -410,31 +447,44 @@
         </aside>
       {/if}
 
-      <div class="iwac-search__results">
+      <div class="iwac-search__results" aria-busy={isLoading}>
         <!-- Toolbar: result count + Filters trigger (mobile-only) + sort -->
         {#if response}
-          <div class="iwac-search__results-head">
-            <span class="iwac-search__results-count" aria-live="polite">
+          <header class="iwac-search__toolbar" bind:this={resultsAnchor} aria-live="polite">
+            <div class="iwac-search__count-block">
               {#if response.found > 0}
-                {response.found.toLocaleString()}
-                {response.found === 1 ? 'result' : 'results'}
+                <span class="iwac-search__count-number">
+                  {response.found.toLocaleString()}
+                </span>
+                <span class="iwac-search__count-label">
+                  {response.found === 1 ? 'result' : 'results'}
+                </span>
+                {#if searchTimeMs > 0}
+                  <span class="iwac-search__count-timing">
+                    · {searchTimeMs} ms
+                  </span>
+                {/if}
               {:else}
-                No results
+                <span class="iwac-search__count-label iwac-search__count-label--empty">
+                  No results
+                </span>
               {/if}
-            </span>
-            <button
-              type="button"
-              class="iwac-search__filters-trigger"
-              onclick={openFilterDrawer}
-              aria-label="Open filters"
-            >
-              Filters
-              {#if activeFilterCount > 0}
-                <span class="iwac-search__filters-trigger-badge">{activeFilterCount}</span>
-              {/if}
-            </button>
-            <SortSelect value={sort} onChange={handleSortChange} />
-          </div>
+            </div>
+            <div class="iwac-search__toolbar-actions">
+              <button
+                type="button"
+                class="iwac-search__filters-trigger"
+                onclick={openFilterDrawer}
+                aria-label="Open filters"
+              >
+                Filters
+                {#if activeFilterCount > 0}
+                  <span class="iwac-search__filters-trigger-badge">{activeFilterCount}</span>
+                {/if}
+              </button>
+              <SortSelect value={sort} onChange={handleSortChange} />
+            </div>
+          </header>
         {/if}
 
         {#if isLoading && !response}
@@ -454,14 +504,14 @@
             {/if}
           </div>
         {:else if response}
-          <ResultsList {response} onLoadMore={loadMore} {isLoading} />
+          <ResultsList {response} {perPage} hitsCap={HITS_CAP} onPageChange={handlePageChange} />
         {/if}
       </div>
     </div>
   {:else if isLoading && !response}
     <p class="iwac-search__status" aria-live="polite">Searching…</p>
   {:else if response}
-    <ResultsList {response} onLoadMore={loadMore} {isLoading} />
+    <ResultsList {response} {perPage} hitsCap={HITS_CAP} onPageChange={handlePageChange} />
   {/if}
 </div>
 
@@ -479,8 +529,8 @@
   }
   .iwac-search__layout {
     display: grid;
-    grid-template-columns: minmax(16rem, 20rem) 1fr;
-    gap: var(--space-lg, 1.5rem);
+    grid-template-columns: minmax(15rem, 18rem) 1fr;
+    gap: var(--space-xl, 2rem);
     align-items: start;
   }
 
@@ -496,6 +546,10 @@
     align-self: start;
     max-height: calc(100vh - var(--space-xl, 2rem));
     overflow-y: auto;
+    /* Subtle right "rail" so the column has a visual edge against the
+       results without becoming a card. */
+    padding-inline-end: var(--space-md, 1rem);
+    border-inline-end: 1px solid var(--border-light, #eee);
   }
   .iwac-search__facets-body {
     /* Padding inside the drawer body. The drawer header already has
@@ -509,12 +563,14 @@
   @media (max-width: 48rem) {
     .iwac-search__layout {
       grid-template-columns: 1fr;
+      gap: var(--space-md, 1rem);
     }
     .iwac-search__filters-trigger {
       display: inline-flex;
       align-items: center;
       gap: var(--space-xs, 0.25rem);
-      padding: 0.4rem 0.75rem;
+      height: var(--size-control-md, 2.5rem);
+      padding-inline: var(--space-md, 1rem);
       border: 1px solid var(--border, #ccc);
       border-radius: var(--radius-md, 0.75rem);
       background: var(--surface, #fff);
@@ -522,10 +578,17 @@
       font-size: var(--text-sm, 0.9rem);
       font-weight: 500;
       cursor: pointer;
+      transition:
+        border-color var(--transition-fast, 150ms ease),
+        color var(--transition-fast, 150ms ease);
     }
     .iwac-search__filters-trigger:hover {
       border-color: var(--primary, #c66);
       color: var(--primary, #c66);
+    }
+    .iwac-search__filters-trigger:focus-visible {
+      outline: none;
+      box-shadow: var(--ring-focus, 0 0 0 3px rgba(0, 0, 0, 0.1));
     }
     .iwac-search__filters-trigger-badge {
       display: inline-flex;
@@ -535,38 +598,75 @@
       height: 1.25rem;
       padding: 0 0.375rem;
       background: var(--primary, #c66);
-      color: var(--surface, #fff);
+      color: var(--primary-contrast, #fff);
       border-radius: var(--radius-full, 9999px);
       font-size: var(--text-xs, 0.75rem);
       font-weight: 600;
       font-variant-numeric: tabular-nums;
     }
   }
+
   .iwac-search__results {
     display: flex;
     flex-direction: column;
     gap: var(--space-md, 1rem);
     min-width: 0; /* allow snippet wrap */
+    /* When a paged search is in flight, dim the list slightly so the
+       user gets feedback without losing scroll position. The bar itself
+       is provided by ResultsList — this is just a passive cue. */
+    transition: opacity var(--transition-base, 200ms ease);
   }
-  .iwac-search__results-head {
+  .iwac-search__results[aria-busy='true'] {
+    opacity: 0.65;
+  }
+  .iwac-search__toolbar {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: var(--space-sm, 0.5rem);
+    gap: var(--space-md, 1rem);
     flex-wrap: wrap;
+    /* Anchor under the search box — gives pagination something to
+       scroll back to. */
+    padding-block-end: var(--space-sm, 0.5rem);
+    border-bottom: 1px solid var(--border-light, #eee);
   }
-  .iwac-search__results-count {
+  .iwac-search__count-block {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 0.375rem;
     color: var(--muted, #666);
     font-size: var(--text-sm, 0.9rem);
     font-variant-numeric: tabular-nums;
-    /* Push the trigger + sort to the end on a single line. */
-    margin-inline-end: auto;
+    flex: 1;
+    min-width: 0;
   }
+  .iwac-search__count-number {
+    color: var(--ink-strong, var(--ink, #222));
+    font-size: var(--text-lg, 1.125rem);
+    font-weight: 700;
+  }
+  .iwac-search__count-label {
+    font-weight: 500;
+  }
+  .iwac-search__count-label--empty {
+    color: var(--ink-strong, var(--ink, #222));
+    font-weight: 600;
+  }
+  .iwac-search__count-timing {
+    color: var(--muted, #888);
+    font-size: var(--text-xs, 0.75rem);
+  }
+  .iwac-search__toolbar-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-sm, 0.5rem);
+  }
+
   .iwac-search__empty {
     background: var(--surface-sunken, #f9f9f9);
     border: 1px dashed var(--border, #ccc);
     border-radius: var(--radius-md, 0.75rem);
-    padding: var(--space-xl, 2rem) var(--space-lg, 1.5rem);
+    padding: var(--space-2xl, 3rem) var(--space-lg, 1.5rem);
     text-align: center;
     color: var(--muted, #666);
     display: flex;
@@ -575,7 +675,7 @@
     gap: var(--space-sm, 0.5rem);
   }
   .iwac-search__empty strong {
-    color: var(--ink, #222);
+    color: var(--ink-strong, var(--ink, #222));
     font-size: var(--text-lg, 1.125rem);
   }
   .iwac-search__empty p {
@@ -590,14 +690,21 @@
     font-size: var(--text-sm, 0.9rem);
     cursor: pointer;
     margin-top: var(--space-xs, 0.25rem);
+    transition:
+      background var(--transition-fast, 150ms ease),
+      color var(--transition-fast, 150ms ease);
   }
   .iwac-search__clear-link:hover {
     background: var(--primary, #c66);
-    color: var(--surface, #fff);
+    color: var(--primary-contrast, #fff);
+  }
+  .iwac-search__clear-link:focus-visible {
+    outline: none;
+    box-shadow: var(--ring-focus, 0 0 0 3px rgba(0, 0, 0, 0.1));
   }
   .iwac-search__error {
-    background: color-mix(in srgb, var(--primary, #c66) 12%, var(--surface, #fff));
-    border: 1px solid color-mix(in srgb, var(--primary, #c66) 35%, transparent);
+    background: color-mix(in srgb, var(--error, #c66) 12%, var(--surface, #fff));
+    border: 1px solid color-mix(in srgb, var(--error, #c66) 35%, transparent);
     border-radius: var(--radius-md, 0.75rem);
     padding: var(--space-md, 1rem);
     color: var(--ink-strong, var(--ink, #222));

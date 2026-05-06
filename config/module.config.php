@@ -172,6 +172,11 @@ return [
             // Curated browse pages (M3). Slug resolves to a row in
             // iwac_browse_config; the controller hydrates the same Svelte
             // shell with locked filters + prominent facets.
+            //
+            // Kept at the global root for back-compat: URLs like
+            // https://islam.zmo.de/browse/benin remain valid for any
+            // bookmark / external link minted before site-scoped routes
+            // existed.
             'iwac-browse' => [
                 'type'    => \Laminas\Router\Http\Segment::class,
                 'options' => [
@@ -180,6 +185,35 @@ return [
                     'defaults'    => [
                         'controller' => Controller\SearchController::class,
                         'action'     => 'browse',
+                    ],
+                ],
+            ],
+
+            // Site-scoped variant of the same route. Nesting under the
+            // `site` parent automatically prefixes /s/:site-slug, so the
+            // public URL becomes /s/{site-slug}/browse/{slug}. Required
+            // for the Site\NavigationLink\IwacBrowse link type — Omeka's
+            // navigation helper generates URLs from the route name, and
+            // the menu must keep the visitor inside their language site
+            // (French /s/afrique_ouest, English /s/westafrica).
+            //
+            // Same controller, same action, no controller changes — the
+            // basePath() calls in the templates pick up the application
+            // base path; the site mount has no effect on the global
+            // /discovery/token + /search-api/multi_search endpoints.
+            'site' => [
+                'child_routes' => [
+                    'iwac-browse' => [
+                        'type'    => \Laminas\Router\Http\Segment::class,
+                        'options' => [
+                            'route'       => '/browse[/:slug]',
+                            'constraints' => ['slug' => '[a-zA-Z0-9_-]+'],
+                            'defaults'    => [
+                                '__NAMESPACE__' => 'IwacSearch\Controller',
+                                'controller'    => Controller\SearchController::class,
+                                'action'        => 'browse',
+                            ],
+                        ],
                     ],
                 ],
             ],
@@ -198,6 +232,20 @@ return [
     'view_helpers' => [
         'invokables' => [
             'iwacBootstrapJson' => View\Helper\IwacBootstrapJson::class,
+        ],
+    ],
+
+    // Site-navigation link types. Adds "IWAC Browse" to the dropdown a
+    // site admin sees when editing the site's nav menu, lets them pick
+    // one of the curated /browse/{slug} pages, and renders it as a
+    // proper site-scoped link. See Site\NavigationLink\IwacBrowse.
+    //
+    // Registered as `factories` (not `invokables`) because the link
+    // type needs the BrowseConfigRepository injected to resolve id →
+    // slug at URL-generation time and id → title at label-render time.
+    'navigation_links' => [
+        'factories' => [
+            'iwacBrowse' => Service\NavigationLink\IwacBrowseFactory::class,
         ],
     ],
 

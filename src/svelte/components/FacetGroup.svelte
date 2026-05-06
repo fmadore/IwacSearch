@@ -11,15 +11,17 @@
   /**
    * One facet field rendered as a collapsible checklist.
    *
-   *   [ ] Burkina Faso  (1,234)
-   *   [✓] Côte d'Ivoire (892)
-   *   [ ] Niger          (450)
-   *   ─── Show 7 more ───
+   *   COUNTRY                         (2) ▾
+   *   ─────────────────────────────────────
+   *   ☑ Burkina Faso             1,234
+   *   ☐ Côte d'Ivoire              892
+   *   ☐ Niger                      450
+   *   Show 7 more
    *
    * Behavioural choices:
-   *   - Collapsed-by-default once the user has at least 3 prominent
-   *     facets visible — keeps the page short on mobile. Always expanded
-   *     when a value is selected so the user can see what's active.
+   *   - Heading is the click target (bigger hit area than a chevron
+   *     alone) and renders as a small-caps eyebrow so the column reads
+   *     like a sequence of editorial sections, not a config dialog.
    *   - "Show more" reveals all values up to Typesense's max_facet_values
    *     (50). A search box per facet lands in M5 (typeahead milestone).
    *   - Counts come from Typesense's facet_counts response — they're
@@ -82,9 +84,10 @@
       <ul class="iwac-facet__list">
         {#each visible as fc (fc.value)}
           <li class="iwac-facet__item">
-            <label class="iwac-facet__option">
+            <label class="iwac-facet__option" class:is-selected={selectedSet.has(fc.value)}>
               <input
                 type="checkbox"
+                class="iwac-facet__checkbox"
                 checked={selectedSet.has(fc.value)}
                 onchange={(e) =>
                   onToggle(field, fc.value, (e.currentTarget as HTMLInputElement).checked)}
@@ -107,25 +110,30 @@
 
 <style>
   .iwac-facet {
+    padding-block: var(--space-md, 1rem);
     border-bottom: 1px solid var(--border-light, #eee);
-    padding-block: var(--space-sm, 0.5rem);
   }
   .iwac-facet:last-child {
     border-bottom: none;
   }
+
   .iwac-facet__heading {
     display: flex;
     align-items: center;
     gap: var(--space-xs, 0.25rem);
     width: 100%;
-    padding: var(--space-xs, 0.25rem) 0;
+    padding: 0;
     background: none;
     border: none;
     cursor: pointer;
     font: inherit;
     color: var(--ink-strong, var(--ink, #222));
-    font-weight: 600;
+    font-size: var(--text-xs, 0.75rem);
+    font-weight: 700;
+    letter-spacing: var(--tracking-wider, 0.08em);
+    text-transform: uppercase;
     text-align: start;
+    transition: color var(--transition-fast, 150ms ease);
   }
   .iwac-facet__heading:hover {
     color: var(--primary, #c66);
@@ -140,26 +148,34 @@
   }
   .iwac-facet__active-count {
     background: var(--primary, #c66);
-    color: var(--white, #fff);
+    color: var(--primary-contrast, #fff);
     border-radius: var(--radius-full, 9999px);
-    padding: 0 var(--space-xs, 0.25rem);
+    padding: 0 0.5rem;
     min-width: 1.25rem;
-    text-align: center;
-    font-size: var(--text-xs, 0.75rem);
-    line-height: 1.4;
+    height: 1.25rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: var(--text-xs, 0.7rem);
     font-weight: 600;
+    letter-spacing: 0;
+    text-transform: none;
   }
   .iwac-facet__chevron {
     color: var(--muted, #888);
     font-size: var(--text-xs, 0.75rem);
+    /* Strip the heading's wide tracking — chevrons are pictograms,
+       letter-spacing them moves the glyph off-centre. */
+    letter-spacing: 0;
   }
+
   .iwac-facet__list {
     list-style: none;
-    margin: var(--space-xs, 0.25rem) 0 0;
+    margin: var(--space-sm, 0.5rem) 0 0;
     padding: 0;
     display: flex;
     flex-direction: column;
-    gap: 0.125rem;
+    gap: 0.0625rem;
   }
   .iwac-facet__item {
     margin: 0;
@@ -167,20 +183,34 @@
   .iwac-facet__option {
     display: grid;
     grid-template-columns: auto 1fr auto;
-    gap: var(--space-xs, 0.25rem);
+    gap: var(--space-sm, 0.5rem);
     align-items: center;
-    padding: 0.25rem var(--space-xs, 0.25rem);
+    padding: 0.375rem var(--space-xs, 0.25rem);
     border-radius: var(--radius-sm, 0.375rem);
     cursor: pointer;
     color: var(--ink, #222);
     font-size: var(--text-sm, 0.9rem);
     line-height: 1.4;
+    transition: background var(--transition-fast, 150ms ease);
   }
   .iwac-facet__option:hover {
     background: var(--surface-sunken, #f5f5f5);
   }
+  .iwac-facet__option.is-selected {
+    color: var(--ink-strong, var(--ink, #222));
+    font-weight: 500;
+  }
   .iwac-facet__option:has(input:focus-visible) {
     box-shadow: var(--ring-focus, 0 0 0 3px rgba(0, 0, 0, 0.1));
+  }
+  .iwac-facet__checkbox {
+    /* Use the theme primary as the checkbox tick colour so checked
+       boxes pick up brand without a custom SVG control. */
+    accent-color: var(--primary, #c66);
+    width: 1rem;
+    height: 1rem;
+    margin: 0;
+    cursor: pointer;
   }
   .iwac-facet__value {
     overflow-wrap: anywhere;
@@ -190,22 +220,34 @@
     font-variant-numeric: tabular-nums;
     font-size: var(--text-xs, 0.75rem);
   }
+  .iwac-facet__option.is-selected .iwac-facet__count {
+    color: var(--ink-light, var(--muted, #666));
+  }
+
   .iwac-facet__more {
-    margin-top: var(--space-xs, 0.25rem);
+    margin-top: var(--space-sm, 0.5rem);
     background: none;
     border: none;
     color: var(--primary, #c66);
     font-size: var(--text-xs, 0.75rem);
+    font-weight: 500;
     cursor: pointer;
-    padding: var(--space-xs, 0.25rem);
+    padding: var(--space-xs, 0.25rem) 0;
   }
   .iwac-facet__more:hover {
     text-decoration: underline;
+    text-underline-offset: 2px;
   }
+  .iwac-facet__more:focus-visible {
+    outline: none;
+    box-shadow: var(--ring-focus, 0 0 0 3px rgba(0, 0, 0, 0.1));
+    border-radius: var(--radius-sm, 0.375rem);
+  }
+
   .iwac-facet__empty {
     color: var(--muted, #888);
     font-size: var(--text-sm, 0.9rem);
-    margin: 0;
+    margin: var(--space-xs, 0.25rem) 0 0;
     padding: var(--space-xs, 0.25rem);
   }
 </style>

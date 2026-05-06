@@ -245,27 +245,27 @@
 
 <style>
   .iwac-daterange {
-    border-bottom: 1px solid var(--border-light, #eee);
-    padding-block: var(--space-sm, 0.5rem);
     display: flex;
     flex-direction: column;
     gap: var(--space-sm, 0.5rem);
   }
   .iwac-daterange__header {
     display: flex;
-    align-items: baseline;
+    align-items: center;
     justify-content: space-between;
     gap: var(--space-sm, 0.5rem);
     color: var(--ink-strong, var(--ink, #222));
-    font-weight: 600;
   }
   .iwac-daterange__label {
-    font-size: var(--text-base, 1rem);
+    font-size: var(--text-xs, 0.75rem);
+    font-weight: 700;
+    letter-spacing: var(--tracking-wider, 0.08em);
+    text-transform: uppercase;
   }
   .iwac-daterange__range {
     flex: 1;
     font-size: var(--text-sm, 0.9rem);
-    font-weight: 500;
+    font-weight: 600;
     font-variant-numeric: tabular-nums;
     color: var(--muted, #666);
     text-align: end;
@@ -278,12 +278,19 @@
     border: none;
     color: var(--primary, #c66);
     font-size: var(--text-xs, 0.75rem);
+    font-weight: 500;
     cursor: pointer;
     padding: 0;
     margin-inline-start: var(--space-sm, 0.5rem);
   }
   .iwac-daterange__reset:hover {
     text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+  .iwac-daterange__reset:focus-visible {
+    outline: none;
+    box-shadow: var(--ring-focus, 0 0 0 3px rgba(0, 0, 0, 0.1));
+    border-radius: var(--radius-sm, 0.375rem);
   }
 
   /*
