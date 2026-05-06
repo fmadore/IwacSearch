@@ -29,10 +29,15 @@ default_sorting_field: date
 
 # Token separators: Typesense splits on these in addition to whitespace.
 # Including ' (apostrophe) keeps "Côte d'Ivoire" and "l'islam" indexable as
-# expected; · (middle dot) handles older typesetting.
+# expected.
+#
+# IMPORTANT: only single-BYTE characters are accepted. Typesense validates
+# with std::string::size() which counts UTF-8 bytes, not codepoints — so
+# multi-byte separators like `·` (middle dot, 2 bytes) are rejected with
+# "`token_separators` should be an array of character symbols." Sticking
+# to ASCII punctuation here.
 token_separators:
   - "'"
-  - "·"
   - "-"
 
 # Symbols treated as part of tokens (not separators). Keep accented chars
