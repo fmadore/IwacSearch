@@ -25,7 +25,14 @@
 #     incremental update path (M4). HF does not expose Omeka ACL state.
 
 name: iwac_v1
-default_sorting_field: date
+
+# No `default_sorting_field` is set on purpose. Typesense requires the
+# default sorting field to be a REQUIRED column, but the only natural
+# candidates (`date`, `pub_year`) are optional — not every doc has a
+# usable pub_date (audiovisual recordings often lack one, plenty of
+# documents do too). The Svelte client and the SSR renderer both pass
+# an explicit `sort_by` on every search (date:desc in browse mode,
+# _text_match:desc on a query), so Typesense never needs the fallback.
 
 # Token separators: Typesense splits on these in addition to whitespace.
 # Including ' (apostrophe) keeps "Côte d'Ivoire" and "l'islam" indexable as
