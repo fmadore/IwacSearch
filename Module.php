@@ -202,11 +202,20 @@ class Module extends AbstractModule
     }
 
     /**
-     * Install: create iwac_browse_config table + seed 6 country pages.
+     * Install: create iwac_browse_config table + seed default browse pages.
      *
-     * Idempotent — `CREATE TABLE IF NOT EXISTS` and the seeder's
+     * Idempotent — `CREATE TABLE IF NOT EXISTS` and the seeders'
      * existsBySlug() guard mean re-running install (after an uninstall
      * + reinstall, or as part of an upgrade path) never clobbers data.
+     *
+     * Two seeders run on first install:
+     *   - CountrySeeder    — six country browse pages (Bénin, Burkina Faso, …).
+     *   - ReferencesSeeder — one /browse/references page locked to type_s=reference.
+     *
+     * Existing installations that upgrade from a pre-references-seeder
+     * version: the references-seeder check is harmless (no row exists →
+     * one gets seeded). Either run the upgrade path or invoke the
+     * seeder once via a one-off CLI script.
      */
     public function install(ServiceLocatorInterface $services): void
     {
@@ -215,9 +224,34 @@ class Module extends AbstractModule
 
         $repository = new Browse\BrowseConfigRepository($connection);
         $logger = LoggerResolver::fromContainer($services);
-        $seeder = new Browse\CountrySeeder($repository, $logger);
-        $stats = $seeder->seed();
-        $logger->info('IwacSearch country browse pages seeded', $stats);
+
+        $countryStats = (new Browse\CountrySeeder($repository, $logger))->seed();
+        $logger->info('IwacSearch country browse pages seeded', $countryStats);
+
+        $refStats = (new Browse\ReferencesSeeder($repository, $logger))->seed();
+        $logger->info('IwacSearch references browse page seeded', $refStats);
+    }
+
+    /**
+     * Upgrade hook — runs when an installed module's version on disk is
+     * newer than the recorded module-table version. We use it to layer
+     * in browse-config seeds that didn't exist at first-install time
+     * without forcing the operator to uninstall/reinstall.
+     *
+     * Each branch is guarded with a version comparison so re-running an
+     * upgrade is a no-op once the seed has landed.
+     */
+    public function upgrade($oldVersion, $newVersion, ServiceLocatorInterface $services): void
+    {
+        // 0.2.17 introduced the references browse page. Anyone on
+        // <0.2.17 missed the install-time seed; trigger it on upgrade.
+        if (version_compare((string) $oldVersion, '0.2.17', '<')) {
+            $connection = $services->get('Omeka\Connection');
+            $repository = new Browse\BrowseConfigRepository($connection);
+            $logger = LoggerResolver::fromContainer($services);
+            $stats = (new Browse\ReferencesSeeder($repository, $logger))->seed();
+            $logger->info('IwacSearch references browse page seeded on upgrade', $stats);
+        }
     }
 
     public function uninstall(ServiceLocatorInterface $services): void

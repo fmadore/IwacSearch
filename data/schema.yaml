@@ -101,6 +101,25 @@ fields:
   - { name: nb_words,    type: int32,  facet: false, optional: true }
   - { name: lda_topic_label, type: string, facet: true, optional: true }
 
+  # ── References ────────────────────────────────────────────────────────
+  # Bibliographic citations (academic articles, books, theses, chapters,
+  # reports, etc.) — populated only by ReferenceMapper. Distinct from
+  # ocr_text because:
+  #   1. References have no OCR; the abstract IS the body text.
+  #   2. We WANT the abstract visible in public results (no licensing
+  #      issue — abstracts are short and discovery-friendly), so it's
+  #      NOT in the public scoped key's exclude_fields.
+  - { name: abstract,    type: string, locale: fr, optional: true }
+  # The 9 RDF classes that appear in the references subset:
+  #   Article de revue · Chapitre · Thèse · Livre · Rapport ·
+  #   Communication · Compte rendu · Ouvrage collectif · Article de blog.
+  # Stored as a string array (single value per doc) so the public facet
+  # UI treats it the same as country_ss / newspaper_ss.
+  - { name: reference_type_ss, type: "string[]", facet: true, optional: true }
+  # DOI is stored for outbound linking but not searchable (matching DOIs
+  # by typo or partial string isn't a useful workflow).
+  - { name: doi, type: string, index: false, optional: true }
+
   # ── AI sentiment (3 models — keep all three for cross-model queries) ──
   # `centralite` and `polarite` are categorical → facets.
   # `subjectivite` is 1–5 float → range facet + sort.

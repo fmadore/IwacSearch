@@ -96,7 +96,7 @@ final class InitialResponseRenderer
             'searches' => [[
                 'collection'            => $collection,
                 'q'                     => $q,
-                'query_by'              => 'title_txt,ocr_text,entity_aliases_txt,embedding',
+                'query_by'              => 'title_txt,ocr_text,abstract,entity_aliases_txt,embedding',
                 'stopwords'             => 'fr_default',
                 'filter_by'             => $filterBy,
                 'sort_by'               => $sort,

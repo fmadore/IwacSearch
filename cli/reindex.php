@@ -31,6 +31,7 @@ use IwacSearch\Indexer\Mapper\AudiovisualMapper;
 use IwacSearch\Indexer\Mapper\DocumentMapper;
 use IwacSearch\Indexer\Mapper\MapperRegistry;
 use IwacSearch\Indexer\Mapper\PublicationMapper;
+use IwacSearch\Indexer\Mapper\ReferenceMapper;
 use IwacSearch\Indexer\OmekaAclLoader;
 use IwacSearch\Indexer\Reindexer;
 use IwacSearch\Indexer\SchemaLoader;
@@ -99,6 +100,7 @@ try {
         new PublicationMapper($authority),
         new DocumentMapper($authority),
         new AudiovisualMapper($authority),
+        new ReferenceMapper($authority),
     ]);
 
     $reindexer = new Reindexer(

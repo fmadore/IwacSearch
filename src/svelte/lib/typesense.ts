@@ -87,11 +87,12 @@ export class TypesenseClient {
         {
           collection,
           q,
-          // Same query_by everywhere: full-text on title + ocr (highlights
-          // only via exclude_fields), entity aliases for spelling tolerance,
-          // and the embedding field for semantic recall. Typesense ignores
-          // query_by when q=* so browse mode drops straight through.
-          query_by: 'title_txt,ocr_text,entity_aliases_txt,embedding',
+          // Same query_by everywhere: full-text on title + ocr + abstract
+          // (the latter is the body text for references — they have no
+          // OCR), entity aliases for spelling tolerance, and the embedding
+          // field for semantic recall. Typesense ignores query_by when
+          // q=* so browse mode drops straight through.
+          query_by: 'title_txt,ocr_text,abstract,entity_aliases_txt,embedding',
           // Stopwords keep "le", "la", "des" etc. from polluting matches.
           // Conditionally included so the recovery retry can drop it.
           ...(includeStopwords ? { stopwords: 'fr_default' } : {}),

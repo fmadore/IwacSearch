@@ -36,6 +36,7 @@ final class FacetCatalog
      */
     public const FACETABLE_FIELDS = [
         'type_s'             => 'Type',
+        'reference_type_ss'  => 'Reference type',
         'country_ss'         => 'Country',
         'newspaper_ss'       => 'Newspaper',
         'language_ss'        => 'Language',

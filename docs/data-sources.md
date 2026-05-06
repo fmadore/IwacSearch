@@ -102,18 +102,32 @@ field. The `AuthorityResolver` reads it twice:
 
 ## Subset coverage
 
-| HF subset | Rows | Goes into `iwac_v1` as `type_s` | Has OCR | Has HF embedding | Mapper |
+| HF subset | Rows | Goes into `iwac_v1` as `type_s` | Body text | HF embedding | Mapper |
 |---|---:|---|:---:|:---:|---|
-| `articles` | 12,287 | `article` | yes | yes (ignored) | `Mapper\ArticleMapper` |
-| `publications` | 1,501 | `publication` | yes | yes (ignored) | `Mapper\PublicationMapper` |
-| `documents` | 26 | `document` | yes | no | `Mapper\DocumentMapper` |
-| `audiovisual` | 45 | `audiovisual` | no | no | `Mapper\AudiovisualMapper` |
-| `references` | 864 | (skipped — bibliographic only) | no | no | — |
-| `index` | 4,697 | (consumed by `AuthorityResolver`, not indexed) | no | no | — |
+| `articles` | 12,287 | `article` | OCR | yes (ignored) | `Mapper\ArticleMapper` |
+| `publications` | 1,501 | `publication` | OCR | yes (ignored) | `Mapper\PublicationMapper` |
+| `documents` | 26 | `document` | OCR | no | `Mapper\DocumentMapper` |
+| `audiovisual` | 45 | `audiovisual` | none | no | `Mapper\AudiovisualMapper` |
+| `references` | 864 | `reference` | abstract (~51% fill) | no | `Mapper\ReferenceMapper` |
+| `index` | 4,697 | (consumed by `AuthorityResolver`, not indexed) | — | no | — |
 
-Total content items: **13,859** indexed into Typesense.
+Total content items: **14,723** indexed into Typesense.
+
+References were skipped in M0/M1 as "bibliographic only" — secondary
+literature *about* IWAC sources rather than primary material. They now
+ship under `type_s = reference` with their own `/browse/references`
+surface (see `Browse\ReferencesSeeder`) so the discovery experience
+stays scoped by default — the page block / standalone search uses
+`type_s` as a top-level facet, and curated country browse pages don't
+mix academic citations into newspaper archive results.
+
+Reference docs carry an `abstract` field instead of `ocr_text`; that
+field is in the public scoped key (NOT excluded) so the abstract
+shows up directly in result cards. The shared search `query_by`
+includes `abstract` so abstract-only matches surface across all
+subsets.
 
 Adding a new subset = drop a `MyMapper extends AbstractMapper` in
-`src/Indexer/Mapper/`, register it in `cli/reindex.php`'s
-`MapperRegistry`. Reindexer iterates `MapperRegistry::subsets()`, so no
-edit to the orchestrator is needed.
+`src/Indexer/Mapper/`, register it in `cli/reindex.php`'s and
+`Job\BulkReindex`'s `MapperRegistry`. Reindexer iterates
+`MapperRegistry::subsets()`, so no edit to the orchestrator is needed.
