@@ -6,7 +6,6 @@ namespace IwacSearch\Indexer;
 use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
 use RuntimeException;
-use Throwable;
 use Typesense\Client as TypesenseClient;
 
 /**
@@ -50,36 +49,32 @@ final class StopwordsSync
         }
 
         $setName = 'fr_default';
-        $body = [
-            'stopwords' => $payload['stopwords'],
-            'locale'    => $payload['locale'] ?? 'fr',
-        ];
+        $locale  = $payload['locale'] ?? 'fr';
 
         $this->logger->info('Syncing stopwords set', [
             'set'    => $setName,
-            'locale' => $body['locale'],
-            'count'  => count($body['stopwords']),
+            'locale' => $locale,
+            'count'  => count($payload['stopwords']),
         ]);
 
-        // Try the resource path first (typesense-php >= 4.10), fall back
-        // to a raw API call so we don't fight client version skew.
-        try {
-            // @phpstan-ignore-next-line  client member access varies by version
-            $this->typesense->stopwords->upsert($setName, $body);
-        } catch (Throwable $direct) {
-            $this->logger->info('Falling back to raw API call for stopwords upsert', [
-                'reason' => $direct->getMessage(),
-            ]);
-            // The Typesense client exposes the underlying API call object
-            // through getApiCall() in all v4+ versions.
-            // @phpstan-ignore-next-line
-            $this->typesense->getApiCall()->put("/stopwords/{$setName}", $body);
-        }
+        // typesense-php v5.x: $client->stopwords->put($stopwordSet) is the
+        // single create-or-update method. The set name is part of the
+        // payload (`name` key), not a separate first argument. Earlier
+        // versions exposed `upsert($name, $body)` and a `getApiCall()`
+        // raw-HTTP escape hatch — both were removed in v5; we pin
+        // typesense/typesense-php ^5.0 in composer.json so the v5 API is
+        // the only one we need to support.
+        // @phpstan-ignore-next-line  property access on Typesense\Client
+        $this->typesense->stopwords->put([
+            'name'      => $setName,
+            'stopwords' => $payload['stopwords'],
+            'locale'    => $locale,
+        ]);
 
         return [
             'set'    => $setName,
-            'locale' => $body['locale'],
-            'count'  => count($body['stopwords']),
+            'locale' => $locale,
+            'count'  => count($payload['stopwords']),
         ];
     }
 }
