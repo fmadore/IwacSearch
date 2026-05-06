@@ -48,7 +48,7 @@ final class Reindexer
         // and the mappers see the data through the shared reference.
         // This is the one mutable shared singleton in the indexer.
         private readonly AuthorityResolver $authority,
-        private readonly OmekaAclLoader $aclLoader,
+        private readonly OmekaAclLoaderInterface $aclLoader,
         private readonly StopwordsSync $stopwordsSync,
         private readonly LoggerInterface $logger = new NullLogger()
     ) {

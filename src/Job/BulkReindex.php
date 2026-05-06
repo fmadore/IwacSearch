@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace IwacSearch\Job;
 
+use IwacSearch\Indexer\ApiOmekaAclLoader;
 use IwacSearch\Indexer\AuthorityResolver;
 use IwacSearch\Indexer\HfDatasetLoader;
 use IwacSearch\Indexer\Mapper\ArticleMapper;
@@ -10,11 +11,11 @@ use IwacSearch\Indexer\Mapper\AudiovisualMapper;
 use IwacSearch\Indexer\Mapper\DocumentMapper;
 use IwacSearch\Indexer\Mapper\MapperRegistry;
 use IwacSearch\Indexer\Mapper\PublicationMapper;
-use IwacSearch\Indexer\OmekaAclLoader;
 use IwacSearch\Indexer\Reindexer;
 use IwacSearch\Indexer\SchemaLoader;
 use IwacSearch\Indexer\StopwordsSync;
 use IwacSearch\Log\LoggerResolver;
+use Omeka\Api\Manager as ApiManager;
 use Omeka\Job\AbstractJob;
 use Throwable;
 use Typesense\Client as TypesenseClient;
@@ -45,12 +46,8 @@ class BulkReindex extends AbstractJob
 
         /** @var TypesenseClient $typesense */
         $typesense = $services->get(TypesenseClient::class);
-
-        $config = $services->get('Config')['iwac_search'] ?? [];
-        $omekaApiUrl = (string) (
-            getenv('IWAC_OMEKA_API_URL')
-            ?: ($config['omeka_api_url'] ?? 'https://islam.zmo.de/api')
-        );
+        /** @var ApiManager $api */
+        $api = $services->get('Omeka\ApiManager');
 
         // src/Job/BulkReindex.php → module root is two levels up.
         $moduleRoot = dirname(__DIR__, 2);
@@ -69,14 +66,17 @@ class BulkReindex extends AbstractJob
             hfLoader:      new HfDatasetLoader(),
             mappers:       $registry,
             authority:     $authority,
-            aclLoader:     new OmekaAclLoader($omekaApiUrl, $logger),
+            // ApiManager-backed loader, NOT HTTP. The container running
+            // this job has no route back to islam.zmo.de — outbound HTTP
+            // to the public API fails with a connection error. The
+            // in-process Api Manager bypasses HTTP entirely.
+            aclLoader:     new ApiOmekaAclLoader($api, $logger),
             stopwordsSync: new StopwordsSync($typesense, $moduleRoot . '/data/stopwords-fr.json', $logger),
             logger:        $logger
         );
 
         $logger->info('IwacSearch: starting bulk reindex from Omeka job', [
             'job_id'      => $this->job->getId(),
-            'omeka_api'   => $omekaApiUrl,
             'module_root' => $moduleRoot,
         ]);
 

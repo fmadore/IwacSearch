@@ -237,11 +237,6 @@ return [
             'api_key_file'     => '/run/secrets/typesense_api_key',
             'collection_alias' => 'iwac_current',
         ],
-        // Public Omeka API base — used by the OmekaAclLoader inside
-        // BulkReindex jobs to fetch is_public state for each indexed
-        // doc. Override at runtime via the IWAC_OMEKA_API_URL env var
-        // if you need a different host (e.g. local API in dev).
-        'omeka_api_url' => 'https://islam.zmo.de/api',
         'public_search_key' => [
             // Constraints baked into every public scoped key. See "Security
             // model" in the roadmap. Loosening any of these requires sign-off.

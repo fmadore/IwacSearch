@@ -8,8 +8,7 @@ use Psr\Log\NullLogger;
 use RuntimeException;
 
 /**
- * Builds an authoritative set of public Omeka item IDs by paginating the
- * Omeka S REST API anonymously.
+ * HTTP-backed ACL loader: paginates the Omeka REST API anonymously.
  *
  * The trick: an unauthenticated /api/items request returns ONLY publicly
  * visible items. So "is this o:id in the result set?" IS the public-flag
@@ -17,15 +16,25 @@ use RuntimeException;
  *
  * Why this matters:
  *   - HF dataset is monthly; Omeka ACL state may have changed since.
+ *   - The IWAC-Hugging-Face pipeline pulls with admin auth and does NOT
+ *     filter by `is_public`, so the HF parquet can contain currently-
+ *     private items. Without the overlay, a bulk reindex would put
+ *     those private items into Typesense as is_public=true.
  *   - Defaulting docs to is_public=false in the mapper means a missed
  *     overlay = invisible to public scoped keys (safe-closed).
- *   - Public scoped key carries `filter_by: is_public:=true` so even an
- *     overlay miss can't leak data — this loader just maximizes recall.
+ *   - Public scoped key also carries `filter_by: is_public:=true` so
+ *     even an overlay miss can't leak data — this loader maximises
+ *     recall on top of that hard guard.
  *
  * Cost: ~14K items at 100/page = 140 calls. ~30 s on warm CDN, called
  * once per reindex. Cached in-memory; no persistence.
+ *
+ * Used from cli/reindex.php where there is no Omeka service container
+ * available. Inside an Omeka job, prefer {@see ApiOmekaAclLoader} —
+ * docker containers can't reach their own public DNS reliably and the
+ * internal ApiManager is faster anyway.
  */
-final class OmekaAclLoader
+final class OmekaAclLoader implements OmekaAclLoaderInterface
 {
     /** @var array<int, true>|null  Set semantics: keyed by public o:id */
     private ?array $publicIds = null;
