@@ -286,10 +286,15 @@ class BrowseConfigController extends AbstractActionController
         // Tie the token to the current admin session so it rotates
         // naturally on sign-out / sign-in. Good enough for M3.5; a
         // shorter-lived per-form token is a future hardening pass.
-        /** @var \Laminas\Session\SessionManager $sessionManager */
-        $sessionManager = $this->getEvent()->getApplication()
-            ->getServiceManager()->get('Omeka\Session');
-        $container = new \Laminas\Session\Container('IwacSearchAdmin', $sessionManager);
+        //
+        // Pass NO SessionManager — Omeka S doesn't register one as
+        // `Omeka\Session` (looking that up throws ServiceNotFoundException
+        // and 500s the page). It builds the SessionManager directly in
+        // Omeka\Mvc\MvcListeners::bootstrapSession() and installs it as
+        // the global default via Container::setDefaultManager(). So the
+        // bare `new Container(...)` constructor picks up the right
+        // manager automatically.
+        $container = new \Laminas\Session\Container('IwacSearchAdmin');
         if (empty($container->csrf)) {
             $container->csrf = bin2hex(random_bytes(32));
         }
