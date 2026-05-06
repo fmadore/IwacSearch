@@ -28,11 +28,19 @@ final class HfDatasetLoader
     private const PAGE_SIZE = 100; // HF cap per call
 
     /**
-     * @param int $maxAttempts Retry budget per page (HF occasionally 503s)
+     * @param int $maxAttempts            Retry budget per page (HF
+     *                                    sporadically 503s; rate limits
+     *                                    surface as 429).
+     * @param int $timeoutSeconds         Per-attempt cURL timeout.
+     * @param int $interPageDelayMs       Sleep between successful pages
+     *                                    to stay under HF's anonymous
+     *                                    rate limit (~120 req/min on the
+     *                                    /rows endpoint).
      */
     public function __construct(
-        private readonly int $maxAttempts = 3,
-        private readonly int $timeoutSeconds = 30
+        private readonly int $maxAttempts = 5,
+        private readonly int $timeoutSeconds = 30,
+        private readonly int $interPageDelayMs = 250
     ) {
     }
 
@@ -68,6 +76,14 @@ final class HfDatasetLoader
             $offset += count($rows);
             if ($total !== null && $offset >= $total) {
                 break;
+            }
+
+            // Throttle: stay under HF's anonymous /rows rate limit. At
+            // 100 rows/page + 250ms/page we issue ~4 req/s ⇒ ~240/min,
+            // still under HF's documented threshold but with headroom for
+            // the cold-cache slowness on the first few pages of a subset.
+            if ($this->interPageDelayMs > 0) {
+                usleep($this->interPageDelayMs * 1000);
             }
         }
 
@@ -107,6 +123,7 @@ final class HfDatasetLoader
 
         $lastError = '';
         for ($attempt = 1; $attempt <= $this->maxAttempts; $attempt++) {
+            $headers = [];
             $ch = curl_init($url);
             curl_setopt_array($ch, [
                 CURLOPT_RETURNTRANSFER => true,
@@ -114,6 +131,15 @@ final class HfDatasetLoader
                 CURLOPT_TIMEOUT        => $this->timeoutSeconds,
                 CURLOPT_USERAGENT      => 'IwacSearch-indexer/0.1',
                 CURLOPT_HTTPHEADER     => ['Accept: application/json'],
+                // Capture response headers — Retry-After is the canonical
+                // signal for 429s on the HF Datasets Server.
+                CURLOPT_HEADERFUNCTION => function ($ch, $rawHeader) use (&$headers): int {
+                    $parts = explode(':', $rawHeader, 2);
+                    if (count($parts) === 2) {
+                        $headers[strtolower(trim($parts[0]))] = trim($parts[1]);
+                    }
+                    return strlen($rawHeader);
+                },
             ]);
             $body = curl_exec($ch);
             $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
@@ -130,9 +156,8 @@ final class HfDatasetLoader
                 $lastError = sprintf('HTTP %d %s', $code, $err);
             }
 
-            // Exponential backoff: 1s, 2s, 4s
             if ($attempt < $this->maxAttempts) {
-                sleep(2 ** ($attempt - 1));
+                sleep($this->backoffSeconds($code, $headers, $attempt));
             }
         }
 
@@ -143,5 +168,38 @@ final class HfDatasetLoader
             $this->maxAttempts,
             $lastError
         ));
+    }
+
+    /**
+     * Decide how long to wait before the next retry.
+     *
+     * HF's anonymous /rows endpoint enforces a per-IP rate limit that
+     * surfaces as HTTP 429 with a `Retry-After` header (seconds). Our
+     * pre-fix policy of `1s, 2s, 4s` blew through three attempts in 7
+     * seconds and left the rate limit untouched. Now:
+     *
+     *   429 — honour Retry-After if present (clamped to [30, 300] so a
+     *         buggy server response can't stall the job for an hour),
+     *         otherwise fall back to 30s, 60s, 120s, 240s by attempt.
+     *   503 — HF transient overload. 5s, 10s, 20s, 40s.
+     *   other — fast retry: 1s, 2s, 4s, 8s.
+     *
+     * @param array<string, string> $responseHeaders
+     */
+    private function backoffSeconds(int $code, array $responseHeaders, int $attempt): int
+    {
+        if ($code === 429) {
+            $retryAfter = isset($responseHeaders['retry-after'])
+                ? (int) $responseHeaders['retry-after']
+                : 0;
+            if ($retryAfter > 0) {
+                return max(30, min(300, $retryAfter));
+            }
+            return 30 * (2 ** ($attempt - 1));
+        }
+        if ($code === 503) {
+            return 5 * (2 ** ($attempt - 1));
+        }
+        return 2 ** ($attempt - 1);
     }
 }
