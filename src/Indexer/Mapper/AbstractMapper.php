@@ -69,18 +69,28 @@ abstract class AbstractMapper implements MapperInterface
      * Layer the country/newspaper/language/creator facets that appear in
      * articles, publications, and (sometimes) documents.
      *
+     * All four fields go through the same `splitPipe()` helper so a row
+     * like `"Niger|Nigeria"` becomes two distinct facet values
+     * (`Niger`, `Nigeria`) rather than one literal string. The IWAC
+     * upstream sometimes joins multiple countries / publishing
+     * newspapers with `|`, especially for cross-border references and
+     * Niger/Nigeria coverage in the Hausa press — the previous "first
+     * value wins" code surfaced those joined strings as single facet
+     * tokens (`Niger|Nigeria`), polluting the country dropdown.
+     *
+     * Centralising on splitPipe() also means new pipe-separated fields
+     * (added in future schema bumps) can join this method without
+     * inventing a parallel code path.
+     *
      * @param array<string, mixed> $doc
      * @param array<string, mixed> $row
      */
     protected function addCommonFacets(array &$doc, array $row): void
     {
-        $this->maybeAddList($doc, 'creator_ss',  $this->splitPipe($row['author']    ?? null));
-        $this->maybeAddList($doc, 'language_ss', $this->splitPipe($row['language']  ?? null));
-
-        $country   = $this->str($row['country']   ?? '');
-        $newspaper = $this->str($row['newspaper'] ?? '');
-        if ($country   !== '') { $doc['country_ss']   = [$country]; }
-        if ($newspaper !== '') { $doc['newspaper_ss'] = [$newspaper]; }
+        $this->maybeAddList($doc, 'creator_ss',   $this->splitPipe($row['author']    ?? null));
+        $this->maybeAddList($doc, 'language_ss',  $this->splitPipe($row['language']  ?? null));
+        $this->maybeAddList($doc, 'country_ss',   $this->splitPipe($row['country']   ?? null));
+        $this->maybeAddList($doc, 'newspaper_ss', $this->splitPipe($row['newspaper'] ?? null));
     }
 
     /**

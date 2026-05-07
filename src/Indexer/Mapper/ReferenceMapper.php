@@ -19,7 +19,9 @@ namespace IwacSearch\Indexer\Mapper;
  *   - `URL` is the original publisher URL (DOI page, journal site, etc.);
  *     `iwac_url` is the IWAC item page. Both kept.
  *   - `country` is pipe-separated (academic literature often discusses
- *     multiple countries) — unlike `articles.country` which is single-valued.
+ *     multiple countries). The `addCommonFacets()` helper in
+ *     AbstractMapper splits this into the country_ss[] facet uniformly
+ *     across every subset, so `Niger|Nigeria` becomes two facet values.
  *   - `language` carries French labels ("Français", "Anglais", ...) rather
  *     than ISO codes. Kept as-is to match the source data; the references
  *     browse page lives on its own slug so the value mismatch with other
@@ -52,9 +54,11 @@ final class ReferenceMapper extends AbstractMapper
         }
 
         // ── Authorship + provenance ────────────────────────────────────
-        // References use `author` and `country` exactly the same way as
-        // primary subsets, so addCommonFacets covers the bulk. Newspaper
-        // is irrelevant here — the helper just no-ops on the empty value.
+        // References use `author`, `language`, and `country` the same way
+        // as primary subsets — pipe-separated multi-values, all split
+        // through addCommonFacets() into their respective *_ss[] facets.
+        // Newspaper is irrelevant for references; the helper just no-ops
+        // on the empty / missing column.
         $this->addCommonFacets($doc, $row);
 
         // ── Reference type (the 9 RDF classes) ─────────────────────────
