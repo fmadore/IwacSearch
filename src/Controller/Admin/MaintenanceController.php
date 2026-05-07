@@ -35,11 +35,28 @@ use Omeka\Stdlib\Message;
 class MaintenanceController extends AbstractActionController
 {
     /**
+     * @param string $collectionBaseName Base collection name from
+     *   data/schema.yaml (e.g. "iwac_v1"). Each reindex builds a
+     *   timestamped variant — `${baseName}_YYYYMMDD_HHMMSS` — and
+     *   atomic-swaps the iwac_current alias to it. We surface the
+     *   base name in the page description and flash messages so the
+     *   prose stays accurate after every schema bump.
+     */
+    public function __construct(
+        private readonly string $collectionBaseName = 'iwac_v1'
+    ) {
+    }
+
+    /**
      * Render the maintenance page.
      *
      * Two POST forms, each carrying its own CSRF token (re-issued per
      * render via Laminas\Form\Element\Csrf), wrapping a single submit
      * button. Posting redirects to one of the action handlers below.
+     *
+     * Also passes the live `collectionBaseName` to the view so the
+     * description prose can spell out the actual collection name
+     * the reindex will build, instead of hardcoding "iwac_v1".
      */
     public function indexAction(): ViewModel
     {
@@ -47,8 +64,9 @@ class MaintenanceController extends AbstractActionController
         $stopwordsForm = $this->getForm(MaintenanceForm::class);
 
         return new ViewModel([
-            'reindexForm'   => $reindexForm,
-            'stopwordsForm' => $stopwordsForm,
+            'reindexForm'         => $reindexForm,
+            'stopwordsForm'       => $stopwordsForm,
+            'collectionBaseName'  => $this->collectionBaseName,
         ]);
     }
 
@@ -60,7 +78,10 @@ class MaintenanceController extends AbstractActionController
     {
         return $this->dispatchJob(
             BulkReindex::class,
-            'Bulk reindex queued — pulls fresh data from HuggingFace, rebuilds the iwac_v1 collection, and atomic-swaps the live alias.'
+            sprintf(
+                'Bulk reindex queued — pulls fresh data from HuggingFace, builds a fresh %s_<timestamp> collection alongside the live one, and atomic-swaps the iwac_current alias once verification passes.',
+                $this->collectionBaseName
+            )
         );
     }
 

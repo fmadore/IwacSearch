@@ -9,11 +9,16 @@
  * @var \Laminas\View\Renderer\PhpRenderer $this
  * @var \IwacSearch\Form\MaintenanceForm $reindexForm
  * @var \IwacSearch\Form\MaintenanceForm $stopwordsForm
+ * @var string $collectionBaseName  Base collection name from
+ *   data/schema.yaml — interpolated into the description so the
+ *   prose tracks schema bumps automatically.
  */
 
 $translate = $this->plugin('translate');
 $escape    = $this->plugin('escapeHtml');
 $this->htmlElement('body')->appendAttribute('class', 'iwac-search admin maintenance');
+
+$baseName = $collectionBaseName ?? 'iwac_v1';
 
 // Prepare forms — set their POST targets here so the view stays declarative.
 $reindexForm->setAttribute('action', $this->url('admin/iwac-search/maintenance-reindex'));
@@ -35,7 +40,17 @@ $stopwordsForm->prepare();
     <section class="iwac-maintenance-card" style="border:1px solid #ddd;border-radius:6px;padding:1.5rem;background:#fff;">
         <h3 style="margin-top:0;"><?php echo $translate('Run full reindex'); ?></h3>
         <p>
-            <?php echo $translate('Pulls fresh data from the HuggingFace dataset, rebuilds the iwac_v1 collection, and atomic-swaps the iwac_current alias. Also re-syncs the fr_default stopword set as its first step.'); ?>
+            <?php echo sprintf(
+                // Format string is translated then escaped, so any literal
+                // < > the translator inserts (e.g. around <timestamp>) end
+                // up as &lt; &gt; in the output. The %s placeholders are
+                // substituted afterwards with already-marked-up <code>
+                // elements — those tags survive into the final HTML.
+                $escape($translate('Pulls fresh data from the HuggingFace dataset, builds a fresh %1$s_<timestamp> collection alongside the live one, and atomic-swaps the %2$s alias to it once verification passes. Also re-syncs the %3$s stopword set as its first step.')),
+                '<code>' . $escape($baseName) . '</code>',
+                '<code>iwac_current</code>',
+                '<code>fr_default</code>'
+            ); ?>
         </p>
         <p>
             <strong><?php echo $translate('Duration:'); ?></strong>
@@ -52,7 +67,11 @@ $stopwordsForm->prepare();
     <section class="iwac-maintenance-card" style="border:1px solid #ddd;border-radius:6px;padding:1.5rem;background:#fff;">
         <h3 style="margin-top:0;"><?php echo $translate('Sync French stopwords only'); ?></h3>
         <p>
-            <?php echo $translate('Refreshes the fr_default stopword set in Typesense from data/stopwords-fr.json. Idempotent — safe to run repeatedly.'); ?>
+            <?php echo sprintf(
+                $escape($translate('Refreshes the %1$s stopword set in Typesense from %2$s. Idempotent — safe to run repeatedly.')),
+                '<code>fr_default</code>',
+                '<code>data/stopwords-fr.json</code>'
+            ); ?>
         </p>
         <p>
             <strong><?php echo $translate('When to use:'); ?></strong>
