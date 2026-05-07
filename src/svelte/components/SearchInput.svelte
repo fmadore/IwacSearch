@@ -114,8 +114,10 @@
     inset-inline-end: var(--space-sm, 0.5rem);
     width: var(--size-control-sm, 2.25rem);
     height: var(--size-control-sm, 2.25rem);
+    padding: 0;
     border: none;
     background: transparent;
+    box-shadow: none;
     color: var(--muted, #666);
     font-size: var(--text-xl, 1.5rem);
     line-height: 1;
@@ -125,6 +127,8 @@
   .iwac-input__clear:hover {
     background: var(--surface-sunken, #f0f0f0);
     color: var(--ink, #222);
+    box-shadow: none;
+    transform: none;
   }
   .iwac-input__visually-hidden {
     position: absolute;

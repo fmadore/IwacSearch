@@ -575,6 +575,7 @@
       border-radius: var(--radius-md, 0.75rem);
       background: var(--surface, #fff);
       color: var(--ink, #222);
+      box-shadow: none;
       font-size: var(--text-sm, 0.9rem);
       font-weight: 500;
       cursor: pointer;
@@ -583,8 +584,11 @@
         color var(--transition-fast, 150ms ease);
     }
     .iwac-search__filters-trigger:hover {
+      background: var(--surface, #fff);
       border-color: var(--primary, #c66);
       color: var(--primary, #c66);
+      box-shadow: none;
+      transform: none;
     }
     .iwac-search__filters-trigger:focus-visible {
       outline: none;
@@ -687,6 +691,7 @@
     color: var(--primary, #c66);
     border-radius: var(--radius-md, 0.75rem);
     padding: 0.4rem 0.75rem;
+    box-shadow: none;
     font-size: var(--text-sm, 0.9rem);
     cursor: pointer;
     margin-top: var(--space-xs, 0.25rem);
@@ -697,6 +702,8 @@
   .iwac-search__clear-link:hover {
     background: var(--primary, #c66);
     color: var(--primary-contrast, #fff);
+    box-shadow: none;
+    transform: none;
   }
   .iwac-search__clear-link:focus-visible {
     outline: none;

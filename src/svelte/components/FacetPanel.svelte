@@ -187,6 +187,7 @@
   .iwac-facets__clear-all {
     background: none;
     border: none;
+    box-shadow: none;
     color: var(--primary, #c66);
     cursor: pointer;
     font-size: var(--text-xs, 0.75rem);
@@ -194,6 +195,9 @@
     padding: 0;
   }
   .iwac-facets__clear-all:hover {
+    background: none;
+    box-shadow: none;
+    transform: none;
     text-decoration: underline;
     text-underline-offset: 2px;
   }
@@ -238,6 +242,7 @@
     border: 1px solid
       color-mix(in srgb, var(--primary, #c66) var(--accent-mix-medium, 40%), var(--border, #ccc));
     border-radius: var(--radius-full, 9999px);
+    box-shadow: none;
     cursor: pointer;
     font: inherit;
     font-size: var(--text-xs, 0.75rem);
@@ -252,6 +257,8 @@
     background: var(--primary, #c66);
     border-color: var(--primary, #c66);
     color: var(--primary-contrast, #fff);
+    box-shadow: none;
+    transform: none;
   }
   .iwac-facets__chip:hover .iwac-facets__chip-field,
   .iwac-facets__chip:hover .iwac-facets__chip-x {

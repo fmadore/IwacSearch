@@ -192,8 +192,18 @@ class Module extends AbstractModule
         $view->headLink()->appendStylesheet(
             $view->assetUrl('css/iwac-search.css', 'IwacSearch')
         );
-        // The compiled Svelte bundle. Vite emits both files into asset/dist;
-        // the .js import-loads its sibling .css automatically.
+        // The compiled Svelte bundle's CSS — contains every component-scoped
+        // style (FacetPanel, ResultItem, Pagination, …). Vite's IIFE lib
+        // build does NOT auto-inject this from the JS at runtime, so without
+        // this <link> tag the page mounts the components but renders them
+        // with zero styling — which is exactly the "hot mess" we hit at
+        // 0.2.18 → 0.2.19. Belongs in the same headLink stack as the static
+        // CSS above; Laminas dedupes by URL so calling it from the block
+        // layout too is harmless.
+        $view->headLink()->appendStylesheet(
+            $view->assetUrl('dist/iwac-search.css', 'IwacSearch')
+        );
+        // The compiled Svelte bundle.
         $view->headScript()->appendFile(
             $view->assetUrl('dist/iwac-search.js', 'IwacSearch'),
             'text/javascript',

@@ -214,10 +214,16 @@ class IwacSearchBlock extends AbstractBlockLayout
         // Append the compiled Svelte bundle once per request. headScript and
         // headLink dedupe identical URLs, so calling this from N blocks on
         // the same page still results in one <script>/<link>. Matches the
-        // standalone /search route (see Module::injectSvelteAssets) — the
-        // .js import-loads its sibling dist/iwac-search.css automatically.
+        // standalone /search route (see Module::injectSvelteAssets).
         $view->headLink()->appendStylesheet(
             $view->assetUrl('css/iwac-search.css', 'IwacSearch')
+        );
+        // The compiled Svelte bundle's CSS — every component-scoped style
+        // lives here. Vite's IIFE lib build does NOT auto-inject this from
+        // the JS at runtime; without this <link> the components mount but
+        // render unstyled.
+        $view->headLink()->appendStylesheet(
+            $view->assetUrl('dist/iwac-search.css', 'IwacSearch')
         );
         $view->headScript()->appendFile(
             $view->assetUrl('dist/iwac-search.js', 'IwacSearch'),

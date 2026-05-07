@@ -141,6 +141,7 @@
     color: var(--ink, #222);
     border: 1px solid var(--border, #ccc);
     border-radius: var(--radius-md, 0.75rem);
+    box-shadow: none;
     font: inherit;
     font-size: var(--text-sm, 0.9rem);
     font-variant-numeric: tabular-nums;
@@ -152,8 +153,11 @@
   }
   .iwac-pager__page:hover:not(.is-current),
   .iwac-pager__nav:hover:not(:disabled) {
+    background: var(--surface, #fff);
     border-color: var(--primary, #c66);
     color: var(--primary, #c66);
+    box-shadow: none;
+    transform: none;
   }
   .iwac-pager__page:focus-visible,
   .iwac-pager__nav:focus-visible {
@@ -164,6 +168,8 @@
     background: var(--primary, #c66);
     border-color: var(--primary, #c66);
     color: var(--primary-contrast, #fff);
+    box-shadow: none;
+    transform: none;
     font-weight: 600;
     cursor: default;
   }
