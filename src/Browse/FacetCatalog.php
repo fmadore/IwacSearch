@@ -47,7 +47,13 @@ final class FacetCatalog
         'events_ss'          => 'Events',
         'date_decade_ss'     => 'Decade',
         'lda_topic_label'    => 'LDA topic',
-        'gemini_polarite_ss' => 'Sentiment (Gemini)',
+        // Sentiment trio — rendered together under one collapsible
+        // "Sentiment" group in the client. All three are already indexed
+        // (Gemini model); centrality + subjectivity were surfaced in
+        // 0.2.22. subjectivite is a 1–5 numeric facet.
+        'gemini_polarite_ss'    => 'Polarity (Gemini)',
+        'gemini_centralite_ss'  => 'Centrality (Gemini)',
+        'gemini_subjectivite'   => 'Subjectivity (Gemini)',
     ];
 
     public const SORT_OPTIONS = [

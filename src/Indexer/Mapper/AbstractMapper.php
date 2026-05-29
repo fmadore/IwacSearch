@@ -152,6 +152,28 @@ abstract class AbstractMapper implements MapperInterface
     }
 
     /**
+     * Populate the public-facing `abstract` from the AI-generated
+     * `descriptionAI` column.
+     *
+     * Distinct from references (whose `abstract` IS the real, human-written
+     * abstract): for primary sources `descriptionAI` is a short, clean
+     * French summary that is safe to surface publicly — unlike the
+     * licensing-restricted `ocr_text`, which the scoped key excludes.
+     * Articles, documents, and audiovisual carry it; publications do not
+     * (they have a table of contents instead). Reusing the existing
+     * `abstract` field means the result card renders one body field for
+     * every type and the summary becomes lightly FTS-searchable (it's in
+     * `query_by`), which only helps recall.
+     *
+     * @param array<string, mixed> $doc
+     * @param array<string, mixed> $row
+     */
+    protected function addDescription(array &$doc, array $row): void
+    {
+        $this->maybeAdd($doc, 'abstract', $this->str($row['descriptionAI'] ?? ''));
+    }
+
+    /**
      * Add the three-model AI sentiment fields if present in the row.
      * Articles are the only subset that currently carries these.
      *

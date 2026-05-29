@@ -5,6 +5,8 @@
 export interface IwacBootstrap {
   block_id: string | number;
   mode: 'full' | 'compact' | 'results-only';
+  /** Site locale for UI strings + facet/type labels. Defaults to 'fr'. */
+  locale?: 'fr' | 'en';
   locked_filters: string; // raw Typesense filter_by
   prominent_facets: string[]; // schema field names
   default_sort: string; // e.g. "_text_match:desc"
@@ -47,9 +49,16 @@ export interface ScopedKeyResponse {
 export interface IwacDoc {
   id: string;
   title: string;
-  type_s?: 'article' | 'publication' | 'document' | 'audiovisual';
+  type_s?: 'article' | 'publication' | 'document' | 'audiovisual' | 'reference';
   date?: number; // unix epoch seconds
   pub_year?: number;
+  /**
+   * Public-safe display body — the human-written abstract for references,
+   * or the AI `descriptionAI` summary for articles/documents/audiovisual.
+   * Distinct from (and unlike) the licensing-restricted ocr_text, which
+   * the scoped key excludes. Rendered as a couple of lines on the card.
+   */
+  abstract?: string;
   country_ss?: string[];
   newspaper_ss?: string[];
   language_ss?: string[];
@@ -62,6 +71,26 @@ export interface IwacDoc {
   iiif_manifest?: string;
   omeka_url?: string;
   source_url?: string;
+}
+
+/**
+ * One entity (place / topic / person / organisation) surfaced by the
+ * typeahead via Typesense `facet_query`. Picking one applies it as a
+ * facet filter rather than running a full-text query.
+ */
+export interface EntitySuggestion {
+  /** Schema facet field, e.g. `places_ss`. */
+  field: string;
+  /** The entity value, e.g. "Cotonou". */
+  value: string;
+  /** Doc count for this entity within the current scope. */
+  count: number;
+}
+
+/** Typeahead payload: article title hits + matching entity values. */
+export interface SuggestResult {
+  articles: IwacHit[];
+  entities: EntitySuggestion[];
 }
 
 export interface IwacHighlight {

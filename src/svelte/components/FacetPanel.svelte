@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { ActiveFilters, IwacFacet, YearRange } from '../lib/types';
-  import { facetLabel } from '../lib/labels';
+  import { facetLabel, SENTIMENT_FIELDS, NUMERIC_FACET_FIELDS, useI18n } from '../lib/i18n';
   import FacetGroup from './FacetGroup.svelte';
   import DateRangeSlider from './DateRangeSlider.svelte';
 
@@ -62,6 +62,8 @@
     onYearRangeChange,
   }: Props = $props();
 
+  const { locale, t } = useI18n();
+
   const activeChips = $derived.by(() => {
     const chips: Array<{
       field: string;
@@ -74,7 +76,7 @@
         chips.push({
           field,
           value: v,
-          label: labels?.[field] ?? facetLabel(field),
+          label: labels?.[field] ?? facetLabel(field, locale),
           kind: 'facet',
         });
       }
@@ -85,7 +87,7 @@
       chips.push({
         field: 'pub_year',
         value: `${lo} – ${hi}`,
-        label: 'Year',
+        label: t('year'),
         kind: 'year',
       });
     }
@@ -93,6 +95,28 @@
   });
 
   const hasActive = $derived(activeChips.length > 0);
+
+  // Sentiment facets (polarity / centrality / subjectivity) collapse into
+  // one parent group so they open and close together; everything else
+  // renders as a flat list of facet groups. Order within each bucket is
+  // preserved from the prominent_facets list the server sent.
+  const regularFacets = $derived(facets.filter((f) => !SENTIMENT_FIELDS.has(f.field_name)));
+  const sentimentFacets = $derived(facets.filter((f) => SENTIMENT_FIELDS.has(f.field_name)));
+  let sentimentOpen = $state(false);
+  const sentimentActiveCount = $derived(
+    sentimentFacets.reduce((n, f) => n + (selected[f.field_name]?.length ?? 0), 0),
+  );
+
+  // Shared toggle wrapper: unchecking the last value in a field drops the
+  // whole field key (keeps URL/filter state clean) — same logic the flat
+  // list used before the sentiment split.
+  function toggleFacet(field: string, value: string, nextChecked: boolean): void {
+    if (!nextChecked && (selected[field]?.length ?? 0) === 1) {
+      onClearField(field);
+    } else {
+      onToggle(field, value, nextChecked);
+    }
+  }
 
   function handleChipClick(chip: { field: string; kind: 'facet' | 'year'; value: string }): void {
     if (chip.kind === 'year') {
@@ -103,16 +127,21 @@
   }
 </script>
 
-<aside class="iwac-facets" aria-label="Filters">
+<aside class="iwac-facets" aria-label={t('filters')}>
   <header class="iwac-facets__header">
-    <h2 class="iwac-facets__heading">Filters</h2>
+    <h2 class="iwac-facets__heading">{t('filters')}</h2>
     {#if hasActive}
-      <button type="button" class="iwac-facets__clear-all" onclick={onClearAll}>Clear all</button>
+      <button type="button" class="iwac-facets__clear-all" onclick={onClearAll}
+        >{t('clear_all')}</button
+      >
     {/if}
   </header>
 
   {#if hasActive}
-    <section class="iwac-facets__section iwac-facets__section--active" aria-label="Active filters">
+    <section
+      class="iwac-facets__section iwac-facets__section--active"
+      aria-label={t('active_filters')}
+    >
       <ul class="iwac-facets__chips">
         {#each activeChips as chip (chip.field + '|' + chip.value)}
           <li>
@@ -120,7 +149,7 @@
               type="button"
               class="iwac-facets__chip"
               onclick={() => handleChipClick(chip)}
-              aria-label={`Remove filter ${chip.label}: ${chip.value}`}
+              aria-label={t('remove_filter', { label: chip.label, value: chip.value })}
             >
               <span class="iwac-facets__chip-field">{chip.label}:</span>
               <span class="iwac-facets__chip-value">{chip.value}</span>
@@ -132,29 +161,56 @@
     </section>
   {/if}
 
-  <section class="iwac-facets__section" aria-label="Year">
+  <section class="iwac-facets__section" aria-label={t('year')}>
     <DateRangeSlider value={yearRange} min={yearMin} max={yearMax} onChange={onYearRangeChange} />
   </section>
 
   {#if facets.length === 0}
-    <p class="iwac-facets__empty">Search to see filter options.</p>
+    <p class="iwac-facets__empty">{t('search_to_see_options')}</p>
   {:else}
     <div class="iwac-facets__groups">
-      {#each facets as f (f.field_name)}
+      {#each regularFacets as f (f.field_name)}
         <FacetGroup
           field={f.field_name}
           counts={f.counts}
           selected={selected[f.field_name] ?? []}
           label={labels?.[f.field_name]}
-          onToggle={(field, value, nextChecked) => {
-            if (!nextChecked && (selected[field]?.length ?? 0) === 1) {
-              onClearField(field);
-            } else {
-              onToggle(field, value, nextChecked);
-            }
-          }}
+          onToggle={toggleFacet}
         />
       {/each}
+
+      {#if sentimentFacets.length > 0}
+        <section class="iwac-facets__group" class:iwac-facets__group--open={sentimentOpen}>
+          <button
+            type="button"
+            class="iwac-facets__group-heading"
+            aria-expanded={sentimentOpen}
+            onclick={() => (sentimentOpen = !sentimentOpen)}
+          >
+            <span class="iwac-facets__group-label">{t('sentiment')}</span>
+            {#if sentimentActiveCount > 0}
+              <span class="iwac-facets__group-count">{sentimentActiveCount}</span>
+            {/if}
+            <span class="iwac-facets__group-chevron" aria-hidden="true">
+              {sentimentOpen ? '▾' : '▸'}
+            </span>
+          </button>
+          {#if sentimentOpen}
+            <div class="iwac-facets__group-body">
+              {#each sentimentFacets as f (f.field_name)}
+                <FacetGroup
+                  field={f.field_name}
+                  counts={f.counts}
+                  selected={selected[f.field_name] ?? []}
+                  label={labels?.[f.field_name]}
+                  sortMode={NUMERIC_FACET_FIELDS.has(f.field_name) ? 'value-asc' : 'count'}
+                  onToggle={toggleFacet}
+                />
+              {/each}
+            </div>
+          {/if}
+        </section>
+      {/if}
     </div>
   {/if}
 </aside>
@@ -286,6 +342,88 @@
     display: flex;
     flex-direction: column;
   }
+
+  /*
+   * Sentiment parent group — wraps the polarity / centrality /
+   * subjectivity sub-facets so they collapse together. Heading mirrors
+   * the FacetGroup eyebrow; the IWAC theme paints every <button>, so we
+   * zero out its background / shadow / hover-translate explicitly.
+   */
+  .iwac-facets__group {
+    padding-block: var(--space-md, 1rem);
+    border-bottom: 1px solid var(--border-light, #eee);
+  }
+  .iwac-facets__group:last-child {
+    border-bottom: none;
+  }
+  .iwac-facets__group-heading {
+    display: flex;
+    align-items: center;
+    gap: var(--space-xs, 0.25rem);
+    width: 100%;
+    padding: 0;
+    background: none;
+    border: none;
+    box-shadow: none;
+    cursor: pointer;
+    font: inherit;
+    color: var(--ink-strong, var(--ink, #222));
+    font-size: var(--text-xs, 0.75rem);
+    font-weight: 700;
+    letter-spacing: var(--tracking-wider, 0.08em);
+    text-transform: uppercase;
+    text-align: start;
+    transition: color var(--transition-fast, 150ms ease);
+  }
+  .iwac-facets__group-heading:hover {
+    color: var(--primary, #c66);
+    background: none;
+    box-shadow: none;
+    transform: none;
+  }
+  .iwac-facets__group-heading:focus-visible {
+    outline: none;
+    box-shadow: var(--ring-focus, 0 0 0 3px rgba(0, 0, 0, 0.1));
+    border-radius: var(--radius-sm, 0.375rem);
+  }
+  .iwac-facets__group-label {
+    flex: 1;
+  }
+  .iwac-facets__group-count {
+    background: var(--primary, #c66);
+    color: var(--primary-contrast, #fff);
+    border-radius: var(--radius-full, 9999px);
+    padding: 0 0.5rem;
+    min-width: 1.25rem;
+    height: 1.25rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: var(--text-xs, 0.7rem);
+    font-weight: 600;
+    letter-spacing: 0;
+    text-transform: none;
+  }
+  .iwac-facets__group-chevron {
+    color: var(--muted, #888);
+    font-size: var(--text-xs, 0.75rem);
+    letter-spacing: 0;
+  }
+  .iwac-facets__group-body {
+    margin-block-start: var(--space-xs, 0.25rem);
+    padding-inline-start: var(--space-sm, 0.5rem);
+    /* Subtle accent rail so the three sub-facets read as one subsection. */
+    border-inline-start: 2px solid
+      color-mix(in srgb, var(--primary, #c66) 30%, var(--border-light, #eee));
+  }
+  /* Tighten the nested sub-facets; the parent owns the section rhythm. */
+  .iwac-facets__group-body :global(.iwac-facet) {
+    padding-block: var(--space-sm, 0.5rem);
+  }
+  .iwac-facets__group-body :global(.iwac-facet:first-child) {
+    padding-block-start: var(--space-xs, 0.25rem);
+  }
+
   .iwac-facets__empty {
     padding-block: var(--space-md, 1rem);
     color: var(--muted, #888);

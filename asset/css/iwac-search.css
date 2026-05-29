@@ -37,7 +37,30 @@
 .iwac-search-block,
 .iwac-search-shell {
   margin-block: var(--space-xl, 2rem);
+}
+
+/*
+ * Embedded page blocks sit inside editorial prose, so they keep a
+ * readable max-width and centre within their column.
+ */
+.iwac-search-block {
   max-width: var(--measure-wide, 72.5rem);
+  margin-inline: auto;
+}
+
+/*
+ * Full-surface shells (the standalone /search route and the curated
+ * /browse|/parcourir pages) fill the theme's content container instead
+ * of capping at --measure-wide and hugging the left. Previously the
+ * shell was left-aligned inside the wider theme container, leaving a
+ * large right gutter (~289px) against a small left one (~56px) — the
+ * asymmetric padding the brief called out. Filling the container lines
+ * the discovery UI up with the full-bleed hero above it; the theme
+ * container's own max-width + auto margins still keep the gutters
+ * symmetric on very wide viewports.
+ */
+.iwac-search-shell {
+  max-width: none;
 }
 
 .iwac-search-block__title {

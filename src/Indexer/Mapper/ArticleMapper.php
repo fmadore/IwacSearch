@@ -35,6 +35,7 @@ final class ArticleMapper extends AbstractMapper
         $this->addAuthorityEntities($doc, $row);
         $this->addDateFields($doc, $row);
         $this->addBodyFields($doc, $row);
+        $this->addDescription($doc, $row);
         $this->addAiSentiment($doc, $row);
 
         return $doc;

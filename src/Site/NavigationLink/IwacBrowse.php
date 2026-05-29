@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace IwacSearch\Site\NavigationLink;
 
 use IwacSearch\Browse\BrowseConfigRepository;
+use IwacSearch\Browse\BrowseContent;
 use Omeka\Api\Representation\SiteRepresentation;
 use Omeka\Site\Navigation\Link\LinkInterface;
 use Omeka\Stdlib\ErrorStore;
@@ -86,7 +87,9 @@ class IwacBrowse implements LinkInterface
             $translator = $site->getServiceLocator()->get('MvcTranslator');
             return $translator->translate('[Missing IWAC Browse page]'); // @translate
         }
-        return $config->title;
+        // Localize the menu label (e.g. "Tous les pays" vs "All countries").
+        // Country pages return their proper-noun name unchanged.
+        return BrowseContent::localize($config, $this->localeOf($site))['title'];
     }
 
     /**
@@ -104,23 +107,41 @@ class IwacBrowse implements LinkInterface
         $browseId = (int) ($data['browse_id'] ?? 0);
         $config = $browseId > 0 ? $this->repository->findById($browseId) : null;
 
+        // French sites resolve to /parcourir, English (and any other) to
+        // /browse — both routes hit the same controller + browse-config row.
+        $route = $this->localeOf($site) === 'en' ? 'site/iwac-browse' : 'site/iwac-parcourir';
+
         // Stale link (config was deleted): degrade to the site-scoped
         // browse landing page rather than 404. The label is already
         // rendered as "[Missing IWAC Browse page]" via getLabel.
         if ($config === null) {
             return [
-                'route'  => 'site/iwac-browse',
+                'route'  => $route,
                 'params' => ['site-slug' => $site->slug()],
             ];
         }
 
         return [
-            'route'  => 'site/iwac-browse',
+            'route'  => $route,
             'params' => [
                 'site-slug' => $site->slug(),
                 'slug'      => $config->slug,
             ],
         ];
+    }
+
+    /**
+     * Resolve 'fr' | 'en' from the site slug (`afrique_ouest` → fr,
+     * `westafrica` → en). Mirrors the IwacLocale view helper so the menu
+     * link and the rendered page agree on which route to use.
+     */
+    private function localeOf(SiteRepresentation $site): string
+    {
+        $slug = strtolower((string) $site->slug());
+        if (str_contains($slug, 'westafrica') || str_contains($slug, 'english')) {
+            return 'en';
+        }
+        return 'fr';
     }
 
     /**

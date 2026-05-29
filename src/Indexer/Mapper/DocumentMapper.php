@@ -36,6 +36,7 @@ final class DocumentMapper extends AbstractMapper
         $this->addAuthorityEntities($doc, $row);
         $this->addDateFields($doc, $row);
         $this->addBodyFields($doc, $row);
+        $this->addDescription($doc, $row);
 
         return $doc;
     }

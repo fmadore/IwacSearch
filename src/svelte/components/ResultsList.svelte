@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { IwacSearchResponse } from '../lib/types';
+  import { useI18n } from '../lib/i18n';
   import ResultItem from './ResultItem.svelte';
   import Pagination from './Pagination.svelte';
 
@@ -39,13 +40,15 @@
 
   const { response, perPage, hitsCap, onPageChange }: Props = $props();
 
+  const { t } = useI18n();
+
   const reachable = $derived(Math.min(response.found, hitsCap));
   const totalPages = $derived(Math.max(1, Math.ceil(reachable / Math.max(1, perPage))));
 </script>
 
 <div class="iwac-results">
   {#if response.hits.length === 0}
-    <p class="iwac-results__empty">No matches. Try a different word or remove a filter.</p>
+    <p class="iwac-results__empty">{t('results_empty_list')}</p>
   {:else}
     <ol class="iwac-results__list">
       {#each response.hits as hit (hit.document.id)}
@@ -59,7 +62,7 @@
 
     {#if response.found > hitsCap}
       <p class="iwac-results__cap-note" role="note">
-        Showing the first {hitsCap.toLocaleString()} matches — narrow your search to reach the rest.
+        {t('cap_note', { cap: hitsCap.toLocaleString() })}
       </p>
     {/if}
   {/if}

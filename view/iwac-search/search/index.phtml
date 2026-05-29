@@ -11,10 +11,13 @@
  * site layout) — the Svelte bundle loads automatically on this route.
  */
 
-$this->headTitle('Search · Islam West Africa Collection');
+$locale = $this->iwacLocale();
+$isEn   = $locale === 'en';
+$heading = $isEn ? 'Search the IWAC archive' : 'Rechercher dans les archives IWAC';
+$this->headTitle(($isEn ? 'Search' : 'Recherche') . ' · Islam West Africa Collection');
 ?>
 <main class="iwac-search-shell" role="main">
-    <h1 class="iwac-search-block__title">Search the IWAC archive</h1>
+    <h1 class="iwac-search-block__title"><?= $this->escapeHtml($heading) ?></h1>
 
     <noscript>
         <p>This search requires JavaScript. Browse the

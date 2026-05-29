@@ -17,6 +17,7 @@
   } from './lib/types';
   import { TypesenseClient } from './lib/typesense';
   import { onUrlPop, readUrlState, syncToUrl } from './lib/urlState';
+  import { normalizeLocale, provideI18n } from './lib/i18n';
   import SearchInput from './components/SearchInput.svelte';
   import SuggestDropdown from './components/SuggestDropdown.svelte';
   import ResultsList from './components/ResultsList.svelte';
@@ -48,6 +49,12 @@
   }
 
   const { bootstrap }: Props = $props();
+
+  // Provide the locale + translator to the whole component subtree. Read
+  // once at init from the server-detected bootstrap locale (defaults to
+  // French). svelte-ignore: bootstrap is a prop, not reactive state.
+  // svelte-ignore state_referenced_locally
+  const { t } = provideI18n(normalizeLocale(bootstrap.locale));
 
   const isStandalone = $derived(String(bootstrap.block_id) === 'standalone');
 
@@ -125,7 +132,17 @@
       yearRange,
     };
     syncToUrl(next, prevState);
-    prevState = structuredClone(next);
+    // Snapshot for the next diff. NOT structuredClone(next): `filters` and
+    // `yearRange` are deep Svelte 5 reactive proxies, and structuredClone
+    // throws DataCloneError on a proxy. Build a plain deep copy by hand so
+    // the clone is guaranteed serialisable and proxy-free.
+    prevState = {
+      q: next.q,
+      page: next.page,
+      sort: next.sort,
+      filters: Object.fromEntries(Object.entries(next.filters).map(([k, v]) => [k, [...v]])),
+      yearRange: next.yearRange ? { ...next.yearRange } : null,
+    };
   });
 
   // Back / forward → re-hydrate state from URL.
@@ -225,6 +242,25 @@
   function handleSuggestPickQuery(text: string): void {
     handleQueryChange(text);
     suggestOpen = false;
+  }
+  // Enter (or clicking the "Search for …" row) runs a full-text search for
+  // exactly what was typed — no need to pick a suggestion. The search runs
+  // reactively off `query`; this just commits the text and closes the
+  // dropdown so the user lands on results.
+  function handleSuggestRunSearch(text: string): void {
+    if (text !== query) {
+      query = text;
+      page = 1;
+    }
+    suggestOpen = false;
+  }
+  // Picking an entity (place / topic / person / organisation) applies it as
+  // a facet filter and clears the free-text query, so the user sees every
+  // document tagged with that entity within the current scope.
+  function handleSuggestPickEntity(field: string, value: string): void {
+    query = '';
+    suggestOpen = false;
+    handleFacetToggle(field, value, true);
   }
   function handleSearchKeydown(e: KeyboardEvent): void {
     if (suggestRef?.handleKeydown(e)) {
@@ -387,7 +423,7 @@
     >
       <SearchInput
         value={query}
-        placeholder="Rechercher dans les archives IWAC…"
+        placeholder={t('search_placeholder')}
         onChange={handleQueryChange}
       />
       <SuggestDropdown
@@ -396,6 +432,8 @@
         {client}
         enabled={suggestOpen}
         onPickQuery={handleSuggestPickQuery}
+        onRunSearch={handleSuggestRunSearch}
+        onPickEntity={handleSuggestPickEntity}
         onClose={handleSuggestClose}
       />
     </form>
@@ -403,7 +441,7 @@
 
   {#if error}
     <div class="iwac-search__error" role="alert">
-      <strong>Search unavailable.</strong>
+      <strong>{t('search_unavailable')}</strong>
       <span>{error}</span>
     </div>
   {/if}
@@ -416,7 +454,7 @@
         <Drawer
           open={filterDrawerOpen}
           onClose={closeFilterDrawer}
-          title="Filters"
+          title={t('filters')}
           side="right"
           width="min(22rem, 92vw)"
         >
@@ -434,7 +472,7 @@
         </Drawer>
       {:else}
         <!-- Wide viewport: classic sticky left column. -->
-        <aside class="iwac-search__facets-inline" aria-label="Filters">
+        <aside class="iwac-search__facets-inline" aria-label={t('filters')}>
           <FacetPanel
             {facets}
             selected={filters}
@@ -457,7 +495,7 @@
                   {response.found.toLocaleString()}
                 </span>
                 <span class="iwac-search__count-label">
-                  {response.found === 1 ? 'result' : 'results'}
+                  {response.found === 1 ? t('result_one') : t('result_other')}
                 </span>
                 {#if searchTimeMs > 0}
                   <span class="iwac-search__count-timing">
@@ -466,7 +504,7 @@
                 {/if}
               {:else}
                 <span class="iwac-search__count-label iwac-search__count-label--empty">
-                  No results
+                  {t('no_results_short')}
                 </span>
               {/if}
             </div>
@@ -475,9 +513,9 @@
                 type="button"
                 class="iwac-search__filters-trigger"
                 onclick={openFilterDrawer}
-                aria-label="Open filters"
+                aria-label={t('open_filters')}
               >
-                Filters
+                {t('filters')}
                 {#if activeFilterCount > 0}
                   <span class="iwac-search__filters-trigger-badge">{activeFilterCount}</span>
                 {/if}
@@ -488,19 +526,19 @@
         {/if}
 
         {#if isLoading && !response}
-          <p class="iwac-search__status" aria-live="polite">Searching…</p>
+          <p class="iwac-search__status" aria-live="polite">{t('searching')}</p>
         {:else if response && response.found === 0}
           <div class="iwac-search__empty" role="status">
-            <strong>No results.</strong>
+            <strong>{t('no_results_title')}</strong>
             {#if activeFilterCount > 0}
-              <p>Try removing a filter or two.</p>
+              <p>{t('try_removing_filter')}</p>
               <button type="button" class="iwac-search__clear-link" onclick={handleClearAll}>
-                Clear all filters
+                {t('clear_all_filters')}
               </button>
             {:else if query.trim() !== ''}
-              <p>Try a broader query, or check your spelling.</p>
+              <p>{t('try_broader_query')}</p>
             {:else}
-              <p>The corpus seems empty — please contact the site administrator.</p>
+              <p>{t('corpus_empty')}</p>
             {/if}
           </div>
         {:else if response}
@@ -509,7 +547,7 @@
       </div>
     </div>
   {:else if isLoading && !response}
-    <p class="iwac-search__status" aria-live="polite">Searching…</p>
+    <p class="iwac-search__status" aria-live="polite">{t('searching')}</p>
   {:else if response}
     <ResultsList {response} {perPage} hitsCap={HITS_CAP} onPageChange={handlePageChange} />
   {/if}
@@ -544,8 +582,15 @@
     position: sticky;
     top: var(--space-md, 1rem);
     align-self: start;
+    /* The single scroll container for filters. Facet groups no longer
+       scroll individually (see FacetGroup .iwac-facet__list), so this is
+       the only scrollbar in the sidebar — and it only appears when the
+       collapsed facet column is taller than the viewport. Thin + stable
+       gutter keeps it from crowding the divider. */
     max-height: calc(100vh - var(--space-xl, 2rem));
     overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-gutter: stable;
     /* Subtle right "rail" so the column has a visual edge against the
        results without becoming a card. */
     padding-inline-end: var(--space-md, 1rem);

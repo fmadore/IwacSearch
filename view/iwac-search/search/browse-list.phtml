@@ -5,45 +5,72 @@
  * @var ?string $missing_slug  Set when the user hit /browse/<unknown-slug>.
  *
  * Landing page for curated browse surfaces. One card per config row,
- * ordered by the `position` column. The 6 country pages are seeded on
- * module install (CountrySeeder); admin CRUD lands in M3.5.
+ * ordered by the `position` column. Titles + intros are localized at
+ * render time by BrowseContent; the French site links to /parcourir.
  */
 
-$this->headTitle('Browse · Islam West Africa Collection');
+use IwacSearch\Browse\BrowseContent;
+
+$locale = $this->iwacLocale();
+$site   = $this->currentSite();
+$isEn   = $locale === 'en';
+
 $missingSlug = $missing_slug ?? null;
+
+// Per-card URL builder — site-scoped /parcourir|/browse when in a site,
+// else the global path.
+$linkTo = function (string $slug) use ($site, $isEn): string {
+    if ($site) {
+        $route = $isEn ? 'site/iwac-browse' : 'site/iwac-parcourir';
+        return $this->url($route, ['site-slug' => $site->slug(), 'slug' => $slug]);
+    }
+    return $this->basePath(($isEn ? '/browse/' : '/parcourir/') . $slug);
+};
+
+$pageTitle = $isEn ? 'Browse' : 'Parcourir';
+$this->headTitle($pageTitle . ' · Islam West Africa Collection');
 ?>
 <main class="iwac-browse-list" role="main">
     <header class="iwac-browse-list__header">
-        <h1>Browse</h1>
+        <h1><?= $this->escapeHtml($pageTitle) ?></h1>
         <p class="iwac-browse-list__intro">
-            Curated entry points into the IWAC archive. Each page pre-applies
-            a locked filter so you can search within a focused subset.
+            <?= $isEn
+                ? 'Curated entry points into the IWAC archive. Each page pre-applies a focused scope so you can search within a subset.'
+                : "Points d'entrée thématiques dans les archives IWAC. Chaque page applique un filtre afin de rechercher dans un sous-ensemble ciblé." ?>
         </p>
     </header>
 
     <?php if ($missingSlug): ?>
         <div class="iwac-browse-list__notice" role="alert">
-            <strong>No browse page named <code><?= $this->escapeHtml($missingSlug) ?></code>.</strong>
-            Pick one below.
+            <?php if ($isEn): ?>
+                <strong>No browse page named <code><?= $this->escapeHtml($missingSlug) ?></code>.</strong>
+                Pick one below.
+            <?php else: ?>
+                <strong>Aucune page nommée <code><?= $this->escapeHtml($missingSlug) ?></code>.</strong>
+                Choisissez-en une ci-dessous.
+            <?php endif; ?>
         </div>
     <?php endif; ?>
 
     <?php if (empty($configs)): ?>
         <p class="iwac-browse-list__empty">
-            No curated browse pages have been configured yet.
+            <?= $isEn
+                ? 'No curated browse pages have been configured yet.'
+                : "Aucune page de navigation n'a encore été configurée." ?>
         </p>
     <?php else: ?>
         <ul class="iwac-browse-list__cards">
             <?php foreach ($configs as $config): ?>
+                <?php $content = BrowseContent::localize($config, $locale); ?>
                 <li class="iwac-browse-list__card">
                     <a class="iwac-browse-list__card-link"
-                       href="<?= $this->escapeHtmlAttr($this->basePath('/browse/' . $config->slug)) ?>">
+                       href="<?= $this->escapeHtmlAttr($linkTo($config->slug)) ?>">
                         <h2 class="iwac-browse-list__card-title">
-                            <?= $this->escapeHtml($config->title) ?>
+                            <?= $this->escapeHtml($content['title']) ?>
                         </h2>
-                        <?php if ($config->introHtml !== ''): ?>
+                        <?php if ($content['introHtml'] !== ''): ?>
                             <div class="iwac-browse-list__card-intro">
-                                <?= $config->introHtml /* admin-authored, intentional raw HTML */ ?>
+                                <?= $content['introHtml'] /* localized template / admin-authored raw HTML */ ?>
                             </div>
                         <?php endif; ?>
                     </a>

@@ -43,6 +43,8 @@
    * single-page result set is just visual noise.
    */
 
+  import { useI18n } from '../lib/i18n';
+
   interface Props {
     currentPage: number;
     totalPages: number;
@@ -50,6 +52,8 @@
   }
 
   const { currentPage, totalPages, onPageChange }: Props = $props();
+
+  const { t } = useI18n();
 
   const items = $derived(pageWindow(currentPage, totalPages));
   const hasPrev = $derived(currentPage > 1);
@@ -62,16 +66,16 @@
 </script>
 
 {#if totalPages > 1}
-  <nav class="iwac-pager" aria-label="Results pagination">
+  <nav class="iwac-pager" aria-label={t('results_pagination')}>
     <button
       type="button"
       class="iwac-pager__nav"
       disabled={!hasPrev}
       onclick={() => go(currentPage - 1)}
-      aria-label="Previous page"
+      aria-label={t('previous_page')}
     >
       <span aria-hidden="true">‹</span>
-      <span class="iwac-pager__nav-label">Prev</span>
+      <span class="iwac-pager__nav-label">{t('prev')}</span>
     </button>
 
     <ol class="iwac-pager__list">
@@ -85,7 +89,7 @@
               class="iwac-pager__page"
               class:is-current={it === currentPage}
               aria-current={it === currentPage ? 'page' : undefined}
-              aria-label={`Page ${it}`}
+              aria-label={t('page_n', { n: it })}
               onclick={() => go(it)}
             >
               {it}
@@ -100,9 +104,9 @@
       class="iwac-pager__nav"
       disabled={!hasNext}
       onclick={() => go(currentPage + 1)}
-      aria-label="Next page"
+      aria-label={t('next_page')}
     >
-      <span class="iwac-pager__nav-label">Next</span>
+      <span class="iwac-pager__nav-label">{t('next')}</span>
       <span aria-hidden="true">›</span>
     </button>
   </nav>

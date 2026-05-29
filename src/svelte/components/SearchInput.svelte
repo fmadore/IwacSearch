@@ -101,6 +101,14 @@
   .iwac-input__field::placeholder {
     color: var(--muted, #888);
   }
+  /* Suppress the browser's native type=search clear glyph. We render our
+     own .iwac-input__clear button; without this, Chrome/Safari show a
+     second × right next to it (the duplicate-X the user reported). */
+  .iwac-input__field::-webkit-search-cancel-button {
+    -webkit-appearance: none;
+    appearance: none;
+    display: none;
+  }
   .iwac-input__field:hover {
     border-color: var(--border-strong, var(--border, #ccc));
   }

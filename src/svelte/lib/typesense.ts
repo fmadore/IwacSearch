@@ -1,10 +1,20 @@
 import type {
   ActiveFilters,
+  EntitySuggestion,
   IwacBootstrap,
   IwacSearchResponse,
   ScopedKeyResponse,
+  SuggestResult,
   YearRange,
 } from './types';
+import { NUMERIC_FACET_FIELDS } from './i18n';
+
+/**
+ * Authority facet fields the typeahead prefix-matches via `facet_query`,
+ * so a user typing "cotonou" sees the place entity, not just articles
+ * whose title contains the word.
+ */
+const ENTITY_FACET_FIELDS = ['places_ss', 'topics_ss', 'persons_ss', 'organisations_ss'] as const;
 
 /**
  * Thin wrapper over the Typesense REST API for the public client.
@@ -200,41 +210,54 @@ export class TypesenseClient {
    * Errors are translated to a thrown Error like search() — caller
    * decides whether to surface in the UI or swallow.
    */
-  async suggest(prefix: string, perPage = 6): Promise<IwacSearchResponse> {
+  async suggest(prefix: string, perPage = 6): Promise<SuggestResult> {
     const trimmed = prefix.trim();
     if (trimmed.length < 2) {
-      return emptySuggestResponse();
+      return { articles: [], entities: [] };
     }
 
     const key = await this.getKey();
     const collection = this.bootstrap.collection_alias ?? key.collection;
     const filterBy = this.bootstrap.locked_filters?.trim() || undefined;
 
-    const body = {
-      searches: [
-        {
-          collection,
-          q: trimmed,
-          // Narrower than the main search query_by — dropdown should
-          // surface clear title hits, not fuzzy OCR matches that wouldn't
-          // make sense out of context.
-          query_by: 'title_txt,entity_aliases_txt',
-          prefix: true,
-          filter_by: filterBy,
-          // Newest first feels right for a typeahead (recent docs surface
-          // before older ones even when match scores are similar).
-          sort_by: '_text_match:desc,date:desc',
-          page: 1,
-          per_page: Math.max(1, Math.min(15, perPage)),
-          highlight_fields: 'title_txt',
-          highlight_full_fields: 'title_txt',
-          // No facets, no snippet — keeps the response tiny and the
-          // dropdown render fast.
-          exclude_fields: 'ocr_text,embedding',
-          limit_hits: 50,
-        },
-      ],
+    // One multi_search request bundles:
+    //   [0]  article title hits (full-text prefix on title + aliases)
+    //   [1…] one facet_query per entity field, surfacing matching
+    //        authority values (places / topics / persons / organisations).
+    // The same locked_filters apply to every sub-search, so suggestions on
+    // /browse/benin stay Bénin-scoped.
+    const titleSearch = {
+      collection,
+      q: trimmed,
+      // Narrower than the main search query_by — dropdown should surface
+      // clear title hits, not fuzzy OCR matches that wouldn't make sense
+      // out of context.
+      query_by: 'title_txt,entity_aliases_txt',
+      prefix: true,
+      filter_by: filterBy,
+      // Newest first feels right for a typeahead (recent docs surface
+      // before older ones even when match scores are similar).
+      sort_by: '_text_match:desc,date:desc',
+      page: 1,
+      per_page: Math.max(1, Math.min(15, perPage)),
+      highlight_fields: 'title_txt',
+      highlight_full_fields: 'title_txt',
+      // No snippet — keeps the response tiny and the dropdown render fast.
+      exclude_fields: 'ocr_text,embedding',
+      limit_hits: 50,
     };
+
+    const entitySearches = ENTITY_FACET_FIELDS.map((field) => ({
+      collection,
+      q: '*',
+      query_by: 'title_txt',
+      filter_by: filterBy,
+      facet_by: field,
+      // Prefix/substring-match facet values against the typed text.
+      facet_query: `${field}:${trimmed}`,
+      max_facet_values: 4,
+      per_page: 0,
+    }));
 
     const res = await fetch(this.bootstrap.endpoints.search, {
       method: 'POST',
@@ -242,7 +265,7 @@ export class TypesenseClient {
         'Content-Type': 'application/json',
         'X-TYPESENSE-API-KEY': key.key,
       },
-      body: JSON.stringify(body),
+      body: JSON.stringify({ searches: [titleSearch, ...entitySearches] }),
     });
     if (!res.ok) {
       throw new Error(await formatHttpError('Suggest', res));
@@ -250,11 +273,23 @@ export class TypesenseClient {
     const json = (await res.json()) as {
       results: Array<IwacSearchResponse | TypesensePerSearchError>;
     };
-    const first = json.results?.[0];
-    if (!first) {
-      return emptySuggestResponse();
-    }
-    return validateSearchResult('Suggest', first);
+
+    const articles = validateSearchResult('Suggest', json.results?.[0]).hits;
+
+    // Collect matching entity values across the four facet searches.
+    const entities: EntitySuggestion[] = [];
+    ENTITY_FACET_FIELDS.forEach((field, i) => {
+      const r = json.results?.[i + 1];
+      if (!r || 'error' in r) return;
+      const fc = (r as IwacSearchResponse).facet_counts?.find((f) => f.field_name === field);
+      for (const c of fc?.counts ?? []) {
+        if (c.value) entities.push({ field, value: c.value, count: c.count });
+      }
+    });
+    // Highest-coverage entities first; cap so the dropdown stays compact.
+    entities.sort((a, b) => b.count - a.count);
+
+    return { articles, entities: entities.slice(0, 6) };
   }
 
   /**
@@ -306,8 +341,17 @@ function buildFilterBy(filters: ActiveFilters): string {
   const parts: string[] = [];
   for (const [field, values] of Object.entries(filters)) {
     if (!values || values.length === 0) continue;
-    const escaped = values.map((v) => v.replaceAll('`', '')).map((v) => `\`${v}\``);
-    parts.push(`${field}:=[${escaped.join(',')}]`);
+    if (NUMERIC_FACET_FIELDS.has(field)) {
+      // Numeric exact-match-any: bare numbers, NO backticks. Typesense
+      // rejects a backticked number ("Numerical field has an invalid
+      // comparator"), so e.g. gemini_subjectivite:=[1,2] — never [`1`,`2`].
+      const nums = values.filter((v) => v.trim() !== '' && Number.isFinite(Number(v)));
+      if (nums.length === 0) continue;
+      parts.push(`${field}:=[${nums.join(',')}]`);
+    } else {
+      const escaped = values.map((v) => v.replaceAll('`', '')).map((v) => `\`${v}\``);
+      parts.push(`${field}:=[${escaped.join(',')}]`);
+    }
   }
   return parts.join(' && ');
 }
@@ -335,17 +379,6 @@ function combineFilters(...parts: Array<string | undefined | null>): string {
     .map((p) => p?.trim())
     .filter((p): p is string => !!p)
     .join(' && ');
-}
-
-function emptySuggestResponse(): IwacSearchResponse {
-  return {
-    found: 0,
-    page: 1,
-    request_params: {},
-    hits: [],
-    facet_counts: [],
-    search_time_ms: 0,
-  };
 }
 
 /**

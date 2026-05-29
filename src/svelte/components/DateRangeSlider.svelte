@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { YearRange } from '../lib/types';
+  import { useI18n } from '../lib/i18n';
 
   /**
    * Single-track dual-thumb year range slider.
@@ -39,6 +40,8 @@
   }
 
   const { value, min = 1960, max = 2025, onChange }: Props = $props();
+
+  const { t } = useI18n();
 
   // svelte-ignore state_referenced_locally
   let fromHandle = $state(value?.from ?? min);
@@ -182,9 +185,9 @@
   const isDirty = $derived(fromHandle !== min || toHandle !== max);
 </script>
 
-<section class="iwac-daterange" aria-label="Year range">
+<section class="iwac-daterange" aria-label={t('year_range')}>
   <header class="iwac-daterange__header">
-    <span class="iwac-daterange__label">Year</span>
+    <span class="iwac-daterange__label">{t('year')}</span>
     <span
       class="iwac-daterange__range"
       class:iwac-daterange__range--dirty={isDirty}
@@ -193,7 +196,7 @@
       {fromHandle} – {toHandle}
     </span>
     {#if isDirty}
-      <button type="button" class="iwac-daterange__reset" onclick={reset}>Reset</button>
+      <button type="button" class="iwac-daterange__reset" onclick={reset}>{t('reset')}</button>
     {/if}
   </header>
 
@@ -213,7 +216,7 @@
       style="inset-inline-start: {fillStart}%;"
       role="slider"
       tabindex="0"
-      aria-label="From year"
+      aria-label={t('from_year')}
       aria-valuemin={min}
       aria-valuemax={toHandle}
       aria-valuenow={fromHandle}
@@ -230,7 +233,7 @@
       style="inset-inline-start: {fillEnd}%;"
       role="slider"
       tabindex="0"
-      aria-label="To year"
+      aria-label={t('to_year')}
       aria-valuemin={fromHandle}
       aria-valuemax={max}
       aria-valuenow={toHandle}

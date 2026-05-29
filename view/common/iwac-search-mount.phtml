@@ -32,6 +32,11 @@
 $bootstrap['endpoints']['token']  = $this->basePath($bootstrap['endpoints']['token']);
 $bootstrap['endpoints']['search'] = $this->basePath($bootstrap['endpoints']['search']);
 
+// Stamp the site locale so the Svelte client picks French or English UI
+// strings + facet/type labels. Detected from the current site (defaults
+// to French off-site, e.g. the global /search route).
+$bootstrap['locale'] = $this->iwacLocale();
+
 $rows = isset($skeleton_rows) ? max(0, (int) $skeleton_rows) : 3;
 $id   = (string) $block_id;
 ?>

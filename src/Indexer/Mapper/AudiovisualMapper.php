@@ -31,6 +31,7 @@ final class AudiovisualMapper extends AbstractMapper
         $this->addCommonFacets($doc, $row);
         $this->addAuthorityEntities($doc, $row);
         $this->addDateFields($doc, $row);
+        $this->addDescription($doc, $row);
         // No body, no sentiment.
 
         return $doc;

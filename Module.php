@@ -238,6 +238,9 @@ class Module extends AbstractModule
         $countryStats = (new Browse\CountrySeeder($repository, $logger))->seed();
         $logger->info('IwacSearch country browse pages seeded', $countryStats);
 
+        $allStats = (new Browse\AllCountriesSeeder($repository, $logger))->seed();
+        $logger->info('IwacSearch all-countries browse page seeded', $allStats);
+
         $refStats = (new Browse\ReferencesSeeder($repository, $logger))->seed();
         $logger->info('IwacSearch references browse page seeded', $refStats);
     }
@@ -261,6 +264,46 @@ class Module extends AbstractModule
             $logger = LoggerResolver::fromContainer($services);
             $stats = (new Browse\ReferencesSeeder($repository, $logger))->seed();
             $logger->info('IwacSearch references browse page seeded on upgrade', $stats);
+        }
+
+        // 0.2.22 added the all-countries entry point and surfaced the
+        // centrality + subjectivity sentiment facets. Seed the new page and
+        // re-apply the default facet stack to the seeded country pages + the
+        // all-countries page so existing installs get the Sentiment group
+        // without an uninstall/reinstall. Only touches system-seeded slugs;
+        // admin-authored custom pages are left untouched.
+        if (version_compare((string) $oldVersion, '0.2.22', '<')) {
+            $connection = $services->get('Omeka\Connection');
+            $repository = new Browse\BrowseConfigRepository($connection);
+            $logger = LoggerResolver::fromContainer($services);
+
+            $allStats = (new Browse\AllCountriesSeeder($repository, $logger))->seed();
+            $logger->info('IwacSearch all-countries browse page seeded on upgrade', $allStats);
+
+            $facetsBySlug = [];
+            foreach (Browse\Countries::slugs() as $slug) {
+                $facetsBySlug[$slug] = Browse\CountrySeeder::DEFAULT_FACETS;
+            }
+            $facetsBySlug[Browse\AllCountriesSeeder::SLUG] = Browse\AllCountriesSeeder::DEFAULT_FACETS;
+
+            foreach ($facetsBySlug as $slug => $facets) {
+                $existing = $repository->findBySlug($slug);
+                if ($existing === null || $existing->prominentFacets === $facets) {
+                    continue;
+                }
+                $repository->save(new Browse\BrowseConfig(
+                    id:               $existing->id,
+                    slug:             $existing->slug,
+                    title:            $existing->title,
+                    introHtml:        $existing->introHtml,
+                    lockedFilters:    $existing->lockedFilters,
+                    prominentFacets:  $facets,
+                    defaultSort:      $existing->defaultSort,
+                    resultsPerPage:   $existing->resultsPerPage,
+                    position:         $existing->position,
+                ));
+                $logger->info('IwacSearch refreshed browse facets on upgrade', ['slug' => $slug]);
+            }
         }
     }
 

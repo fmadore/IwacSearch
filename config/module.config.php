@@ -189,6 +189,22 @@ return [
                 ],
             ],
 
+            // French-language alias of /browse. Same controller + action;
+            // the slug resolves against the same iwac_browse_config rows.
+            // The French site links here (Parcourir) while the English site
+            // uses /browse — see Site\NavigationLink\IwacBrowse::toZend.
+            'iwac-parcourir' => [
+                'type'    => \Laminas\Router\Http\Segment::class,
+                'options' => [
+                    'route'       => '/parcourir[/:slug]',
+                    'constraints' => ['slug' => '[a-zA-Z0-9_-]+'],
+                    'defaults'    => [
+                        'controller' => Controller\SearchController::class,
+                        'action'     => 'browse',
+                    ],
+                ],
+            ],
+
             // Site-scoped variant of the same route. Nesting under the
             // `site` parent automatically prefixes /s/:site-slug, so the
             // public URL becomes /s/{site-slug}/browse/{slug}. Required
@@ -215,6 +231,21 @@ return [
                             ],
                         ],
                     ],
+                    // French alias: /s/{site-slug}/parcourir[/:slug]. The
+                    // French site's nav links resolve to this route so the
+                    // public URL reads /s/afrique_ouest/parcourir/benin.
+                    'iwac-parcourir' => [
+                        'type'    => \Laminas\Router\Http\Segment::class,
+                        'options' => [
+                            'route'       => '/parcourir[/:slug]',
+                            'constraints' => ['slug' => '[a-zA-Z0-9_-]+'],
+                            'defaults'    => [
+                                '__NAMESPACE__' => 'IwacSearch\Controller',
+                                'controller'    => Controller\SearchController::class,
+                                'action'        => 'browse',
+                            ],
+                        ],
+                    ],
                 ],
             ],
         ],
@@ -232,6 +263,9 @@ return [
     'view_helpers' => [
         'invokables' => [
             'iwacBootstrapJson' => View\Helper\IwacBootstrapJson::class,
+            // Resolves 'fr' | 'en' from the current site for UI strings +
+            // the /parcourir vs /browse route choice.
+            'iwacLocale'        => View\Helper\IwacLocale::class,
         ],
     ],
 

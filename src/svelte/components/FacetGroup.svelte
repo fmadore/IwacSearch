@@ -19,7 +19,7 @@
 
 <script lang="ts">
   import type { IwacFacetCount } from '../lib/types';
-  import { facetLabel } from '../lib/labels';
+  import { facetLabel, useI18n } from '../lib/i18n';
 
   /**
    * One facet field rendered as a collapsible checklist with an optional
@@ -64,8 +64,15 @@
     /** Show the in-facet search box once counts.length exceeds this. */
     searchThreshold?: number;
     onToggle: (field: string, value: string, nextChecked: boolean) => void;
-    /** Optional override; defaults to the global label table. */
+    /** Optional override; defaults to the locale label table. */
     label?: string;
+    /**
+     * Value ordering. 'count' (default) sorts by descending doc count;
+     * 'value-asc' sorts numerically ascending — used for the 1–5
+     * subjectivity scale, where a count order ("2, 1, 4, 3, 5") reads as
+     * noise.
+     */
+    sortMode?: 'count' | 'value-asc';
   }
 
   const {
@@ -76,21 +83,26 @@
     searchThreshold = 10,
     onToggle,
     label,
+    sortMode = 'count',
   }: Props = $props();
 
-  const heading = $derived(label ?? facetLabel(field));
+  const { locale, t } = useI18n();
+
+  const heading = $derived(label ?? facetLabel(field, locale));
   const selectedSet = $derived(new Set(selected));
   let expanded = $state(false);
   let collapsed = $state(false); // user-collapsed (whole group)
   let filterText = $state('');
 
   // Sort: selected first (so toggling doesn't make a value vanish under
-  // the "show more" fold), then by count descending.
+  // the "show more" fold), then by the chosen order (count desc, or
+  // numeric ascending for scale facets like subjectivity).
   const sorted = $derived.by(() => {
     return [...counts].sort((a, b) => {
       const aSel = selectedSet.has(a.value);
       const bSel = selectedSet.has(b.value);
       if (aSel !== bSel) return aSel ? -1 : 1;
+      if (sortMode === 'value-asc') return Number(a.value) - Number(b.value);
       return b.count - a.count;
     });
   });
@@ -120,7 +132,7 @@
   >
     <span class="iwac-facet__label">{heading}</span>
     {#if selected.length > 0}
-      <span class="iwac-facet__active-count" aria-label={`${selected.length} active`}>
+      <span class="iwac-facet__active-count" aria-label={t('n_active', { n: selected.length })}>
         {selected.length}
       </span>
     {/if}
@@ -129,22 +141,22 @@
 
   {#if !collapsed}
     {#if counts.length === 0}
-      <p class="iwac-facet__empty">No values for this filter.</p>
+      <p class="iwac-facet__empty">{t('no_values')}</p>
     {:else}
       {#if showSearch}
         <div class="iwac-facet__search">
           <input
             type="search"
             class="iwac-facet__search-input"
-            placeholder={`Search ${heading.toLowerCase()}…`}
-            aria-label={`Filter ${heading} values`}
+            placeholder={t('search_values', { name: heading.toLowerCase() })}
+            aria-label={t('filter_values', { name: heading })}
             bind:value={filterText}
           />
           {#if isFiltering}
             <button
               type="button"
               class="iwac-facet__search-clear"
-              aria-label="Clear filter"
+              aria-label={t('clear_filter')}
               onclick={() => (filterText = '')}
             >
               ×
@@ -154,7 +166,7 @@
       {/if}
 
       {#if visible.length === 0}
-        <p class="iwac-facet__empty">No matches.</p>
+        <p class="iwac-facet__empty">{t('no_matches')}</p>
       {:else}
         <ul class="iwac-facet__list">
           {#each visible as fc (fc.value)}
@@ -177,11 +189,11 @@
 
       {#if isFiltering}
         <p class="iwac-facet__hint">
-          {filtered.length} of {counts.length} match
+          {t('match_count', { shown: filtered.length, total: counts.length })}
         </p>
       {:else if hiddenCount > 0}
         <button type="button" class="iwac-facet__more" onclick={() => (expanded = !expanded)}>
-          {expanded ? 'Show less' : `Show ${hiddenCount} more`}
+          {expanded ? t('show_less') : t('show_more', { n: hiddenCount })}
         </button>
       {/if}
     {/if}
@@ -281,6 +293,14 @@
   .iwac-facet__search-input::placeholder {
     color: var(--muted, #888);
   }
+  /* Hide the browser's native type=search clear glyph — we render our
+     own .iwac-facet__search-clear button, so the native one is a
+     duplicate × sitting right beside it. */
+  .iwac-facet__search-input::-webkit-search-cancel-button {
+    -webkit-appearance: none;
+    appearance: none;
+    display: none;
+  }
   .iwac-facet__search-input:focus {
     outline: none;
     border-color: var(--primary, #c66);
@@ -327,11 +347,11 @@
     display: flex;
     flex-direction: column;
     gap: 0.0625rem;
-    /* Keep long facet lists from pushing pagination off-screen — once
-       the user expands or types into the search box, the column
-       scrolls internally rather than the whole sidebar growing. */
-    max-height: 22rem;
-    overflow-y: auto;
+    /* No inner scroll: the list grows to its natural height and the
+       "Show more / Show less" control bounds it instead. Per-facet
+       scroll containers stacked on top of the sidebar scroll produced
+       the "so many scrollbars" problem; the sidebar column owns the one
+       scroll now (see .iwac-search__facets-inline in App.svelte). */
   }
   .iwac-facet__item {
     margin: 0;

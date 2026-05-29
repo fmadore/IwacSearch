@@ -76,6 +76,8 @@ class IwacSearchBlock extends AbstractBlockLayout
                 'organisations_ss',
                 'topics_ss',
                 'gemini_polarite_ss',
+                'gemini_centralite_ss',
+                'gemini_subjectivite',
             ];
         $defaultSort      = $data['default_sort']     ?? '_text_match:desc';
         $resultsPerPage   = (int) ($data['results_per_page'] ?? 10);

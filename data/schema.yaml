@@ -101,14 +101,17 @@ fields:
   - { name: nb_words,    type: int32,  facet: false, optional: true }
   - { name: lda_topic_label, type: string, facet: true, optional: true }
 
-  # ── References ────────────────────────────────────────────────────────
-  # Bibliographic citations (academic articles, books, theses, chapters,
-  # reports, etc.) — populated only by ReferenceMapper. Distinct from
-  # ocr_text because:
-  #   1. References have no OCR; the abstract IS the body text.
-  #   2. We WANT the abstract visible in public results (no licensing
-  #      issue — abstracts are short and discovery-friendly), so it's
-  #      NOT in the public scoped key's exclude_fields.
+  # ── Abstract / description (display body, public-safe) ─────────────────
+  # Two sources feed this one field, by design:
+  #   1. References — the real, human-written `abstract` (ReferenceMapper).
+  #      References have no OCR; the abstract IS the body text.
+  #   2. Primary sources (articles / documents / audiovisual) — the
+  #      AI-generated `descriptionAI` summary (addDescription() in the
+  #      mappers). A short clean French précis, distinct from the
+  #      licensing-restricted OCR.
+  # Visible in public results (NOT in the scoped key's exclude_fields) so
+  # the result card can show a couple of lines for every type. Also in
+  # query_by, so the summary lightly improves recall.
   - { name: abstract,    type: string, locale: fr, optional: true }
   # The 9 RDF classes that appear in the references subset:
   #   Article de revue · Chapitre · Thèse · Livre · Rapport ·

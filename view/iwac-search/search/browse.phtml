@@ -8,21 +8,38 @@
  * client mounts via the shared common/iwac-search-mount partial.
  */
 
-$this->headTitle($config->title . ' · Browse · Islam West Africa Collection');
+use IwacSearch\Browse\BrowseContent;
+
+$locale  = $this->iwacLocale();
+$content = BrowseContent::localize($config, $locale);
+$site    = $this->currentSite();
+
+// French sites read /parcourir, everything else /browse — both hit the
+// same controller. Build the landing-page link for the breadcrumb.
+$browseWord  = $locale === 'en' ? 'Browse' : 'Parcourir';
+$browseTitle = $locale === 'en' ? 'Browse' : 'Parcourir';
+if ($site) {
+    $landingRoute = $locale === 'en' ? 'site/iwac-browse' : 'site/iwac-parcourir';
+    $landingUrl   = $this->url($landingRoute, ['site-slug' => $site->slug()]);
+} else {
+    $landingUrl = $this->basePath($locale === 'en' ? '/browse' : '/parcourir');
+}
+
+$this->headTitle($content['title'] . ' · ' . $browseTitle . ' · Islam West Africa Collection');
 $blockId = (string) $bootstrap['block_id'];
 ?>
 <main class="iwac-search-shell iwac-browse-page" role="main">
     <nav class="iwac-browse-page__crumbs" aria-label="Breadcrumb">
-        <a href="<?= $this->escapeHtmlAttr($this->basePath('/browse')) ?>">Browse</a>
+        <a href="<?= $this->escapeHtmlAttr($landingUrl) ?>"><?= $this->escapeHtml($browseWord) ?></a>
         <span aria-hidden="true">›</span>
-        <span><?= $this->escapeHtml($config->title) ?></span>
+        <span><?= $this->escapeHtml($content['title']) ?></span>
     </nav>
 
     <header class="iwac-browse-page__header">
-        <h1 class="iwac-search-block__title"><?= $this->escapeHtml($config->title) ?></h1>
-        <?php if ($config->introHtml !== ''): ?>
+        <h1 class="iwac-search-block__title"><?= $this->escapeHtml($content['title']) ?></h1>
+        <?php if ($content['introHtml'] !== ''): ?>
             <div class="iwac-browse-page__intro">
-                <?= $config->introHtml /* admin-authored, intentional raw HTML */ ?>
+                <?= $content['introHtml'] /* localized template / admin-authored, intentional raw HTML */ ?>
             </div>
         <?php endif; ?>
     </header>

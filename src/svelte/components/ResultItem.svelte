@@ -1,20 +1,6 @@
-<script module lang="ts">
-  /**
-   * Display labels for the schema's `type_s` enum. Kept here (next to the
-   * card that renders them) rather than in lib/labels because they're only
-   * used in this component — and grouping them with the badge styling
-   * keeps the i18n surface compact.
-   */
-  const TYPE_LABEL: Readonly<Record<string, string>> = {
-    article: 'Article',
-    publication: 'Publication',
-    document: 'Document',
-    audiovisual: 'Audiovisual',
-  };
-</script>
-
 <script lang="ts">
   import type { IwacHit } from '../lib/types';
+  import { typeLabel as typeLabelFor, useI18n } from '../lib/i18n';
 
   /**
    * One result rendered as a card.
@@ -52,11 +38,13 @@
 
   const { hit }: Props = $props();
 
+  const { locale, t } = useI18n();
+
   const doc = $derived(hit.document);
-  const title = $derived(doc.title || `[Untitled #${doc.id}]`);
+  const title = $derived(doc.title || t('untitled', { id: doc.id }));
   const dateLabel = $derived(formatDate(doc.date, doc.pub_year));
   const typeKey = $derived(doc.type_s ?? '');
-  const typeLabel = $derived(TYPE_LABEL[typeKey] ?? '');
+  const typeLabel = $derived(typeKey ? typeLabelFor(typeKey, locale) : '');
   // Compact source line: Newspaper · Country. Kept inside the body so
   // the eyebrow row above the title only carries the date + type chip
   // — too many tokens up there reads as visual noise.
@@ -69,6 +57,11 @@
       '',
   );
   const snippet = $derived(sanitizeSnippet(rawSnippet));
+  // Card body: prefer the query-match snippet (shows WHY this hit matched);
+  // fall back to the abstract/description so browse-mode cards (no query,
+  // no highlight) still show a couple of lines of context. The abstract is
+  // plain text — Svelte escapes it — whereas the snippet carries <mark>.
+  const abstract = $derived((doc.abstract ?? '').trim());
   const itemUrl = $derived(doc.omeka_url || `/s/afrique_ouest/item/${doc.id}`);
 
   function formatDate(epoch?: number, year?: number): string {
@@ -142,10 +135,12 @@
       <!-- snippet was HTML-escaped client-side; only literal mark tags survive (see sanitizeSnippet) -->
       <!-- eslint-disable-next-line svelte/no-at-html-tags -->
       <p class="iwac-card__snippet">{@html snippet}</p>
+    {:else if abstract}
+      <p class="iwac-card__snippet iwac-card__snippet--abstract">{abstract}</p>
     {/if}
 
     {#if sourceChips.length > 0}
-      <ul class="iwac-card__source" aria-label="Source">
+      <ul class="iwac-card__source" aria-label={t('source')}>
         {#each sourceChips as chip (chip)}
           <li class="iwac-card__chip">{chip}</li>
         {/each}
@@ -283,6 +278,13 @@
     line-clamp: 3;
     -webkit-box-orient: vertical;
     overflow: hidden;
+  }
+  /* The abstract/description fallback reads as supporting context, so
+     clamp it tighter ("a couple of lines") than a query-match snippet. */
+  .iwac-card__snippet--abstract {
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    color: var(--muted, #666);
   }
   .iwac-card__snippet :global(mark) {
     background: color-mix(in srgb, var(--primary, #c66) var(--accent-mix-subtle, 25%), transparent);

@@ -1,22 +1,11 @@
-<script module lang="ts">
-  /**
-   * Map a Typesense `sort_by` string to a UI label.
-   * Single source of truth for the dropdown.
-   */
-  export const SORT_OPTIONS: ReadonlyArray<{ value: string; label: string }> = [
-    { value: '_text_match:desc', label: 'Relevance' },
-    { value: 'date:desc', label: 'Newest first' },
-    { value: 'date:asc', label: 'Oldest first' },
-  ];
-</script>
-
 <script lang="ts">
   /**
    * Sort dropdown — sits at the top-right of the results column.
    *
-   * Kept tiny on purpose: M5 may add "by sentiment", "by relevance + date
-   * tie-break", etc. Adding a new option = one line in SORT_OPTIONS.
+   * Options + labels come from the locale-aware sortOptions() helper, so
+   * adding a new sort order is one line in lib/i18n.ts.
    */
+  import { sortOptions, useI18n } from '../lib/i18n';
 
   interface Props {
     value: string;
@@ -24,16 +13,19 @@
   }
 
   const { value, onChange }: Props = $props();
+
+  const { locale, t } = useI18n();
+  const options = $derived(sortOptions(locale));
 </script>
 
 <label class="iwac-sort">
-  <span class="iwac-sort__label">Sort by</span>
+  <span class="iwac-sort__label">{t('sort_by')}</span>
   <select
     class="iwac-sort__select"
     {value}
     onchange={(e) => onChange((e.currentTarget as HTMLSelectElement).value)}
   >
-    {#each SORT_OPTIONS as opt (opt.value)}
+    {#each options as opt (opt.value)}
       <option value={opt.value}>{opt.label}</option>
     {/each}
   </select>

@@ -62,7 +62,11 @@ class SearchController extends AbstractActionController
                 'persons_ss',            // persons
                 'organisations_ss',      // organisations
                 'topics_ss',             // subjects
-                'gemini_polarite_ss',    // sentiment (Gemini default; chatgpt/mistral available as alt)
+                // Sentiment trio — grouped under one collapsible section
+                // in the client (Gemini model; chatgpt/mistral available).
+                'gemini_polarite_ss',    // polarity
+                'gemini_centralite_ss',  // centrality (of Islam/Muslims)
+                'gemini_subjectivite',   // subjectivity (1–5)
             ],
             'default_sort'     => '_text_match:desc',
             'results_per_page' => 10,
