@@ -305,10 +305,13 @@
   .iwac-daterange__track {
     position: relative;
     height: 1.5rem;
-    /* Padding-inline gives the thumbs room to centre on the 0% / 100% bounds
-       while staying inside the panel. No negative margin: that bled the track
-       past the panel's content edge (overflowing left and colliding with the
-       results scrollbar on the right). */
+    /* Inset the track by one thumb-radius (0.625rem) so the centred thumbs
+       (transform: translateX(-50%)) at the 0% / 100% bounds sit flush INSIDE
+       the panel, aligned with the other facet rows, instead of overhanging the
+       content edge by half a thumb — that overhang was clipped by the sidebar's
+       overflow and read as a missing left gutter. padding-inline keeps the
+       drawn line + fill aligned within that inset track. */
+    margin-inline: 0.625rem;
     padding-inline: 0.625rem;
     cursor: pointer;
     touch-action: pan-y; /* allow vertical scroll, capture horizontal drags */
