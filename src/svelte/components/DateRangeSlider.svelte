@@ -305,9 +305,11 @@
   .iwac-daterange__track {
     position: relative;
     height: 1.5rem;
-    /* Padding-inline so the thumbs don't get clipped at the bounds. */
+    /* Padding-inline gives the thumbs room to centre on the 0% / 100% bounds
+       while staying inside the panel. No negative margin: that bled the track
+       past the panel's content edge (overflowing left and colliding with the
+       results scrollbar on the right). */
     padding-inline: 0.625rem;
-    margin-inline: -0.625rem;
     cursor: pointer;
     touch-action: pan-y; /* allow vertical scroll, capture horizontal drags */
   }

@@ -40,7 +40,7 @@ export type Translate = (key: string, vars?: Record<string, string | number>) =>
 
 const STRINGS: Record<Locale, Record<string, string>> = {
   fr: {
-    search_placeholder: 'Rechercher dans les archives IWAC…',
+    search_placeholder: "Rechercher dans l'IWAC…",
     search_unavailable: 'Recherche indisponible.',
     filters: 'Filtres',
     open_filters: 'Ouvrir les filtres',
@@ -98,7 +98,7 @@ const STRINGS: Record<Locale, Record<string, string>> = {
     sort_most_recent: 'Plus récent',
   },
   en: {
-    search_placeholder: 'Search the IWAC archive…',
+    search_placeholder: 'Search the IWAC…',
     search_unavailable: 'Search unavailable.',
     filters: 'Filters',
     open_filters: 'Open filters',

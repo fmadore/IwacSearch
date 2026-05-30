@@ -134,7 +134,10 @@
     position: fixed;
     inset: 0;
     background: rgba(0, 0, 0, 0.35);
-    z-index: 100;
+    /* Above the IWAC-theme sticky header (z-index 200) and its menu-drawer
+       (300) so the filter drawer overlays the page chrome instead of sliding
+       in behind the sticky header (it appeared cut off under it on mobile). */
+    z-index: 400;
     animation: iwac-drawer-fade-in 150ms ease;
   }
   .iwac-drawer {
@@ -142,7 +145,7 @@
     inset-block: 0;
     width: var(--iwac-drawer-width, min(42rem, 100vw));
     background: var(--surface, #fff);
-    z-index: 101;
+    z-index: 401;
     display: flex;
     flex-direction: column;
   }

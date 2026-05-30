@@ -256,14 +256,14 @@ class HeaderSearch {
 
     if (row.kind === 'search') {
       el.classList.add('iwac-header-suggest__item--search');
-      const icon = document.createElement('span');
-      icon.className = 'iwac-header-suggest__icon';
-      icon.setAttribute('aria-hidden', 'true');
-      icon.textContent = '⌕';
+      // No leading magnifying-glass here: the header input already has its
+      // own search-submit icon right above the panel, so a second ⌕ on this
+      // row read as a duplicated search icon. The bold "Search for «q»" label
+      // carries the affordance on its own (entity rows are text + tag too).
       const title = document.createElement('span');
       title.className = 'iwac-header-suggest__title';
       title.textContent = translate(this.locale, 'search_for', { q });
-      el.append(icon, title);
+      el.append(title);
     } else if (row.kind === 'entity') {
       el.classList.add('iwac-header-suggest__item--entity');
       const title = document.createElement('span');
