@@ -241,6 +241,9 @@ class Module extends AbstractModule
         $allStats = (new Browse\AllCountriesSeeder($repository, $logger))->seed();
         $logger->info('IwacSearch all-countries browse page seeded', $allStats);
 
+        $indexStats = (new Browse\IndexSeeder($repository, $logger))->seed();
+        $logger->info('IwacSearch index browse page seeded', $indexStats);
+
         $refStats = (new Browse\ReferencesSeeder($repository, $logger))->seed();
         $logger->info('IwacSearch references browse page seeded', $refStats);
     }
@@ -304,6 +307,18 @@ class Module extends AbstractModule
                 ));
                 $logger->info('IwacSearch refreshed browse facets on upgrade', ['slug' => $slug]);
             }
+        }
+
+        // 0.2.23 added the Index browse page (entity collection). Seed it on
+        // upgrade. NOTE: the entity collection itself is built by the next
+        // discovery:reindex run (it now builds both collections) — until
+        // then the page renders but returns no entities.
+        if (version_compare((string) $oldVersion, '0.2.23', '<')) {
+            $connection = $services->get('Omeka\Connection');
+            $repository = new Browse\BrowseConfigRepository($connection);
+            $logger = LoggerResolver::fromContainer($services);
+            $stats = (new Browse\IndexSeeder($repository, $logger))->seed();
+            $logger->info('IwacSearch index browse page seeded on upgrade', $stats);
         }
     }
 

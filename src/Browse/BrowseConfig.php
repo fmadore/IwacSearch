@@ -3,6 +3,8 @@ declare(strict_types=1);
 
 namespace IwacSearch\Browse;
 
+use IwacSearch\Search\SearchDefaults;
+
 /**
  * Read-only DTO for one row of `iwac_browse_config`.
  *
@@ -41,16 +43,28 @@ final class BrowseConfig
      *
      * @return array<string, mixed>
      */
-    public function toBootstrap(string $collectionAlias, string $tokenEndpoint, string $searchEndpoint): array
-    {
+    public function toBootstrap(
+        string $collectionAlias,
+        string $tokenEndpoint,
+        string $searchEndpoint,
+        string $card = 'content',
+        ?string $queryBy = null,
+        ?string $highlightFields = null,
+        ?string $indexCollectionAlias = null
+    ): array {
         return [
             'block_id'         => 'browse-' . ($this->id ?? 'preview'),
             'mode'             => 'full',
+            'card'             => $card,
             'locked_filters'   => $this->lockedFilters,
             'prominent_facets' => $this->prominentFacets,
             'default_sort'     => $this->defaultSort,
             'results_per_page' => $this->resultsPerPage,
             'collection_alias' => $collectionAlias,
+            'index_collection_alias' => $indexCollectionAlias,
+            // Field sets for THIS surface's collection (entity vs content).
+            'query_by'         => $queryBy ?? SearchDefaults::CONTENT_QUERY_BY,
+            'highlight_fields' => $highlightFields ?? SearchDefaults::CONTENT_HIGHLIGHT_FIELDS,
             'endpoints' => [
                 'token'  => $tokenEndpoint,
                 'search' => $searchEndpoint,

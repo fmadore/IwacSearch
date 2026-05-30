@@ -318,6 +318,9 @@ return [
             'protocol'         => 'http',
             'api_key_file'     => '/run/secrets/typesense_api_key',
             'collection_alias' => 'iwac_current',
+            // Second collection: the index/authority entities, built by
+            // IndexReindexer and browsed via the /browse/index page.
+            'index_collection_alias' => 'iwac_index_current',
         ],
         'public_search_key' => [
             // Constraints baked into every public scoped key. See "Security

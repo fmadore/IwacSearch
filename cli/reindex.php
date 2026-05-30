@@ -26,9 +26,11 @@ declare(strict_types=1);
 
 use IwacSearch\Indexer\AuthorityResolver;
 use IwacSearch\Indexer\HfDatasetLoader;
+use IwacSearch\Indexer\IndexReindexer;
 use IwacSearch\Indexer\Mapper\ArticleMapper;
 use IwacSearch\Indexer\Mapper\AudiovisualMapper;
 use IwacSearch\Indexer\Mapper\DocumentMapper;
+use IwacSearch\Indexer\Mapper\IndexEntityMapper;
 use IwacSearch\Indexer\Mapper\MapperRegistry;
 use IwacSearch\Indexer\Mapper\PublicationMapper;
 use IwacSearch\Indexer\Mapper\ReferenceMapper;
@@ -103,19 +105,35 @@ try {
         new ReferenceMapper($authority),
     ]);
 
+    // Shared across both reindexers so the public-item set is fetched once.
+    $hfLoader  = new HfDatasetLoader();
+    $aclLoader = new OmekaAclLoader($omekaApiUrl, $logger);
+
     $reindexer = new Reindexer(
         typesense:     $typesense,
         schemaLoader:  new SchemaLoader($moduleRoot . '/data/schema.yaml'),
-        hfLoader:      new HfDatasetLoader(),
+        hfLoader:      $hfLoader,
         mappers:       $registry,
         // Same instance held by every mapper in the registry. Reindexer
         // populates it via build() in run(); mappers see the data through
         // the shared reference. The only mutable singleton in the
         // indexer; everything else is immutable after construction.
         authority:     $authority,
-        aclLoader:     new OmekaAclLoader($omekaApiUrl, $logger),
+        aclLoader:     $aclLoader,
         stopwordsSync: new StopwordsSync($typesense, $moduleRoot . '/data/stopwords-fr.json', $logger),
         logger:        $logger
+    );
+
+    // Entity (index) collection — built on the same run, reusing the primed
+    // ACL loader. Independent alias swap: a failure here cannot affect the
+    // content alias already swapped by the content reindex above.
+    $indexReindexer = new IndexReindexer(
+        typesense:    $typesense,
+        schemaLoader: new SchemaLoader($moduleRoot . '/data/schema-index.yaml'),
+        hfLoader:     $hfLoader,
+        mapper:       new IndexEntityMapper(),
+        aclLoader:    $aclLoader,
+        logger:       $logger
     );
 
     $logger->info('Starting reindex', [
@@ -123,6 +141,7 @@ try {
         'omeka_api'      => $omekaApiUrl,
     ]);
     $stats = $reindexer->run();
+    $stats['index'] = $indexReindexer->run();
     $logger->info('Reindex complete', $stats);
 
     fwrite(STDOUT, json_encode($stats, JSON_PRETTY_PRINT) . "\n");

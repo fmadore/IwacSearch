@@ -14,8 +14,8 @@
 
   const { value, onChange }: Props = $props();
 
-  const { locale, t } = useI18n();
-  const options = $derived(sortOptions(locale));
+  const { locale, card, t } = useI18n();
+  const options = $derived(sortOptions(locale, card));
 </script>
 
 <label class="iwac-sort">

@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { IwacHit } from '../lib/types';
-  import { typeLabel as typeLabelFor, useI18n } from '../lib/i18n';
+  import { entityTypeLabel, typeLabel as typeLabelFor, useI18n } from '../lib/i18n';
 
   /**
    * One result rendered as a card.
@@ -38,13 +38,30 @@
 
   const { hit }: Props = $props();
 
-  const { locale, t } = useI18n();
+  const { locale, card, t } = useI18n();
 
   const doc = $derived(hit.document);
   const title = $derived(doc.title || t('untitled', { id: doc.id }));
   const dateLabel = $derived(formatDate(doc.date, doc.pub_year));
   const typeKey = $derived(doc.type_s ?? '');
   const typeLabel = $derived(typeKey ? typeLabelFor(typeKey, locale) : '');
+
+  // ── Entity (index) card variant ──────────────────────────────────────
+  const isEntity = $derived(card === 'entity');
+  const entityType = $derived(doc.entity_type_s ? entityTypeLabel(doc.entity_type_s, locale) : '');
+  const frequency = $derived(typeof doc.frequency === 'number' ? doc.frequency : null);
+  const mentionsLabel = $derived(
+    frequency != null
+      ? t(frequency === 1 ? 'mention_one' : 'mention_other', { n: frequency.toLocaleString() })
+      : '',
+  );
+  const yearRange = $derived.by(() => {
+    const a = doc.first_year;
+    const b = doc.last_year;
+    if (a && b) return a === b ? String(a) : `${a} – ${b}`;
+    return a ? String(a) : b ? String(b) : '';
+  });
+  const entityCountries = $derived(doc.country_ss ?? []);
   // Compact source line: Newspaper · Country. Kept inside the body so
   // the eyebrow row above the title only carries the date + type chip
   // — too many tokens up there reads as visual noise.
@@ -118,33 +135,61 @@
   {/if}
 
   <div class="iwac-card__body">
-    <header class="iwac-card__head">
-      {#if dateLabel}
-        <time class="iwac-card__eyebrow">{dateLabel}</time>
+    {#if isEntity}
+      <!-- Index/authority entity card: year-span eyebrow, type badge,
+           occurrence count + countries. No body text. -->
+      <header class="iwac-card__head">
+        {#if yearRange}
+          <time class="iwac-card__eyebrow">{yearRange}</time>
+        {/if}
+        {#if entityType}
+          <span class="iwac-card__type" data-entity-type={doc.entity_type_s}>{entityType}</span>
+        {/if}
+      </header>
+
+      <h3 class="iwac-card__title">
+        <a href={itemUrl}>{title}</a>
+      </h3>
+
+      {#if mentionsLabel || entityCountries.length > 0}
+        <ul class="iwac-card__source" aria-label={t('source')}>
+          {#if mentionsLabel}
+            <li class="iwac-card__chip iwac-card__chip--count">{mentionsLabel}</li>
+          {/if}
+          {#each entityCountries as c (c)}
+            <li class="iwac-card__chip">{c}</li>
+          {/each}
+        </ul>
       {/if}
-      {#if typeLabel}
-        <span class="iwac-card__type" data-type={typeKey}>{typeLabel}</span>
+    {:else}
+      <header class="iwac-card__head">
+        {#if dateLabel}
+          <time class="iwac-card__eyebrow">{dateLabel}</time>
+        {/if}
+        {#if typeLabel}
+          <span class="iwac-card__type" data-type={typeKey}>{typeLabel}</span>
+        {/if}
+      </header>
+
+      <h3 class="iwac-card__title">
+        <a href={itemUrl}>{title}</a>
+      </h3>
+
+      {#if snippet}
+        <!-- snippet was HTML-escaped client-side; only literal mark tags survive (see sanitizeSnippet) -->
+        <!-- eslint-disable-next-line svelte/no-at-html-tags -->
+        <p class="iwac-card__snippet">{@html snippet}</p>
+      {:else if abstract}
+        <p class="iwac-card__snippet iwac-card__snippet--abstract">{abstract}</p>
       {/if}
-    </header>
 
-    <h3 class="iwac-card__title">
-      <a href={itemUrl}>{title}</a>
-    </h3>
-
-    {#if snippet}
-      <!-- snippet was HTML-escaped client-side; only literal mark tags survive (see sanitizeSnippet) -->
-      <!-- eslint-disable-next-line svelte/no-at-html-tags -->
-      <p class="iwac-card__snippet">{@html snippet}</p>
-    {:else if abstract}
-      <p class="iwac-card__snippet iwac-card__snippet--abstract">{abstract}</p>
-    {/if}
-
-    {#if sourceChips.length > 0}
-      <ul class="iwac-card__source" aria-label={t('source')}>
-        {#each sourceChips as chip (chip)}
-          <li class="iwac-card__chip">{chip}</li>
-        {/each}
-      </ul>
+      {#if sourceChips.length > 0}
+        <ul class="iwac-card__source" aria-label={t('source')}>
+          {#each sourceChips as chip (chip)}
+            <li class="iwac-card__chip">{chip}</li>
+          {/each}
+        </ul>
+      {/if}
     {/if}
   </div>
 </article>
@@ -249,6 +294,17 @@
   .iwac-card__type[data-type='document'] {
     background: color-mix(in srgb, var(--warning, #e89c4a) 18%, var(--surface, #fff));
   }
+  /* Entity-type tints so persons / places / organisations read distinctly
+     when scanning the index. */
+  .iwac-card__type[data-entity-type='Personnes'] {
+    background: color-mix(in srgb, var(--info, #4a90c8) 18%, var(--surface, #fff));
+  }
+  .iwac-card__type[data-entity-type='Lieux'] {
+    background: color-mix(in srgb, var(--success, #6cc18b) 18%, var(--surface, #fff));
+  }
+  .iwac-card__type[data-entity-type='Organisations'] {
+    background: color-mix(in srgb, var(--warning, #e89c4a) 18%, var(--surface, #fff));
+  }
 
   .iwac-card__title {
     margin: 0;
@@ -311,6 +367,13 @@
     font-size: var(--text-xs, 0.75rem);
     font-weight: 500;
     line-height: 1.4;
+  }
+  /* Occurrence count on entity cards — the headline metric, so tint it. */
+  .iwac-card__chip--count {
+    background: color-mix(in srgb, var(--primary, #c66) 14%, var(--surface, #fff));
+    color: var(--ink-strong, var(--ink, #222));
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
   }
 
   /* Narrow viewport: stack the thumb on top so titles get full width. */

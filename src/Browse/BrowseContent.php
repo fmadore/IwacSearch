@@ -20,6 +20,7 @@ final class BrowseContent
 {
     public const ALL_SLUG        = 'all';
     public const REFERENCES_SLUG = 'references';
+    public const INDEX_SLUG      = 'index';
 
     /**
      * @return array{title: string, introHtml: string}
@@ -49,6 +50,13 @@ final class BrowseContent
             return [
                 'title'     => $locale === 'en' ? 'All countries' : 'Tous les pays',
                 'introHtml' => self::allIntro($locale),
+            ];
+        }
+
+        if ($slug === self::INDEX_SLUG) {
+            return [
+                'title'     => 'Index', // same word in both locales
+                'introHtml' => self::indexIntro($locale),
             ];
         }
 
@@ -104,6 +112,19 @@ final class BrowseContent
             . 'confondus — articles de presse, périodiques islamiques, documents audiovisuels '
             . 'et sources primaires. Utilisez le filtre Pays pour vous concentrer sur un seul '
             . 'pays.</p>';
+    }
+
+    private static function indexIntro(string $locale): string
+    {
+        if ($locale === 'en') {
+            return '<p>Browse the people, places, organisations, events and topics that '
+                . 'appear across the Islam West Africa Collection, ranked by how often they '
+                . 'are mentioned. Use the Type facet to focus on one kind of entity.</p>';
+        }
+        return "<p>Parcourez les personnes, lieux, organisations, événements et thèmes qui "
+            . "apparaissent dans la Collection Islam Afrique de l'Ouest, classés selon leur "
+            . 'fréquence de mention. Utilisez le filtre Type pour vous concentrer sur un type '
+            . "d'entité.</p>";
     }
 
     private static function esc(string $s): string

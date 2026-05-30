@@ -17,7 +17,7 @@
   } from './lib/types';
   import { TypesenseClient } from './lib/typesense';
   import { onUrlPop, readUrlState, syncToUrl } from './lib/urlState';
-  import { normalizeLocale, provideI18n } from './lib/i18n';
+  import { normalizeCard, normalizeLocale, provideI18n } from './lib/i18n';
   import SearchInput from './components/SearchInput.svelte';
   import SuggestDropdown from './components/SuggestDropdown.svelte';
   import ResultsList from './components/ResultsList.svelte';
@@ -54,7 +54,7 @@
   // once at init from the server-detected bootstrap locale (defaults to
   // French). svelte-ignore: bootstrap is a prop, not reactive state.
   // svelte-ignore state_referenced_locally
-  const { t } = provideI18n(normalizeLocale(bootstrap.locale));
+  const { t } = provideI18n(normalizeLocale(bootstrap.locale), normalizeCard(bootstrap.card));
 
   const isStandalone = $derived(String(bootstrap.block_id) === 'standalone');
 

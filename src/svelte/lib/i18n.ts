@@ -21,8 +21,15 @@ import { getContext, setContext } from 'svelte';
 
 export type Locale = 'fr' | 'en';
 
+/** Which card vocabulary + sort options a surface renders. */
+export type CardKind = 'content' | 'entity';
+
 export function normalizeLocale(value: unknown): Locale {
   return value === 'en' ? 'en' : 'fr';
+}
+
+export function normalizeCard(value: unknown): CardKind {
+  return value === 'entity' ? 'entity' : 'content';
 }
 
 /** Translator bound to a locale — `t('clear_all')`, `t('page_n', {n: 3})`. */
@@ -83,6 +90,12 @@ const STRINGS: Record<Locale, Record<string, string>> = {
     cap_note:
       'Affichage des {cap} premières correspondances — affinez votre recherche pour atteindre les autres.',
     sentiment: 'Sentiment',
+    mention_one: '{n} mention',
+    mention_other: '{n} mentions',
+    sort_most_mentioned: 'Plus mentionné',
+    sort_least_mentioned: 'Moins mentionné',
+    sort_az: 'A–Z',
+    sort_most_recent: 'Plus récent',
   },
   en: {
     search_placeholder: 'Search the IWAC archive…',
@@ -134,6 +147,12 @@ const STRINGS: Record<Locale, Record<string, string>> = {
     results_empty_list: 'No matches. Try a different word or remove a filter.',
     cap_note: 'Showing the first {cap} matches — narrow your search to reach the rest.',
     sentiment: 'Sentiment',
+    mention_one: '{n} mention',
+    mention_other: '{n} mentions',
+    sort_most_mentioned: 'Most mentioned',
+    sort_least_mentioned: 'Least mentioned',
+    sort_az: 'A–Z',
+    sort_most_recent: 'Most recent',
   },
 };
 
@@ -167,6 +186,7 @@ const FACET_LABELS: Record<Locale, Record<string, string>> = {
     date_decade_ss: 'Décennie',
     pub_year: 'Année',
     type_s: 'Type',
+    entity_type_s: 'Type',
     reference_type_ss: 'Type de référence',
     lda_topic_label: 'Thème (LDA)',
     creator_ss: 'Auteur',
@@ -190,6 +210,7 @@ const FACET_LABELS: Record<Locale, Record<string, string>> = {
     date_decade_ss: 'Decade',
     pub_year: 'Year',
     type_s: 'Type',
+    entity_type_s: 'Type',
     reference_type_ss: 'Reference type',
     lda_topic_label: 'LDA topic',
     creator_ss: 'Author',
@@ -259,7 +280,48 @@ export function typeLabel(value: string, locale: Locale): string {
   return TYPE_LABELS[locale]?.[value] ?? TYPE_LABELS.fr[value] ?? '';
 }
 
-export function sortOptions(locale: Locale): ReadonlyArray<{ value: string; label: string }> {
+// ── Index/authority entity type labels (entity_type_s values) ──────────
+// The raw values are French data strings; English gets translations.
+
+const ENTITY_TYPE_LABELS: Record<Locale, Record<string, string>> = {
+  fr: {
+    Personnes: 'Personnes',
+    Lieux: 'Lieux',
+    Organisations: 'Organisations',
+    Événements: 'Événements',
+    Sujets: 'Sujets',
+    "Notices d'autorité": "Notices d'autorité",
+  },
+  en: {
+    Personnes: 'People',
+    Lieux: 'Places',
+    Organisations: 'Organisations',
+    Événements: 'Events',
+    Sujets: 'Topics',
+    "Notices d'autorité": 'Authority records',
+  },
+};
+
+export function entityTypeLabel(value: string, locale: Locale): string {
+  return ENTITY_TYPE_LABELS[locale]?.[value] ?? value;
+}
+
+/**
+ * Sort options for the surface. The entity (index) browse page sorts by
+ * occurrence frequency and name; content surfaces by relevance + date.
+ */
+export function sortOptions(
+  locale: Locale,
+  card: CardKind = 'content',
+): ReadonlyArray<{ value: string; label: string }> {
+  if (card === 'entity') {
+    return [
+      { value: 'frequency:desc', label: translate(locale, 'sort_most_mentioned') },
+      { value: 'frequency:asc', label: translate(locale, 'sort_least_mentioned') },
+      { value: 'title:asc', label: translate(locale, 'sort_az') },
+      { value: 'date:desc', label: translate(locale, 'sort_most_recent') },
+    ];
+  }
   return [
     { value: '_text_match:desc', label: translate(locale, 'sort_relevance') },
     { value: 'date:desc', label: translate(locale, 'sort_newest') },
@@ -280,23 +342,25 @@ function humanise(field: string): string {
 
 interface I18nContext {
   locale: Locale;
+  card: CardKind;
   t: Translate;
 }
 
 const I18N_KEY = Symbol('iwac-i18n');
 
 /** Call once in App.svelte during init. */
-export function provideI18n(locale: Locale): I18nContext {
-  const ctx: I18nContext = { locale, t: (key, vars) => translate(locale, key, vars) };
+export function provideI18n(locale: Locale, card: CardKind = 'content'): I18nContext {
+  const ctx: I18nContext = { locale, card, t: (key, vars) => translate(locale, key, vars) };
   setContext(I18N_KEY, ctx);
   return ctx;
 }
 
-/** Read in any descendant component during init. Falls back to French. */
+/** Read in any descendant component during init. Falls back to French content. */
 export function useI18n(): I18nContext {
   return (
     getContext<I18nContext | undefined>(I18N_KEY) ?? {
       locale: 'fr',
+      card: 'content',
       t: (key, vars) => translate('fr', key, vars),
     }
   );

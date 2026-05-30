@@ -6,9 +6,11 @@ namespace IwacSearch\Job;
 use IwacSearch\Indexer\ApiOmekaAclLoader;
 use IwacSearch\Indexer\AuthorityResolver;
 use IwacSearch\Indexer\HfDatasetLoader;
+use IwacSearch\Indexer\IndexReindexer;
 use IwacSearch\Indexer\Mapper\ArticleMapper;
 use IwacSearch\Indexer\Mapper\AudiovisualMapper;
 use IwacSearch\Indexer\Mapper\DocumentMapper;
+use IwacSearch\Indexer\Mapper\IndexEntityMapper;
 use IwacSearch\Indexer\Mapper\MapperRegistry;
 use IwacSearch\Indexer\Mapper\PublicationMapper;
 use IwacSearch\Indexer\Mapper\ReferenceMapper;
@@ -62,19 +64,34 @@ class BulkReindex extends AbstractJob
             new ReferenceMapper($authority),
         ]);
 
+        // Shared across both reindexers so the public-item set is fetched
+        // once. ApiManager-backed loader, NOT HTTP: the container running
+        // this job has no route back to islam.zmo.de — outbound HTTP to the
+        // public API fails with a connection error. The in-process Api
+        // Manager bypasses HTTP entirely.
+        $hfLoader  = new HfDatasetLoader();
+        $aclLoader = new ApiOmekaAclLoader($api, $logger);
+
         $reindexer = new Reindexer(
             typesense:     $typesense,
             schemaLoader:  new SchemaLoader($moduleRoot . '/data/schema.yaml'),
-            hfLoader:      new HfDatasetLoader(),
+            hfLoader:      $hfLoader,
             mappers:       $registry,
             authority:     $authority,
-            // ApiManager-backed loader, NOT HTTP. The container running
-            // this job has no route back to islam.zmo.de — outbound HTTP
-            // to the public API fails with a connection error. The
-            // in-process Api Manager bypasses HTTP entirely.
-            aclLoader:     new ApiOmekaAclLoader($api, $logger),
+            aclLoader:     $aclLoader,
             stopwordsSync: new StopwordsSync($typesense, $moduleRoot . '/data/stopwords-fr.json', $logger),
             logger:        $logger
+        );
+
+        // Entity (index) collection — built on the same run, reusing the
+        // primed ACL loader. Independent alias swap.
+        $indexReindexer = new IndexReindexer(
+            typesense:    $typesense,
+            schemaLoader: new SchemaLoader($moduleRoot . '/data/schema-index.yaml'),
+            hfLoader:     $hfLoader,
+            mapper:       new IndexEntityMapper(),
+            aclLoader:    $aclLoader,
+            logger:       $logger
         );
 
         $logger->info('IwacSearch: starting bulk reindex from Omeka job', [
@@ -84,6 +101,7 @@ class BulkReindex extends AbstractJob
 
         try {
             $stats = $reindexer->run();
+            $stats['index'] = $indexReindexer->run();
         } catch (Throwable $e) {
             $logger->error('IwacSearch: reindex failed', [
                 'class'   => $e::class,

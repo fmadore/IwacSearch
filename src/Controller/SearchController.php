@@ -4,7 +4,9 @@ declare(strict_types=1);
 namespace IwacSearch\Controller;
 
 use IwacSearch\Browse\BrowseConfigRepository;
+use IwacSearch\Browse\IndexSeeder;
 use IwacSearch\Search\InitialResponseRenderer;
+use IwacSearch\Search\SearchDefaults;
 use IwacSearch\Search\TypesenseSearchKeyProvider;
 use IwacSearch\Util\ExceptionMessage;
 use Laminas\Http\Response;
@@ -71,6 +73,8 @@ class SearchController extends AbstractActionController
             'default_sort'     => '_text_match:desc',
             'results_per_page' => 10,
             'collection_alias' => $aliasName,
+            // Entity collection — lets the autocomplete federate to it.
+            'index_collection_alias' => $this->config['typesense']['index_collection_alias'] ?? 'iwac_index_current',
             'endpoints' => [
                 // basePath() is set by the renderer at view time; we'd
                 // prefer to compute these in the view, but pre-baking them
@@ -184,10 +188,21 @@ class SearchController extends AbstractActionController
             return $view;
         }
 
+        // The Index page targets the SEPARATE entity collection and renders
+        // entity cards; every other browse page is content.
+        $isEntity   = ($config->slug === IndexSeeder::SLUG);
+        $indexAlias = $this->config['typesense']['index_collection_alias'] ?? 'iwac_index_current';
+
         $bootstrap = $config->toBootstrap(
-            collectionAlias: $aliasName,
-            tokenEndpoint:   '/discovery/token',
-            searchEndpoint:  '/search-api/multi_search'
+            collectionAlias:      $isEntity ? $indexAlias : $aliasName,
+            tokenEndpoint:        '/discovery/token',
+            searchEndpoint:       '/search-api/multi_search',
+            card:                 $isEntity ? 'entity' : 'content',
+            queryBy:              $isEntity ? SearchDefaults::ENTITY_QUERY_BY : null,
+            highlightFields:      $isEntity ? SearchDefaults::ENTITY_HIGHLIGHT_FIELDS : null,
+            // Always advertise the entity collection so the autocomplete on
+            // content surfaces can federate to it.
+            indexCollectionAlias: $indexAlias,
         );
 
         // Curated browse pages are the biggest SSR win: the corpus is

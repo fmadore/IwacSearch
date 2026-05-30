@@ -82,6 +82,12 @@ export class TypesenseClient {
     // (newest first) unless the caller explicitly set a sort.
     const isBrowse = !args.q.trim();
     const q = isBrowse ? '*' : args.q;
+    // Per-surface field sets. The entity collection lacks ocr_text/abstract/
+    // embedding, so the index browse page passes its own query_by /
+    // highlight_fields; content surfaces fall back to the full set.
+    const queryBy =
+      this.bootstrap.query_by ?? 'title_txt,ocr_text,abstract,entity_aliases_txt,embedding';
+    const highlightFields = this.bootstrap.highlight_fields ?? 'title_txt,ocr_text';
     const sortBy =
       args.sortBy && args.sortBy !== '_text_match:desc'
         ? args.sortBy
@@ -97,12 +103,11 @@ export class TypesenseClient {
         {
           collection,
           q,
-          // Same query_by everywhere: full-text on title + ocr + abstract
-          // (the latter is the body text for references — they have no
-          // OCR), entity aliases for spelling tolerance, and the embedding
-          // field for semantic recall. Typesense ignores query_by when
-          // q=* so browse mode drops straight through.
-          query_by: 'title_txt,ocr_text,abstract,entity_aliases_txt,embedding',
+          // query_by is surface-specific (see queryBy above): content uses
+          // title + ocr + abstract + aliases + embedding; the entity
+          // collection uses only title + aliases. Typesense ignores
+          // query_by when q=* so browse mode drops straight through.
+          query_by: queryBy,
           // Stopwords keep "le", "la", "des" etc. from polluting matches.
           // Conditionally included so the recovery retry can drop it.
           ...(includeStopwords ? { stopwords: 'fr_default' } : {}),
@@ -110,7 +115,7 @@ export class TypesenseClient {
           sort_by: sortBy,
           page: args.page ?? 1,
           per_page: args.perPage ?? this.bootstrap.results_per_page,
-          highlight_fields: 'title_txt,ocr_text',
+          highlight_fields: highlightFields,
           highlight_full_fields: 'title_txt',
           snippet_threshold: 30,
           highlight_affix_num_tokens: 8,

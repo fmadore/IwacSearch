@@ -243,6 +243,9 @@ class IwacSearchBlock extends AbstractBlockLayout
             'prominent_facets' => $data['prominent_facets'] ?? [],
             'default_sort'     => $data['default_sort']     ?? '_text_match:desc',
             'results_per_page' => (int) ($data['results_per_page'] ?? 10),
+            // Entity collection alias (fixed) so the block's autocomplete can
+            // federate to the index entities like the other surfaces.
+            'index_collection_alias' => 'iwac_index_current',
             // Endpoint locations — kept here so the client doesn't hardcode
             // Omeka's URL shape, and so site admins can override later.
             'endpoints' => [

@@ -7,11 +7,26 @@ export interface IwacBootstrap {
   mode: 'full' | 'compact' | 'results-only';
   /** Site locale for UI strings + facet/type labels. Defaults to 'fr'. */
   locale?: 'fr' | 'en';
+  /**
+   * Which card + sort vocabulary to render. 'content' (default) is the
+   * article/document surface; 'entity' is the index/authority browse page
+   * (entity cards with occurrence counts, frequency-based sort).
+   */
+  card?: 'content' | 'entity';
   locked_filters: string; // raw Typesense filter_by
   prominent_facets: string[]; // schema field names
   default_sort: string; // e.g. "_text_match:desc"
   results_per_page: number;
   collection_alias?: string; // defaults to "iwac_current"
+  /** Entity collection alias — lets the autocomplete federate to it. */
+  index_collection_alias?: string;
+  /**
+   * Typesense query_by / highlight_fields for THIS surface's collection.
+   * The entity collection lacks ocr_text/abstract/embedding, so these must
+   * match the collection's schema or Typesense 404s on missing fields.
+   */
+  query_by?: string;
+  highlight_fields?: string;
   endpoints: {
     token: string; // /discovery/token (server-mounted)
     search: string; // /search-api/multi_search (proxied)
@@ -71,6 +86,14 @@ export interface IwacDoc {
   iiif_manifest?: string;
   omeka_url?: string;
   source_url?: string;
+  // ── Index/authority entity fields (entity collection only) ──
+  /** Entity kind: "Personnes" | "Lieux" | "Organisations" | … (raw data value). */
+  entity_type_s?: string;
+  /** Occurrence count — how many content items reference this entity. */
+  frequency?: number;
+  /** Mention span (years), shown as the entity card eyebrow. */
+  first_year?: number;
+  last_year?: number;
 }
 
 /**

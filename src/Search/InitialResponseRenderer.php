@@ -80,6 +80,11 @@ final class InitialResponseRenderer
             'is_string'
         ));
         $sort          = (string) ($bootstrap['default_sort'] ?? 'date:desc');
+        // Surface-specific query_by — the entity collection lacks
+        // ocr_text/abstract/embedding, so it passes its own. Even in browse
+        // mode (q=*) Typesense validates query_by field names, so this must
+        // match the target collection's schema.
+        $queryBy       = (string) ($bootstrap['query_by'] ?? SearchDefaults::CONTENT_QUERY_BY);
 
         // Empty-query browse mode → q=*, sort by date for a sane default
         // ordering (text_match is meaningless without a query). Mirrors
@@ -96,7 +101,7 @@ final class InitialResponseRenderer
             'searches' => [[
                 'collection'            => $collection,
                 'q'                     => $q,
-                'query_by'              => 'title_txt,ocr_text,abstract,entity_aliases_txt,embedding',
+                'query_by'              => $queryBy,
                 'stopwords'             => 'fr_default',
                 'filter_by'             => $filterBy,
                 'sort_by'               => $sort,
