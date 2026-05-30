@@ -133,6 +133,17 @@ class Module extends AbstractModule
             [$this, 'injectSvelteAssets']
         );
 
+        // Header-search enhancer — a tiny, separate bundle injected on EVERY
+        // public site page (not just SearchController) so the theme header
+        // search box gets the Typesense typeahead everywhere. Attached to '*'
+        // and guarded to site requests inside the handler, so admin + API
+        // layouts stay untouched.
+        $sharedEventManager->attach(
+            '*',
+            'view.layout',
+            [$this, 'injectHeaderSearchAssets']
+        );
+
         // M4 incremental indexing — handler bodies live in
         // Indexer\ItemEventListener so they're testable + so Module.php
         // doesn't accumulate listener logic. Resolving the listener
@@ -206,6 +217,69 @@ class Module extends AbstractModule
         // The compiled Svelte bundle.
         $view->headScript()->appendFile(
             $view->assetUrl('dist/iwac-search.js', 'IwacSearch'),
+            'text/javascript',
+            ['defer' => true]
+        );
+    }
+
+    /**
+     * Inject the tiny header-search enhancer on every public SITE page.
+     *
+     * Separate from injectSvelteAssets (which ships the full ~90 KB search
+     * app only on SearchController routes): the header search box lives in
+     * the theme chrome on every page, so its typeahead must load site-wide.
+     * The bundle is framework-free and small (~15 KB); it no-ops harmlessly
+     * if the active theme has no [data-iwac-header-search] form.
+     *
+     * Skips admin + API layouts via the status() helper. The inline config
+     * blob carries the (basePath-resolved) token + search endpoints and the
+     * site locale; the bundle reads it as window.IWAC_HEADER_SEARCH and the
+     * landing URL from the form's own action (set by the iwacSearchUrl
+     * helper in the theme).
+     */
+    public function injectHeaderSearchAssets(Event $event): void
+    {
+        $view = $event->getTarget();
+        if (!$view instanceof \Laminas\View\Renderer\PhpRenderer) {
+            return;
+        }
+
+        // Public site pages only — never admin / API layouts.
+        try {
+            if (!$view->status()->isSiteRequest()) {
+                return;
+            }
+        } catch (\Throwable) {
+            return;
+        }
+
+        // Endpoints are global (the site mount doesn't prefix /discovery/token
+        // or /search-api); basePath() keeps them correct under a subdirectory
+        // install. Locale picks the FR/EN dropdown strings.
+        $config = [
+            'endpoints' => [
+                'token'  => $view->basePath('/discovery/token'),
+                'search' => $view->basePath('/search-api/multi_search'),
+            ],
+            'locale' => $view->iwacLocale(),
+        ];
+        // JSON_HEX_TAG neutralises any "</script>" inside the (server-trusted)
+        // values so the inline blob can't break out of the <script> element.
+        $json = json_encode(
+            $config,
+            JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_HEX_TAG
+        );
+        if ($json === false) {
+            return;
+        }
+
+        // Config first so it's defined before the deferred bundle executes.
+        $view->headScript()->appendScript('window.IWAC_HEADER_SEARCH = ' . $json . ';');
+        $view->headLink()->appendStylesheet(
+            $view->assetUrl('dist/iwac-search-header.css', 'IwacSearch')
+        );
+        $view->headScript()->appendFile(
+            $view->assetUrl('dist/iwac-search-header.js', 'IwacSearch'),
             'text/javascript',
             ['defer' => true]
         );

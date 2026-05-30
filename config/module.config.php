@@ -246,6 +246,41 @@ return [
                             ],
                         ],
                     ],
+
+                    // Site-scoped search landing page (English sites):
+                    // /s/{site-slug}/search. The IWAC-theme header search
+                    // form posts here (via the iwacSearchUrl helper) so a
+                    // visitor who submits the header box lands on the faceted
+                    // Typesense surface inside their own language site. Same
+                    // controller/action as the global /search route;
+                    // readUrlState() hydrates ?q= + ?f.<field>= deep links
+                    // on the client, so no extra controller wiring is needed.
+                    'iwac-search' => [
+                        'type'    => \Laminas\Router\Http\Literal::class,
+                        'options' => [
+                            'route'    => '/search',
+                            'defaults' => [
+                                '__NAMESPACE__' => 'IwacSearch\Controller',
+                                'controller'    => Controller\SearchController::class,
+                                'action'        => 'index',
+                            ],
+                        ],
+                    ],
+                    // French alias: /s/{site-slug}/recherche. The French site
+                    // (afrique_ouest) links here; iwacLocale() maps the slug
+                    // to pick /recherche vs /search — mirrors /parcourir vs
+                    // /browse.
+                    'iwac-recherche' => [
+                        'type'    => \Laminas\Router\Http\Literal::class,
+                        'options' => [
+                            'route'    => '/recherche',
+                            'defaults' => [
+                                '__NAMESPACE__' => 'IwacSearch\Controller',
+                                'controller'    => Controller\SearchController::class,
+                                'action'        => 'index',
+                            ],
+                        ],
+                    ],
                 ],
             ],
         ],
@@ -266,6 +301,10 @@ return [
             // Resolves 'fr' | 'en' from the current site for UI strings +
             // the /parcourir vs /browse route choice.
             'iwacLocale'        => View\Helper\IwacLocale::class,
+            // Builds the locale-correct search landing URL for the current
+            // site (FR → /recherche, EN → /search). Called by the IWAC-theme
+            // header search form to set its `action`.
+            'iwacSearchUrl'     => View\Helper\IwacSearchUrl::class,
         ],
     ],
 
