@@ -66,6 +66,11 @@ fields:
 
   # ── Authority + facets ────────────────────────────────────────────────
   - { name: creator_ss,   type: "string[]", facet: true, optional: true }
+  # Single-value, sortable key derived from the FIRST author (surname-first,
+  # lowercased, diacritics folded) — Typesense can't sort on the creator_ss
+  # array, so the "sort by author" option on the references page sorts on
+  # this instead. Populated by AbstractMapper::addCommonFacets.
+  - { name: creator_sort, type: string, sort: true, optional: true }
   - { name: country_ss,   type: "string[]", facet: true, optional: true }
   - { name: newspaper_ss, type: "string[]", facet: true, optional: true }
   - { name: language_ss,  type: "string[]", facet: true, optional: true }
@@ -122,6 +127,21 @@ fields:
   # DOI is stored for outbound linking but not searchable (matching DOIs
   # by typo or partial string isn't a useful workflow).
   - { name: doi, type: string, index: false, optional: true }
+
+  # Reference bibliographic detail — stored display-only (index:false) and
+  # rendered as the source/citation line on reference result cards. Populated
+  # by ReferenceMapper from the HF references columns; absent on other subsets.
+  # `publisher` holds the JOURNAL title for journal articles and the publisher
+  # for books/chapters/theses/reports; `book_title` is the containing book for
+  # chapters. The client formats these into a citation per reference type, so
+  # tweaking the format is a rebuild, not a reindex.
+  - { name: publisher_s,  type: string,     index: false, optional: true }
+  - { name: book_title_s, type: string,     index: false, optional: true }
+  - { name: volume_s,     type: string,     index: false, optional: true }
+  - { name: issue_s,      type: string,     index: false, optional: true }
+  - { name: pages_s,      type: string,     index: false, optional: true }
+  - { name: editor_ss,    type: "string[]", index: false, optional: true }
+  - { name: edition_s,    type: string,     index: false, optional: true }
 
   # ── AI sentiment (3 models — keep all three for cross-model queries) ──
   # `centralite` and `polarite` are categorical → facets.

@@ -74,6 +74,21 @@ export interface IwacDoc {
    * the scoped key excludes. Rendered as a couple of lines on the card.
    */
   abstract?: string;
+  /** Author(s) / creator(s). Pipe-split upstream into one value per author. */
+  creator_ss?: string[];
+  // ── Reference bibliographic detail (references subset only) ──
+  /** RDF class: "Article de revue" | "Chapitre" | "Livre" | … — drives citation format. */
+  reference_type_ss?: string[];
+  /** Journal title (articles) or publisher (books / chapters / theses / reports). */
+  publisher_s?: string;
+  /** Containing book title (chapters). */
+  book_title_s?: string;
+  volume_s?: string;
+  issue_s?: string;
+  /** Page range, pre-formatted e.g. "185–209". */
+  pages_s?: string;
+  editor_ss?: string[];
+  edition_s?: string;
   country_ss?: string[];
   newspaper_ss?: string[];
   language_ss?: string[];

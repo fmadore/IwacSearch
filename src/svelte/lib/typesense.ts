@@ -94,6 +94,14 @@ export class TypesenseClient {
         : isBrowse
           ? 'date:desc'
           : (this.bootstrap.default_sort ?? '_text_match:desc');
+    // creator_sort is an optional field (only docs with an author have it).
+    // Typesense needs an explicit missing-values rule for optional sort
+    // fields, or it errors; push author-less docs (e.g. unsigned press) to
+    // the end. Done here, not in the sort-option value, so the URL/dropdown
+    // stay clean (`creator_sort:asc`).
+    const sortByParam = sortBy.startsWith('creator_sort:')
+      ? sortBy.replace('creator_sort:', 'creator_sort(missing_values:last):')
+      : sortBy;
 
     // The body is built as a function so we can re-issue the request
     // without the `stopwords` field if Typesense 404s with "stopword set
@@ -112,7 +120,7 @@ export class TypesenseClient {
           // Conditionally included so the recovery retry can drop it.
           ...(includeStopwords ? { stopwords: 'fr_default' } : {}),
           filter_by: filterBy || undefined,
-          sort_by: sortBy,
+          sort_by: sortByParam,
           page: args.page ?? 1,
           per_page: args.perPage ?? this.bootstrap.results_per_page,
           highlight_fields: highlightFields,

@@ -79,7 +79,45 @@
   // no highlight) still show a couple of lines of context. The abstract is
   // plain text — Svelte escapes it — whereas the snippet carries <mark>.
   const abstract = $derived((doc.abstract ?? '').trim());
+  // Author byline — essential for references (a citation without its author
+  // is useless), informative for signed articles; simply absent when a doc
+  // carries no creator_ss (e.g. unsigned press).
+  const byline = $derived((doc.creator_ss ?? []).join(', '));
+
+  // Bibliographic source line for references — "journal vol(issue), pages",
+  // "Book title (eds. …), pages — Publisher", etc. Built per reference type
+  // from the structured fields (see schema.yaml / ReferenceMapper). Other
+  // subsets don't carry these fields, so this stays empty for them.
+  const citation = $derived.by(() => buildCitation(doc));
   const itemUrl = $derived(doc.omeka_url || `/s/afrique_ouest/item/${doc.id}`);
+
+  function buildCitation(d: IwacHit['document']): string {
+    const rt = d.reference_type_ss?.[0] ?? '';
+    const pub = (d.publisher_s ?? '').trim();
+    const book = (d.book_title_s ?? '').trim();
+    const vol = (d.volume_s ?? '').trim();
+    const iss = (d.issue_s ?? '').trim();
+    const pages = (d.pages_s ?? '').trim();
+    const edition = (d.edition_s ?? '').trim();
+    const editors = (d.editor_ss ?? []).join(', ');
+    const volIss = vol && iss ? `${vol}(${iss})` : vol || (iss ? `(${iss})` : '');
+
+    if (rt === 'Chapitre') {
+      let s = book;
+      if (editors) s += ` (${t('cite_eds')} ${editors})`;
+      if (pages) s += `${s ? ', ' : ''}${pages}`;
+      if (pub) s += `${s ? ' — ' : ''}${pub}`;
+      return s.trim();
+    }
+    if (rt === 'Article de revue' || rt === 'Compte rendu') {
+      let s = pub;
+      if (volIss) s += `${s ? ' ' : ''}${volIss}`;
+      if (pages) s += `${s ? ', ' : ''}${pages}`;
+      return s.trim();
+    }
+    // Books, theses, reports, edited volumes, encyclopaedia entries, fallback.
+    return [book, pub, edition].filter(Boolean).join(' — ');
+  }
 
   function formatDate(epoch?: number, year?: number): string {
     if (epoch && epoch > 0) {
@@ -174,6 +212,14 @@
       <h3 class="iwac-card__title">
         <a href={itemUrl}>{title}</a>
       </h3>
+
+      {#if byline}
+        <p class="iwac-card__byline">{byline}</p>
+      {/if}
+
+      {#if citation}
+        <p class="iwac-card__citation">{citation}</p>
+      {/if}
 
       {#if snippet}
         <!-- snippet was HTML-escaped client-side; only literal mark tags survive (see sanitizeSnippet) -->
@@ -321,6 +367,35 @@
     color: var(--primary, #c66);
     text-decoration: underline;
     text-underline-offset: 2px;
+  }
+
+  .iwac-card__byline {
+    margin: 0;
+    font-size: var(--text-sm, 0.9rem);
+    color: var(--ink-light, var(--ink, #444));
+    line-height: 1.4;
+    /* Clamp long author lists to two lines so cards stay even. */
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  /* Source line for references (journal · volume · pages, book · publisher).
+     Italic + muted so it reads as bibliographic metadata under the byline,
+     distinct from the abstract below it. */
+  .iwac-card__citation {
+    margin: 0;
+    font-size: var(--text-sm, 0.9rem);
+    font-style: italic;
+    color: var(--muted, #666);
+    line-height: 1.4;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
   }
 
   .iwac-card__snippet {

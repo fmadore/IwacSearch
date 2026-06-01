@@ -87,10 +87,62 @@ abstract class AbstractMapper implements MapperInterface
      */
     protected function addCommonFacets(array &$doc, array $row): void
     {
-        $this->maybeAddList($doc, 'creator_ss',   $this->splitPipe($row['author']    ?? null));
+        $creators = $this->splitPipe($row['author'] ?? null);
+        $this->maybeAddList($doc, 'creator_ss', $creators);
+        // Scalar sort key from the FIRST author. creator_ss is a string[] and
+        // Typesense can't sort on an array, so the references page's
+        // "sort by author" sorts on this single-value field instead.
+        if ($creators !== []) {
+            $this->maybeAdd($doc, 'creator_sort', $this->authorSortKey($creators[0]));
+        }
+
         $this->maybeAddList($doc, 'language_ss',  $this->splitPipe($row['language']  ?? null));
         $this->maybeAddList($doc, 'country_ss',   $this->splitPipe($row['country']   ?? null));
         $this->maybeAddList($doc, 'newspaper_ss', $this->splitPipe($row['newspaper'] ?? null));
+    }
+
+    /**
+     * Build a single-value sort key from one author name.
+     *
+     * Surname-first so a "sort by author" reads like a bibliography
+     * ("Marie Miran-Guyon" → "miran-guyon marie"); lowercased and with
+     * Latin diacritics folded so "Ménard" sorts beside "Menard" rather
+     * than after "Z" (Typesense string sort is codepoint-ordered, and
+     * accented letters sit above the ASCII range). A single-token name is
+     * used as-is. Pure string work — no intl dependency.
+     */
+    final protected function authorSortKey(string $author): string
+    {
+        $name = trim($author);
+        if ($name === '') {
+            return '';
+        }
+        $parts = preg_split('/\s+/', $name) ?: [$name];
+        if (count($parts) > 1) {
+            $surname = array_pop($parts);
+            $name = $surname . ' ' . implode(' ', $parts);
+        }
+        return $this->foldDiacritics(mb_strtolower($name, 'UTF-8'));
+    }
+
+    /**
+     * Fold the Latin-1/French diacritics that occur in the corpus's author
+     * names down to ASCII, for predictable A–Z collation. Deliberately small
+     * and dependency-free (no ext-intl) — it only needs to cover the
+     * accented characters that actually appear in West-African scholarship
+     * bylines, not the whole Unicode range.
+     */
+    final protected function foldDiacritics(string $s): string
+    {
+        static $map = [
+            'à' => 'a', 'á' => 'a', 'â' => 'a', 'ã' => 'a', 'ä' => 'a', 'å' => 'a',
+            'ç' => 'c', 'è' => 'e', 'é' => 'e', 'ê' => 'e', 'ë' => 'e',
+            'ì' => 'i', 'í' => 'i', 'î' => 'i', 'ï' => 'i', 'ñ' => 'n',
+            'ò' => 'o', 'ó' => 'o', 'ô' => 'o', 'õ' => 'o', 'ö' => 'o', 'ø' => 'o',
+            'ù' => 'u', 'ú' => 'u', 'û' => 'u', 'ü' => 'u', 'ý' => 'y', 'ÿ' => 'y',
+            'œ' => 'oe', 'æ' => 'ae', 'ß' => 'ss',
+        ];
+        return strtr($s, $map);
     }
 
     /**

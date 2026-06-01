@@ -66,6 +66,7 @@ const STRINGS: Record<Locale, Record<string, string>> = {
     sort_relevance: 'Pertinence',
     sort_newest: 'Plus récent',
     sort_oldest: 'Plus ancien',
+    sort_author_az: 'Auteur (A–Z)',
     prev: 'Préc.',
     next: 'Suiv.',
     previous_page: 'Page précédente',
@@ -96,6 +97,7 @@ const STRINGS: Record<Locale, Record<string, string>> = {
     sort_least_mentioned: 'Moins mentionné',
     sort_az: 'A–Z',
     sort_most_recent: 'Plus récent',
+    cite_eds: 'dir.',
   },
   en: {
     search_placeholder: 'Search the IWAC…',
@@ -124,6 +126,7 @@ const STRINGS: Record<Locale, Record<string, string>> = {
     sort_relevance: 'Relevance',
     sort_newest: 'Newest first',
     sort_oldest: 'Oldest first',
+    sort_author_az: 'Author (A–Z)',
     prev: 'Prev',
     next: 'Next',
     previous_page: 'Previous page',
@@ -153,6 +156,7 @@ const STRINGS: Record<Locale, Record<string, string>> = {
     sort_least_mentioned: 'Least mentioned',
     sort_az: 'A–Z',
     sort_most_recent: 'Most recent',
+    cite_eds: 'eds.',
   },
 };
 
@@ -326,6 +330,9 @@ export function sortOptions(
     { value: '_text_match:desc', label: translate(locale, 'sort_relevance') },
     { value: 'date:desc', label: translate(locale, 'sort_newest') },
     { value: 'date:asc', label: translate(locale, 'sort_oldest') },
+    // Sorts on the scalar creator_sort field (see schema.yaml). Docs with no
+    // author sort last — see the missing_values handling in typesense.ts.
+    { value: 'creator_sort:asc', label: translate(locale, 'sort_author_az') },
   ];
 }
 

@@ -72,6 +72,28 @@ final class ReferenceMapper extends AbstractMapper
             $doc['reference_type_ss'] = [$resourceClass];
         }
 
+        // ── Bibliographic detail (display-only source line) ────────────
+        // `publisher` is the JOURNAL title for journal articles, the publisher
+        // for books/chapters/theses/reports; `book_title` is the containing
+        // book for chapters. volume/issue are pipe-separated upstream (take the
+        // first); pages come from page_start/page_end. The client formats these
+        // into a citation per reference type — see ResultItem.svelte. Only
+        // references carry these columns, so other subsets never set them.
+        $this->maybeAdd($doc, 'publisher_s',  $this->str($row['publisher']  ?? ''));
+        $this->maybeAdd($doc, 'book_title_s', $this->str($row['book_title'] ?? ''));
+        $this->maybeAdd($doc, 'edition_s',    $this->str($row['edition']    ?? ''));
+        $this->maybeAddList($doc, 'editor_ss', $this->splitPipe($row['editor'] ?? null));
+
+        $volume = $this->splitPipe($row['volume'] ?? null);
+        $issue  = $this->splitPipe($row['issue']  ?? null);
+        if (isset($volume[0])) { $this->maybeAdd($doc, 'volume_s', $volume[0]); }
+        if (isset($issue[0]))  { $this->maybeAdd($doc, 'issue_s',  $issue[0]); }
+
+        $this->maybeAdd($doc, 'pages_s', $this->pageRange(
+            $this->str($row['page_start'] ?? ''),
+            $this->str($row['page_end']   ?? '')
+        ));
+
         // ── Body text ──────────────────────────────────────────────────
         // Abstract is the FTS body — distinct field from ocr_text because
         // we want it visible in public results (see schema.yaml comment).
@@ -92,5 +114,20 @@ final class ReferenceMapper extends AbstractMapper
         // any of those upstream.
 
         return $doc;
+    }
+
+    /**
+     * Format a page range for display: "185–209" (en dash), or a single page
+     * when only one bound is present / both match. Empty when neither is set.
+     */
+    private function pageRange(string $start, string $end): string
+    {
+        if ($start === '' && $end === '') {
+            return '';
+        }
+        if ($start !== '' && $end !== '' && $start !== $end) {
+            return $start . '–' . $end;
+        }
+        return $start !== '' ? $start : $end;
     }
 }
