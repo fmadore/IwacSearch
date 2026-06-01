@@ -310,6 +310,73 @@ export function entityTypeLabel(value: string, locale: Locale): string {
   return ENTITY_TYPE_LABELS[locale]?.[value] ?? value;
 }
 
+// ── Country value labels ───────────────────────────────────────────────
+// The country_ss data values are mostly already correct in both locales
+// (Burkina Faso, Côte d'Ivoire, Niger, Togo). Only Bénin / Nigéria need a
+// French accent the source value may lack. We map both the bare and the
+// accented spellings to the canonical French form, so display is correct
+// regardless of how the value is stored — and the raw value (used for
+// filtering) is never touched. French-only; English keeps the raw value.
+
+const COUNTRY_LABELS: Partial<Record<Locale, Record<string, string>>> = {
+  fr: {
+    Benin: 'Bénin',
+    Bénin: 'Bénin',
+    Nigeria: 'Nigéria',
+    Nigéria: 'Nigéria',
+  },
+};
+
+export function countryLabel(value: string, locale: Locale): string {
+  return COUNTRY_LABELS[locale]?.[value] ?? value;
+}
+
+// ── Subjectivity scale value labels (1–5 → readable label) ─────────────
+// gemini/chatgpt/mistral_subjectivite are 1–5 float facets. Typesense
+// returns the facet value as a string ("1", or possibly "1.0"), so the raw
+// sidebar reads as a bare "1". We map the rounded integer to a human label
+// — labels only; the long scale descriptions live in the dataset docs, not
+// the filter UI.
+
+const SUBJECTIVITY_LABELS: Record<Locale, Record<string, string>> = {
+  fr: {
+    '1': 'Très objectif',
+    '2': 'Plutôt objectif',
+    '3': 'Mixte',
+    '4': 'Plutôt subjectif',
+    '5': 'Très subjectif',
+  },
+  en: {
+    '1': 'Very objective',
+    '2': 'Rather objective',
+    '3': 'Mixed',
+    '4': 'Rather subjective',
+    '5': 'Very subjective',
+  },
+};
+
+/**
+ * Display label for a facet *value* (as opposed to facetLabel, which
+ * labels the field). Only the subjectivity scale needs remapping (1–5 →
+ * words); every other facet shows its raw value. Falls back to the raw
+ * value for unknown fields / out-of-range or non-numeric values, so the
+ * underlying filter value the caller toggles on is never altered.
+ */
+export function facetValueLabel(field: string, value: string, locale: Locale): string {
+  if (field === 'country_ss') {
+    return countryLabel(value, locale);
+  }
+  if (field.endsWith('_subjectivite')) {
+    const n = Number(value);
+    if (Number.isFinite(n)) {
+      const key = String(Math.round(n));
+      const label = SUBJECTIVITY_LABELS[locale]?.[key] ?? SUBJECTIVITY_LABELS.fr[key];
+      if (label) return label;
+    }
+  }
+  return value;
+}
+
 /**
  * Sort options for the surface. The entity (index) browse page sorts by
  * occurrence frequency and name; content surfaces by relevance + date.

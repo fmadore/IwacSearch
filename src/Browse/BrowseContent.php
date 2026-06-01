@@ -23,6 +23,17 @@ final class BrowseContent
     public const INDEX_SLUG      = 'index';
 
     /**
+     * French display names for countries whose stored {@see Countries}
+     * `name` lacks the French accent. The stored name doubles as the
+     * country_ss filter value (accent-sensitive), so it can't be renamed
+     * for display — we remap it here at render time instead. Bénin, Niger,
+     * Togo, Burkina Faso and Côte d'Ivoire already read correctly in French.
+     */
+    private const FR_COUNTRY_NAMES = [
+        'Nigeria' => 'Nigéria',
+    ];
+
+    /**
      * @return array{title: string, introHtml: string}
      */
     public static function localize(BrowseConfig $config, string $locale): array
@@ -33,8 +44,9 @@ final class BrowseContent
         $country = Countries::bySlug($slug);
         if ($country !== null) {
             return [
-                // Country names are proper nouns — identical in both locales.
-                'title'     => $country['name'],
+                // Mostly identical across locales; only the French accent on
+                // a name like "Nigéria" differs (see displayName()).
+                'title'     => self::displayName($country, $locale),
                 'introHtml' => self::countryIntro($country, $locale),
             ];
         }
@@ -65,11 +77,25 @@ final class BrowseContent
     }
 
     /**
+     * Locale-aware display name. The stored name is the country_ss filter
+     * value and must not change; this only affects what the reader sees.
+     *
+     * @param array{name: string, slug: string, prep: string} $country
+     */
+    private static function displayName(array $country, string $locale): string
+    {
+        if ($locale === 'fr') {
+            return self::FR_COUNTRY_NAMES[$country['name']] ?? $country['name'];
+        }
+        return $country['name'];
+    }
+
+    /**
      * @param array{name: string, slug: string, prep: string} $country
      */
     private static function countryIntro(array $country, string $locale): string
     {
-        $name = self::esc($country['name']);
+        $name = self::esc(self::displayName($country, $locale));
         if ($locale === 'en') {
             return sprintf(
                 '<p>Documents about Islam and Muslim public life in %s — news articles, '

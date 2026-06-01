@@ -1,6 +1,12 @@
 <script lang="ts">
   import type { ActiveFilters, IwacFacet, YearRange } from '../lib/types';
-  import { facetLabel, SENTIMENT_FIELDS, NUMERIC_FACET_FIELDS, useI18n } from '../lib/i18n';
+  import {
+    facetLabel,
+    facetValueLabel,
+    SENTIMENT_FIELDS,
+    NUMERIC_FACET_FIELDS,
+    useI18n,
+  } from '../lib/i18n';
   import FacetGroup from './FacetGroup.svelte';
   import DateRangeSlider from './DateRangeSlider.svelte';
 
@@ -67,7 +73,10 @@
   const activeChips = $derived.by(() => {
     const chips: Array<{
       field: string;
+      /** Raw value — the one toggled off when the chip is clicked. */
       value: string;
+      /** Human-facing value (e.g. subjectivity 1–5 → words). */
+      displayValue: string;
       label: string;
       kind: 'facet' | 'year';
     }> = [];
@@ -76,6 +85,7 @@
         chips.push({
           field,
           value: v,
+          displayValue: facetValueLabel(field, v, locale),
           label: labels?.[field] ?? facetLabel(field, locale),
           kind: 'facet',
         });
@@ -84,9 +94,11 @@
     if (yearRange) {
       const lo = yearRange.from ?? yearMin;
       const hi = yearRange.to ?? yearMax;
+      const range = `${lo} – ${hi}`;
       chips.push({
         field: 'pub_year',
-        value: `${lo} – ${hi}`,
+        value: range,
+        displayValue: range,
         label: t('year'),
         kind: 'year',
       });
@@ -149,10 +161,10 @@
               type="button"
               class="iwac-facets__chip"
               onclick={() => handleChipClick(chip)}
-              aria-label={t('remove_filter', { label: chip.label, value: chip.value })}
+              aria-label={t('remove_filter', { label: chip.label, value: chip.displayValue })}
             >
               <span class="iwac-facets__chip-field">{chip.label}:</span>
-              <span class="iwac-facets__chip-value">{chip.value}</span>
+              <span class="iwac-facets__chip-value">{chip.displayValue}</span>
               <span class="iwac-facets__chip-x" aria-hidden="true">×</span>
             </button>
           </li>

@@ -19,7 +19,7 @@
 
 <script lang="ts">
   import type { IwacFacetCount } from '../lib/types';
-  import { facetLabel, useI18n } from '../lib/i18n';
+  import { facetLabel, facetValueLabel, useI18n } from '../lib/i18n';
 
   /**
    * One facet field rendered as a collapsible checklist with an optional
@@ -179,7 +179,7 @@
                   onchange={(e) =>
                     onToggle(field, fc.value, (e.currentTarget as HTMLInputElement).checked)}
                 />
-                <span class="iwac-facet__value">{fc.value}</span>
+                <span class="iwac-facet__value">{facetValueLabel(field, fc.value, locale)}</span>
                 <span class="iwac-facet__count">{formatCount(fc.count)}</span>
               </label>
             </li>

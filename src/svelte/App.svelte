@@ -653,6 +653,21 @@
       font-weight: 600;
       font-variant-numeric: tabular-nums;
     }
+    /*
+     * Toolbar stacks on narrow viewports: the result count takes the
+     * first line on its own (so "· 34 ms" never gets squeezed off it),
+     * and the actions drop to a second line — Filters pinned left, Sort
+     * pushed right. Without this the count-block (flex: 1; min-width: 0)
+     * shrinks to share the line with the buttons and its text wraps
+     * behind them.
+     */
+    .iwac-search__count-block {
+      flex-basis: 100%;
+    }
+    .iwac-search__toolbar-actions {
+      width: 100%;
+      justify-content: space-between;
+    }
   }
 
   .iwac-search__results {
@@ -704,11 +719,16 @@
   .iwac-search__count-timing {
     color: var(--muted, #888);
     font-size: var(--text-xs, 0.75rem);
+    /* Keep "· 34 ms" as one unit — never let it break to its own line. */
+    white-space: nowrap;
   }
   .iwac-search__toolbar-actions {
     display: inline-flex;
     align-items: center;
     gap: var(--space-sm, 0.5rem);
+    /* Don't let the actions get squeezed; they wrap to their own line
+       below the count on narrow viewports (see the media query). */
+    flex-shrink: 0;
   }
 
   .iwac-search__empty {

@@ -89,6 +89,19 @@ final class IndexEntityMapper
 
     // ── Helpers (mirrors AbstractMapper's, kept local to stay standalone) ─
 
+    /**
+     * Set $doc[$key] only when $value is non-empty — mirrors
+     * AbstractMapper::maybeAdd() for this standalone mapper.
+     *
+     * @param array<string, mixed> $doc
+     */
+    private function maybeAdd(array &$doc, string $key, string $value): void
+    {
+        if ($value !== '') {
+            $doc[$key] = $value;
+        }
+    }
+
     private function str(mixed $v): string
     {
         return is_string($v) ? trim($v) : '';

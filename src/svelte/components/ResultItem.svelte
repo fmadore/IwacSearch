@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { IwacHit } from '../lib/types';
-  import { entityTypeLabel, typeLabel as typeLabelFor, useI18n } from '../lib/i18n';
+  import { countryLabel, entityTypeLabel, typeLabel as typeLabelFor, useI18n } from '../lib/i18n';
 
   /**
    * One result rendered as a card.
@@ -42,7 +42,12 @@
 
   const doc = $derived(hit.document);
   const title = $derived(doc.title || t('untitled', { id: doc.id }));
-  const dateLabel = $derived(formatDate(doc.date, doc.pub_year));
+  // References are bibliographic citations — cited by year. Their pub_date
+  // is commonly year-only, which the indexer stores as a Jan-1 epoch (see
+  // AbstractMapper::dateToEpoch); formatting that as a full date invented a
+  // misleading "1 janvier 2016". Show the publication year for references;
+  // every other subset keeps its precise date.
+  const dateLabel = $derived(formatDate(doc.date, doc.pub_year, doc.type_s === 'reference'));
   const typeKey = $derived(doc.type_s ?? '');
   const typeLabel = $derived(typeKey ? typeLabelFor(typeKey, locale) : '');
 
@@ -61,7 +66,7 @@
     if (a && b) return a === b ? String(a) : `${a} – ${b}`;
     return a ? String(a) : b ? String(b) : '';
   });
-  const entityCountries = $derived(doc.country_ss ?? []);
+  const entityCountries = $derived((doc.country_ss ?? []).map((c) => countryLabel(c, locale)));
   // Compact source line: Newspaper · Country. Kept inside the body so
   // the eyebrow row above the title only carries the date + type chip
   // — too many tokens up there reads as visual noise.
@@ -119,8 +124,8 @@
     return [book, pub, edition].filter(Boolean).join(' — ');
   }
 
-  function formatDate(epoch?: number, year?: number): string {
-    if (epoch && epoch > 0) {
+  function formatDate(epoch?: number, year?: number, yearOnly = false): string {
+    if (!yearOnly && epoch && epoch > 0) {
       try {
         return new Date(epoch * 1000).toLocaleDateString(undefined, {
           year: 'numeric',
@@ -137,7 +142,7 @@
   function buildSourceChips(d: IwacHit['document']): string[] {
     const parts: string[] = [];
     if (d.newspaper_ss?.[0]) parts.push(d.newspaper_ss[0]);
-    if (d.country_ss?.[0]) parts.push(d.country_ss[0]);
+    if (d.country_ss?.[0]) parts.push(countryLabel(d.country_ss[0], locale));
     return parts;
   }
 
