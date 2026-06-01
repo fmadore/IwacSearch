@@ -191,7 +191,8 @@
       />
     </fieldset>
 
-    <footer class="iwac-config-form__footer">
+    <!-- <div>, not <footer>: avoids Omeka admin's bare-<footer> styling. -->
+    <div class="iwac-config-form__footer">
       <Button variant="ghost" onclick={onClose} disabled={inFlight}>Cancel</Button>
       <Button type="submit" variant="primary" disabled={inFlight}>
         {#if inFlight}
@@ -202,7 +203,7 @@
           Save changes
         {/if}
       </Button>
-    </footer>
+    </div>
   </form>
 </Drawer>
 

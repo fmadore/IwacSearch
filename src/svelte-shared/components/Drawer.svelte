@@ -115,12 +115,18 @@
     style:--iwac-drawer-width={width}
   >
     {#if title}
-      <header class="iwac-drawer__header">
+      <!--
+        A <div>, not a <header>: in the Omeka S admin backend (the admin CRUD
+        drawer) bare <header> elements inherit Omeka's navy page-header styling,
+        which overrode this header's own background/colour. The <h2> + dialog
+        ARIA still carry the heading semantics, so a div loses nothing.
+      -->
+      <div class="iwac-drawer__header">
         <h2 id={titleId} class="iwac-drawer__title">{title}</h2>
         <button type="button" class="iwac-drawer__close" aria-label="Close" onclick={onClose}>
           ×
         </button>
-      </header>
+      </div>
     {/if}
 
     <div class="iwac-drawer__body">

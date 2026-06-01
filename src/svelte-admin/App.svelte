@@ -75,13 +75,20 @@
 </script>
 
 <div class="iwac-admin">
-  <header class="iwac-admin__actions">
+  <!--
+    A <div>, not a <header>: Omeka S admin's global stylesheet paints bare
+    <header> elements as the navy page-header bar (#404e61, light-blue text,
+    bottom padding) — that bled through here as a tall navy block above the
+    table. The Svelte app renders inside Omeka's #content, whose element-level
+    rules out-specify our scoped classes, so we avoid the colliding tags.
+  -->
+  <div class="iwac-admin__actions">
     <div class="iwac-admin__count">
       {store.configs.length}
       {store.configs.length === 1 ? 'browse page' : 'browse pages'}
     </div>
     <Button variant="primary" onclick={openCreate}>+ New browse page</Button>
-  </header>
+  </div>
 
   {#if store.lastError}
     <div class="iwac-admin__error" role="alert">

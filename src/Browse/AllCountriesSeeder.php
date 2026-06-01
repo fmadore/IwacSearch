@@ -21,14 +21,15 @@ final class AllCountriesSeeder
     public const SLUG = BrowseContent::ALL_SLUG; // 'all'
 
     /**
-     * Country first (the natural slicer for an all-corpus page), then the
-     * usual stack, then the grouped sentiment facets.
+     * Country first (the natural slicer for an all-corpus page — a visitor
+     * browsing "all countries" narrows by place before format), then Type and
+     * the usual stack, then the grouped sentiment facets.
      *
      * @var list<string>
      */
     public const DEFAULT_FACETS = [
-        'type_s',
         'country_ss',
+        'type_s',
         'newspaper_ss',
         'language_ss',
         'places_ss',

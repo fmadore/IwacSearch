@@ -135,6 +135,15 @@
 <style>
   .iwac-table {
     width: 100%;
+    /*
+     * Omeka S admin's global table CSS forces `table-layout: fixed` on tables
+     * inside #content. Under fixed layout our `width: 1%` shrink-to-fit Actions
+     * column became a literal ~10px (1% of the table) — collapsing the row
+     * buttons — while Title/Locked split the slack evenly. Force auto layout
+     * back so the declared column widths behave as intended. !important is the
+     * established pattern for defending module styles against Omeka admin CSS.
+     */
+    table-layout: auto !important;
     border-collapse: collapse;
     background: var(--surface, #fff);
     border-radius: var(--radius-md, 0.75rem);
@@ -179,18 +188,24 @@
       opacity: 0.85;
     }
   }
+  /*
+   * !important on the column widths too: Omeka admin's #content-scoped cell
+   * rules out-specify these Svelte-scoped classes, so without it the narrow
+   * fixed columns (#, F) and the shrink-to-fit Actions column don't hold their
+   * intended widths even once table-layout is restored above.
+   */
   .iwac-table__col-pos {
-    width: 3rem;
+    width: 3rem !important;
     text-align: center;
   }
   .iwac-table__col-facets {
-    width: 3rem;
+    width: 3rem !important;
     text-align: center;
     font-variant-numeric: tabular-nums;
   }
   .iwac-table__col-actions {
-    width: 1%; /* shrink-to-fit */
-    white-space: nowrap;
+    width: 1% !important; /* shrink-to-fit */
+    white-space: nowrap !important;
   }
   .iwac-table__position {
     display: inline-block;

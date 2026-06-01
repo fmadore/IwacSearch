@@ -36,6 +36,26 @@
   display: block;
 }
 
+/*
+ * Mobile (below the IWAC-theme $md=768px header breakpoint, where the search
+ * box becomes flex:1 in a row it shares with the language/theme toggles). The
+ * box's right edge then sits well left of the viewport's right edge — the
+ * toggles occupy that space — so a panel right-anchored to that edge with a
+ * 22rem min-width grows leftward straight off the screen (suggestions were
+ * clipped on the left). Re-anchor to the box's LEFT edge and grow rightward
+ * instead, capping the width to the viewport so it can never overflow either
+ * side. max-content keeps it snug for short lists; the cap truncates long ones.
+ */
+@media (max-width: 47.99em) {
+  .iwac-header-suggest {
+    inset-inline-start: 0;
+    inset-inline-end: auto;
+    min-width: 0;
+    width: max-content;
+    max-width: calc(100vw - 2 * var(--space-4, 1rem));
+  }
+}
+
 @keyframes iwac-header-suggest-in {
   from {
     opacity: 0;

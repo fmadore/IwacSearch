@@ -394,6 +394,39 @@ class Module extends AbstractModule
             $stats = (new Browse\IndexSeeder($repository, $logger))->seed();
             $logger->info('IwacSearch index browse page seeded on upgrade', $stats);
         }
+
+        // 0.2.27 reordered the all-countries facets so Country (the natural
+        // slicer for an all-corpus page) sits ABOVE Type. The seeder's
+        // existsBySlug() guard never rewrites an already-seeded row, so push
+        // the new order onto the existing all-countries config here. The ===
+        // guard makes it a no-op once applied and leaves any admin-customised
+        // facet list untouched only if it happens to already match — an admin
+        // who reordered these intentionally would be re-normalised, which is
+        // acceptable for a system-seeded page (custom pages are never touched).
+        if (version_compare((string) $oldVersion, '0.2.27', '<')) {
+            $connection = $services->get('Omeka\Connection');
+            $repository = new Browse\BrowseConfigRepository($connection);
+            $logger = LoggerResolver::fromContainer($services);
+
+            $slug = Browse\AllCountriesSeeder::SLUG;
+            $existing = $repository->findBySlug($slug);
+            if ($existing !== null
+                && $existing->prominentFacets !== Browse\AllCountriesSeeder::DEFAULT_FACETS
+            ) {
+                $repository->save(new Browse\BrowseConfig(
+                    id:               $existing->id,
+                    slug:             $existing->slug,
+                    title:            $existing->title,
+                    introHtml:        $existing->introHtml,
+                    lockedFilters:    $existing->lockedFilters,
+                    prominentFacets:  Browse\AllCountriesSeeder::DEFAULT_FACETS,
+                    defaultSort:      $existing->defaultSort,
+                    resultsPerPage:   $existing->resultsPerPage,
+                    position:         $existing->position,
+                ));
+                $logger->info('IwacSearch reordered all-countries facets on upgrade', ['slug' => $slug]);
+            }
+        }
     }
 
     public function uninstall(ServiceLocatorInterface $services): void
