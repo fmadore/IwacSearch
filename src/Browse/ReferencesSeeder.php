@@ -19,21 +19,26 @@ use Psr\Log\NullLogger;
  */
 final class ReferencesSeeder
 {
-    private const SLUG  = 'references';
+    // Public so Module::upgrade can re-apply the order to an existing
+    // references config without re-seeding (mirrors AllCountriesSeeder).
+    public const SLUG  = 'references';
     private const TITLE = 'Bibliographic references';
 
     /**
-     * Facet stack tuned for academic literature: reference_type first
-     * (the natural slicer — "show me only theses"), then authorship,
-     * then geographic + thematic context. `country_ss` stays in because
-     * references often cover multiple countries (pipe-separated source
-     * field) so users will want to narrow to e.g. Burkina-Faso-only
-     * scholarship.
+     * Facet stack tuned for academic literature: Country first (it sits
+     * directly under the year-range slider, the natural top-of-panel
+     * geographic slicer for cross-country scholarship), then reference_type
+     * (genre — "show me only theses") and author, then language + thematic
+     * context. `country_ss` matters because references often span multiple
+     * countries (pipe-separated source field).
+     *
+     * @var list<string>
      */
-    private const DEFAULT_FACETS = [
-        'reference_type_ss',
-        'language_ss',
+    public const DEFAULT_FACETS = [
         'country_ss',
+        'reference_type_ss',
+        'creator_ss',
+        'language_ss',
         'topics_ss',
         'persons_ss',
         'places_ss',

@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace IwacSearch\Controller;
 
+use IwacSearch\Browse\AllCountriesSeeder;
 use IwacSearch\Browse\BrowseConfigRepository;
 use IwacSearch\Browse\IndexSeeder;
 use IwacSearch\Search\InitialResponseRenderer;
@@ -153,39 +154,48 @@ class SearchController extends AbstractActionController
     /**
      * GET /browse[/:slug]
      *
-     * Without a slug — landing page listing every curated browse config
-     * as a card linking to its detail page.
+     * Without a slug (or with an unknown slug) — the curated landing grid
+     * was removed (the browse pages live in the site navigation), so this
+     * redirects to the all-countries page: the broadest browse entry point.
+     * Old /browse and /browse/<stale-slug> links keep working.
      *
-     * With a slug — load the matching config row, render the same
+     * With a known slug — load the matching config row, render the same
      * root + state script that /search uses, with locked filters and
      * curated facet picks baked into the bootstrap. The Svelte client
      * doesn't know it's on a curated page; it just sees a different
      * bootstrap.
      */
-    public function browseAction(): ViewModel
+    public function browseAction(): ViewModel|Response
     {
         $slug = $this->params()->fromRoute('slug');
         $aliasName = $this->config['typesense']['collection_alias'] ?? 'iwac_current';
 
-        if ($slug === null || $slug === '') {
-            $configs = $this->browseRepository->findAll();
-            $view = new ViewModel(['configs' => $configs]);
-            $view->setTemplate('iwac-search/search/browse-list');
-            return $view;
-        }
+        $config = ($slug === null || $slug === '')
+            ? null
+            : $this->browseRepository->findBySlug((string) $slug);
 
-        $config = $this->browseRepository->findBySlug((string) $slug);
         if ($config === null) {
-            // Soft 404 — render the landing page with a banner. Avoids a
-            // bare framework error page; gives the user navigation.
-            $this->getResponse()->setStatusCode(Response::STATUS_CODE_404);
-            $configs = $this->browseRepository->findAll();
-            $view = new ViewModel([
-                'configs'        => $configs,
-                'missing_slug'   => $slug,
-            ]);
-            $view->setTemplate('iwac-search/search/browse-list');
-            return $view;
+            // No landing grid anymore — route /browse and any unknown slug to
+            // the all-countries page, on whichever route the request matched
+            // (global /browse|/parcourir or the site-scoped variant), so the
+            // visitor stays in their language site. The slug !== 'all' guard
+            // prevents a redirect loop in the degenerate case where the
+            // all-countries config itself has been deleted — then fall back
+            // to the standalone /search shell.
+            if ((string) $slug !== AllCountriesSeeder::SLUG) {
+                $routeMatch = $this->getEvent()->getRouteMatch();
+                return $this->redirect()->toRoute(
+                    $routeMatch?->getMatchedRouteName() ?? 'iwac-parcourir',
+                    array_filter(
+                        [
+                            'site-slug' => $this->params()->fromRoute('site-slug'),
+                            'slug'      => AllCountriesSeeder::SLUG,
+                        ],
+                        static fn ($v): bool => $v !== null
+                    )
+                );
+            }
+            return $this->redirect()->toRoute('iwac-search');
         }
 
         // The Index page targets the SEPARATE entity collection and renders

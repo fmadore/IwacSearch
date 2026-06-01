@@ -38,6 +38,12 @@ final class FacetCatalog
         'type_s'             => 'Type',
         'entity_type_s'      => 'Entity type',
         'reference_type_ss'  => 'Reference type',
+        // Authorship — mapped from the HF `author` field to creator_ss by
+        // AbstractMapper; facet:true in schema.yaml and populated in the live
+        // index, but it was never in this catalog, so it couldn't be picked in
+        // the admin or survive a save (normaliseFacets dropped it). Used on the
+        // references browse page.
+        'creator_ss'         => 'Author',
         'country_ss'         => 'Country',
         'newspaper_ss'       => 'Newspaper',
         'language_ss'        => 'Language',

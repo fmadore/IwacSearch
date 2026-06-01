@@ -427,6 +427,37 @@ class Module extends AbstractModule
                 $logger->info('IwacSearch reordered all-countries facets on upgrade', ['slug' => $slug]);
             }
         }
+
+        // 0.2.28 reworked the references browse page: Country moved to the top
+        // of the facet list (directly under the year slider) and the Author
+        // (creator_ss) facet — indexed all along but never surfaced — was
+        // added. Re-apply the new facet set to the existing references config;
+        // the === guard makes it a no-op once applied. No Typesense reindex is
+        // needed: creator_ss is already populated in the live collection.
+        if (version_compare((string) $oldVersion, '0.2.28', '<')) {
+            $connection = $services->get('Omeka\Connection');
+            $repository = new Browse\BrowseConfigRepository($connection);
+            $logger = LoggerResolver::fromContainer($services);
+
+            $slug = Browse\ReferencesSeeder::SLUG;
+            $existing = $repository->findBySlug($slug);
+            if ($existing !== null
+                && $existing->prominentFacets !== Browse\ReferencesSeeder::DEFAULT_FACETS
+            ) {
+                $repository->save(new Browse\BrowseConfig(
+                    id:               $existing->id,
+                    slug:             $existing->slug,
+                    title:            $existing->title,
+                    introHtml:        $existing->introHtml,
+                    lockedFilters:    $existing->lockedFilters,
+                    prominentFacets:  Browse\ReferencesSeeder::DEFAULT_FACETS,
+                    defaultSort:      $existing->defaultSort,
+                    resultsPerPage:   $existing->resultsPerPage,
+                    position:         $existing->position,
+                ));
+                $logger->info('IwacSearch reordered + exposed author on references facets on upgrade', ['slug' => $slug]);
+            }
+        }
     }
 
     public function uninstall(ServiceLocatorInterface $services): void
