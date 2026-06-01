@@ -28,9 +28,25 @@ final class HfDatasetLoader
     private const PAGE_SIZE = 100; // HF cap per call
 
     /**
-     * @param int $maxAttempts            Retry budget per page (HF
+     * One libcurl handle reused for every page of every subset, so the TCP
+     * connection (HTTP keep-alive) and the resolved DNS stay warm across the
+     * whole reindex. A cold reindex makes ~190 calls to the same host; a fresh
+     * handle per call meant ~190 separate DNS lookups, and under Docker's
+     * embedded resolver (127.0.0.11) a burst of lookups intermittently drops a
+     * UDP packet and surfaces as "Could not resolve host" — killing a job that
+     * was minutes in. One warm handle ⇒ ~1 lookup for the entire run.
+     */
+    private ?\CurlHandle $handle = null;
+
+    /**
+     * @param int $maxAttempts            Retry budget per page. HF
      *                                    sporadically 503s; rate limits
-     *                                    surface as 429).
+     *                                    surface as 429; transient DNS /
+     *                                    connection failures surface as curl
+     *                                    code 0. A reindex makes hundreds of
+     *                                    calls, so the budget is generous — a
+     *                                    single transient blip must not nuke a
+     *                                    10-minute job.
      * @param int $timeoutSeconds         Per-attempt cURL timeout.
      * @param int $interPageDelayMs       Sleep between successful pages
      *                                    to stay under HF's anonymous
@@ -38,10 +54,18 @@ final class HfDatasetLoader
      *                                    /rows endpoint).
      */
     public function __construct(
-        private readonly int $maxAttempts = 5,
+        private readonly int $maxAttempts = 8,
         private readonly int $timeoutSeconds = 30,
         private readonly int $interPageDelayMs = 250
     ) {
+    }
+
+    public function __destruct()
+    {
+        if ($this->handle instanceof \CurlHandle) {
+            curl_close($this->handle);
+            $this->handle = null;
+        }
     }
 
     /**
@@ -122,14 +146,20 @@ final class HfDatasetLoader
         );
 
         $lastError = '';
+        // Reused handle (see $handle docblock): NOT closed between attempts or
+        // pages, so libcurl keeps the connection + DNS cache warm.
+        $ch = $this->handle ??= curl_init();
         for ($attempt = 1; $attempt <= $this->maxAttempts; $attempt++) {
             $headers = [];
-            $ch = curl_init($url);
             curl_setopt_array($ch, [
+                CURLOPT_URL            => $url,
                 CURLOPT_RETURNTRANSFER => true,
                 CURLOPT_FOLLOWLOCATION => true,
                 CURLOPT_TIMEOUT        => $this->timeoutSeconds,
-                CURLOPT_USERAGENT      => 'IwacSearch-indexer/0.1',
+                // Fail a stuck connect fast so the retry/backoff can act,
+                // rather than burning the full per-attempt timeout on it.
+                CURLOPT_CONNECTTIMEOUT => 10,
+                CURLOPT_USERAGENT      => 'IwacSearch-indexer/1.0',
                 CURLOPT_HTTPHEADER     => ['Accept: application/json'],
                 // Capture response headers — Retry-After is the canonical
                 // signal for 429s on the HF Datasets Server.
@@ -144,7 +174,7 @@ final class HfDatasetLoader
             $body = curl_exec($ch);
             $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
             $err  = curl_error($ch);
-            curl_close($ch);
+            // Deliberately NOT curl_close($ch) — the handle is reused.
 
             if ($body !== false && $code >= 200 && $code < 300) {
                 $decoded = json_decode((string) $body, true);
@@ -180,9 +210,11 @@ final class HfDatasetLoader
      *
      *   429 — honour Retry-After if present (clamped to [30, 300] so a
      *         buggy server response can't stall the job for an hour),
-     *         otherwise fall back to 30s, 60s, 120s, 240s by attempt.
-     *   503 — HF transient overload. 5s, 10s, 20s, 40s.
-     *   other — fast retry: 1s, 2s, 4s, 8s.
+     *         otherwise fall back to 30s, 60s, 120s, 240s (capped 300).
+     *   503 / code 0 — HF transient overload, or a connection-level failure
+     *         (DNS resolution, connection refused, timeout — curl never got an
+     *         HTTP response). Both are transient: 5s, 10s, 20s, 40s, then 60s.
+     *   other — fast retry: 1s, 2s, 4s, 8s, …
      *
      * @param array<string, string> $responseHeaders
      */
@@ -195,10 +227,14 @@ final class HfDatasetLoader
             if ($retryAfter > 0) {
                 return max(30, min(300, $retryAfter));
             }
-            return 30 * (2 ** ($attempt - 1));
+            return min(300, 30 * (2 ** ($attempt - 1)));
         }
-        if ($code === 503) {
-            return 5 * (2 ** ($attempt - 1));
+        // 503 = HF transient overload; code 0 = curl transport failure (DNS /
+        // connect / timeout). Treat both as transient with a generous but
+        // capped backoff so a flaky resolver can recover without the whole
+        // multi-page job dying in ~15 seconds of fast retries.
+        if ($code === 503 || $code === 0) {
+            return min(60, 5 * (2 ** ($attempt - 1)));
         }
         return 2 ** ($attempt - 1);
     }
