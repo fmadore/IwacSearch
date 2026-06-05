@@ -88,18 +88,18 @@
     height: var(--size-control-lg, 2.75rem);
     padding-inline: var(--space-md, 1rem);
     padding-inline-end: var(--space-2xl, 3rem);
-    font-size: var(--text-base, 1rem);
-    color: var(--ink, #222);
-    background: var(--surface, #fff);
-    border: 1px solid var(--border, #ccc);
-    border-radius: var(--radius-md, 0.75rem);
+    font-size: var(--text-base, 1.0625rem);
+    color: var(--ink, #2c2f37);
+    background: var(--surface, #fdfdfd);
+    border: 1px solid var(--border, #d4d6da);
+    border-radius: var(--radius-md, 0.5rem);
     box-shadow: var(--shadow-xs, 0 1px 2px rgba(0, 0, 0, 0.04));
     transition:
       border-color var(--transition-fast, 150ms ease),
       box-shadow var(--transition-fast, 150ms ease);
   }
   .iwac-input__field::placeholder {
-    color: var(--muted, #888);
+    color: var(--muted, #767880);
   }
   /* Suppress the browser's native type=search clear glyph. We render our
      own .iwac-input__clear button; without this, Chrome/Safari show a
@@ -110,11 +110,11 @@
     display: none;
   }
   .iwac-input__field:hover {
-    border-color: var(--border-strong, var(--border, #ccc));
+    border-color: var(--border-strong, var(--border, #d4d6da));
   }
   .iwac-input__field:focus {
     outline: none;
-    border-color: var(--primary, #c66);
+    border-color: var(--primary, #e64a19);
     box-shadow: var(--ring-focus, 0 0 0 3px rgba(0, 0, 0, 0.1));
   }
   .iwac-input__clear {
@@ -126,15 +126,15 @@
     border: none;
     background: transparent;
     box-shadow: none;
-    color: var(--muted, #666);
+    color: var(--muted, #767880);
     font-size: var(--text-xl, 1.5rem);
     line-height: 1;
     cursor: pointer;
     border-radius: var(--radius-full, 9999px);
   }
   .iwac-input__clear:hover {
-    background: var(--surface-sunken, #f0f0f0);
-    color: var(--ink, #222);
+    background: var(--surface-sunken, #f3f3f1);
+    color: var(--ink, #2c2f37);
     box-shadow: none;
     transform: none;
   }

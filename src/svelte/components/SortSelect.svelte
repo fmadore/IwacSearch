@@ -36,8 +36,8 @@
     display: inline-flex;
     align-items: center;
     gap: var(--space-xs, 0.25rem);
-    color: var(--muted, #666);
-    font-size: var(--text-sm, 0.9rem);
+    color: var(--muted, #767880);
+    font-size: var(--text-sm, 0.9375rem);
   }
   .iwac-sort__label {
     white-space: nowrap;
@@ -45,23 +45,23 @@
   .iwac-sort__select {
     height: var(--size-control-md, 2.5rem);
     padding: 0 var(--space-lg, 1.5rem) 0 var(--space-sm, 0.5rem);
-    background: var(--surface, #fff);
-    color: var(--ink, #222);
-    border: 1px solid var(--border, #ccc);
-    border-radius: var(--radius-md, 0.75rem);
+    background: var(--surface, #fdfdfd);
+    color: var(--ink, #2c2f37);
+    border: 1px solid var(--border, #d4d6da);
+    border-radius: var(--radius-md, 0.5rem);
     font: inherit;
-    font-size: var(--text-sm, 0.9rem);
+    font-size: var(--text-sm, 0.9375rem);
     cursor: pointer;
     transition:
       border-color var(--transition-fast, 150ms ease),
       box-shadow var(--transition-fast, 150ms ease);
   }
   .iwac-sort__select:hover {
-    border-color: var(--border-strong, var(--border, #ccc));
+    border-color: var(--border-strong, var(--border, #d4d6da));
   }
   .iwac-sort__select:focus-visible {
     outline: none;
-    border-color: var(--primary, #c66);
+    border-color: var(--primary, #e64a19);
     box-shadow: var(--ring-focus, 0 0 0 3px rgba(0, 0, 0, 0.1));
   }
 </style>

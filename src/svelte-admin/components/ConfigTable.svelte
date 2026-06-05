@@ -145,32 +145,32 @@
      */
     table-layout: auto !important;
     border-collapse: collapse;
-    background: var(--surface, #fff);
-    border-radius: var(--radius-md, 0.75rem);
+    background: var(--surface, #fdfdfd);
+    border-radius: var(--radius-md, 0.5rem);
     overflow: hidden;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
   }
   .iwac-table thead {
-    background: var(--surface-sunken, #f5f5f5);
+    background: var(--surface-sunken, #f3f3f1);
   }
   .iwac-table th,
   .iwac-table td {
     padding: var(--space-sm, 0.5rem) var(--space-md, 1rem);
     text-align: start;
-    font-size: var(--text-sm, 0.9rem);
+    font-size: var(--text-sm, 0.9375rem);
     vertical-align: middle;
   }
   .iwac-table th {
     font-weight: 600;
-    color: var(--ink, #222);
-    border-bottom: 1px solid var(--border, #ccc);
+    color: var(--ink, #2c2f37);
+    border-bottom: 1px solid var(--border, #d4d6da);
   }
   .iwac-table tbody tr {
-    border-bottom: 1px solid var(--border-light, #eee);
+    border-bottom: 1px solid var(--border-light, #e6e7eb);
     transition: background 120ms ease;
   }
   .iwac-table tbody tr:hover {
-    background: color-mix(in srgb, var(--primary, #c66) 2%, var(--surface, #fff));
+    background: color-mix(in oklab, var(--primary, #e64a19) 2%, var(--surface, #fdfdfd));
   }
   .iwac-table tbody tr:last-child {
     border-bottom: none;
@@ -211,19 +211,19 @@
     display: inline-block;
     min-width: 1.5rem;
     padding: 0.125rem 0.5rem;
-    background: var(--surface-sunken, #f0f0f0);
+    background: var(--surface-sunken, #f3f3f1);
     border-radius: var(--radius-sm, 0.375rem);
-    color: var(--muted, #666);
+    color: var(--muted, #767880);
     font-variant-numeric: tabular-nums;
   }
   .iwac-table__title {
     font-weight: 500;
-    color: var(--ink, #222);
+    color: var(--ink, #2c2f37);
   }
   .iwac-table__slug {
     font-family: var(--font-mono, ui-monospace, monospace);
-    font-size: var(--text-xs, 0.75rem);
-    color: var(--muted, #666);
+    font-size: var(--text-xs, 0.8125rem);
+    color: var(--muted, #767880);
   }
   .iwac-table__lock code {
     display: inline-block;
@@ -232,14 +232,14 @@
     text-overflow: ellipsis;
     white-space: nowrap;
     font-family: var(--font-mono, ui-monospace, monospace);
-    font-size: var(--text-xs, 0.75rem);
-    background: var(--surface-sunken, #f5f5f5);
+    font-size: var(--text-xs, 0.8125rem);
+    background: var(--surface-sunken, #f3f3f1);
     padding: 0.125em 0.375em;
     border-radius: 0.25em;
     vertical-align: middle;
   }
   .iwac-table__muted {
-    color: var(--muted, #666);
+    color: var(--muted, #767880);
   }
   .iwac-table__actions,
   .iwac-table__confirm {
@@ -248,8 +248,8 @@
     align-items: center;
   }
   .iwac-table__confirm-label {
-    font-size: var(--text-xs, 0.75rem);
-    color: var(--primary, #c66);
+    font-size: var(--text-xs, 0.8125rem);
+    color: var(--primary, #e64a19);
     font-weight: 500;
     margin-inline-end: var(--space-xs, 0.25rem);
   }
@@ -260,15 +260,15 @@
   .iwac-empty {
     padding: var(--space-2xl, 3rem) var(--space-lg, 1.5rem);
     text-align: center;
-    background: var(--surface, #fff);
-    border: 1px dashed var(--border, #ccc);
-    border-radius: var(--radius-md, 0.75rem);
-    color: var(--muted, #666);
+    background: var(--surface, #fdfdfd);
+    border: 1px dashed var(--border, #d4d6da);
+    border-radius: var(--radius-md, 0.5rem);
+    color: var(--muted, #767880);
   }
   .iwac-empty p {
     margin: 0.5rem 0;
   }
   .iwac-empty__hint {
-    font-size: var(--text-sm, 0.9rem);
+    font-size: var(--text-sm, 0.9375rem);
   }
 </style>

@@ -257,30 +257,30 @@
     align-items: center;
     justify-content: space-between;
     gap: var(--space-sm, 0.5rem);
-    color: var(--ink-strong, var(--ink, #222));
+    color: var(--ink-strong, var(--ink, #2c2f37));
   }
   .iwac-daterange__label {
-    font-size: var(--text-xs, 0.75rem);
+    font-size: var(--text-xs, 0.8125rem);
     font-weight: 700;
     letter-spacing: var(--tracking-wider, 0.08em);
     text-transform: uppercase;
   }
   .iwac-daterange__range {
     flex: 1;
-    font-size: var(--text-sm, 0.9rem);
+    font-size: var(--text-sm, 0.9375rem);
     font-weight: 600;
     font-variant-numeric: tabular-nums;
-    color: var(--muted, #666);
+    color: var(--muted, #767880);
     text-align: end;
   }
   .iwac-daterange__range--dirty {
-    color: var(--primary, #c66);
+    color: var(--primary, #e64a19);
   }
   .iwac-daterange__reset {
     background: none;
     border: none;
-    color: var(--primary, #c66);
-    font-size: var(--text-xs, 0.75rem);
+    color: var(--primary, #e64a19);
+    font-size: var(--text-xs, 0.8125rem);
     font-weight: 500;
     cursor: pointer;
     padding: 0;
@@ -323,7 +323,7 @@
     inset-block: calc(50% - 3px);
     inset-inline: 0.625rem;
     height: 6px;
-    background: var(--surface-sunken, #e5e5e5);
+    background: var(--surface-sunken, #f3f3f1);
     border-radius: var(--radius-full, 9999px);
     pointer-events: none;
   }
@@ -334,7 +334,7 @@
     inset-inline-start: calc(0.625rem + var(--iwac-fill-start));
     width: calc(var(--iwac-fill-end) - var(--iwac-fill-start));
     height: 6px;
-    background: var(--primary, #c66);
+    background: var(--primary, #e64a19);
     border-radius: var(--radius-full, 9999px);
     pointer-events: none;
     transform: translateX(calc(-1 * var(--iwac-fill-start) * 0));
@@ -349,8 +349,8 @@
     transform: translateX(-50%);
     width: 1.25rem;
     height: 1.25rem;
-    background: var(--surface, #fff);
-    border: 2px solid var(--primary, #c66);
+    background: var(--surface, #fdfdfd);
+    border: 2px solid var(--primary, #e64a19);
     border-radius: var(--radius-full, 9999px);
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18);
     cursor: grab;
@@ -368,7 +368,7 @@
     outline: none;
     box-shadow:
       0 1px 3px rgba(0, 0, 0, 0.18),
-      var(--ring-focus, 0 0 0 3px rgba(204, 102, 102, 0.3));
+      var(--ring-focus, 0 0 0 3px color-mix(in oklab, var(--primary, #e64a19) 30%, transparent));
   }
   .iwac-daterange__thumb--dragging {
     cursor: grabbing;

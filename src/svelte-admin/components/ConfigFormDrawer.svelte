@@ -222,12 +222,12 @@
     gap: var(--space-lg, 1.5rem);
   }
   .iwac-config-form__error {
-    background: color-mix(in srgb, var(--primary, #c66) 12%, var(--surface, #fff));
-    border: 1px solid color-mix(in srgb, var(--primary, #c66) 35%, transparent);
-    border-radius: var(--radius-md, 0.75rem);
+    background: color-mix(in oklab, var(--primary, #e64a19) 12%, var(--surface, #fdfdfd));
+    border: 1px solid color-mix(in oklab, var(--primary, #e64a19) 35%, transparent);
+    border-radius: var(--radius-md, 0.5rem);
     padding: var(--space-sm, 0.5rem) var(--space-md, 1rem);
-    color: var(--ink-strong, var(--ink, #222));
-    font-size: var(--text-sm, 0.9rem);
+    color: var(--ink-strong, var(--ink, #2c2f37));
+    font-size: var(--text-sm, 0.9375rem);
   }
   .iwac-config-form__grid {
     display: grid;
@@ -243,25 +243,25 @@
     grid-column: 1 / -1;
   }
   .iwac-config-form__label {
-    font-size: var(--text-sm, 0.9rem);
+    font-size: var(--text-sm, 0.9375rem);
     font-weight: 600;
-    color: var(--ink, #222);
+    color: var(--ink, #2c2f37);
   }
   .iwac-config-form__label code {
     font-weight: 400;
-    color: var(--muted, #666);
-    font-size: var(--text-xs, 0.75rem);
+    color: var(--muted, #767880);
+    font-size: var(--text-xs, 0.8125rem);
   }
   .iwac-config-form__input,
   .iwac-config-form__textarea {
     width: 100%;
     padding: var(--space-sm, 0.5rem);
-    border: 1px solid var(--border, #ccc);
+    border: 1px solid var(--border, #d4d6da);
     border-radius: var(--radius-sm, 0.375rem);
-    background: var(--surface, #fff);
-    color: var(--ink, #222);
+    background: var(--surface, #fdfdfd);
+    color: var(--ink, #2c2f37);
     font: inherit;
-    font-size: var(--text-sm, 0.9rem);
+    font-size: var(--text-sm, 0.9375rem);
     transition:
       border-color 120ms ease,
       box-shadow 120ms ease;
@@ -272,27 +272,30 @@
   .iwac-config-form__input:focus,
   .iwac-config-form__textarea:focus {
     outline: none;
-    border-color: var(--primary, #c66);
-    box-shadow: var(--ring-focus, 0 0 0 3px rgba(204, 102, 102, 0.2));
+    border-color: var(--primary, #e64a19);
+    box-shadow: var(
+      --ring-focus,
+      0 0 0 3px color-mix(in oklab, var(--primary, #e64a19) 30%, transparent)
+    );
   }
   .iwac-config-form__input:disabled {
-    background: var(--surface-sunken, #f5f5f5);
-    color: var(--muted, #666);
+    background: var(--surface-sunken, #f3f3f1);
+    color: var(--muted, #767880);
     cursor: not-allowed;
   }
   .iwac-config-form__hint {
-    font-size: var(--text-xs, 0.75rem);
-    color: var(--muted, #666);
+    font-size: var(--text-xs, 0.8125rem);
+    color: var(--muted, #767880);
   }
   .iwac-config-form__hint code {
     font-family: var(--font-mono, ui-monospace, monospace);
-    background: var(--surface-sunken, #f5f5f5);
+    background: var(--surface-sunken, #f3f3f1);
     padding: 0.125em 0.25em;
     border-radius: 0.125em;
   }
   .iwac-config-form__fieldset {
-    border: 1px solid var(--border-light, #eee);
-    border-radius: var(--radius-md, 0.75rem);
+    border: 1px solid var(--border-light, #e6e7eb);
+    border-radius: var(--radius-md, 0.5rem);
     padding: var(--space-md, 1rem);
     display: flex;
     flex-direction: column;
@@ -301,14 +304,14 @@
   .iwac-config-form__legend {
     padding: 0 var(--space-xs, 0.25rem);
     font-weight: 600;
-    color: var(--ink, #222);
+    color: var(--ink, #2c2f37);
   }
   .iwac-config-form__footer {
     display: flex;
     justify-content: flex-end;
     gap: var(--space-sm, 0.5rem);
     padding-top: var(--space-md, 1rem);
-    border-top: 1px solid var(--border-light, #eee);
+    border-top: 1px solid var(--border-light, #e6e7eb);
     margin-top: auto;
   }
   /* `.iwac-btn` styles now live in src/svelte-shared/components/Button.svelte. */

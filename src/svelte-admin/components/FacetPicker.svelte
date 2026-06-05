@@ -111,14 +111,14 @@
     align-items: center;
     gap: var(--space-sm, 0.5rem);
     padding: var(--space-xs, 0.25rem) var(--space-sm, 0.5rem);
-    border: 1px solid var(--border-light, #eee);
+    border: 1px solid var(--border-light, #e6e7eb);
     border-radius: var(--radius-sm, 0.375rem);
-    background: var(--surface, #fff);
+    background: var(--surface, #fdfdfd);
     transition: all 120ms ease;
   }
   .iwac-facets__row--checked {
-    border-color: var(--primary, #c66);
-    background: color-mix(in srgb, var(--primary, #c66) 4%, var(--surface, #fff));
+    border-color: var(--primary, #e64a19);
+    background: color-mix(in oklab, var(--primary, #e64a19) 4%, var(--surface, #fdfdfd));
   }
   .iwac-facets__label {
     display: flex;
@@ -126,20 +126,20 @@
     gap: var(--space-sm, 0.5rem);
     flex: 1;
     cursor: pointer;
-    font-size: var(--text-sm, 0.9rem);
-    color: var(--ink, #222);
+    font-size: var(--text-sm, 0.9375rem);
+    color: var(--ink, #2c2f37);
   }
   .iwac-facets__checkbox {
     margin: 0;
-    accent-color: var(--primary, #c66);
+    accent-color: var(--primary, #e64a19);
   }
   .iwac-facets__name {
     font-weight: 500;
   }
   .iwac-facets__field {
     font-family: var(--font-mono, ui-monospace, monospace);
-    font-size: var(--text-xs, 0.75rem);
-    color: var(--muted, #666);
+    font-size: var(--text-xs, 0.8125rem);
+    color: var(--muted, #767880);
     margin-inline-start: auto;
   }
   .iwac-facets__reorder {
@@ -149,12 +149,12 @@
   .iwac-facets__reorder-btn {
     width: 1.75rem;
     height: 1.75rem;
-    border: 1px solid var(--border, #ccc);
+    border: 1px solid var(--border, #d4d6da);
     border-radius: var(--radius-sm, 0.375rem);
-    background: var(--surface, #fff);
-    color: var(--ink, #222);
+    background: var(--surface, #fdfdfd);
+    color: var(--ink, #2c2f37);
     cursor: pointer;
-    font-size: var(--text-base, 1rem);
+    font-size: var(--text-base, 1.0625rem);
     line-height: 1;
     display: inline-flex;
     align-items: center;
@@ -162,8 +162,8 @@
     transition: all 100ms ease;
   }
   .iwac-facets__reorder-btn:hover:not(:disabled) {
-    border-color: var(--primary, #c66);
-    color: var(--primary, #c66);
+    border-color: var(--primary, #e64a19);
+    color: var(--primary, #e64a19);
   }
   .iwac-facets__reorder-btn:disabled {
     opacity: 0.35;

@@ -251,9 +251,9 @@
     grid-template-columns: auto 1fr;
     gap: var(--space-md, 1rem);
     padding: var(--space-md, 1rem);
-    background: var(--panel-bg, var(--surface, #fff));
-    border: var(--panel-border, 1px solid var(--border-light, #eee));
-    border-radius: var(--panel-radius, var(--radius-md, 0.75rem));
+    background: var(--panel-bg, var(--surface, #fdfdfd));
+    border: var(--panel-border, 1px solid var(--border-light, #e6e7eb));
+    border-radius: var(--panel-radius, var(--radius-md, 0.5rem));
     box-shadow: var(--shadow-xs, 0 1px 2px rgba(0, 0, 0, 0.04));
     transition:
       border-color var(--transition-base, 200ms ease),
@@ -262,9 +262,9 @@
   }
   .iwac-card:hover {
     border-color: color-mix(
-      in srgb,
-      var(--primary, #c66) var(--accent-mix-medium, 40%),
-      var(--border, #ccc)
+      in oklab,
+      var(--primary, #e64a19) var(--accent-mix-medium, 40%),
+      var(--border, #d4d6da)
     );
     box-shadow: var(--shadow-md, 0 4px 12px rgba(0, 0, 0, 0.08));
     transform: translateY(var(--lift-xxs, -1px));
@@ -285,8 +285,8 @@
     height: 6.5rem;
     border-radius: var(--radius-sm, 0.375rem);
     overflow: hidden;
-    background: var(--surface-sunken, #f5f5f5);
-    border: 1px solid var(--border-light, #eee);
+    background: var(--surface-sunken, #f3f3f1);
+    border: 1px solid var(--border-light, #e6e7eb);
   }
   .iwac-card__thumb img {
     width: 100%;
@@ -309,8 +309,8 @@
     min-height: 1.25rem;
   }
   .iwac-card__eyebrow {
-    color: var(--muted, #666);
-    font-size: var(--text-xs, 0.75rem);
+    color: var(--muted, #767880);
+    font-size: var(--text-xs, 0.8125rem);
     font-weight: 600;
     letter-spacing: var(--tracking-wider, 0.08em);
     text-transform: uppercase;
@@ -321,13 +321,13 @@
     align-items: center;
     padding: 0.125rem 0.5rem;
     background: color-mix(
-      in srgb,
-      var(--primary, #c66) var(--accent-mix-subtle, 25%),
-      var(--surface, #fff)
+      in oklab,
+      var(--primary, #e64a19) var(--accent-mix-subtle, 25%),
+      var(--surface, #fdfdfd)
     );
-    color: var(--ink-on-pastel, var(--ink-strong, var(--ink, #222)));
+    color: var(--ink-on-pastel, var(--ink-strong, var(--ink, #2c2f37)));
     border-radius: var(--radius-full, 9999px);
-    font-size: var(--text-xs, 0.7rem);
+    font-size: var(--text-xs, 0.8125rem);
     font-weight: 600;
     letter-spacing: var(--tracking-wide, 0.04em);
     text-transform: uppercase;
@@ -337,47 +337,47 @@
      scannable without reading the badge text. Falls through to the
      default tint for any type the schema doesn't enumerate. */
   .iwac-card__type[data-type='audiovisual'] {
-    background: color-mix(in srgb, var(--info, #4a90c8) 18%, var(--surface, #fff));
+    background: color-mix(in oklab, var(--info, #4a90c8) 18%, var(--surface, #fdfdfd));
   }
   .iwac-card__type[data-type='publication'] {
-    background: color-mix(in srgb, var(--success, #6cc18b) 18%, var(--surface, #fff));
+    background: color-mix(in oklab, var(--success, #6cc18b) 18%, var(--surface, #fdfdfd));
   }
   .iwac-card__type[data-type='document'] {
-    background: color-mix(in srgb, var(--warning, #e89c4a) 18%, var(--surface, #fff));
+    background: color-mix(in oklab, var(--warning, #e89c4a) 18%, var(--surface, #fdfdfd));
   }
   /* Entity-type tints so persons / places / organisations read distinctly
      when scanning the index. */
   .iwac-card__type[data-entity-type='Personnes'] {
-    background: color-mix(in srgb, var(--info, #4a90c8) 18%, var(--surface, #fff));
+    background: color-mix(in oklab, var(--info, #4a90c8) 18%, var(--surface, #fdfdfd));
   }
   .iwac-card__type[data-entity-type='Lieux'] {
-    background: color-mix(in srgb, var(--success, #6cc18b) 18%, var(--surface, #fff));
+    background: color-mix(in oklab, var(--success, #6cc18b) 18%, var(--surface, #fdfdfd));
   }
   .iwac-card__type[data-entity-type='Organisations'] {
-    background: color-mix(in srgb, var(--warning, #e89c4a) 18%, var(--surface, #fff));
+    background: color-mix(in oklab, var(--warning, #e89c4a) 18%, var(--surface, #fdfdfd));
   }
 
   .iwac-card__title {
     margin: 0;
-    font-size: var(--text-lg, 1.125rem);
+    font-size: var(--text-lg, 1.1875rem);
     line-height: 1.35;
-    color: var(--ink-strong, var(--ink, #222));
-    letter-spacing: var(--tracking-tight, -0.01em);
+    color: var(--ink-strong, var(--ink, #2c2f37));
+    letter-spacing: var(--tracking-tight, -0.02em);
   }
   .iwac-card__title a {
     color: inherit;
     text-decoration: none;
   }
   .iwac-card__title a:hover {
-    color: var(--primary, #c66);
+    color: var(--primary, #e64a19);
     text-decoration: underline;
     text-underline-offset: 2px;
   }
 
   .iwac-card__byline {
     margin: 0;
-    font-size: var(--text-sm, 0.9rem);
-    color: var(--ink-light, var(--ink, #444));
+    font-size: var(--text-sm, 0.9375rem);
+    color: var(--ink-light, var(--ink, #2c2f37));
     line-height: 1.4;
     /* Clamp long author lists to two lines so cards stay even. */
     display: -webkit-box;
@@ -392,9 +392,9 @@
      distinct from the abstract below it. */
   .iwac-card__citation {
     margin: 0;
-    font-size: var(--text-sm, 0.9rem);
+    font-size: var(--text-sm, 0.9375rem);
     font-style: italic;
-    color: var(--muted, #666);
+    color: var(--muted, #767880);
     line-height: 1.4;
     display: -webkit-box;
     -webkit-line-clamp: 2;
@@ -405,8 +405,8 @@
 
   .iwac-card__snippet {
     margin: var(--space-xs, 0.25rem) 0 0;
-    font-size: var(--text-sm, 0.9rem);
-    color: var(--ink-light, var(--ink, #444));
+    font-size: var(--text-sm, 0.9375rem);
+    color: var(--ink-light, var(--ink, #2c2f37));
     line-height: var(--line-height-normal, 1.5);
     /* Clamp to ~3 lines to keep cards visually consistent in a long list. */
     display: -webkit-box;
@@ -420,12 +420,16 @@
   .iwac-card__snippet--abstract {
     -webkit-line-clamp: 2;
     line-clamp: 2;
-    color: var(--muted, #666);
+    color: var(--muted, #767880);
   }
   .iwac-card__snippet :global(mark) {
-    background: color-mix(in srgb, var(--primary, #c66) var(--accent-mix-subtle, 25%), transparent);
+    background: color-mix(
+      in oklab,
+      var(--primary, #e64a19) var(--accent-mix-subtle, 25%),
+      transparent
+    );
     color: inherit;
-    border-radius: var(--radius-sm, 0.25rem);
+    border-radius: var(--radius-sm, 0.375rem);
     padding-inline: 0.15em;
   }
 
@@ -441,17 +445,17 @@
     display: inline-flex;
     align-items: center;
     padding: 0.125rem 0.5rem;
-    background: var(--surface-sunken, #f5f5f5);
-    color: var(--ink-light, var(--ink, #444));
+    background: var(--surface-sunken, #f3f3f1);
+    color: var(--ink-light, var(--ink, #2c2f37));
     border-radius: var(--radius-sm, 0.375rem);
-    font-size: var(--text-xs, 0.75rem);
+    font-size: var(--text-xs, 0.8125rem);
     font-weight: 500;
     line-height: 1.4;
   }
   /* Occurrence count on entity cards — the headline metric, so tint it. */
   .iwac-card__chip--count {
-    background: color-mix(in srgb, var(--primary, #c66) 14%, var(--surface, #fff));
-    color: var(--ink-strong, var(--ink, #222));
+    background: color-mix(in oklab, var(--primary, #e64a19) 14%, var(--surface, #fdfdfd));
+    color: var(--ink-strong, var(--ink, #2c2f37));
     font-weight: 600;
     font-variant-numeric: tabular-nums;
   }

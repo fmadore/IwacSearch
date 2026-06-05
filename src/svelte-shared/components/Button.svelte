@@ -103,7 +103,7 @@
     border: 1px solid transparent;
     border-radius: var(--radius-sm, 0.375rem);
     font: inherit;
-    font-size: var(--text-sm, 0.9rem);
+    font-size: var(--text-sm, 0.9375rem);
     font-weight: 500;
     line-height: 1.2;
     cursor: pointer;
@@ -119,9 +119,9 @@
 
   /* Variants */
   :global(.iwac-btn--primary) {
-    background: var(--primary, #c66);
-    color: var(--surface, #fff);
-    border-color: var(--primary, #c66);
+    background: var(--primary, #e64a19);
+    color: var(--surface, #fdfdfd);
+    border-color: var(--primary, #e64a19);
   }
   :global(.iwac-btn--primary:hover:not(:disabled):not(.iwac-btn--disabled)) {
     filter: brightness(1.08);
@@ -129,31 +129,34 @@
 
   :global(.iwac-btn--ghost) {
     background: transparent;
-    color: var(--ink, #222);
-    border-color: var(--border, #ccc);
+    color: var(--ink, #2c2f37);
+    border-color: var(--border, #d4d6da);
   }
   :global(.iwac-btn--ghost:hover:not(:disabled):not(.iwac-btn--disabled)) {
-    background: var(--surface-sunken, #f5f5f5);
+    background: var(--surface-sunken, #f3f3f1);
   }
 
   :global(.iwac-btn--danger) {
     background: transparent;
-    color: var(--primary, #c66);
-    border-color: var(--primary, #c66);
+    color: var(--primary, #e64a19);
+    border-color: var(--primary, #e64a19);
   }
   :global(.iwac-btn--danger:hover:not(:disabled):not(.iwac-btn--disabled)) {
-    background: var(--primary, #c66);
-    color: var(--surface, #fff);
+    background: var(--primary, #e64a19);
+    color: var(--surface, #fdfdfd);
   }
 
   /* Sizes */
   :global(.iwac-btn--sm) {
     padding: 0.25rem 0.625rem;
-    font-size: var(--text-xs, 0.75rem);
+    font-size: var(--text-xs, 0.8125rem);
   }
 
   :global(.iwac-btn:focus-visible) {
     outline: none;
-    box-shadow: var(--ring-focus, 0 0 0 3px rgba(204, 102, 102, 0.3));
+    box-shadow: var(
+      --ring-focus,
+      0 0 0 3px color-mix(in oklab, var(--primary, #e64a19) 30%, transparent)
+    );
   }
 </style>

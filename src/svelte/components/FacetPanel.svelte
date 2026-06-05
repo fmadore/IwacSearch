@@ -242,23 +242,23 @@
     justify-content: space-between;
     gap: var(--space-sm, 0.5rem);
     padding-block: var(--space-xs, 0.25rem) var(--space-sm, 0.5rem);
-    border-bottom: 1px solid var(--border, #ccc);
+    border-bottom: 1px solid var(--border, #d4d6da);
   }
   .iwac-facets__heading {
     margin: 0;
-    font-size: var(--text-xs, 0.75rem);
+    font-size: var(--text-xs, 0.8125rem);
     font-weight: 700;
     letter-spacing: var(--tracking-wider, 0.08em);
     text-transform: uppercase;
-    color: var(--ink-strong, var(--ink, #222));
+    color: var(--ink-strong, var(--ink, #2c2f37));
   }
   .iwac-facets__clear-all {
     background: none;
     border: none;
     box-shadow: none;
-    color: var(--primary, #c66);
+    color: var(--primary, #e64a19);
     cursor: pointer;
-    font-size: var(--text-xs, 0.75rem);
+    font-size: var(--text-xs, 0.8125rem);
     font-weight: 500;
     padding: 0;
   }
@@ -277,7 +277,7 @@
 
   .iwac-facets__section {
     padding-block: var(--space-md, 1rem);
-    border-bottom: 1px solid var(--border-light, #eee);
+    border-bottom: 1px solid var(--border-light, #e6e7eb);
   }
   .iwac-facets__section:last-of-type {
     border-bottom: none;
@@ -287,8 +287,12 @@
        glance "these are what I've selected" vs. "these are options". */
     margin-inline: calc(-1 * var(--space-sm, 0.5rem));
     padding-inline: var(--space-sm, 0.5rem);
-    background: color-mix(in srgb, var(--primary, #c66) var(--accent-mix-subtle, 12%), transparent);
-    border-radius: var(--radius-md, 0.75rem);
+    background: color-mix(
+      in oklab,
+      var(--primary, #e64a19) var(--accent-mix-subtle, 25%),
+      transparent
+    );
+    border-radius: var(--radius-md, 0.5rem);
     border-bottom: none;
     margin-block-end: var(--space-sm, 0.5rem);
   }
@@ -306,15 +310,19 @@
     align-items: center;
     gap: var(--space-xs, 0.25rem);
     padding: 0.25rem 0.625rem;
-    background: var(--surface, #fff);
+    background: var(--surface, #fdfdfd);
     border: 1px solid
-      color-mix(in srgb, var(--primary, #c66) var(--accent-mix-medium, 40%), var(--border, #ccc));
+      color-mix(
+        in oklab,
+        var(--primary, #e64a19) var(--accent-mix-medium, 40%),
+        var(--border, #d4d6da)
+      );
     border-radius: var(--radius-full, 9999px);
     box-shadow: none;
     cursor: pointer;
     font: inherit;
-    font-size: var(--text-xs, 0.75rem);
-    color: var(--ink, #222);
+    font-size: var(--text-xs, 0.8125rem);
+    color: var(--ink, #2c2f37);
     line-height: 1.4;
     transition:
       background var(--transition-fast, 150ms ease),
@@ -322,9 +330,9 @@
       color var(--transition-fast, 150ms ease);
   }
   .iwac-facets__chip:hover {
-    background: var(--primary, #c66);
-    border-color: var(--primary, #c66);
-    color: var(--primary-contrast, #fff);
+    background: var(--primary, #e64a19);
+    border-color: var(--primary, #e64a19);
+    color: var(--white, #fff);
     box-shadow: none;
     transform: none;
   }
@@ -338,15 +346,15 @@
     box-shadow: var(--ring-focus, 0 0 0 3px rgba(0, 0, 0, 0.1));
   }
   .iwac-facets__chip-field {
-    color: var(--muted, #666);
+    color: var(--muted, #767880);
     font-weight: 500;
   }
   .iwac-facets__chip-value {
     font-weight: 600;
   }
   .iwac-facets__chip-x {
-    color: var(--muted, #888);
-    font-size: var(--text-sm, 0.9rem);
+    color: var(--muted, #767880);
+    font-size: var(--text-sm, 0.9375rem);
     line-height: 1;
   }
 
@@ -363,7 +371,7 @@
    */
   .iwac-facets__group {
     padding-block: var(--space-md, 1rem);
-    border-bottom: 1px solid var(--border-light, #eee);
+    border-bottom: 1px solid var(--border-light, #e6e7eb);
   }
   .iwac-facets__group:last-child {
     border-bottom: none;
@@ -379,8 +387,8 @@
     box-shadow: none;
     cursor: pointer;
     font: inherit;
-    color: var(--ink-strong, var(--ink, #222));
-    font-size: var(--text-xs, 0.75rem);
+    color: var(--ink-strong, var(--ink, #2c2f37));
+    font-size: var(--text-xs, 0.8125rem);
     font-weight: 700;
     letter-spacing: var(--tracking-wider, 0.08em);
     text-transform: uppercase;
@@ -388,7 +396,7 @@
     transition: color var(--transition-fast, 150ms ease);
   }
   .iwac-facets__group-heading:hover {
-    color: var(--primary, #c66);
+    color: var(--primary, #e64a19);
     background: none;
     box-shadow: none;
     transform: none;
@@ -402,8 +410,8 @@
     flex: 1;
   }
   .iwac-facets__group-count {
-    background: var(--primary, #c66);
-    color: var(--primary-contrast, #fff);
+    background: var(--primary, #e64a19);
+    color: var(--white, #fff);
     border-radius: var(--radius-full, 9999px);
     padding: 0 0.5rem;
     min-width: 1.25rem;
@@ -411,14 +419,14 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    font-size: var(--text-xs, 0.7rem);
+    font-size: var(--text-xs, 0.8125rem);
     font-weight: 600;
     letter-spacing: 0;
     text-transform: none;
   }
   .iwac-facets__group-chevron {
-    color: var(--muted, #888);
-    font-size: var(--text-xs, 0.75rem);
+    color: var(--muted, #767880);
+    font-size: var(--text-xs, 0.8125rem);
     letter-spacing: 0;
   }
   .iwac-facets__group-body {
@@ -426,7 +434,7 @@
     padding-inline-start: var(--space-sm, 0.5rem);
     /* Subtle accent rail so the three sub-facets read as one subsection. */
     border-inline-start: 2px solid
-      color-mix(in srgb, var(--primary, #c66) 30%, var(--border-light, #eee));
+      color-mix(in oklab, var(--primary, #e64a19) 30%, var(--border-light, #e6e7eb));
   }
   /* Tighten the nested sub-facets; the parent owns the section rhythm. */
   .iwac-facets__group-body :global(.iwac-facet) {
@@ -438,8 +446,8 @@
 
   .iwac-facets__empty {
     padding-block: var(--space-md, 1rem);
-    color: var(--muted, #888);
-    font-size: var(--text-sm, 0.9rem);
+    color: var(--muted, #767880);
+    font-size: var(--text-sm, 0.9375rem);
     margin: 0;
   }
 </style>

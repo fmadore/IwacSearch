@@ -558,8 +558,8 @@
     display: flex;
     flex-direction: column;
     gap: var(--space-md, 1rem);
-    color: var(--ink, #222);
-    font-size: var(--text-base, 1rem);
+    color: var(--ink, #2c2f37);
+    font-size: var(--text-base, 1.0625rem);
   }
   /* Anchors the floating SuggestDropdown — must be positioned. */
   .iwac-search__searchbox {
@@ -594,7 +594,7 @@
     /* Subtle right "rail" so the column has a visual edge against the
        results without becoming a card. */
     padding-inline-end: var(--space-md, 1rem);
-    border-inline-end: 1px solid var(--border-light, #eee);
+    border-inline-end: 1px solid var(--border-light, #e6e7eb);
   }
   .iwac-search__facets-body {
     /* Padding inside the drawer body. The drawer header already has
@@ -616,12 +616,12 @@
       gap: var(--space-xs, 0.25rem);
       height: var(--size-control-md, 2.5rem);
       padding-inline: var(--space-md, 1rem);
-      border: 1px solid var(--border, #ccc);
-      border-radius: var(--radius-md, 0.75rem);
-      background: var(--surface, #fff);
-      color: var(--ink, #222);
+      border: 1px solid var(--border, #d4d6da);
+      border-radius: var(--radius-md, 0.5rem);
+      background: var(--surface, #fdfdfd);
+      color: var(--ink, #2c2f37);
       box-shadow: none;
-      font-size: var(--text-sm, 0.9rem);
+      font-size: var(--text-sm, 0.9375rem);
       font-weight: 500;
       cursor: pointer;
       transition:
@@ -629,9 +629,9 @@
         color var(--transition-fast, 150ms ease);
     }
     .iwac-search__filters-trigger:hover {
-      background: var(--surface, #fff);
-      border-color: var(--primary, #c66);
-      color: var(--primary, #c66);
+      background: var(--surface, #fdfdfd);
+      border-color: var(--primary, #e64a19);
+      color: var(--primary, #e64a19);
       box-shadow: none;
       transform: none;
     }
@@ -646,10 +646,10 @@
       min-width: 1.25rem;
       height: 1.25rem;
       padding: 0 0.375rem;
-      background: var(--primary, #c66);
-      color: var(--primary-contrast, #fff);
+      background: var(--primary, #e64a19);
+      color: var(--white, #fff);
       border-radius: var(--radius-full, 9999px);
-      font-size: var(--text-xs, 0.75rem);
+      font-size: var(--text-xs, 0.8125rem);
       font-weight: 600;
       font-variant-numeric: tabular-nums;
     }
@@ -692,33 +692,33 @@
     /* Anchor under the search box — gives pagination something to
        scroll back to. */
     padding-block-end: var(--space-sm, 0.5rem);
-    border-bottom: 1px solid var(--border-light, #eee);
+    border-bottom: 1px solid var(--border-light, #e6e7eb);
   }
   .iwac-search__count-block {
     display: inline-flex;
     align-items: baseline;
     gap: 0.375rem;
-    color: var(--muted, #666);
-    font-size: var(--text-sm, 0.9rem);
+    color: var(--muted, #767880);
+    font-size: var(--text-sm, 0.9375rem);
     font-variant-numeric: tabular-nums;
     flex: 1;
     min-width: 0;
   }
   .iwac-search__count-number {
-    color: var(--ink-strong, var(--ink, #222));
-    font-size: var(--text-lg, 1.125rem);
+    color: var(--ink-strong, var(--ink, #2c2f37));
+    font-size: var(--text-lg, 1.1875rem);
     font-weight: 700;
   }
   .iwac-search__count-label {
     font-weight: 500;
   }
   .iwac-search__count-label--empty {
-    color: var(--ink-strong, var(--ink, #222));
+    color: var(--ink-strong, var(--ink, #2c2f37));
     font-weight: 600;
   }
   .iwac-search__count-timing {
-    color: var(--muted, #888);
-    font-size: var(--text-xs, 0.75rem);
+    color: var(--muted, #767880);
+    font-size: var(--text-xs, 0.8125rem);
     /* Keep "· 34 ms" as one unit — never let it break to its own line. */
     white-space: nowrap;
   }
@@ -732,32 +732,32 @@
   }
 
   .iwac-search__empty {
-    background: var(--surface-sunken, #f9f9f9);
-    border: 1px dashed var(--border, #ccc);
-    border-radius: var(--radius-md, 0.75rem);
+    background: var(--surface-sunken, #f3f3f1);
+    border: 1px dashed var(--border, #d4d6da);
+    border-radius: var(--radius-md, 0.5rem);
     padding: var(--space-2xl, 3rem) var(--space-lg, 1.5rem);
     text-align: center;
-    color: var(--muted, #666);
+    color: var(--muted, #767880);
     display: flex;
     flex-direction: column;
     align-items: center;
     gap: var(--space-sm, 0.5rem);
   }
   .iwac-search__empty strong {
-    color: var(--ink-strong, var(--ink, #222));
-    font-size: var(--text-lg, 1.125rem);
+    color: var(--ink-strong, var(--ink, #2c2f37));
+    font-size: var(--text-lg, 1.1875rem);
   }
   .iwac-search__empty p {
     margin: 0;
   }
   .iwac-search__clear-link {
     background: none;
-    border: 1px solid var(--primary, #c66);
-    color: var(--primary, #c66);
-    border-radius: var(--radius-md, 0.75rem);
+    border: 1px solid var(--primary, #e64a19);
+    color: var(--primary, #e64a19);
+    border-radius: var(--radius-md, 0.5rem);
     padding: 0.4rem 0.75rem;
     box-shadow: none;
-    font-size: var(--text-sm, 0.9rem);
+    font-size: var(--text-sm, 0.9375rem);
     cursor: pointer;
     margin-top: var(--space-xs, 0.25rem);
     transition:
@@ -765,8 +765,8 @@
       color var(--transition-fast, 150ms ease);
   }
   .iwac-search__clear-link:hover {
-    background: var(--primary, #c66);
-    color: var(--primary-contrast, #fff);
+    background: var(--primary, #e64a19);
+    color: var(--white, #fff);
     box-shadow: none;
     transform: none;
   }
@@ -775,18 +775,18 @@
     box-shadow: var(--ring-focus, 0 0 0 3px rgba(0, 0, 0, 0.1));
   }
   .iwac-search__error {
-    background: color-mix(in srgb, var(--error, #c66) 12%, var(--surface, #fff));
-    border: 1px solid color-mix(in srgb, var(--error, #c66) 35%, transparent);
-    border-radius: var(--radius-md, 0.75rem);
+    background: color-mix(in oklab, var(--error, #c0392b) 12%, var(--surface, #fdfdfd));
+    border: 1px solid color-mix(in oklab, var(--error, #c0392b) 35%, transparent);
+    border-radius: var(--radius-md, 0.5rem);
     padding: var(--space-md, 1rem);
-    color: var(--ink-strong, var(--ink, #222));
+    color: var(--ink-strong, var(--ink, #2c2f37));
     display: flex;
     flex-direction: column;
     gap: var(--space-xs, 0.25rem);
   }
   .iwac-search__status {
-    color: var(--muted, #666);
-    font-size: var(--text-sm, 0.9rem);
+    color: var(--muted, #767880);
+    font-size: var(--text-sm, 0.9375rem);
     margin: 0;
   }
 </style>

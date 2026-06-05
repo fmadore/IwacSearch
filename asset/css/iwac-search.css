@@ -64,15 +64,15 @@
 }
 
 .iwac-search-block__title {
-  font-size: var(--text-2xl, 1.75rem);
-  color: var(--ink-strong, var(--ink, #222));
+  font-size: var(--text-2xl, 1.875rem);
+  color: var(--ink-strong, var(--ink, #2c2f37));
   margin-block-end: var(--space-md, 1rem);
   letter-spacing: var(--tracking-tight, -0.02em);
 }
 
 .iwac-search-block__intro {
-  font-size: var(--text-base, 1rem);
-  color: var(--ink-light, var(--ink, #444));
+  font-size: var(--text-base, 1.0625rem);
+  color: var(--ink-light, var(--ink, #2c2f37));
   margin-block-end: var(--space-lg, 1.5rem);
   max-width: var(--measure-narrow, 44rem);
 }
@@ -96,10 +96,10 @@
  * Here a card frame helps the widget stand out from surrounding prose.
  */
 .iwac-search-block--compact .iwac-search-block__root {
-  background: var(--panel-bg, var(--surface, #fff));
-  border: var(--panel-border, 1px solid var(--border, #e5e5e5));
+  background: var(--panel-bg, var(--surface, #fdfdfd));
+  border: var(--panel-border, 1px solid var(--border, #d4d6da));
   box-shadow: var(--panel-shadow, none);
-  border-radius: var(--panel-radius, var(--radius-lg, 1rem));
+  border-radius: var(--panel-radius, var(--radius-lg, 0.75rem));
   padding: var(--space-lg, 1.5rem);
   transition: box-shadow var(--transition-base, 200ms ease);
 }
@@ -121,8 +121,8 @@
 
 .iwac-search-block__skeleton-input {
   height: var(--size-control-lg, 2.75rem);
-  background: var(--surface-sunken, #f5f5f5);
-  border-radius: var(--radius-md, 0.75rem);
+  background: var(--surface-sunken, #f3f3f1);
+  border-radius: var(--radius-md, 0.5rem);
 }
 
 .iwac-search-block__skeleton-results {
@@ -133,9 +133,9 @@
 
 .iwac-search-block__skeleton-row {
   height: 5.5rem;
-  background: var(--surface-raised, #fafafa);
-  border: 1px solid var(--border-light, #eee);
-  border-radius: var(--radius-md, 0.75rem);
+  background: var(--surface-raised, #fafaf9);
+  border: 1px solid var(--border-light, #e6e7eb);
+  border-radius: var(--radius-md, 0.5rem);
 }
 
 /* Compact widgets only need the input — not a full card-list preview. */

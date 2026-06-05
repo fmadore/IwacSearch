@@ -271,9 +271,9 @@
     inset-inline: 0;
     inset-block-start: calc(100% + var(--space-2xs, 0.25rem));
     z-index: 30;
-    background: var(--surface, #fff);
-    border: 1px solid var(--border, #ccc);
-    border-radius: var(--radius-md, 0.75rem);
+    background: var(--surface, #fdfdfd);
+    border: 1px solid var(--border, #d4d6da);
+    border-radius: var(--radius-md, 0.5rem);
     box-shadow:
       0 4px 12px rgba(0, 0, 0, 0.08),
       0 1px 3px rgba(0, 0, 0, 0.05);
@@ -310,10 +310,10 @@
     -webkit-appearance: none;
     text-decoration: none;
     text-align: start;
-    color: var(--ink, #222);
+    color: var(--ink, #2c2f37);
     background: transparent;
     border: 0;
-    border-bottom: 1px solid var(--border-light, #eee);
+    border-bottom: 1px solid var(--border-light, #e6e7eb);
     box-shadow: none;
     font: inherit;
     transition: background 80ms ease;
@@ -325,7 +325,7 @@
   .iwac-suggest__item--active,
   .iwac-suggest__item:hover,
   .iwac-suggest__item:focus-visible {
-    background: color-mix(in srgb, var(--primary, #c66) 8%, var(--surface, #fff));
+    background: color-mix(in oklab, var(--primary, #e64a19) 8%, var(--surface, #fdfdfd));
     box-shadow: none;
     transform: none;
     outline: none;
@@ -333,17 +333,17 @@
   /* The "Search for …" action reads as the primary affordance. */
   .iwac-suggest__item--search {
     font-weight: 500;
-    color: var(--ink-strong, var(--ink, #222));
+    color: var(--ink-strong, var(--ink, #2c2f37));
   }
   .iwac-suggest__icon {
     flex-shrink: 0;
-    color: var(--primary, #c66);
-    font-size: var(--text-base, 1rem);
+    color: var(--primary, #e64a19);
+    font-size: var(--text-base, 1.0625rem);
     line-height: 1;
   }
   .iwac-suggest__title {
     flex: 1;
-    font-size: var(--text-sm, 0.9rem);
+    font-size: var(--text-sm, 0.9375rem);
     line-height: 1.35;
     color: inherit;
     /* Single-line truncation: dropdowns rarely look right when wrapping. */
@@ -353,8 +353,8 @@
   }
   /* Inherited <mark> from the highlight snippet. */
   .iwac-suggest__title :global(mark) {
-    background: color-mix(in srgb, var(--primary, #c66) 22%, transparent);
-    color: var(--ink-strong, var(--ink, #222));
+    background: color-mix(in oklab, var(--primary, #e64a19) 22%, transparent);
+    color: var(--ink-strong, var(--ink, #2c2f37));
     border-radius: 0.125em;
     padding: 0 0.125em;
     font-weight: 500;
@@ -362,17 +362,17 @@
   /* Entity rows get a small field-type tag (Place / Topic / …). */
   .iwac-suggest__tag {
     flex-shrink: 0;
-    font-size: var(--text-xs, 0.75rem);
-    color: var(--muted, #666);
-    background: var(--surface-sunken, #f5f5f5);
+    font-size: var(--text-xs, 0.8125rem);
+    color: var(--muted, #767880);
+    background: var(--surface-sunken, #f3f3f1);
     padding: 0.125rem 0.5rem;
     border-radius: var(--radius-full, 9999px);
   }
   .iwac-suggest__empty,
   .iwac-suggest__error {
     padding: var(--space-sm, 0.5rem) var(--space-md, 1rem);
-    font-size: var(--text-xs, 0.75rem);
-    color: var(--muted, #666);
-    border-top: 1px solid var(--border-light, #eee);
+    font-size: var(--text-xs, 0.8125rem);
+    color: var(--muted, #767880);
+    border-top: 1px solid var(--border-light, #e6e7eb);
   }
 </style>

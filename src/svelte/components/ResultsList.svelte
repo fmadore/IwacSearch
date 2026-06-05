@@ -86,16 +86,16 @@
     margin: 0;
   }
   .iwac-results__empty {
-    color: var(--muted, #666);
+    color: var(--muted, #767880);
     padding: var(--space-md, 1rem);
-    background: var(--surface-sunken, #f5f5f5);
-    border-radius: var(--radius-md, 0.75rem);
+    background: var(--surface-sunken, #f3f3f1);
+    border-radius: var(--radius-md, 0.5rem);
     margin: 0;
   }
   .iwac-results__cap-note {
     margin: 0;
     text-align: center;
-    color: var(--muted, #888);
-    font-size: var(--text-xs, 0.75rem);
+    color: var(--muted, #767880);
+    font-size: var(--text-xs, 0.8125rem);
   }
 </style>

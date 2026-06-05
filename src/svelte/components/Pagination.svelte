@@ -141,13 +141,13 @@
     min-width: var(--size-control-md, 2.5rem);
     height: var(--size-control-md, 2.5rem);
     padding-inline: var(--space-sm, 0.5rem);
-    background: var(--surface, #fff);
-    color: var(--ink, #222);
-    border: 1px solid var(--border, #ccc);
-    border-radius: var(--radius-md, 0.75rem);
+    background: var(--surface, #fdfdfd);
+    color: var(--ink, #2c2f37);
+    border: 1px solid var(--border, #d4d6da);
+    border-radius: var(--radius-md, 0.5rem);
     box-shadow: none;
     font: inherit;
-    font-size: var(--text-sm, 0.9rem);
+    font-size: var(--text-sm, 0.9375rem);
     font-variant-numeric: tabular-nums;
     cursor: pointer;
     transition:
@@ -157,9 +157,9 @@
   }
   .iwac-pager__page:hover:not(.is-current),
   .iwac-pager__nav:hover:not(:disabled) {
-    background: var(--surface, #fff);
-    border-color: var(--primary, #c66);
-    color: var(--primary, #c66);
+    background: var(--surface, #fdfdfd);
+    border-color: var(--primary, #e64a19);
+    color: var(--primary, #e64a19);
     box-shadow: none;
     transform: none;
   }
@@ -169,9 +169,9 @@
     box-shadow: var(--ring-focus, 0 0 0 3px rgba(0, 0, 0, 0.1));
   }
   .iwac-pager__page.is-current {
-    background: var(--primary, #c66);
-    border-color: var(--primary, #c66);
-    color: var(--primary-contrast, #fff);
+    background: var(--primary, #e64a19);
+    border-color: var(--primary, #e64a19);
+    color: var(--white, #fff);
     box-shadow: none;
     transform: none;
     font-weight: 600;
@@ -192,8 +192,8 @@
     align-items: center;
     justify-content: center;
     min-width: 1.5rem;
-    color: var(--muted, #888);
-    font-size: var(--text-sm, 0.9rem);
+    color: var(--muted, #767880);
+    font-size: var(--text-sm, 0.9375rem);
   }
 
   @media (max-width: 30rem) {
