@@ -273,10 +273,25 @@ class Module extends AbstractModule
             return;
         }
 
+        // The header CSS only styles the typeahead dropdown, which stays hidden
+        // until the user focuses / types — so it must never block first paint.
+        // The whole feature is JS-gated (header.js enhances the form), so loading
+        // the stylesheet from JS via the media="print" → onload swap costs no-JS
+        // users nothing they'd otherwise get, and drops one render-blocking
+        // request from every site page (incl. the homepage). The fetch still
+        // starts during head parse, so the dropdown is styled well before any
+        // interaction.
+        $headerCssUrl = json_encode(
+            $view->assetUrl('dist/iwac-search-header.css', 'IwacSearch'),
+            JSON_UNESCAPED_SLASHES | JSON_HEX_TAG
+        );
         // Config first so it's defined before the deferred bundle executes.
-        $view->headScript()->appendScript('window.IWAC_HEADER_SEARCH = ' . $json . ';');
-        $view->headLink()->appendStylesheet(
-            $view->assetUrl('dist/iwac-search-header.css', 'IwacSearch')
+        $view->headScript()->appendScript(
+            'window.IWAC_HEADER_SEARCH = ' . $json . ';'
+            . '(function(){var l=document.createElement("link");l.rel="stylesheet";'
+            . 'l.href=' . $headerCssUrl . ';l.media="print";'
+            . 'l.onload=function(){this.media="all";};'
+            . '(document.head||document.documentElement).appendChild(l);})();'
         );
         $view->headScript()->appendFile(
             $view->assetUrl('dist/iwac-search-header.js', 'IwacSearch'),
