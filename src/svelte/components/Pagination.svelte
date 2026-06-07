@@ -44,6 +44,7 @@
    */
 
   import { useI18n } from '../lib/i18n';
+  import Icon from './Icon.svelte';
 
   interface Props {
     currentPage: number;
@@ -74,7 +75,7 @@
       onclick={() => go(currentPage - 1)}
       aria-label={t('previous_page')}
     >
-      <span aria-hidden="true">‹</span>
+      <span aria-hidden="true"><Icon name="chevron-left" /></span>
       <span class="iwac-pager__nav-label">{t('prev')}</span>
     </button>
 
@@ -107,7 +108,7 @@
       aria-label={t('next_page')}
     >
       <span class="iwac-pager__nav-label">{t('next')}</span>
-      <span aria-hidden="true">›</span>
+      <span aria-hidden="true"><Icon name="chevron-right" /></span>
     </button>
   </nav>
 {/if}

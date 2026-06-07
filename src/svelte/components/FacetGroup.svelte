@@ -20,6 +20,7 @@
 <script lang="ts">
   import type { IwacFacetCount } from '../lib/types';
   import { facetLabel, facetValueLabel, useI18n } from '../lib/i18n';
+  import Icon from './Icon.svelte';
 
   /**
    * One facet field rendered as a collapsible checklist with an optional
@@ -136,7 +137,9 @@
         {selected.length}
       </span>
     {/if}
-    <span class="iwac-facet__chevron" aria-hidden="true">{collapsed ? '▸' : '▾'}</span>
+    <span class="iwac-facet__chevron" aria-hidden="true"
+      ><Icon name={collapsed ? 'chevron-right' : 'chevron-down'} /></span
+    >
   </button>
 
   {#if !collapsed}
@@ -159,7 +162,7 @@
               aria-label={t('clear_filter')}
               onclick={() => (filterText = '')}
             >
-              ×
+              <Icon name="x" />
             </button>
           {/if}
         </div>
@@ -263,11 +266,10 @@
     text-transform: none;
   }
   .iwac-facet__chevron {
+    display: inline-flex;
+    align-items: center;
     color: var(--muted, #767880);
     font-size: var(--text-xs, 0.8125rem);
-    /* Strip the heading's wide tracking — chevrons are pictograms,
-       letter-spacing them moves the glyph off-centre. */
-    letter-spacing: 0;
   }
 
   .iwac-facet__search {

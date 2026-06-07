@@ -2,6 +2,7 @@
   import type { EntitySuggestion, IwacHit, SuggestResult } from '../lib/types';
   import type { TypesenseClient } from '../lib/typesense';
   import { facetLabel, useI18n } from '../lib/i18n';
+  import Icon from './Icon.svelte';
 
   /**
    * Floating typeahead dropdown shown just under the SearchInput.
@@ -223,7 +224,7 @@
           role="option"
           aria-selected={i === highlightedIndex}
         >
-          <span class="iwac-suggest__icon" aria-hidden="true">⌕</span>
+          <span class="iwac-suggest__icon" aria-hidden="true"><Icon name="search" /></span>
           <span class="iwac-suggest__title">{t('search_for', { q: query.trim() })}</span>
         </button>
       {:else if row.kind === 'article'}
@@ -336,6 +337,8 @@
     color: var(--ink-strong, var(--ink, #2c2f37));
   }
   .iwac-suggest__icon {
+    display: inline-flex;
+    align-items: center;
     flex-shrink: 0;
     color: var(--primary, #e64a19);
     font-size: var(--text-base, 1.0625rem);

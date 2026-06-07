@@ -9,6 +9,7 @@
    */
 
   import { untrack } from 'svelte';
+  import Icon from './Icon.svelte';
 
   interface Props {
     value: string;
@@ -72,7 +73,7 @@
   />
   {#if local !== ''}
     <button type="button" class="iwac-input__clear" aria-label="Clear search" onclick={handleClear}
-      >×</button
+      ><Icon name="x" /></button
     >
   {/if}
 </div>
@@ -120,6 +121,9 @@
   .iwac-input__clear {
     position: absolute;
     inset-inline-end: var(--space-sm, 0.5rem);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     width: var(--size-control-sm, 2.25rem);
     height: var(--size-control-sm, 2.25rem);
     padding: 0;
@@ -127,7 +131,7 @@
     background: transparent;
     box-shadow: none;
     color: var(--muted, #767880);
-    font-size: var(--text-xl, 1.5rem);
+    font-size: var(--text-lg, 1.1875rem);
     line-height: 1;
     cursor: pointer;
     border-radius: var(--radius-full, 9999px);
