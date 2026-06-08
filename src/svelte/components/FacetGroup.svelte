@@ -1,4 +1,12 @@
 <script module lang="ts">
+  // Per-instance counter so each group's collapsible body gets a page-unique
+  // id for the heading's aria-controls (multiple search surfaces can render
+  // the same facet field on one page).
+  let groupUid = 0;
+  function nextFacetBodyId(): string {
+    return `iwac-facet-body-${++groupUid}`;
+  }
+
   function formatCount(n: number): string {
     return new Intl.NumberFormat().format(n);
   }
@@ -91,6 +99,7 @@
 
   const heading = $derived(label ?? facetLabel(field, locale));
   const selectedSet = $derived(new Set(selected));
+  const bodyId = nextFacetBodyId();
   let expanded = $state(false);
   let collapsed = $state(false); // user-collapsed (whole group)
   let filterText = $state('');
@@ -129,6 +138,7 @@
     type="button"
     class="iwac-facet__heading"
     aria-expanded={!collapsed}
+    aria-controls={!collapsed ? bodyId : undefined}
     onclick={() => (collapsed = !collapsed)}
   >
     <span class="iwac-facet__label">{heading}</span>
@@ -143,63 +153,65 @@
   </button>
 
   {#if !collapsed}
-    {#if counts.length === 0}
-      <p class="iwac-facet__empty">{t('no_values')}</p>
-    {:else}
-      {#if showSearch}
-        <div class="iwac-facet__search">
-          <input
-            type="search"
-            class="iwac-facet__search-input"
-            placeholder={t('search_values', { name: heading.toLowerCase() })}
-            aria-label={t('filter_values', { name: heading })}
-            bind:value={filterText}
-          />
-          {#if isFiltering}
-            <button
-              type="button"
-              class="iwac-facet__search-clear"
-              aria-label={t('clear_filter')}
-              onclick={() => (filterText = '')}
-            >
-              <Icon name="x" />
-            </button>
-          {/if}
-        </div>
-      {/if}
-
-      {#if visible.length === 0}
-        <p class="iwac-facet__empty">{t('no_matches')}</p>
+    <div id={bodyId}>
+      {#if counts.length === 0}
+        <p class="iwac-facet__empty">{t('no_values')}</p>
       {:else}
-        <ul class="iwac-facet__list">
-          {#each visible as fc (fc.value)}
-            <li class="iwac-facet__item">
-              <label class="iwac-facet__option" class:is-selected={selectedSet.has(fc.value)}>
-                <input
-                  type="checkbox"
-                  class="iwac-facet__checkbox"
-                  checked={selectedSet.has(fc.value)}
-                  onchange={(e) =>
-                    onToggle(field, fc.value, (e.currentTarget as HTMLInputElement).checked)}
-                />
-                <span class="iwac-facet__value">{facetValueLabel(field, fc.value, locale)}</span>
-                <span class="iwac-facet__count">{formatCount(fc.count)}</span>
-              </label>
-            </li>
-          {/each}
-        </ul>
-      {/if}
+        {#if showSearch}
+          <div class="iwac-facet__search">
+            <input
+              type="search"
+              class="iwac-facet__search-input"
+              placeholder={t('search_values', { name: heading.toLowerCase() })}
+              aria-label={t('filter_values', { name: heading })}
+              bind:value={filterText}
+            />
+            {#if isFiltering}
+              <button
+                type="button"
+                class="iwac-facet__search-clear"
+                aria-label={t('clear_filter')}
+                onclick={() => (filterText = '')}
+              >
+                <Icon name="x" />
+              </button>
+            {/if}
+          </div>
+        {/if}
 
-      {#if isFiltering}
-        <p class="iwac-facet__hint">
-          {t('match_count', { shown: filtered.length, total: counts.length })}
-        </p>
-      {:else if hiddenCount > 0}
-        <button type="button" class="iwac-facet__more" onclick={() => (expanded = !expanded)}>
-          {expanded ? t('show_less') : t('show_more', { n: hiddenCount })}
-        </button>
+        {#if visible.length === 0}
+          <p class="iwac-facet__empty">{t('no_matches')}</p>
+        {:else}
+          <ul class="iwac-facet__list">
+            {#each visible as fc (fc.value)}
+              <li class="iwac-facet__item">
+                <label class="iwac-facet__option" class:is-selected={selectedSet.has(fc.value)}>
+                  <input
+                    type="checkbox"
+                    class="iwac-facet__checkbox"
+                    checked={selectedSet.has(fc.value)}
+                    onchange={(e) =>
+                      onToggle(field, fc.value, (e.currentTarget as HTMLInputElement).checked)}
+                  />
+                  <span class="iwac-facet__value">{facetValueLabel(field, fc.value, locale)}</span>
+                  <span class="iwac-facet__count">{formatCount(fc.count)}</span>
+                </label>
+              </li>
+            {/each}
+          </ul>
+        {/if}
+
+        {#if isFiltering}
+          <p class="iwac-facet__hint">
+            {t('match_count', { shown: filtered.length, total: counts.length })}
+          </p>
+        {:else if hiddenCount > 0}
+          <button type="button" class="iwac-facet__more" onclick={() => (expanded = !expanded)}>
+            {expanded ? t('show_less') : t('show_more', { n: hiddenCount })}
+          </button>
+        {/if}
       {/if}
-    {/if}
+    </div>
   {/if}
 </section>
 

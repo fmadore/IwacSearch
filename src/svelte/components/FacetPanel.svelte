@@ -1,3 +1,12 @@
+<script module lang="ts">
+  // Per-instance counter so the sentiment group's body id is page-unique
+  // (multiple search surfaces can render a panel each).
+  let panelUid = 0;
+  function nextSentimentBodyId(): string {
+    return `iwac-sentiment-body-${++panelUid}`;
+  }
+</script>
+
 <script lang="ts">
   import type { ActiveFilters, IwacFacet, YearRange } from '../lib/types';
   import {
@@ -115,6 +124,7 @@
   const regularFacets = $derived(facets.filter((f) => !SENTIMENT_FIELDS.has(f.field_name)));
   const sentimentFacets = $derived(facets.filter((f) => SENTIMENT_FIELDS.has(f.field_name)));
   let sentimentOpen = $state(false);
+  const sentimentBodyId = nextSentimentBodyId();
   const sentimentActiveCount = $derived(
     sentimentFacets.reduce((n, f) => n + (selected[f.field_name]?.length ?? 0), 0),
   );
@@ -197,6 +207,7 @@
             type="button"
             class="iwac-facets__group-heading"
             aria-expanded={sentimentOpen}
+            aria-controls={sentimentOpen ? sentimentBodyId : undefined}
             onclick={() => (sentimentOpen = !sentimentOpen)}
           >
             <span class="iwac-facets__group-label">{t('sentiment')}</span>
@@ -208,7 +219,7 @@
             </span>
           </button>
           {#if sentimentOpen}
-            <div class="iwac-facets__group-body">
+            <div class="iwac-facets__group-body" id={sentimentBodyId}>
               {#each sentimentFacets as f (f.field_name)}
                 <FacetGroup
                   field={f.field_name}

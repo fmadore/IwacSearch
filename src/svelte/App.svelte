@@ -234,6 +234,15 @@
   let suggestOpen = $state(false);
   let suggestRef: SuggestDropdown | undefined = $state();
 
+  // ARIA combobox wiring. block_id is unique per mount, so the listbox id (and
+  // the option ids derived from it) never collide when several search surfaces
+  // share a page. suggestActiveId is mirrored up from the dropdown so the input
+  // can set aria-activedescendant; suggestExpanded matches the dropdown's own
+  // render condition (open AND ≥2 chars typed).
+  const suggestListboxId = $derived(`iwac-suggest-${bootstrap.block_id}`);
+  let suggestActiveId = $state<string | null>(null);
+  const suggestExpanded = $derived(suggestOpen && query.trim().length >= 2);
+
   function handleSearchFocus(): void {
     suggestOpen = true;
   }
@@ -434,12 +443,17 @@
         value={query}
         placeholder={t('search_placeholder')}
         onChange={handleQueryChange}
+        listboxId={suggestListboxId}
+        expanded={suggestExpanded}
+        activeDescendant={suggestActiveId}
       />
       <SuggestDropdown
         bind:this={suggestRef}
         {query}
         {client}
         enabled={suggestOpen}
+        listboxId={suggestListboxId}
+        onActiveChange={(id) => (suggestActiveId = id)}
         onPickQuery={handleSuggestPickQuery}
         onRunSearch={handleSuggestRunSearch}
         onPickEntity={handleSuggestPickEntity}

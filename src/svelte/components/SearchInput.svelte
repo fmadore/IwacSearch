@@ -10,14 +10,34 @@
 
   import { untrack } from 'svelte';
   import Icon from './Icon.svelte';
+  import { useI18n } from '../lib/i18n';
 
   interface Props {
     value: string;
     placeholder?: string;
     onChange: (next: string) => void;
+    /**
+     * ARIA combobox wiring. The parent (App.svelte) owns the suggestion
+     * dropdown, so it passes the listbox id, whether it's expanded, and the
+     * id of the active option so this input can advertise itself as a proper
+     * combobox (input that controls a popup listbox). All optional: when the
+     * surface has no typeahead, the input renders as a plain search box.
+     */
+    listboxId?: string;
+    expanded?: boolean;
+    activeDescendant?: string | null;
   }
 
-  const { value, placeholder = '', onChange }: Props = $props();
+  const {
+    value,
+    placeholder = '',
+    onChange,
+    listboxId,
+    expanded = false,
+    activeDescendant = null,
+  }: Props = $props();
+
+  const { t } = useI18n();
 
   // svelte-ignore state_referenced_locally
   // Initial seed only; the $effect below re-syncs if the parent pushes
@@ -58,11 +78,22 @@
 </script>
 
 <div class="iwac-input">
-  <label class="iwac-input__visually-hidden" for="iwac-q">Search</label>
+  <!--
+    Combobox input. aria-label gives it an accessible name without a separate
+    <label for> (which would need a unique id per mount — multiple search
+    surfaces can share a page). aria-controls / aria-activedescendant are only
+    set while the listbox is actually in the DOM (expanded), so they never
+    dangle at a removed element. role/aria-* are inert when listboxId is unset.
+  -->
   <input
-    id="iwac-q"
     class="iwac-input__field"
     type="search"
+    role={listboxId ? 'combobox' : undefined}
+    aria-label={t('search_placeholder')}
+    aria-autocomplete={listboxId ? 'list' : undefined}
+    aria-expanded={listboxId ? expanded : undefined}
+    aria-controls={listboxId && expanded ? listboxId : undefined}
+    aria-activedescendant={listboxId && expanded ? (activeDescendant ?? undefined) : undefined}
     autocomplete="off"
     autocapitalize="off"
     spellcheck="false"
@@ -72,8 +103,11 @@
     oninput={handleInput}
   />
   {#if local !== ''}
-    <button type="button" class="iwac-input__clear" aria-label="Clear search" onclick={handleClear}
-      ><Icon name="x" /></button
+    <button
+      type="button"
+      class="iwac-input__clear"
+      aria-label={t('clear_search')}
+      onclick={handleClear}><Icon name="x" /></button
     >
   {/if}
 </div>
@@ -141,16 +175,5 @@
     color: var(--ink, #2c2f37);
     box-shadow: none;
     transform: none;
-  }
-  .iwac-input__visually-hidden {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    padding: 0;
-    margin: -1px;
-    overflow: hidden;
-    clip: rect(0, 0, 0, 0);
-    white-space: nowrap;
-    border: 0;
   }
 </style>

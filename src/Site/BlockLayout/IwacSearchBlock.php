@@ -105,18 +105,24 @@ class IwacSearchBlock extends AbstractBlockLayout
         $t       = fn(string $s): string => (string) $view->translate($s);
 
         $namePrefix = 'o:block[__blockIndex__][o:data]';
+        // Unique id suffix so each field's <label for> stays associated when
+        // several IWAC blocks are edited on one page (identical ids would
+        // otherwise collide and break label binding / fail an a11y audit).
+        $uid = ($block && $block->id())
+            ? (string) $block->id()
+            : substr(bin2hex(random_bytes(4)), 0, 8);
 
         ob_start();
         ?>
         <div class="field">
             <div class="field-meta">
-                <label for="iwac-search-preset"><?= $esc($t('Scope')) ?></label>
+                <label for="iwac-search-preset-<?= $escAttr($uid) ?>"><?= $esc($t('Scope')) ?></label>
                 <div class="field-description">
                     <?= $esc($t('What this block searches. Pick a ready-made scope, or “Custom…” to set your own content filter + facets in the advanced fields below.')) ?>
                 </div>
             </div>
             <div class="inputs">
-                <select id="iwac-search-preset" name="<?= $escAttr($namePrefix) ?>[preset]">
+                <select id="iwac-search-preset-<?= $escAttr($uid) ?>" name="<?= $escAttr($namePrefix) ?>[preset]">
                     <?php foreach (PresetCatalog::optionsList() as $opt): ?>
                         <option value="<?= $escAttr($opt['value']) ?>"<?= $opt['value'] === $preset ? ' selected' : '' ?>>
                             <?= $esc($t($opt['label'])) ?>
@@ -131,13 +137,13 @@ class IwacSearchBlock extends AbstractBlockLayout
 
         <div class="field">
             <div class="field-meta">
-                <label for="iwac-search-mode"><?= $esc($t('Render mode')) ?></label>
+                <label for="iwac-search-mode-<?= $escAttr($uid) ?>"><?= $esc($t('Render mode')) ?></label>
                 <div class="field-description">
                     <?= $esc($t('Full = standalone discovery surface. Compact = header search box. Results only = curated grid (e.g. "latest from Sidwaya").')) ?>
                 </div>
             </div>
             <div class="inputs">
-                <select id="iwac-search-mode" name="<?= $escAttr($namePrefix) ?>[mode]">
+                <select id="iwac-search-mode-<?= $escAttr($uid) ?>" name="<?= $escAttr($namePrefix) ?>[mode]">
                     <?php foreach (FacetCatalog::RENDER_MODES as $key => $label): ?>
                         <option value="<?= $escAttr($key) ?>"<?= $key === $mode ? ' selected' : '' ?>>
                             <?= $esc($t($label)) ?>
@@ -149,10 +155,10 @@ class IwacSearchBlock extends AbstractBlockLayout
 
         <div class="field">
             <div class="field-meta">
-                <label for="iwac-search-title"><?= $esc($t('Title (optional)')) ?></label>
+                <label for="iwac-search-title-<?= $escAttr($uid) ?>"><?= $esc($t('Title (optional)')) ?></label>
             </div>
             <div class="inputs">
-                <input id="iwac-search-title" type="text"
+                <input id="iwac-search-title-<?= $escAttr($uid) ?>" type="text"
                        name="<?= $escAttr($namePrefix) ?>[title]"
                        value="<?= $escAttr($title) ?>">
             </div>
@@ -160,26 +166,26 @@ class IwacSearchBlock extends AbstractBlockLayout
 
         <div class="field">
             <div class="field-meta">
-                <label for="iwac-search-intro"><?= $esc($t('Intro HTML (optional)')) ?></label>
+                <label for="iwac-search-intro-<?= $escAttr($uid) ?>"><?= $esc($t('Intro HTML (optional)')) ?></label>
                 <div class="field-description">
                     <?= $esc($t('Plain HTML rendered above the search results.')) ?>
                 </div>
             </div>
             <div class="inputs">
-                <textarea id="iwac-search-intro" rows="3"
+                <textarea id="iwac-search-intro-<?= $escAttr($uid) ?>" rows="3"
                           name="<?= $escAttr($namePrefix) ?>[intro_html]"><?= $esc($introHtml) ?></textarea>
             </div>
         </div>
 
         <div class="field">
             <div class="field-meta">
-                <label for="iwac-search-locked"><?= $esc($t('Locked filters (Typesense filter_by)')) ?></label>
+                <label for="iwac-search-locked-<?= $escAttr($uid) ?>"><?= $esc($t('Locked filters (Typesense filter_by)')) ?></label>
                 <div class="field-description">
                     <?= $esc($t('Custom scope only. Enforced server-side. Example: country_ss:=`Burkina Faso` && date:>=946684800')) ?>
                 </div>
             </div>
             <div class="inputs">
-                <input id="iwac-search-locked" type="text"
+                <input id="iwac-search-locked-<?= $escAttr($uid) ?>" type="text"
                        name="<?= $escAttr($namePrefix) ?>[locked_filters]"
                        value="<?= $escAttr($lockedFilters) ?>"
                        placeholder="country_ss:=`Burkina Faso`">
@@ -209,13 +215,13 @@ class IwacSearchBlock extends AbstractBlockLayout
 
         <div class="field">
             <div class="field-meta">
-                <label for="iwac-search-sort"><?= $esc($t('Default sort')) ?></label>
+                <label for="iwac-search-sort-<?= $escAttr($uid) ?>"><?= $esc($t('Default sort')) ?></label>
                 <div class="field-description">
                     <?= $esc($t('Custom scope only — preset scopes use their own default sort.')) ?>
                 </div>
             </div>
             <div class="inputs">
-                <select id="iwac-search-sort" name="<?= $escAttr($namePrefix) ?>[default_sort]">
+                <select id="iwac-search-sort-<?= $escAttr($uid) ?>" name="<?= $escAttr($namePrefix) ?>[default_sort]">
                     <?php foreach (FacetCatalog::SORT_OPTIONS as $key => $label): ?>
                         <option value="<?= $escAttr($key) ?>"<?= $key === $defaultSort ? ' selected' : '' ?>>
                             <?= $esc($t($label)) ?>
@@ -227,10 +233,10 @@ class IwacSearchBlock extends AbstractBlockLayout
 
         <div class="field">
             <div class="field-meta">
-                <label for="iwac-search-perpage"><?= $esc($t('Results per page')) ?></label>
+                <label for="iwac-search-perpage-<?= $escAttr($uid) ?>"><?= $esc($t('Results per page')) ?></label>
             </div>
             <div class="inputs">
-                <input id="iwac-search-perpage" type="number" min="1" max="50" step="1"
+                <input id="iwac-search-perpage-<?= $escAttr($uid) ?>" type="number" min="1" max="50" step="1"
                        name="<?= $escAttr($namePrefix) ?>[results_per_page]"
                        value="<?= $escAttr((string) $resultsPerPage) ?>">
             </div>

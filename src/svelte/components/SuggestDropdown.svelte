@@ -29,6 +29,12 @@
     query: string;
     client: TypesenseClient;
     enabled: boolean;
+    /**
+     * Stable id of this listbox, shared with the SearchInput's aria-controls.
+     * Option ids derive from it so the input's aria-activedescendant can point
+     * at the highlighted row.
+     */
+    listboxId: string;
     /** Seed the query with chosen text (article-with-no-URL fallback). */
     onPickQuery: (next: string) => void;
     /** Run a full-text search for the typed text and close the dropdown. */
@@ -37,10 +43,27 @@
     onPickEntity: (field: string, value: string) => void;
     /** Close the dropdown (e.g. after navigation). */
     onClose: () => void;
+    /**
+     * Report the active option's id (or null when the listbox is closed/empty)
+     * so the parent can mirror it onto the input's aria-activedescendant.
+     */
+    onActiveChange?: (id: string | null) => void;
   }
 
-  const { query, client, enabled, onPickQuery, onRunSearch, onPickEntity, onClose }: Props =
-    $props();
+  const {
+    query,
+    client,
+    enabled,
+    listboxId,
+    onPickQuery,
+    onRunSearch,
+    onPickEntity,
+    onClose,
+    onActiveChange,
+  }: Props = $props();
+
+  /** Stable per-row id for aria-activedescendant wiring. */
+  const optionId = (i: number): string => `${listboxId}-opt-${i}`;
 
   const { locale, t } = useI18n();
 
@@ -126,6 +149,14 @@
     }, 120);
   });
 
+  // Mirror the active option's id onto the parent so it can set the input's
+  // aria-activedescendant. The dropdown only renders when enabled && the query
+  // is ≥2 chars; report null otherwise so the input drops the stale reference.
+  $effect(() => {
+    const open = enabled && query.trim().length >= 2;
+    onActiveChange?.(open && rows.length > 0 ? optionId(highlightedIndex) : null);
+  });
+
   function act(row: Row): void {
     if (row.kind === 'search') {
       onRunSearch(query);
@@ -208,6 +239,7 @@
 {#if enabled && query.trim().length >= 2}
   <div
     class="iwac-suggest"
+    id={listboxId}
     role="listbox"
     aria-label={t('suggestions')}
     tabindex="-1"
@@ -217,6 +249,7 @@
       {#if row.kind === 'search'}
         <button
           type="button"
+          id={optionId(i)}
           class="iwac-suggest__item iwac-suggest__item--search"
           class:iwac-suggest__item--active={i === highlightedIndex}
           onclick={(e) => onRowClick(row, i, e)}
@@ -229,6 +262,7 @@
         </button>
       {:else if row.kind === 'article'}
         <a
+          id={optionId(i)}
           class="iwac-suggest__item"
           class:iwac-suggest__item--active={i === highlightedIndex}
           href={hrefOf(row)}
@@ -245,6 +279,7 @@
       {:else}
         <button
           type="button"
+          id={optionId(i)}
           class="iwac-suggest__item iwac-suggest__item--entity"
           class:iwac-suggest__item--active={i === highlightedIndex}
           onclick={(e) => onRowClick(row, i, e)}

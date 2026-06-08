@@ -210,7 +210,12 @@
     {/each}
   </div>
 
-  <div class="iwac-fed__panel" id="iwac-fed-panel" role="tabpanel">
+  <div
+    class="iwac-fed__panel"
+    id="iwac-fed-panel"
+    role="tabpanel"
+    aria-labelledby="iwac-fed-tab-{activeTab}"
+  >
     {#key activeTab + '::' + query}
       <App bootstrap={activeBootstrap} showSearchBox={false} />
     {/key}
