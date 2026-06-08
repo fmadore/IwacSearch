@@ -4,14 +4,15 @@ declare(strict_types=1);
 /**
  * IwacSearch — Omeka S module.
  *
- * Owns the public discovery surface (/search, /browse/{slug}) backed by
- * Typesense. Admin search, item detail, ingest, and IIIF stay on Omeka.
+ * Owns the public discovery surface (/search, /search/everything, page blocks)
+ * backed by Typesense. Admin search, item detail, ingest, and IIIF stay on
+ * Omeka.
  *
  * Lifecycle:
- *  - install/upgrade: ensure module's own tables exist (iwac_browse_config in M3+)
- *  - bootstrap (attachListeners): inject Svelte assets on /search and
- *    /browse, plus (M4) wire api.*.post listeners so edits in Omeka
- *    propagate to Typesense
+ *  - install: nothing (the module owns no database tables)
+ *  - upgrade: drop the retired iwac_browse_config table if present
+ *  - bootstrap (attachListeners): inject Svelte assets on the search routes,
+ *    plus wire api.*.post listeners so edits in Omeka propagate to Typesense
  *
  * @see https://github.com/fmadore/IWAC-docker/blob/main/docs/iwac-search-roadmap.md
  */
@@ -24,7 +25,6 @@ namespace IwacSearch;
 // (so init() wouldn't fire yet). Matches the ImageServer / IiifServer pattern.
 require_once __DIR__ . '/vendor/autoload.php';
 
-use IwacSearch\Log\LoggerResolver;
 use Laminas\EventManager\Event;
 use Laminas\EventManager\SharedEventManagerInterface;
 use Laminas\Mvc\MvcEvent;
@@ -44,19 +44,18 @@ class Module extends AbstractModule
      *
      * Two zones:
      *
-     *   1. Public discovery (SearchController) — index / token / browse.
-     *      Granted to the null role so anonymous site visitors can hit
-     *      /search, /browse[/{slug}], and /discovery/token. Without this,
-     *      Omeka's default deny-by-default ACL throws
-     *      PermissionDeniedException for every anonymous request and the
-     *      Svelte client shows "Search unavailable. Token HTTP 500" on
-     *      every public surface (including page blocks on Site pages,
-     *      because the block JS still calls /discovery/token).
+     *   1. Public discovery (SearchController) — index / token / browse /
+     *      everything. Granted to the null role so anonymous site visitors can
+     *      hit /search, /search/everything, /discovery/token, and the legacy
+     *      /browse redirect. Without this, Omeka's deny-by-default ACL throws
+     *      PermissionDeniedException for every anonymous request and the Svelte
+     *      client shows "Search unavailable. Token HTTP 500" on every public
+     *      surface (including page blocks, whose JS still calls /discovery/token).
      *
-     *   2. Admin CRUD (Admin\BrowseConfigController) — restricted to
-     *      editor + site-admin + global-admin. The /admin/ parent route
-     *      already guarantees authentication, so this `allow` only
-     *      narrows *which* admin roles pass the check.
+     *   2. Admin Maintenance (Admin\MaintenanceController) — restricted to
+     *      editor + site-admin + global-admin. The /admin/ parent route already
+     *      guarantees authentication, so this `allow` only narrows *which* admin
+     *      roles pass the check.
      *
      * Pass `null` as the first arg to allow EVERY role (anonymous +
      * authenticated). Listing privileges explicitly means adding a
@@ -75,17 +74,6 @@ class Module extends AbstractModule
             null,
             [Controller\SearchController::class],
             ['index', 'token', 'browse', 'everything']
-        );
-
-        // Admin CRUD — editors and above only.
-        $acl->allow(
-            [
-                Acl::ROLE_EDITOR,
-                Acl::ROLE_SITE_ADMIN,
-                Acl::ROLE_GLOBAL_ADMIN,
-            ],
-            [Controller\Admin\BrowseConfigController::class],
-            ['browse', 'apiList', 'apiItem']
         );
 
         // Maintenance page — same role tier. Lets editors dispatch
@@ -307,186 +295,34 @@ class Module extends AbstractModule
     }
 
     /**
-     * Install: create iwac_browse_config table + seed default browse pages.
-     *
-     * Idempotent — `CREATE TABLE IF NOT EXISTS` and the seeders'
-     * existsBySlug() guard mean re-running install (after an uninstall
-     * + reinstall, or as part of an upgrade path) never clobbers data.
-     *
-     * Two seeders run on first install:
-     *   - CountrySeeder    — six country browse pages (Bénin, Burkina Faso, …).
-     *   - ReferencesSeeder — one /browse/references page locked to type_s=reference.
-     *
-     * Existing installations that upgrade from a pre-references-seeder
-     * version: the references-seeder check is harmless (no row exists →
-     * one gets seeded). Either run the upgrade path or invoke the
-     * seeder once via a one-off CLI script.
+     * Install: nothing to do. The module owns no database tables — the former
+     * curated-browse system (iwac_browse_config) was retired and its scopes
+     * moved into PresetCatalog, now selected per page block.
      */
     public function install(ServiceLocatorInterface $services): void
     {
-        $connection = $services->get('Omeka\Connection');
-        $connection->executeStatement(Browse\BrowseConfigRepository::createTableSql());
-
-        $repository = new Browse\BrowseConfigRepository($connection);
-        $logger = LoggerResolver::fromContainer($services);
-
-        $countryStats = (new Browse\CountrySeeder($repository, $logger))->seed();
-        $logger->info('IwacSearch country browse pages seeded', $countryStats);
-
-        $allStats = (new Browse\AllCountriesSeeder($repository, $logger))->seed();
-        $logger->info('IwacSearch all-countries browse page seeded', $allStats);
-
-        $indexStats = (new Browse\IndexSeeder($repository, $logger))->seed();
-        $logger->info('IwacSearch index browse page seeded', $indexStats);
-
-        $refStats = (new Browse\ReferencesSeeder($repository, $logger))->seed();
-        $logger->info('IwacSearch references browse page seeded', $refStats);
     }
 
     /**
-     * Upgrade hook — runs when an installed module's version on disk is
-     * newer than the recorded module-table version. We use it to layer
-     * in browse-config seeds that didn't exist at first-install time
-     * without forcing the operator to uninstall/reinstall.
-     *
-     * Each branch is guarded with a version comparison so re-running an
-     * upgrade is a no-op once the seed has landed.
+     * Upgrade hook. The curated-browse system was retired, so drop its orphan
+     * table on any install that still has it. iwac_browse_config held only
+     * seeded + admin-authored scope rows, now superseded by PresetCatalog
+     * scopes picked per page block — dropping it loses no search data. Old
+     * /browse/{slug} bookmarks keep working via SearchController::browseAction,
+     * which 302-redirects them to /search. Idempotent (DROP … IF EXISTS).
      */
     public function upgrade($oldVersion, $newVersion, ServiceLocatorInterface $services): void
     {
-        // 0.2.17 introduced the references browse page. Anyone on
-        // <0.2.17 missed the install-time seed; trigger it on upgrade.
-        if (version_compare((string) $oldVersion, '0.2.17', '<')) {
-            $connection = $services->get('Omeka\Connection');
-            $repository = new Browse\BrowseConfigRepository($connection);
-            $logger = LoggerResolver::fromContainer($services);
-            $stats = (new Browse\ReferencesSeeder($repository, $logger))->seed();
-            $logger->info('IwacSearch references browse page seeded on upgrade', $stats);
-        }
-
-        // 0.2.22 added the all-countries entry point and surfaced the
-        // centrality + subjectivity sentiment facets. Seed the new page and
-        // re-apply the default facet stack to the seeded country pages + the
-        // all-countries page so existing installs get the Sentiment group
-        // without an uninstall/reinstall. Only touches system-seeded slugs;
-        // admin-authored custom pages are left untouched.
-        if (version_compare((string) $oldVersion, '0.2.22', '<')) {
-            $connection = $services->get('Omeka\Connection');
-            $repository = new Browse\BrowseConfigRepository($connection);
-            $logger = LoggerResolver::fromContainer($services);
-
-            $allStats = (new Browse\AllCountriesSeeder($repository, $logger))->seed();
-            $logger->info('IwacSearch all-countries browse page seeded on upgrade', $allStats);
-
-            $facetsBySlug = [];
-            foreach (Browse\Countries::slugs() as $slug) {
-                $facetsBySlug[$slug] = Browse\CountrySeeder::DEFAULT_FACETS;
-            }
-            $facetsBySlug[Browse\AllCountriesSeeder::SLUG] = Browse\AllCountriesSeeder::DEFAULT_FACETS;
-
-            foreach ($facetsBySlug as $slug => $facets) {
-                $existing = $repository->findBySlug($slug);
-                if ($existing === null || $existing->prominentFacets === $facets) {
-                    continue;
-                }
-                $repository->save(new Browse\BrowseConfig(
-                    id:               $existing->id,
-                    slug:             $existing->slug,
-                    title:            $existing->title,
-                    introHtml:        $existing->introHtml,
-                    lockedFilters:    $existing->lockedFilters,
-                    prominentFacets:  $facets,
-                    defaultSort:      $existing->defaultSort,
-                    resultsPerPage:   $existing->resultsPerPage,
-                    position:         $existing->position,
-                ));
-                $logger->info('IwacSearch refreshed browse facets on upgrade', ['slug' => $slug]);
-            }
-        }
-
-        // 0.2.23 added the Index browse page (entity collection). Seed it on
-        // upgrade. NOTE: the entity collection itself is built by the next
-        // discovery:reindex run (it now builds both collections) — until
-        // then the page renders but returns no entities.
-        if (version_compare((string) $oldVersion, '0.2.23', '<')) {
-            $connection = $services->get('Omeka\Connection');
-            $repository = new Browse\BrowseConfigRepository($connection);
-            $logger = LoggerResolver::fromContainer($services);
-            $stats = (new Browse\IndexSeeder($repository, $logger))->seed();
-            $logger->info('IwacSearch index browse page seeded on upgrade', $stats);
-        }
-
-        // 0.2.27 reordered the all-countries facets so Country (the natural
-        // slicer for an all-corpus page) sits ABOVE Type. The seeder's
-        // existsBySlug() guard never rewrites an already-seeded row, so push
-        // the new order onto the existing all-countries config here. The ===
-        // guard makes it a no-op once applied and leaves any admin-customised
-        // facet list untouched only if it happens to already match — an admin
-        // who reordered these intentionally would be re-normalised, which is
-        // acceptable for a system-seeded page (custom pages are never touched).
-        if (version_compare((string) $oldVersion, '0.2.27', '<')) {
-            $connection = $services->get('Omeka\Connection');
-            $repository = new Browse\BrowseConfigRepository($connection);
-            $logger = LoggerResolver::fromContainer($services);
-
-            $slug = Browse\AllCountriesSeeder::SLUG;
-            $existing = $repository->findBySlug($slug);
-            if ($existing !== null
-                && $existing->prominentFacets !== Browse\AllCountriesSeeder::DEFAULT_FACETS
-            ) {
-                $repository->save(new Browse\BrowseConfig(
-                    id:               $existing->id,
-                    slug:             $existing->slug,
-                    title:            $existing->title,
-                    introHtml:        $existing->introHtml,
-                    lockedFilters:    $existing->lockedFilters,
-                    prominentFacets:  Browse\AllCountriesSeeder::DEFAULT_FACETS,
-                    defaultSort:      $existing->defaultSort,
-                    resultsPerPage:   $existing->resultsPerPage,
-                    position:         $existing->position,
-                ));
-                $logger->info('IwacSearch reordered all-countries facets on upgrade', ['slug' => $slug]);
-            }
-        }
-
-        // 0.2.28 reworked the references browse page: Country moved to the top
-        // of the facet list (directly under the year slider) and the Author
-        // (creator_ss) facet — indexed all along but never surfaced — was
-        // added. Re-apply the new facet set to the existing references config;
-        // the === guard makes it a no-op once applied. No Typesense reindex is
-        // needed: creator_ss is already populated in the live collection.
-        if (version_compare((string) $oldVersion, '0.2.28', '<')) {
-            $connection = $services->get('Omeka\Connection');
-            $repository = new Browse\BrowseConfigRepository($connection);
-            $logger = LoggerResolver::fromContainer($services);
-
-            $slug = Browse\ReferencesSeeder::SLUG;
-            $existing = $repository->findBySlug($slug);
-            if ($existing !== null
-                && $existing->prominentFacets !== Browse\ReferencesSeeder::DEFAULT_FACETS
-            ) {
-                $repository->save(new Browse\BrowseConfig(
-                    id:               $existing->id,
-                    slug:             $existing->slug,
-                    title:            $existing->title,
-                    introHtml:        $existing->introHtml,
-                    lockedFilters:    $existing->lockedFilters,
-                    prominentFacets:  Browse\ReferencesSeeder::DEFAULT_FACETS,
-                    defaultSort:      $existing->defaultSort,
-                    resultsPerPage:   $existing->resultsPerPage,
-                    position:         $existing->position,
-                ));
-                $logger->info('IwacSearch reordered + exposed author on references facets on upgrade', ['slug' => $slug]);
-            }
-        }
+        $connection = $services->get('Omeka\Connection');
+        $connection->executeStatement('DROP TABLE IF EXISTS iwac_browse_config');
     }
 
     public function uninstall(ServiceLocatorInterface $services): void
     {
         $connection = $services->get('Omeka\Connection');
-        // Drop module-owned tables only — never touches Typesense data,
-        // since that may be shared with a parallel install.
-        $connection->executeStatement(Browse\BrowseConfigRepository::dropTableSql());
+        // Drop the retired curated-browse table if an earlier version created
+        // it. Never touches Typesense data (may be shared with another install).
+        $connection->executeStatement('DROP TABLE IF EXISTS iwac_browse_config');
 
         // Clean up the cached search-only key so a fresh install bootstraps
         // a new one rather than reusing a key the previous install owned.

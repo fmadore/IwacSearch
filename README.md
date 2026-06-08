@@ -10,7 +10,7 @@ on Omeka.
 
 ## Status
 
-**M3.5 + public SSR.** Both discovery surfaces (public `/search`, `/browse/{slug}`, page blocks) and the admin CRUD (`/admin/iwac-search/browse-config`) now paint results on first frame. The server calls Typesense during PHP dispatch, inlines the first-page response + facet counts into the bootstrap JSON, and the Svelte client seeds its `response` state at mount without any fetch roundtrip. If Typesense is unreachable the SSR quietly returns null and the client falls back to its normal scoped-key flow — same end state, one extra flash.
+**Public SSR.** Every discovery surface (`/search`, the federated `/search/everything`, and page blocks) paints results on first frame. The server calls Typesense during PHP dispatch, inlines the first-page response + facet counts into the bootstrap JSON, and the Svelte client seeds its `response` state at mount without any fetch roundtrip. If Typesense is unreachable the SSR quietly returns null and the client falls back to its normal scoped-key flow — same end state, one extra flash.
 
 Admin CRUD mutations are optimistic (row appears / updates / disappears immediately) with rollback on server error. Editors + site-admins + global-admins have access via ACL rules in `Module::onBootstrap`.
 
@@ -104,8 +104,8 @@ IwacSearch/
 │   └── module.config.php                       # Routes, controllers, blocks, services
 ├── src/
 │   ├── Controller/
-│   │   ├── SearchController.php                # /search, /discovery/token, /browse[/:slug]
-│   │   └── Admin/BrowseConfigController.php    # /admin/iwac-search/browse-config[/api[/:id]]
+│   │   ├── SearchController.php                # /search, /search/everything, /discovery/token, /browse redirect
+│   │   └── Admin/MaintenanceController.php     # /admin/iwac-search/maintenance (reindex, stopwords, status)
 │   ├── Indexer/                                # Bulk reindex pipeline (reads Omeka MySQL)
 │   │   ├── SchemaLoader.php                    #   reads data/schema.yaml
 │   │   ├── OmekaSourceReader.php               #   DBAL: keyset item stream + value loading
@@ -122,17 +122,16 @@ IwacSearch/
 │   │   │   └── MapperRegistry.php
 │   │   ├── Reindexer.php                       #   content collection, atomic alias swap
 │   │   └── IndexReindexer.php                  #   entity (iwac_index) collection
-│   ├── Browse/                                 # Curated /browse/{slug} surfaces
-│   │   ├── BrowseConfig.php                    #   read-only DTO
-│   │   ├── BrowseConfigRepository.php          #   DBAL CRUD against iwac_browse_config
-│   │   ├── CountrySeeder.php                   #   seeds 6 country pages on install
-│   │   └── FacetCatalog.php                    #   shared facet/sort/mode constants
+│   ├── Browse/
+│   │   └── FacetCatalog.php                    #   facetable fields + content/entity sort sets
 │   ├── Site/BlockLayout/IwacSearchBlock.php    # Page block — drop into any Site page
 │   ├── Log/
 │   │   ├── OmekaPsrLogger.php                  # PSR-3 ↔ Laminas\Log adapter (psr/log 3.x-safe)
 │   │   └── LoggerResolver.php                  # static helper: container → wrapped PSR-3 logger
 │   ├── View/Helper/IwacBootstrapJson.php       # encodes bootstrap blob with the canonical JSON flag set
 │   ├── Search/
+│   │   ├── PresetCatalog.php · Preset.php      # page-block scopes (all / country / references / entity index)
+│   │   ├── SearchDefaults.php                  # per-collection query_by / highlight fields
 │   │   ├── InitialResponseRenderer.php         # SSR: PHP→Typesense, inlines first page into bootstrap
 │   │   └── TypesenseSearchKeyProvider.php      # mints scoped keys for the browser
 │   ├── svelte/                                 # Svelte 5 + TS client source — public bundle
@@ -152,27 +151,15 @@ IwacSearch/
 │   │   │   ├── urlState.ts                     #   bidirectional URL ↔ memory sync
 │   │   │   └── labels.ts                       #   schema field → display label
 │   │   └── main.ts                             #   IIFE entry; auto-mounts on every root
-│   ├── svelte-admin/                           # Svelte 5 + TS client source — admin bundle
-│   │   ├── App.svelte                          #   list + drawer + error banner
-│   │   ├── components/
-│   │   │   ├── ConfigTable.svelte              #   rows + inline delete-confirm
-│   │   │   ├── ConfigFormDrawer.svelte         #   create/edit form (uses shared <Drawer>)
-│   │   │   └── FacetPicker.svelte              #   reorderable checkbox grid
-│   │   ├── lib/
-│   │   │   ├── api.ts                          #   JSON CRUD client + error envelope
-│   │   │   ├── store.svelte.ts                 #   optimistic state (Svelte 5 runes)
-│   │   │   └── types.ts                        #   BrowseConfig, ApiError, Bootstrap
-│   │   └── main.ts                             #   IIFE entry; mounts on [data-iwac-admin-root]
-│   ├── svelte-shared/                          # Reusable widgets used by BOTH bundles
+│   ├── svelte-shared/                          # Reusable widgets used by the public bundle
 │   │   └── components/
 │   │       └── Drawer.svelte                   #   slide-in overlay (animation, ESC, scroll lock)
 │   └── Service/                                # Service-locator factories only (services live elsewhere)
 │       ├── SearchControllerFactory.php
 │       ├── TypesenseClientFactory.php          # Admin client (reads Docker secret)
 │       ├── TypesenseClientLazy.php             # static helper: container → Closure(): TypesenseClient
-│       ├── BrowseConfigRepositoryFactory.php
 │       ├── BlockLayout/IwacSearchBlockFactory.php
-│       ├── Controller/BrowseConfigControllerFactory.php
+│       ├── Controller/MaintenanceControllerFactory.php
 │       ├── Indexer/{IncrementalIndexerFactory,ItemEventListenerFactory}.php
 │       └── Search/InitialResponseRendererFactory.php
 ├── cli/
@@ -183,17 +170,17 @@ IwacSearch/
 │   ├── stopwords-fr.json                       # French stopword set (loaded as fr_default)
 │   └── newspaper-countries.json                # Newspaper → country map (derives country_ss)
 ├── view/
-│   ├── iwac-search/search/{index,browse,browse-list}.phtml
-│   ├── iwac-search/admin/browse-config/browse.phtml   # Admin CRUD shell (M3.5)
+│   ├── iwac-search/search/{index,everything}.phtml
+│   ├── iwac-search/admin/maintenance/index.phtml      # Admin maintenance page
 │   ├── common/iwac-search-mount.phtml                 # Shared Svelte mount partial (one source of truth)
 │   └── common/block-layout/iwac-search-block.phtml
 ├── asset/
 │   ├── css/iwac-search.css                     # Block container + skeleton (consumes IWAC-theme tokens)
 │   └── dist/                                   # Compiled Svelte bundles (committed; CI rebuilds on PR)
-│       ├── iwac-search.js                      #   public client, ~22 KB gzipped IIFE
+│       ├── iwac-search.js                      #   public client (~35 KB gzipped IIFE)
 │       ├── iwac-search.css                     #   public component styles
-│       ├── iwac-search-admin.js                #   admin CRUD client, ~20 KB gzipped IIFE
-│       └── iwac-search-admin.css               #   admin component styles
+│       ├── iwac-search-header.js               #   header typeahead (~12 KB gzipped IIFE)
+│       └── iwac-search-header.css              #   header dropdown styles
 ├── .github/
 │   ├── dependabot.yml                          # weekly grouped updates: npm + composer + actions
 │   └── workflows/ci.yml                        # lint + svelte-check + build + PHP syntax
@@ -301,62 +288,27 @@ a query is present — browse mode (`q=*`) stays in strict date order.
 Curated `/browse/{slug}` pages and page blocks omit the tag, so they keep
 raw relevance order.
 
-### Curated browse pages
+### Search scopes (page-block presets)
 
-Each row in the module-owned `iwac_browse_config` table renders as a
-public surface at `/browse/{slug}`. The Svelte client mounts with the
-row's `locked_filters` baked into the bootstrap — those filters become
-part of the scoped key the server mints, so they're enforced
-server-side and can't be removed by client tampering.
+A page block's **Scope** dropdown picks a ready-made scope from
+`src/Search/PresetCatalog.php` — the whole corpus, one country, the
+references subset, or the entity index — or **Custom…** for a raw
+content-collection `filter_by`. Each preset drives the collection, the
+locked filter (baked into the scoped key, so enforced server-side), the
+facet set, and the default sort. Compose discovery pages by dropping a
+block onto any Omeka page alongside your own text/HTML blocks.
 
-Six country pages are auto-seeded on install (`CountrySeeder.php`):
+| Scope        | Collection           | Locked filter               |
+| ------------ | -------------------- | --------------------------- |
+| All content  | `iwac_current`       | — (`is_public:=true` only)  |
+| Bénin … Togo | `iwac_current`       | `` country_ss:=`Bénin` `` … |
+| References   | `iwac_current`       | `type_s:=reference`         |
+| Entity index | `iwac_index_current` | — (entity cards, frequency) |
 
-| Slug           | URL                    | Locked filter                     |
-| -------------- | ---------------------- | --------------------------------- |
-| `benin`        | `/browse/benin`        | `` country_ss:=`Bénin` ``         |
-| `burkina-faso` | `/browse/burkina-faso` | `` country_ss:=`Burkina Faso` ``  |
-| `cote-divoire` | `/browse/cote-divoire` | `` country_ss:=`Côte d'Ivoire` `` |
-| `niger`        | `/browse/niger`        | `` country_ss:=`Niger` ``         |
-| `nigeria`      | `/browse/nigeria`      | `` country_ss:=`Nigeria` ``       |
-| `togo`         | `/browse/togo`         | `` country_ss:=`Togo` ``          |
-
-The seeder is idempotent — `existsBySlug()` skips configs that already
-exist, so a future re-install never clobbers admin edits. Add a new
-country = either add one row to `CountrySeeder::COUNTRIES` and reinstall,
-or use the M3.5 admin UI at `/admin/iwac-search/browse-config` to create
-one from scratch.
-
-### Admin CRUD (M3.5)
-
-Authenticated editors / site admins / global admins land at
-`/admin/iwac-search/browse-config` (sidebar entry: **IWAC Search**) and
-see a table of every curated surface. The page is rendered with the
-full config list **already inlined** in its bootstrap JSON — one PHP
-round-trip to `iwac_browse_config`, zero browser fetches on mount. The
-admin Svelte app paints its table on first frame.
-
-Everything interactive — creating a new surface, editing title / intro /
-locked filter / facet picks, reordering facets with ↑↓ buttons, deleting
-a config — runs through the JSON API:
-
-```
-GET    /admin/iwac-search/browse-config/api         → list
-POST   /admin/iwac-search/browse-config/api         → create
-GET    /admin/iwac-search/browse-config/api/{id}    → one
-PATCH  /admin/iwac-search/browse-config/api/{id}    → update
-DELETE /admin/iwac-search/browse-config/api/{id}    → delete
-```
-
-Writes require a matching `X-CSRF-Token` header (minted server-side per
-session and echoed in the bootstrap). The admin session cookie is the
-primary authentication gate — the ACL rules in `Module::onBootstrap`
-decide which roles pass.
-
-Mutations are **optimistic**: the UI updates locally before the server
-confirms, and rolls back with a visible error banner if the request
-fails. Creates show a pulsing "provisional" row until the server
-returns the canonical id. Delete uses inline confirmation (`Delete →
-Confirm?`) rather than a modal — two clicks, zero popups.
+The earlier `iwac_browse_config` table + admin CRUD UI were retired. Old
+`/browse/{slug}` links still work: `SearchController::browseAction`
+302-redirects them to the equivalent `/search?f.…` (or, for the index,
+`/search/everything?tab=entities`). The `upgrade()` hook drops the table.
 
 ## Running the bulk reindex
 
@@ -376,10 +328,10 @@ never affects production.
 
 Two Vite builds emit two IIFE bundles side by side:
 
-| Bundle                       | Source              | Mounted on                               |
-| ---------------------------- | ------------------- | ---------------------------------------- |
-| `iwac-search.{js,css}`       | `src/svelte/`       | `/search`, `/browse/{slug}`, page blocks |
-| `iwac-search-admin.{js,css}` | `src/svelte-admin/` | `/admin/iwac-search/browse-config`       |
+| Bundle                        | Source                 | Mounted on                                   |
+| ----------------------------- | ---------------------- | -------------------------------------------- |
+| `iwac-search.{js,css}`        | `src/svelte/`          | `/search`, `/search/everything`, page blocks |
+| `iwac-search-header.{js,css}` | `src/svelte/header.ts` | theme header search box (every site page)    |
 
 Both compiled bundles (`asset/dist/*`) are committed so production
 deployments work with no Node toolchain. To rebuild after changing
@@ -389,7 +341,7 @@ Svelte source:
 npm install              # one-time: ~100 packages, ~6 s
 npm run build            # builds both bundles sequentially
 npm run build:public     # only the public discovery bundle
-npm run build:admin      # only the admin CRUD bundle
+npm run build:header     # only the header typeahead bundle
 npm run dev              # vite watch mode (whichever bundle IWAC_BUNDLE names)
 npm run check            # svelte-check (TypeScript + Svelte 5 reactivity)
 npm run lint             # eslint + prettier --check on both trees

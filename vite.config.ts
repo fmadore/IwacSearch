@@ -9,19 +9,13 @@ import { resolve } from 'node:path';
  *                                (mounts on /search, /browse/{slug}, and
  *                                 page blocks via [data-iwac-search-root])
  *
- *   iwac-search-admin.{js,css} — admin CRUD app for curated browse pages
- *                                (mounts under /admin/iwac-search/...
- *                                 via [data-iwac-admin-root])
- *
  *   iwac-search-header.{js,css} — tiny, framework-free header typeahead
  *                                (enhances the IWAC-theme header search box
  *                                 on every site page; navigates to /search)
  *
- * Why separate bundles instead of one admin + public SPA:
- *   - Public pages should not ship admin-CRUD code the anonymous visitor
- *     can't use anyway. ~25 KB gzipped saved per public page.
- *   - Different mount contracts, different state shapes, different
- *     security tradeoffs (admin needs CSRF, public doesn't).
+ * Why two bundles instead of one:
+ *   - The public discovery app loads only on the search surfaces; the header
+ *     typeahead is framework-free and loads site-wide, so it must stay tiny.
  *   - Build failures in one don't block the other.
  *
  * Both bundles are IIFE for the same reasons the public client was:
@@ -35,11 +29,6 @@ const bundles = {
     fileName: 'iwac-search',
     name: 'IwacSearch',
   },
-  admin: {
-    entry: 'src/svelte-admin/main.ts',
-    fileName: 'iwac-search-admin',
-    name: 'IwacSearchAdmin',
-  },
   header: {
     entry: 'src/svelte/header.ts',
     fileName: 'iwac-search-header',
@@ -48,8 +37,8 @@ const bundles = {
 } as const;
 
 // Vite's lib mode takes a single entry, so we select one per build via the
-// IWAC_BUNDLE env var (`cross-env IWAC_BUNDLE=admin vite build`). The npm
-// scripts drive all three in sequence; CI runs them in parallel via matrix.
+// IWAC_BUNDLE env var (`cross-env IWAC_BUNDLE=header vite build`). The npm
+// scripts drive both in sequence; CI runs them in parallel via matrix.
 const activeBundleName = (process.env.IWAC_BUNDLE ?? 'public') as keyof typeof bundles;
 const active = bundles[activeBundleName] ?? bundles.public;
 
@@ -70,8 +59,8 @@ export default defineConfig({
     },
     rollupOptions: {
       output: {
-        // Force a stable CSS filename per bundle — Module.php + the
-        // admin controller both reference these by literal path.
+        // Force a stable CSS filename per bundle — Module.php references
+        // these by literal path.
         assetFileNames: (asset) =>
           asset.name?.endsWith('.css') ? `${active.fileName}.css` : 'assets/[name][extname]',
       },

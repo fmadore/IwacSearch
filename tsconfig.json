@@ -18,8 +18,6 @@
   "include": [
     "src/svelte/**/*.ts",
     "src/svelte/**/*.svelte",
-    "src/svelte-admin/**/*.ts",
-    "src/svelte-admin/**/*.svelte",
     "src/svelte-shared/**/*.ts",
     "src/svelte-shared/**/*.svelte",
     "vite.config.ts"

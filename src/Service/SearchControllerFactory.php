@@ -3,7 +3,6 @@ declare(strict_types=1);
 
 namespace IwacSearch\Service;
 
-use IwacSearch\Browse\BrowseConfigRepository;
 use IwacSearch\Controller\SearchController;
 use IwacSearch\Log\LoggerResolver;
 use IwacSearch\Search\InitialResponseRenderer;
@@ -16,7 +15,6 @@ use Psr\Container\ContainerInterface;
  *
  * Wires:
  *   - TypesenseSearchKeyProvider — mints scoped keys on /discovery/token
- *   - BrowseConfigRepository     — reads `iwac_browse_config` for /browse
  *   - module config              — typesense conn + scoped-key constraints
  *
  * The TypesenseClient itself is not injected into the controller —
@@ -42,7 +40,6 @@ class SearchControllerFactory implements FactoryInterface
 
         return new SearchController(
             keyProvider:        $keyProvider,
-            browseRepository:   $container->get(BrowseConfigRepository::class),
             initialRenderer:    $container->get(InitialResponseRenderer::class),
             config:             $config,
             logger:             $logger

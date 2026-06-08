@@ -19,8 +19,6 @@ return [
             // /run/secrets/typesense_api_key Docker secret. Never read
             // from app config or env vars in production.
             TypesenseClient::class => Service\TypesenseClientFactory::class,
-            // Browse-config repository, talks to Omeka's shared DBAL connection.
-            Browse\BrowseConfigRepository::class => Service\BrowseConfigRepositoryFactory::class,
             // Server-side pre-renderer — calls Typesense during PHP dispatch
             // so the first page of results is inlined into the bootstrap JSON
             // and the Svelte client paints without any mount-time fetch.
@@ -38,9 +36,8 @@ return [
 
     'controllers' => [
         'factories' => [
-            Controller\SearchController::class                => Service\SearchControllerFactory::class,
-            Controller\Admin\BrowseConfigController::class    => Service\Controller\BrowseConfigControllerFactory::class,
-            Controller\Admin\MaintenanceController::class     => Service\Controller\MaintenanceControllerFactory::class,
+            Controller\SearchController::class            => Service\SearchControllerFactory::class,
+            Controller\Admin\MaintenanceController::class => Service\Controller\MaintenanceControllerFactory::class,
         ],
     ],
 
@@ -64,9 +61,9 @@ return [
 
     'router' => [
         'routes' => [
-            // Admin CRUD for curated browse configs (M3.5). One HTML shell +
-            // two JSON endpoints. All three nest under /admin/iwac-search
-            // so the AdminModule nav entry has a single parent to target.
+            // Admin Maintenance page (reindex / stopwords / live index status),
+            // nested under /admin/iwac-search so the AdminModule nav entry has a
+            // single parent to target.
             'admin' => [
                 'child_routes' => [
                     'iwac-search' => [
@@ -75,37 +72,12 @@ return [
                             'route'    => '/iwac-search',
                             'defaults' => [
                                 '__NAMESPACE__' => 'IwacSearch\Controller\Admin',
-                                'controller'    => Controller\Admin\BrowseConfigController::class,
-                                'action'        => 'browse',
+                                'controller'    => Controller\Admin\MaintenanceController::class,
+                                'action'        => 'index',
                             ],
                         ],
                         'may_terminate' => true,
                         'child_routes' => [
-                            // HTML shell: /admin/iwac-search/browse-config
-                            'browse-config' => [
-                                'type'    => \Laminas\Router\Http\Literal::class,
-                                'options' => [
-                                    'route'    => '/browse-config',
-                                    'defaults' => ['action' => 'browse'],
-                                ],
-                            ],
-                            // JSON collection endpoint — GET (list) + POST (create)
-                            'browse-config-api-list' => [
-                                'type'    => \Laminas\Router\Http\Literal::class,
-                                'options' => [
-                                    'route'    => '/browse-config/api',
-                                    'defaults' => ['action' => 'apiList'],
-                                ],
-                            ],
-                            // JSON item endpoint — GET / PATCH / DELETE
-                            'browse-config-api-item' => [
-                                'type'    => \Laminas\Router\Http\Segment::class,
-                                'options' => [
-                                    'route'       => '/browse-config/api/:id',
-                                    'constraints' => ['id' => '\d+'],
-                                    'defaults'    => ['action' => 'apiItem'],
-                                ],
-                            ],
                             // Maintenance HTML page: /admin/iwac-search/maintenance
                             'maintenance' => [
                                 'type'    => \Laminas\Router\Http\Literal::class,
@@ -183,14 +155,11 @@ return [
                 ],
             ],
 
-            // Curated browse pages (M3). Slug resolves to a row in
-            // iwac_browse_config; the controller hydrates the same Svelte
-            // shell with locked filters + prominent facets.
-            //
-            // Kept at the global root for back-compat: URLs like
-            // https://islam.zmo.de/browse/benin remain valid for any
-            // bookmark / external link minted before site-scoped routes
-            // existed.
+            // Legacy browse routes — kept only to redirect old bookmarks to
+            // /search (the curated browse-config system was retired). URLs like
+            // https://islam.zmo.de/browse/benin 302 to /search?f.country_ss=…;
+            // /browse/index → /search/everything?tab=entities. See
+            // SearchController::browseAction.
             'iwac-browse' => [
                 'type'    => \Laminas\Router\Http\Segment::class,
                 'options' => [
@@ -203,10 +172,7 @@ return [
                 ],
             ],
 
-            // French-language alias of /browse. Same controller + action;
-            // the slug resolves against the same iwac_browse_config rows.
-            // The French site links here (Parcourir) while the English site
-            // uses /browse — see Site\NavigationLink\IwacBrowse::toZend.
+            // French-language alias of /browse — same redirect action.
             'iwac-parcourir' => [
                 'type'    => \Laminas\Router\Http\Segment::class,
                 'options' => [
@@ -219,18 +185,10 @@ return [
                 ],
             ],
 
-            // Site-scoped variant of the same route. Nesting under the
-            // `site` parent automatically prefixes /s/:site-slug, so the
-            // public URL becomes /s/{site-slug}/browse/{slug}. Required
-            // for the Site\NavigationLink\IwacBrowse link type — Omeka's
-            // navigation helper generates URLs from the route name, and
-            // the menu must keep the visitor inside their language site
-            // (French /s/afrique_ouest, English /s/westafrica).
-            //
-            // Same controller, same action, no controller changes — the
-            // basePath() calls in the templates pick up the application
-            // base path; the site mount has no effect on the global
-            // /discovery/token + /search-api/multi_search endpoints.
+            // Site-scoped variants of the legacy browse redirect: a bookmarked
+            // /s/{site-slug}/browse/{slug} redirects to that site's own /search
+            // (preserving the language site). Also holds the site-scoped /search
+            // + /search/everything routes the header search form targets.
             'site' => [
                 'child_routes' => [
                     'iwac-browse' => [
@@ -352,40 +310,17 @@ return [
         ],
     ],
 
-    // Site-navigation link types. Adds "IWAC Browse" to the dropdown a
-    // site admin sees when editing the site's nav menu, lets them pick
-    // one of the curated /browse/{slug} pages, and renders it as a
-    // proper site-scoped link. See Site\NavigationLink\IwacBrowse.
-    //
-    // Registered as `factories` (not `invokables`) because the link
-    // type needs the BrowseConfigRepository injected to resolve id →
-    // slug at URL-generation time and id → title at label-render time.
-    'navigation_links' => [
-        'factories' => [
-            'iwacBrowse' => Service\NavigationLink\IwacBrowseFactory::class,
-        ],
-    ],
-
     // Sidebar entry under Omeka's "Modules" admin menu.
     'navigation' => [
         'AdminModule' => [
             [
                 'label'    => 'IWAC Search', // @translate
-                'route'    => 'admin/iwac-search/browse-config',
-                'resource' => Controller\Admin\BrowseConfigController::class,
+                'route'    => 'admin/iwac-search/maintenance',
+                'resource' => Controller\Admin\MaintenanceController::class,
                 'class'    => 'o-icon-search',
                 'pages' => [
-                    // Maintenance — visible sub-entry, lets editors trigger
-                    // reindex / stopwords-sync without docker exec access.
-                    [
-                        'label'    => 'Maintenance', // @translate
-                        'route'    => 'admin/iwac-search/maintenance',
-                        'resource' => Controller\Admin\MaintenanceController::class,
-                    ],
                     // Hidden child routes — let Omeka highlight the parent
                     // entry when one of these sub-pages is active.
-                    ['route' => 'admin/iwac-search/browse-config-api-list',     'visible' => false],
-                    ['route' => 'admin/iwac-search/browse-config-api-item',     'visible' => false],
                     ['route' => 'admin/iwac-search/maintenance-reindex',        'visible' => false],
                     ['route' => 'admin/iwac-search/maintenance-sync-stopwords', 'visible' => false],
                 ],
@@ -402,7 +337,7 @@ return [
             'api_key_file'     => '/run/secrets/typesense_api_key',
             'collection_alias' => 'iwac_current',
             // Second collection: the index/authority entities, built by
-            // IndexReindexer and browsed via the /browse/index page.
+            // IndexReindexer and surfaced via the /search/everything Entities tab.
             'index_collection_alias' => 'iwac_index_current',
         ],
         'public_search_key' => [

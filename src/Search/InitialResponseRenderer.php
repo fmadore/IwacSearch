@@ -241,8 +241,8 @@ final class InitialResponseRenderer
      *
      *   - `is_public:=true` is ALWAYS prepended (the admin key would
      *     otherwise return non-public docs)
-     *   - The surface's `locked_filters` come next (already validated
-     *     by the admin CRUD or seeded by CountrySeeder)
+     *   - The surface's `locked_filters` come next (a PresetCatalog scope
+     *     or a custom page-block filter)
      *
      * The two are joined with `&&`. If locked_filters is empty we still
      * emit the public guard alone.

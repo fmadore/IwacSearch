@@ -19,10 +19,9 @@ namespace IwacSearch\Browse;
  *                        integrations) can pull from the same list
  *                        without re-copying.
  *
- * Both the page-block form (IwacSearchBlock::form) and the admin Svelte
- * app read from these arrays, so adding a new facetable field or a new
- * sort option is a one-line change here rather than a sweep across
- * three places that must stay in sync.
+ * The page-block form (IwacSearchBlock::form) reads from these arrays, so
+ * adding a new facetable field or a new sort option is a one-line change
+ * here rather than a sweep across the places that must stay in sync.
  *
  * Keep this class pure data — no services, no I/O. Tests rely on it
  * being instantiation-free.

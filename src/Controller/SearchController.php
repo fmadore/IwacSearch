@@ -3,9 +3,6 @@ declare(strict_types=1);
 
 namespace IwacSearch\Controller;
 
-use IwacSearch\Browse\AllCountriesSeeder;
-use IwacSearch\Browse\BrowseConfigRepository;
-use IwacSearch\Browse\IndexSeeder;
 use IwacSearch\Indexer\CurationSync;
 use IwacSearch\Search\InitialResponseRenderer;
 use IwacSearch\Search\PresetCatalog;
@@ -24,9 +21,10 @@ use Throwable;
  * Public discovery controller.
  *
  *   GET /search             — HTML shell + Svelte bundle (standalone surface)
+ *   GET /search/everything  — federated Content + Entities surface
  *   GET /discovery/token    — mints a 1h scoped key for the browser
- *   GET /browse             — landing page listing curated browse configs
- *   GET /browse/:slug       — one curated browse page (Svelte mounted with locked filters)
+ *   GET /browse[/:slug]     — legacy redirect to /search (the curated
+ *                             browse-config system was retired)
  *
  * Same root + state script contract as IwacSearchBlock so the same
  * Svelte client mounts on every surface.
@@ -57,7 +55,6 @@ class SearchController extends AbstractActionController
 
     public function __construct(
         private readonly TypesenseSearchKeyProvider $keyProvider,
-        private readonly BrowseConfigRepository $browseRepository,
         private readonly InitialResponseRenderer $initialRenderer,
         /** @var array<string, mixed> */
         private readonly array $config = [],
@@ -263,82 +260,48 @@ class SearchController extends AbstractActionController
     }
 
     /**
-     * GET /browse[/:slug]
+     * GET /browse[/:slug] (+ /parcourir + the site-scoped variants).
      *
-     * Without a slug (or with an unknown slug) — the curated landing grid
-     * was removed (the browse pages live in the site navigation), so this
-     * redirects to the all-countries page: the broadest browse entry point.
-     * Old /browse and /browse/<stale-slug> links keep working.
+     * The curated browse-config system was retired. These routes now exist
+     * only to keep old bookmarks / external links working, redirecting each
+     * legacy slug to its successor surface:
      *
-     * With a known slug — load the matching config row, render the same
-     * root + state script that /search uses, with locked filters and
-     * curated facet picks baked into the bootstrap. The Svelte client
-     * doesn't know it's on a curated page; it just sees a different
-     * bootstrap.
+     *   benin … togo  → /search?f.country_ss=<country>
+     *   references    → /search?f.type_s=reference
+     *   index         → /search/everything?tab=entities
+     *   all / unknown → /search
+     *
+     * Site context (and therefore the UI locale) is preserved by redirecting
+     * to the site-scoped route when the request carried a site-slug.
      */
-    public function browseAction(): ViewModel|Response
+    public function browseAction(): Response
     {
-        $slug = $this->params()->fromRoute('slug');
-        $aliasName = $this->config['typesense']['collection_alias'] ?? 'iwac_current';
+        $slug   = (string) ($this->params()->fromRoute('slug') ?? '');
+        $preset = $slug !== '' ? PresetCatalog::findByLegacySlug($slug) : null;
 
-        $config = ($slug === null || $slug === '')
-            ? null
-            : $this->browseRepository->findBySlug((string) $slug);
+        $siteSlug = $this->params()->fromRoute('site-slug');
+        $params   = $siteSlug !== null ? ['site-slug' => $siteSlug] : [];
 
-        if ($config === null) {
-            // No landing grid anymore — route /browse and any unknown slug to
-            // the all-countries page, on whichever route the request matched
-            // (global /browse|/parcourir or the site-scoped variant), so the
-            // visitor stays in their language site. The slug !== 'all' guard
-            // prevents a redirect loop in the degenerate case where the
-            // all-countries config itself has been deleted — then fall back
-            // to the standalone /search shell.
-            if ((string) $slug !== AllCountriesSeeder::SLUG) {
-                $routeMatch = $this->getEvent()->getRouteMatch();
-                return $this->redirect()->toRoute(
-                    $routeMatch?->getMatchedRouteName() ?? 'iwac-parcourir',
-                    array_filter(
-                        [
-                            'site-slug' => $this->params()->fromRoute('site-slug'),
-                            'slug'      => AllCountriesSeeder::SLUG,
-                        ],
-                        static fn ($v): bool => $v !== null
-                    )
-                );
+        // The entity index maps to the federated page's Entities tab.
+        if ($preset !== null && $preset->isEntity()) {
+            $route = $siteSlug !== null ? 'site/iwac-search-everything' : 'iwac-search-everything';
+            return $this->redirect()->toRoute($route, $params, ['query' => ['tab' => 'entities']]);
+        }
+
+        // Country / references presets re-apply their old scope as a facet on
+        // /search (the client hydrates ?f.<field>= via urlState.ts); 'all' and
+        // unknown slugs land on the bare /search shell.
+        $query = [];
+        if ($preset !== null) {
+            if (preg_match('/^country_ss:=`(.+)`$/', $preset->lockedFilters, $m)) {
+                $query = ['f.country_ss' => $m[1]];
+            } elseif ($preset->lockedFilters === 'type_s:=reference') {
+                $query = ['f.type_s' => 'reference'];
             }
-            return $this->redirect()->toRoute('iwac-search');
         }
 
-        // The Index page targets the SEPARATE entity collection and renders
-        // entity cards; every other browse page is content.
-        $isEntity   = ($config->slug === IndexSeeder::SLUG);
-        $indexAlias = $this->config['typesense']['index_collection_alias'] ?? 'iwac_index_current';
-
-        $bootstrap = $config->toBootstrap(
-            collectionAlias:      $isEntity ? $indexAlias : $aliasName,
-            tokenEndpoint:        '/discovery/token',
-            searchEndpoint:       '/search-api/multi_search',
-            card:                 $isEntity ? 'entity' : 'content',
-            queryBy:              $isEntity ? SearchDefaults::ENTITY_QUERY_BY : null,
-            highlightFields:      $isEntity ? SearchDefaults::ENTITY_HIGHLIGHT_FIELDS : null,
-            // Always advertise the entity collection so the autocomplete on
-            // content surfaces can federate to it.
-            indexCollectionAlias: $indexAlias,
-        );
-
-        // Curated browse pages are the biggest SSR win: the corpus is
-        // already filtered by locked_filters, so inlining the first page
-        // is cheap and users see their country's items instantly.
-        $initial = $this->initialRenderer->render($bootstrap);
-        if ($initial !== null) {
-            $bootstrap['initial_response'] = $initial;
-        }
-
-        $view = new ViewModel([
-            'config'    => $config,
-            'bootstrap' => $bootstrap,
-        ]);
-        $view->setTemplate('iwac-search/search/browse');
-        return $view;
+        $route   = $siteSlug !== null ? 'site/iwac-search' : 'iwac-search';
+        $options = $query === [] ? [] : ['query' => $query];
+        return $this->redirect()->toRoute($route, $params, $options);
     }
 }
