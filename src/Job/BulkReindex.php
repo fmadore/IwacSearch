@@ -5,6 +5,7 @@ namespace IwacSearch\Job;
 
 use IwacSearch\Indexer\ApiOmekaAclLoader;
 use IwacSearch\Indexer\AuthorityResolver;
+use IwacSearch\Indexer\CurationSync;
 use IwacSearch\Indexer\HfDatasetLoader;
 use IwacSearch\Indexer\IndexReindexer;
 use IwacSearch\Indexer\Mapper\ArticleMapper;
@@ -80,6 +81,7 @@ class BulkReindex extends AbstractJob
             authority:     $authority,
             aclLoader:     $aclLoader,
             stopwordsSync: new StopwordsSync($typesense, $moduleRoot . '/data/stopwords-fr.json', $logger),
+            curationSync:  new CurationSync($typesense, $logger),
             logger:        $logger
         );
 

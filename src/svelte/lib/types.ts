@@ -27,6 +27,21 @@ export interface IwacBootstrap {
    */
   query_by?: string;
   highlight_fields?: string;
+  /**
+   * Result diversification (Typesense 30.2 MMR). When set, text queries on
+   * this surface pass `curation_tags: <diversify_tag>` to activate the
+   * `iwac_diversity` curation set (linked on the collection), which spreads
+   * out near-duplicate syndicated articles. Unset on browse pages / page
+   * blocks, so they keep raw relevance order. Browse mode (q=*) never
+   * diversifies regardless — text-match clustering only happens on a query.
+   */
+  diversify_tag?: string | null;
+  /**
+   * MMR relevance↔diversity balance: 1 = pure relevance, 0 = max diversity.
+   * Defaults to 0.7 (mostly relevance, gentle dedup) when diversify_tag is
+   * set. Ignored without diversify_tag.
+   */
+  diversity_lambda?: number;
   endpoints: {
     token: string; // /discovery/token (server-mounted)
     search: string; // /search-api/multi_search (proxied)

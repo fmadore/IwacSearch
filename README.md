@@ -270,6 +270,34 @@ works.
 The embedding model is `ts/multilingual-e5-small` (384d, in-process
 ONNX) — no external API calls at query time.
 
+### French stemming
+
+The French prose fields (`title_txt`, `ocr_text`, `abstract`) carry
+`stem: true`, so Typesense's Snowball French stemmer folds word-forms of
+the same root: a query for `musulman` also matches `musulmans` /
+`musulmane`, `islamique` matches `islamiques`, and so on. Stemming is
+applied to the keyword inverted index only — the embedding model still
+receives the raw field text, so semantic recall is unaffected.
+`entity_aliases_txt` is deliberately **not** stemmed (it holds proper
+nouns and acronyms a stemmer would mangle). Enabling stemming is an
+index-time change, hence the `iwac_v1` → `iwac_v2` collection bump.
+
+### Result diversification (Typesense 30.2 MMR)
+
+The standalone `/search` diversifies results on a text query using
+Maximum Marginal Relevance: near-duplicate syndicated articles (the same
+wire story reprinted across outlets and dates) get pushed apart so one
+story can't fill the first page. It's driven by the `iwac_diversity`
+global curation set — a tag-only rule whose `vector_distance` similarity
+metric runs over the same `embedding` field semantic search uses —
+created idempotently during the bulk reindex (`CurationSync`) and linked
+to the collection via `curation_sets` in `schema.yaml`. The client
+activates it per-search with `curation_tags: diversify` + a
+`diversity_lambda` of 0.7 (mostly relevance, gentle dedup), and only when
+a query is present — browse mode (`q=*`) stays in strict date order.
+Curated `/browse/{slug}` pages and page blocks omit the tag, so they keep
+raw relevance order.
+
 ### Curated browse pages
 
 Each row in the module-owned `iwac_browse_config` table renders as a
@@ -335,7 +363,7 @@ Confirm?`) rather than a modal — two clicks, zero popups.
 docker compose exec php php /var/www/html/modules/IwacSearch/cli/reindex.php
 ```
 
-Builds a versioned collection (`iwac_v1_<UTC timestamp>`), streams content
+Builds a versioned collection (`iwac_v2_<UTC timestamp>`), streams content
 from the HuggingFace dataset, batch-imports into Typesense, then atomic-
 swaps the `iwac_current` alias. Live search keeps serving the previous
 collection uninterrupted until the swap completes — a failed reindex

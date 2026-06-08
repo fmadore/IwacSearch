@@ -8,14 +8,26 @@
 #   - Names ending in `_ss` are multi-valued strings (facets).
 #   - Names ending in `_s`  are single-valued strings (sort keys).
 #   - Names ending in `_txt` are full-text indexed with the French analyser.
+#   - The French PROSE fields (title_txt, ocr_text, abstract) carry
+#     `stem: true` — Typesense's Snowball French stemmer folds word-forms
+#     of the same root (musulman/musulmans/musulmane, islamique/islamiques)
+#     so a query for one matches the others. Stemming is applied to the
+#     keyword inverted index only; the embedding model still receives the
+#     raw field text, so semantic recall is unaffected. entity_aliases_txt
+#     is deliberately NOT stemmed — it holds proper nouns and acronyms
+#     (AOF, RCI, names) that a stemmer would mangle.
 #   - `embedding` uses Typesense's in-process ts/multilingual-e5-small ONNX
 #     model (384d). Re-embedded at index AND query time, so no external API
 #     dependency at search time.
 #
 # Versioning:
-#   - The actual collection is named `iwac_v1` and aliased as `iwac_current`.
-#   - Schema changes ⇒ build `iwac_v2`, atomic-swap the alias. The browser
-#     only ever queries the alias, so swaps are zero-downtime.
+#   - The actual collection is named `iwac_v2` and aliased as `iwac_current`.
+#     (v1 → v2 bump: added French stemming on the prose fields + linked the
+#     `iwac_diversity` curation set — both are index-time changes that need
+#     a fresh collection.)
+#   - Schema changes ⇒ bump the name (`iwac_v2` → `iwac_v3`), atomic-swap
+#     the alias. The browser only ever queries the alias, so swaps are
+#     zero-downtime.
 #
 # Source-of-truth for content fields:
 #   - Bulk fields (title, ocr_text, sentiment, topic labels, ...) come from
@@ -24,7 +36,18 @@
 #   - is_public and the IIIF/thumbnail URLs come from the Omeka S API on the
 #     incremental update path (M4). HF does not expose Omeka ACL state.
 
-name: iwac_v1
+name: iwac_v2
+
+# Global curation set linked to this collection. The set itself is created
+# (idempotently) by src/Indexer/CurationSync.php during the bulk reindex.
+# Its only purpose is result diversification (MMR): a tag-only rule with a
+# `vector_distance` similarity metric on `embedding`, so near-duplicate
+# syndicated articles don't crowd the first page. INERT until a search
+# passes `curation_tags: diversify` — so browse pages and page blocks that
+# don't opt in are unaffected. Keep the name in sync with
+# CurationSync::SET_NAME.
+curation_sets:
+  - iwac_diversity
 
 # No `default_sorting_field` is set on purpose. Typesense requires the
 # default sorting field to be a REQUIRED column, but the only natural
@@ -60,7 +83,7 @@ fields:
 
   # ── Display + sort ────────────────────────────────────────────────────
   - { name: title,       type: string, sort: true }            # display + sort
-  - { name: title_txt,   type: string, locale: fr }            # FTS, French analyser
+  - { name: title_txt,   type: string, locale: fr, stem: true } # FTS, French analyser + stemmer
   - { name: thumbnail_url, type: string, index: false, optional: true }
   - { name: iiif_manifest, type: string, index: false, optional: true }
 
@@ -102,7 +125,7 @@ fields:
   # ocr_text is INDEXED (so matches work) but EXCLUDED from public results
   # via the scoped key (exclude_fields: ocr_text). Highlights still ship.
   # Loosening this requires licensing sign-off — see roadmap "Security model".
-  - { name: ocr_text,    type: string, locale: fr, optional: true }
+  - { name: ocr_text,    type: string, locale: fr, stem: true, optional: true }
   - { name: nb_words,    type: int32,  facet: false, optional: true }
   - { name: lda_topic_label, type: string, facet: true, optional: true }
 
@@ -117,7 +140,7 @@ fields:
   # Visible in public results (NOT in the scoped key's exclude_fields) so
   # the result card can show a couple of lines for every type. Also in
   # query_by, so the summary lightly improves recall.
-  - { name: abstract,    type: string, locale: fr, optional: true }
+  - { name: abstract,    type: string, locale: fr, stem: true, optional: true }
   # The 9 RDF classes that appear in the references subset:
   #   Article de revue · Chapitre · Thèse · Livre · Rapport ·
   #   Communication · Compte rendu · Ouvrage collectif · Article de blog.

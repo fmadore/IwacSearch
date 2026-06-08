@@ -134,6 +134,21 @@ export class TypesenseClient {
           // Show up to 50 values per facet — enough for "show more" inside
           // a facet group without paging the facet API.
           max_facet_values: 50,
+          // Result diversification (Typesense 30.2 MMR). Only on a real
+          // query: browse mode (q=*) is date-sorted and must not be
+          // reshuffled, and the clustering of near-identical syndicated
+          // articles this fixes only happens under text-match ranking.
+          // `curation_tags` activates the iwac_diversity curation set
+          // linked on the collection (see CurationSync.php); the server
+          // ignores it on collections without that link, so it's safe to
+          // send during the v1→v2 cutover. diversity_lambda tunes the
+          // relevance↔diversity balance (1 = relevance, 0 = max variety).
+          ...(!isBrowse && this.bootstrap.diversify_tag
+            ? {
+                curation_tags: this.bootstrap.diversify_tag,
+                diversity_lambda: this.bootstrap.diversity_lambda ?? 0.7,
+              }
+            : {}),
         },
       ],
     });

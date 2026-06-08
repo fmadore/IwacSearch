@@ -25,6 +25,7 @@ declare(strict_types=1);
  */
 
 use IwacSearch\Indexer\AuthorityResolver;
+use IwacSearch\Indexer\CurationSync;
 use IwacSearch\Indexer\HfDatasetLoader;
 use IwacSearch\Indexer\IndexReindexer;
 use IwacSearch\Indexer\Mapper\ArticleMapper;
@@ -121,6 +122,7 @@ try {
         authority:     $authority,
         aclLoader:     $aclLoader,
         stopwordsSync: new StopwordsSync($typesense, $moduleRoot . '/data/stopwords-fr.json', $logger),
+        curationSync:  new CurationSync($typesense, $logger),
         logger:        $logger
     );
 

@@ -6,6 +6,7 @@ namespace IwacSearch\Controller;
 use IwacSearch\Browse\AllCountriesSeeder;
 use IwacSearch\Browse\BrowseConfigRepository;
 use IwacSearch\Browse\IndexSeeder;
+use IwacSearch\Indexer\CurationSync;
 use IwacSearch\Search\InitialResponseRenderer;
 use IwacSearch\Search\SearchDefaults;
 use IwacSearch\Search\TypesenseSearchKeyProvider;
@@ -72,6 +73,15 @@ class SearchController extends AbstractActionController
                 'gemini_subjectivite',   // subjectivity (1–5)
             ],
             'default_sort'     => '_text_match:desc',
+            // Diversify the standalone /search results (Typesense 30.2 MMR):
+            // on a text query, push down near-duplicate syndicated articles
+            // so one wire story doesn't fill the first page. Activates the
+            // iwac_diversity curation set (CurationSync) via curation_tags;
+            // applied client-side and only when a query is present (browse
+            // mode stays date-sorted). Curated /browse pages and page blocks
+            // deliberately omit this — they keep raw relevance order.
+            'diversify_tag'    => CurationSync::TAG,
+            'diversity_lambda' => 0.7,
             'results_per_page' => 10,
             'collection_alias' => $aliasName,
             // Entity collection — lets the autocomplete federate to it.

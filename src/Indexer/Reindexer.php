@@ -20,12 +20,15 @@ use Typesense\Client as TypesenseClient;
  *   - MapperRegistry    → row → doc per subset
  *   - OmekaAclLoader    → is_public overlay (lazy)
  *   - StopwordsSync     → ensure fr_default stopword set exists
+ *   - CurationSync      → ensure iwac_diversity curation set exists
  *
  * Flow:
- *   1. Sync stopwords (idempotent — safe under retries)
+ *   1. Sync stopwords + the diversification curation set (idempotent —
+ *      safe under retries; both created BEFORE the collection so the
+ *      schema's `curation_sets` link resolves)
  *   2. Build authority lookup from HF `index` subset
  *   3. Prime the Omeka ACL cache
- *   4. Create the new versioned collection (e.g. iwac_v1_<UTC>)
+ *   4. Create the new versioned collection (e.g. iwac_v2_<UTC>)
  *   5. Stream → map → ACL-overlay → batch-import each subset
  *   6. Atomic-swap iwac_current alias → new collection
  *   7. Drop the previous collection
@@ -50,6 +53,7 @@ final class Reindexer
         private readonly AuthorityResolver $authority,
         private readonly OmekaAclLoaderInterface $aclLoader,
         private readonly StopwordsSync $stopwordsSync,
+        private readonly CurationSync $curationSync,
         private readonly LoggerInterface $logger = new NullLogger()
     ) {
     }
@@ -62,6 +66,7 @@ final class Reindexer
      *     indexed: int, errors: int, public_items: int,
      *     subsets: array<string, array{indexed: int, errors: int}>,
      *     stopwords: array{set: string, locale: string, count: int},
+     *     curation: array{set: string, tag: string, metric: string},
      *     duration_seconds: float
      * }
      */
@@ -69,8 +74,13 @@ final class Reindexer
     {
         $start = microtime(true);
 
-        // ── 1. Stopwords (Typesense-wide, not per-collection) ────────────
+        // ── 1. Global resources (Typesense-wide, not per-collection) ─────
+        // Both must exist BEFORE the collection is created: the schema
+        // links `curation_sets: [iwac_diversity]`, and searches reference
+        // `fr_default` stopwords. Created here, in the no-collection-yet
+        // phase, so a failure aborts cleanly with nothing to roll back.
         $stopwordsResult = $this->stopwordsSync->sync();
+        $curationResult  = $this->curationSync->sync();
 
         // ── 2. Authority lookup ──────────────────────────────────────────
         // Mutates the shared AuthorityResolver in-place. Mappers in the
@@ -144,6 +154,7 @@ final class Reindexer
             'public_items'     => $this->aclLoader->size(),
             'subsets'          => $perSubset,
             'stopwords'        => $stopwordsResult,
+            'curation'         => $curationResult,
             'duration_seconds' => round(microtime(true) - $start, 2),
         ];
     }
