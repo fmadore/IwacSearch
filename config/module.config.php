@@ -156,6 +156,20 @@ return [
                 ],
             ],
 
+            // Federated "search everything" page — Content + Entities tabs over
+            // both Typesense collections. Literal route, so it never shadows
+            // /search above. Global root for back-compat / external links.
+            'iwac-search-everything' => [
+                'type' => \Laminas\Router\Http\Literal::class,
+                'options' => [
+                    'route'    => '/search/everything',
+                    'defaults' => [
+                        'controller' => Controller\SearchController::class,
+                        'action'     => 'everything',
+                    ],
+                ],
+            ],
+
             // Scoped-key endpoint — PHP inspects the Omeka session and mints
             // a short-lived Typesense scoped key (1h, public OR admin variant).
             'iwac-search-token' => [
@@ -278,6 +292,36 @@ return [
                                 '__NAMESPACE__' => 'IwacSearch\Controller',
                                 'controller'    => Controller\SearchController::class,
                                 'action'        => 'index',
+                            ],
+                        ],
+                    ],
+
+                    // Site-scoped federated page (English sites):
+                    // /s/{site-slug}/search/everything. The theme header search
+                    // form posts here (via iwacSearchUrl) so a visitor lands on
+                    // the Content+Entities surface inside their own language site.
+                    'iwac-search-everything' => [
+                        'type'    => \Laminas\Router\Http\Literal::class,
+                        'options' => [
+                            'route'    => '/search/everything',
+                            'defaults' => [
+                                '__NAMESPACE__' => 'IwacSearch\Controller',
+                                'controller'    => Controller\SearchController::class,
+                                'action'        => 'everything',
+                            ],
+                        ],
+                    ],
+                    // French alias: /s/{site-slug}/recherche/tout. iwacSearchUrl
+                    // maps the French site slug to this route — mirrors
+                    // /recherche vs /search.
+                    'iwac-recherche-tout' => [
+                        'type'    => \Laminas\Router\Http\Literal::class,
+                        'options' => [
+                            'route'    => '/recherche/tout',
+                            'defaults' => [
+                                '__NAMESPACE__' => 'IwacSearch\Controller',
+                                'controller'    => Controller\SearchController::class,
+                                'action'        => 'everything',
                             ],
                         ],
                     ],

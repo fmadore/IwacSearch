@@ -8,6 +8,7 @@ use IwacSearch\Browse\BrowseConfigRepository;
 use IwacSearch\Browse\IndexSeeder;
 use IwacSearch\Indexer\CurationSync;
 use IwacSearch\Search\InitialResponseRenderer;
+use IwacSearch\Search\PresetCatalog;
 use IwacSearch\Search\SearchDefaults;
 use IwacSearch\Search\TypesenseSearchKeyProvider;
 use IwacSearch\Util\ExceptionMessage;
@@ -32,6 +33,28 @@ use Throwable;
  */
 class SearchController extends AbstractActionController
 {
+    /**
+     * Above-the-fold facet stack for the full content corpus. Ordered
+     * coarse → fine: type, then geography, publisher, the entity authorities,
+     * then the grouped sentiment trio. Shared by the standalone /search shell
+     * and the federated page's Content tab so the two stay identical.
+     *
+     * @var list<string>
+     */
+    private const CONTENT_PROMINENT_FACETS = [
+        'type_s',                // article | publication | document | audiovisual
+        'country_ss',            // country
+        'newspaper_ss',          // publisher
+        'places_ss',             // locations
+        'persons_ss',            // persons
+        'organisations_ss',      // organisations
+        'topics_ss',             // subjects
+        // Sentiment trio — grouped under one collapsible section in the client.
+        'gemini_polarite_ss',    // polarity
+        'gemini_centralite_ss',  // centrality (of Islam/Muslims)
+        'gemini_subjectivite',   // subjectivity (1–5)
+    ];
+
     public function __construct(
         private readonly TypesenseSearchKeyProvider $keyProvider,
         private readonly BrowseConfigRepository $browseRepository,
@@ -56,22 +79,10 @@ class SearchController extends AbstractActionController
             'mode'             => 'full',
             'locked_filters'   => '',
             // Curatorial choice, ordered coarse → fine. The year range
-            // slider (DateRangeSlider.svelte) renders separately; it's
-            // not a categorical facet so it doesn't appear in this list.
-            'prominent_facets' => [
-                'type_s',                // article | publication | document | audiovisual
-                'country_ss',            // country
-                'newspaper_ss',          // publisher
-                'places_ss',             // locations
-                'persons_ss',            // persons
-                'organisations_ss',      // organisations
-                'topics_ss',             // subjects
-                // Sentiment trio — grouped under one collapsible section
-                // in the client (Gemini model; chatgpt/mistral available).
-                'gemini_polarite_ss',    // polarity
-                'gemini_centralite_ss',  // centrality (of Islam/Muslims)
-                'gemini_subjectivite',   // subjectivity (1–5)
-            ],
+            // slider (DateRangeSlider.svelte) renders separately; it's not a
+            // categorical facet so it doesn't appear in this list. Shared with
+            // the federated Content tab via the class const.
+            'prominent_facets' => self::CONTENT_PROMINENT_FACETS,
             'default_sort'     => '_text_match:desc',
             // Diversify the standalone /search results (Typesense 30.2 MMR):
             // on a text query, push down near-duplicate syndicated articles
@@ -106,6 +117,96 @@ class SearchController extends AbstractActionController
 
         $view = new ViewModel(['bootstrap' => $bootstrap]);
         $view->setTemplate('iwac-search/search/index');
+        return $view;
+    }
+
+    /**
+     * GET /search/everything — the federated "search everything" surface.
+     *
+     * Two tabs over the two collections: Content (iwac_current) and the entity
+     * Index (iwac_index_current). The Svelte FederatedApp owns one shared query,
+     * runs a single counts-only multi_search across both collections for the
+     * tab badges (one scoped key spans every collection), and reuses the
+     * per-collection App for the active tab. We SSR the first page of BOTH tabs
+     * for the empty-query landing so switching tabs paints instantly; with a
+     * query present the client fetches per tab (the empty-query snapshot
+     * wouldn't match), so SSR is skipped.
+     */
+    public function everythingAction(): ViewModel
+    {
+        $contentAlias = $this->config['typesense']['collection_alias'] ?? 'iwac_current';
+        $indexAlias   = $this->config['typesense']['index_collection_alias'] ?? 'iwac_index_current';
+        $query        = (string) $this->params()->fromQuery('q', '');
+        $defaultTab   = $this->params()->fromQuery('tab') === 'entities' ? 'entities' : 'content';
+
+        // Raw stems; common/iwac-federated-mount resolves basePath at view time.
+        $endpoints = [
+            'token'  => '/discovery/token',
+            'search' => '/search-api/multi_search',
+        ];
+
+        // Content tab — whole corpus, mirrors /search (incl. MMR diversification
+        // of near-duplicate syndicated articles on a text query).
+        $contentTab = [
+            'block_id'         => 'everything-content',
+            'mode'             => 'full',
+            'card'             => 'content',
+            'locked_filters'   => '',
+            'prominent_facets' => self::CONTENT_PROMINENT_FACETS,
+            'default_sort'     => '_text_match:desc',
+            'diversify_tag'    => CurationSync::TAG,
+            'diversity_lambda' => 0.7,
+            'results_per_page' => 10,
+            'collection_alias' => $contentAlias,
+            'index_collection_alias' => $indexAlias,
+            'query_by'         => SearchDefaults::CONTENT_QUERY_BY,
+            'highlight_fields' => SearchDefaults::CONTENT_HIGHLIGHT_FIELDS,
+            'endpoints'        => $endpoints,
+        ];
+
+        // Entity tab — the index/authority collection. Facets + sort come from
+        // the shared PresetCatalog 'index' scope so the block and the federated
+        // page agree (defensive fallback if the preset is ever renamed).
+        $indexPreset = PresetCatalog::get('index');
+        $entityTab = [
+            'block_id'         => 'everything-entities',
+            'mode'             => 'full',
+            'card'             => 'entity',
+            'locked_filters'   => '',
+            'prominent_facets' => $indexPreset?->facets ?? ['entity_type_s', 'country_ss'],
+            'default_sort'     => $indexPreset?->defaultSort ?? 'frequency:desc',
+            'results_per_page' => 20,
+            'collection_alias' => $indexAlias,
+            'index_collection_alias' => $indexAlias,
+            'query_by'         => SearchDefaults::ENTITY_QUERY_BY,
+            'highlight_fields' => SearchDefaults::ENTITY_HIGHLIGHT_FIELDS,
+            'endpoints'        => $endpoints,
+        ];
+
+        if ($query === '') {
+            $contentSsr = $this->initialRenderer->render($contentTab);
+            if ($contentSsr !== null) {
+                $contentTab['initial_response'] = $contentSsr;
+            }
+            $entitySsr = $this->initialRenderer->render($entityTab);
+            if ($entitySsr !== null) {
+                $entityTab['initial_response'] = $entitySsr;
+            }
+        }
+
+        $bootstrap = [
+            'variant'       => 'federated',
+            'initial_query' => $query,
+            'default_tab'   => $defaultTab,
+            'tabs'          => [
+                ['id' => 'content',  'bootstrap' => $contentTab],
+                ['id' => 'entities', 'bootstrap' => $entityTab],
+            ],
+            'endpoints'     => $endpoints,
+        ];
+
+        $view = new ViewModel(['bootstrap' => $bootstrap]);
+        $view->setTemplate('iwac-search/search/everything');
         return $view;
     }
 

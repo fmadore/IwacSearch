@@ -10,8 +10,9 @@ namespace IwacSearch\Browse;
  *   - FACETABLE_FIELDS — the schema fields an admin can mark as a
  *                        prominent (above-the-fold) facet, with their
  *                        display labels.
- *   - SORT_OPTIONS     — the three sort orders the block / browse page
- *                        can default to.
+ *   - SORT_OPTIONS     — the content-collection sort orders the block can
+ *                        default to (the entity index sorts live client-side
+ *                        in src/svelte/lib/i18n.ts).
  *   - RENDER_MODES     — shared by the page block today; kept here so
  *                        later surfaces (embed snippets, external
  *                        integrations) can pull from the same list
@@ -66,6 +67,12 @@ final class FacetCatalog
         '_text_match:desc' => 'Relevance',
         'date:desc'        => 'Newest first',
         'date:asc'         => 'Oldest first',
+        // Optional scalar creator_sort field — author-less docs sort last
+        // (missing_values rule applied in typesense.ts + InitialResponseRenderer).
+        // Mirrors the client content sort set in src/svelte/lib/i18n.ts
+        // (sortOptions). The entity index uses frequency/title sorts defined
+        // only client-side, since no PHP surface defaults to them.
+        'creator_sort:asc' => 'Author (A–Z)',
     ];
 
     public const RENDER_MODES = [

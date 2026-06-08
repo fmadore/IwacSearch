@@ -46,9 +46,16 @@
 
   interface Props {
     bootstrap: IwacBootstrap;
+    /**
+     * Whether this App renders its own search box. The federated
+     * /search/everything page owns one shared search box across its tabs,
+     * so it mounts each tab's App with showSearchBox={false}. Standalone
+     * surfaces (/search, page blocks) default to true.
+     */
+    showSearchBox?: boolean;
   }
 
-  const { bootstrap }: Props = $props();
+  const { bootstrap, showSearchBox = true }: Props = $props();
 
   // Provide the locale + translator to the whole component subtree. Read
   // once at init from the server-detected bootstrap locale (defaults to
@@ -72,7 +79,9 @@
   const initial: SearchState = isStandalone
     ? readUrlState()
     : {
-        q: '',
+        // initial_query is set by the federated page so the tab seeds with
+        // the shared query; empty on page blocks.
+        q: bootstrap.initial_query ?? '',
         page: 1,
         sort: bootstrap.default_sort || '_text_match:desc',
         filters: {},
@@ -398,7 +407,7 @@
 </script>
 
 <div class="iwac-search" class:iwac-search--compact={bootstrap.mode === 'compact'}>
-  {#if bootstrap.mode !== 'results-only'}
+  {#if showSearchBox && bootstrap.mode !== 'results-only'}
     <!--
       <form role="search"> is the canonical container for a search UI.
       onfocusin / onfocusout bubble (unlike onfocus / onblur), so the

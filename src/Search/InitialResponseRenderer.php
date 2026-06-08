@@ -94,6 +94,13 @@ final class InitialResponseRenderer
         if ($sort === '_text_match:desc' || $sort === '') {
             $sort = 'date:desc';
         }
+        // creator_sort is an optional scalar field; Typesense errors on an
+        // optional sort field without an explicit missing-values rule. Push
+        // author-less docs last, mirroring the client (typesense.ts) so an
+        // author-sorted custom block can SSR instead of falling back.
+        if (str_starts_with($sort, 'creator_sort:')) {
+            $sort = str_replace('creator_sort:', 'creator_sort(missing_values:last):', $sort);
+        }
 
         $filterBy = $this->applyPublicConstraints($lockedFilters);
 

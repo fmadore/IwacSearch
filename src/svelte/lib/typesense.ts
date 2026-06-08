@@ -321,6 +321,60 @@ export class TypesenseClient {
   }
 
   /**
+   * Run a counts-only multi_search across several collections for the same
+   * query, returning the `found` total per collection in input order.
+   *
+   * Powers the federated /search/everything tab badges. One scoped key
+   * covers every collection (the search-only parent key spans all of them)
+   * and already bakes in `is_public:=true`. Stopwords are deliberately
+   * omitted: a tab badge is an approximate count, and dropping the set keeps
+   * this resilient when the server lacks `fr_default` (the per-tab App still
+   * applies stopwords to the actual results). A collection that errors
+   * resolves to `null` (blank badge) rather than throwing — one bad
+   * collection must not blank the whole page.
+   */
+  async countAcross(
+    q: string,
+    collections: Array<{ collection: string; queryBy: string; filterBy?: string }>,
+  ): Promise<Array<number | null>> {
+    if (collections.length === 0) {
+      return [];
+    }
+    const key = await this.getKey();
+    const qParam = q.trim() ? q : '*';
+    const searches = collections.map((c) => ({
+      collection: c.collection,
+      q: qParam,
+      query_by: c.queryBy,
+      filter_by: c.filterBy?.trim() || undefined,
+      // Only `found` is read — no hits, facets, or highlights.
+      per_page: 0,
+    }));
+
+    const res = await fetch(this.bootstrap.endpoints.search, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-TYPESENSE-API-KEY': key.key,
+      },
+      body: JSON.stringify({ searches }),
+    });
+    if (!res.ok) {
+      throw new Error(await formatHttpError('Counts', res));
+    }
+    const json = (await res.json()) as {
+      results: Array<{ found?: number; error?: string }>;
+    };
+    return collections.map((_, i) => {
+      const r = json.results?.[i];
+      if (!r || r.error || typeof r.found !== 'number') {
+        return null;
+      }
+      return r.found;
+    });
+  }
+
+  /**
    * Get a valid scoped key, refreshing in-flight requests get coalesced
    * so a burst of debounced searches doesn't N-amplify token requests.
    */

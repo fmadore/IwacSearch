@@ -1,0 +1,34 @@
+<?php
+/**
+ * @var \Laminas\View\Renderer\PhpRenderer $this
+ * @var array $bootstrap   Federated config blob (variant=federated).
+ *
+ * The federated "search everything" shell. Mount + state contract is rendered
+ * by common/iwac-federated-mount; this template only carries the page chrome.
+ *
+ * Asset injection is centralised in Module.php (view.layout on SearchController)
+ * — the Svelte bundle loads automatically on this route.
+ */
+
+$locale  = $this->iwacLocale();
+$isEn    = $locale === 'en';
+$heading = $isEn ? 'Search everything' : 'Tout rechercher';
+$this->headTitle(($isEn ? 'Search everything' : 'Tout rechercher') . ' · Islam West Africa Collection');
+?>
+<main class="iwac-search-shell" role="main">
+    <h1 class="iwac-search-block__title"><?= $this->escapeHtml($heading) ?></h1>
+
+    <noscript>
+        <p>This search requires JavaScript. Browse the
+            <a href="<?= $this->escapeHtmlAttr($this->basePath('/s/afrique_ouest')) ?>">French</a>
+            or
+            <a href="<?= $this->escapeHtmlAttr($this->basePath('/s/westafrica')) ?>">English</a>
+            site instead.
+        </p>
+    </noscript>
+
+    <?= $this->partial('common/iwac-federated-mount', [
+        'bootstrap' => $bootstrap,
+        'block_id'  => 'everything',
+    ]) ?>
+</main>

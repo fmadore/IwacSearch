@@ -18,8 +18,10 @@
  * Rows mirror the in-app SuggestDropdown:
  *   1. "Search for «q»"  → landing?q=<q>
  *   2. article hits      → the item's omeka_url (fallback landing?q=<title>)
- *   3. entity values     → landing?f.<field>=<value> (a pre-applied facet,
- *                          matching the urlState.ts facet encoding)
+ *   3. entity values     → landing?q=<value> (the landing page is the federated
+ *                          "search everything" surface, which reads ?q rather
+ *                          than the ?f.<field>= facet params standalone /search
+ *                          hydrates — so an entity click searches its name)
  *
  * It ships as its own IIFE bundle (vite --mode header) injected by
  * Module.php on every public site page, NOT the full ~90 KB search app.
@@ -135,8 +137,9 @@ class HeaderSearch {
     this.client = new TypesenseClient(buildBootstrap(cfg));
     this.locale = cfg.locale;
     // The landing page lives on the form's action — set by the theme via the
-    // iwacSearchUrl helper (locale-correct). Fall back to the global /search.
-    this.landing = form.getAttribute('action') || '/search';
+    // iwacSearchUrl helper (locale-correct, the federated page). Fall back to
+    // the global federated route.
+    this.landing = form.getAttribute('action') || '/search/everything';
 
     const host = this.resolveHost();
     this.listbox = document.createElement('div');
@@ -314,10 +317,11 @@ class HeaderSearch {
       return;
     }
     if (row.kind === 'entity') {
-      // Matches lib/urlState.ts: ?f.<field>=<value> pre-applies a facet.
-      window.location.assign(
-        withParams(this.landing, { [`f.${row.entity.field}`]: row.entity.value }),
-      );
+      // The landing page is the federated "search everything" surface, which
+      // reads ?q (not the ?f.<field>= facet params standalone /search
+      // hydrates). Search the entity's name as text so the click lands on
+      // matching content plus the entity itself in the Entities tab.
+      window.location.assign(withParams(this.landing, { q: row.entity.value }));
       return;
     }
     const url = urlOf(row.hit);

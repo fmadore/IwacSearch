@@ -13,6 +13,12 @@ export interface IwacBootstrap {
    * (entity cards with occurrence counts, frequency-based sort).
    */
   card?: 'content' | 'entity';
+  /**
+   * Initial query string. Set by the federated page so a reused App seeds
+   * with the shared query; absent on standalone surfaces (which read the
+   * query from the URL or start empty).
+   */
+  initial_query?: string;
   locked_filters: string; // raw Typesense filter_by
   prominent_facets: string[]; // schema field names
   default_sort: string; // e.g. "_text_match:desc"
@@ -209,4 +215,34 @@ export interface SearchState {
   sort: string; // e.g. "_text_match:desc", "date:desc"
   filters: ActiveFilters;
   yearRange: YearRange | null;
+}
+
+/**
+ * One tab on the federated /search/everything page. `bootstrap` is a full
+ * per-collection IwacBootstrap the reused <App> mounts when the tab is
+ * active; `id` distinguishes the content collection from the entity index.
+ */
+export interface IwacFederatedTab {
+  id: 'content' | 'entities';
+  bootstrap: IwacBootstrap;
+}
+
+/**
+ * Bootstrap for the federated "search everything" page, mounted on
+ * [data-iwac-federated-root]. The page owns a shared query + active tab,
+ * runs one counts-only multi_search across both collections for the tab
+ * badges, then mounts the active tab's <App> (search box suppressed) for
+ * the faceted results. Both collections are reachable with a single scoped
+ * key (the search-only parent key spans all collections).
+ */
+export interface IwacFederatedBootstrap {
+  variant: 'federated';
+  locale?: 'fr' | 'en';
+  initial_query: string;
+  default_tab: 'content' | 'entities';
+  tabs: IwacFederatedTab[];
+  endpoints: {
+    token: string;
+    search: string;
+  };
 }

@@ -74,7 +74,7 @@ class Module extends AbstractModule
         $acl->allow(
             null,
             [Controller\SearchController::class],
-            ['index', 'token', 'browse']
+            ['index', 'token', 'browse', 'everything']
         );
 
         // Admin CRUD — editors and above only.

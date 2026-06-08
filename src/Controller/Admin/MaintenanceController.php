@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace IwacSearch\Controller\Admin;
 
+use Closure;
 use IwacSearch\Form\MaintenanceForm;
 use IwacSearch\Job\BulkReindex;
 use IwacSearch\Job\SyncStopwords;
@@ -10,6 +11,8 @@ use Laminas\Http\Response;
 use Laminas\Mvc\Controller\AbstractActionController;
 use Laminas\View\Model\ViewModel;
 use Omeka\Stdlib\Message;
+use Throwable;
+use Typesense\Client as TypesenseClient;
 
 /**
  * Admin maintenance page for the IwacSearch module.
@@ -42,9 +45,35 @@ class MaintenanceController extends AbstractActionController
      *   base name in the page description and flash messages so the
      *   prose stays accurate after every schema bump.
      */
+    /**
+     * @param Closure(): TypesenseClient|null $clientFactory Lazy client so a
+     *   missing Docker secret / unreachable Typesense degrades to an
+     *   "unreachable" status panel rather than a 500.
+     */
     public function __construct(
-        private readonly string $collectionBaseName = 'iwac_v1'
+        private readonly string $collectionBaseName = 'iwac_v1',
+        private readonly ?Closure $clientFactory = null,
+        private readonly string $contentAlias = 'iwac_current',
+        private readonly string $indexAlias = 'iwac_index_current',
     ) {
+    }
+
+    private ?TypesenseClient $cachedClient = null;
+
+    /** Resolve the lazy client once; null if unconfigured/unreachable. */
+    private function client(): ?TypesenseClient
+    {
+        if ($this->clientFactory === null) {
+            return null;
+        }
+        if ($this->cachedClient !== null) {
+            return $this->cachedClient;
+        }
+        try {
+            return $this->cachedClient = ($this->clientFactory)();
+        } catch (Throwable) {
+            return null;
+        }
     }
 
     /**
@@ -67,7 +96,58 @@ class MaintenanceController extends AbstractActionController
             'reindexForm'         => $reindexForm,
             'stopwordsForm'       => $stopwordsForm,
             'collectionBaseName'  => $this->collectionBaseName,
+            'statuses'            => $this->collectStatuses(),
         ]);
+    }
+
+    /**
+     * One status row per Typesense collection (content + entity index):
+     * whether it's reachable and its live document count. `documents` is null
+     * when Typesense is unreachable, 0 when the server is up but the
+     * collection was never built. Mirrors DRE-Search's maintenance probe.
+     *
+     * @return list<array{alias: string, label: string, reachable: bool, documents: ?int, error: ?string}>
+     */
+    private function collectStatuses(): array
+    {
+        $client = $this->client();
+        $targets = [
+            ['alias' => $this->contentAlias, 'label' => 'Content (articles, documents, publications, references)'],
+            ['alias' => $this->indexAlias,   'label' => 'Entity index (people, places, organisations, topics…)'],
+        ];
+
+        $rows = [];
+        foreach ($targets as $target) {
+            $row = [
+                'alias'     => $target['alias'],
+                'label'     => $target['label'],
+                'reachable' => false,
+                'documents' => null,
+                'error'     => null,
+            ];
+
+            if ($client !== null) {
+                try {
+                    $info = $client->collections[$target['alias']]->retrieve();
+                    $row['reachable'] = true;
+                    $row['documents'] = isset($info['num_documents']) ? (int) $info['num_documents'] : null;
+                } catch (Throwable $e) {
+                    // The collection may simply not exist yet (never reindexed).
+                    // Probe health to tell "server down" from "collection absent".
+                    try {
+                        $client->health->retrieve();
+                        $row['reachable'] = true;
+                        $row['documents'] = 0;
+                    } catch (Throwable $inner) {
+                        $row['error'] = $inner->getMessage();
+                    }
+                }
+            }
+
+            $rows[] = $row;
+        }
+
+        return $rows;
     }
 
     /**

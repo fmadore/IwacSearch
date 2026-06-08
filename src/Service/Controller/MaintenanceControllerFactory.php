@@ -5,6 +5,7 @@ namespace IwacSearch\Service\Controller;
 
 use IwacSearch\Controller\Admin\MaintenanceController;
 use IwacSearch\Indexer\SchemaLoader;
+use IwacSearch\Service\TypesenseClientLazy;
 use Laminas\ServiceManager\Factory\FactoryInterface;
 use Psr\Container\ContainerInterface;
 
@@ -16,6 +17,12 @@ use Psr\Container\ContainerInterface;
  * always reflect the live schema's base collection name (iwac_v1,
  * iwac_v2, …) rather than a hardcoded literal that drifts every time
  * the schema is bumped.
+ *
+ * Also injects a lazy Typesense client + both collection aliases so the
+ * page can show a live status panel (reachable? document counts?). The
+ * client is lazy (TypesenseClientLazy) so a missing Docker secret or an
+ * unreachable Typesense renders the page with an "unreachable" panel
+ * instead of a 500.
  */
 final class MaintenanceControllerFactory implements FactoryInterface
 {
@@ -31,6 +38,13 @@ final class MaintenanceControllerFactory implements FactoryInterface
         $schema = (new SchemaLoader($moduleRoot . '/data/schema.yaml'))->load();
         $baseName = is_string($schema['name'] ?? null) ? $schema['name'] : 'iwac_v1';
 
-        return new MaintenanceController($baseName);
+        $typesense = $container->get('Config')['iwac_search']['typesense'] ?? [];
+
+        return new MaintenanceController(
+            collectionBaseName: $baseName,
+            clientFactory:      TypesenseClientLazy::fromContainer($container),
+            contentAlias:       $typesense['collection_alias'] ?? 'iwac_current',
+            indexAlias:         $typesense['index_collection_alias'] ?? 'iwac_index_current',
+        );
     }
 }

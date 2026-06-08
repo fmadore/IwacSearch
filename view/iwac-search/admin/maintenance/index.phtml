@@ -12,6 +12,8 @@
  * @var string $collectionBaseName  Base collection name from
  *   data/schema.yaml — interpolated into the description so the
  *   prose tracks schema bumps automatically.
+ * @var list<array{alias: string, label: string, reachable: bool, documents: ?int, error: ?string}> $statuses
+ *   Live Typesense status, one row per collection.
  */
 
 $translate = $this->plugin('translate');
@@ -34,6 +36,45 @@ $stopwordsForm->prepare();
 <p class="description">
     <?php echo $translate('Trigger Typesense maintenance tasks without dropping into the docker container. Both actions dispatch as Omeka background jobs; track progress in the Jobs admin page.'); ?>
 </p>
+
+<?php $statuses = $statuses ?? []; ?>
+<section class="iwac-maintenance-status" style="margin-top:1.5rem;border:1px solid #ddd;border-radius:6px;padding:1rem 1.5rem;background:#fff;">
+    <h3 style="margin-top:0;"><?php echo $translate('Index status'); ?></h3>
+    <table style="width:100%;border-collapse:collapse;">
+        <thead>
+            <tr style="text-align:left;border-bottom:2px solid #eee;">
+                <th style="padding:0.4rem 0.5rem;"><?php echo $translate('Collection'); ?></th>
+                <th style="padding:0.4rem 0.5rem;"><?php echo $translate('Alias'); ?></th>
+                <th style="padding:0.4rem 0.5rem;"><?php echo $translate('Status'); ?></th>
+                <th style="padding:0.4rem 0.5rem;text-align:right;"><?php echo $translate('Documents'); ?></th>
+            </tr>
+        </thead>
+        <tbody>
+            <?php foreach ($statuses as $row): ?>
+                <tr style="border-bottom:1px solid #f0f0f0;">
+                    <td style="padding:0.4rem 0.5rem;"><?php echo $escape($translate($row['label'])); ?></td>
+                    <td style="padding:0.4rem 0.5rem;"><code><?php echo $escape($row['alias']); ?></code></td>
+                    <td style="padding:0.4rem 0.5rem;">
+                        <?php if ($row['reachable']): ?>
+                            <span style="color:#2e7d32;font-weight:600;">&#9679; <?php echo $translate('Reachable'); ?></span>
+                        <?php else: ?>
+                            <span style="color:#c62828;font-weight:600;">&#9679; <?php echo $translate('Unreachable'); ?></span>
+                            <?php if (!empty($row['error'])): ?>
+                                <span style="color:#999;"> — <?php echo $escape($row['error']); ?></span>
+                            <?php endif; ?>
+                        <?php endif; ?>
+                    </td>
+                    <td style="padding:0.4rem 0.5rem;text-align:right;font-variant-numeric:tabular-nums;">
+                        <?php echo $row['documents'] === null ? '—' : number_format((int) $row['documents']); ?>
+                    </td>
+                </tr>
+            <?php endforeach; ?>
+        </tbody>
+    </table>
+    <p class="description" style="margin-top:0.75rem;margin-bottom:0;">
+        <?php echo $translate('Live counts read directly from Typesense. A reachable collection with 0 documents has never been built — run a full reindex.'); ?>
+    </p>
+</section>
 
 <div class="iwac-maintenance-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:1.5rem;margin-top:1.5rem;">
 

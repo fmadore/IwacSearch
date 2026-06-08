@@ -1,0 +1,53 @@
+<?php
+/**
+ * Svelte mount point for the federated /search/everything surface.
+ *
+ * Parallel to common/iwac-search-mount, but emits a [data-iwac-federated-root]
+ * element + an iwac-federated-state-{id} script that src/svelte/main.ts mounts
+ * as a FederatedApp (Content + Entities tabs over both collections).
+ *
+ * Touching this file means re-checking the mount contract in
+ * src/svelte/main.ts (`mountFederatedRoots`).
+ *
+ * @var \Laminas\View\Renderer\PhpRenderer $this
+ * @var array<string, mixed> $bootstrap   Federated config blob (variant=federated).
+ * @var int|string $block_id              Mount instance id (default 'everything').
+ */
+
+$id = (string) ($block_id ?? 'everything');
+
+// Resolve mount-prefix-sensitive endpoints at view time (the controller bakes
+// raw stems; basePath keeps them correct under a subdirectory / site mount).
+$token  = $this->basePath($bootstrap['endpoints']['token']  ?? '/discovery/token');
+$search = $this->basePath($bootstrap['endpoints']['search'] ?? '/search-api/multi_search');
+$locale = $this->iwacLocale();
+
+$bootstrap['endpoints'] = ['token' => $token, 'search' => $search];
+$bootstrap['locale']    = $locale;
+
+// Stamp the same resolved endpoints + locale onto each tab's bootstrap — the
+// reused App reads them from its own (tab) bootstrap, not the federated one.
+foreach (($bootstrap['tabs'] ?? []) as $i => $tab) {
+    $bootstrap['tabs'][$i]['bootstrap']['endpoints'] = ['token' => $token, 'search' => $search];
+    $bootstrap['tabs'][$i]['bootstrap']['locale']    = $locale;
+}
+?>
+<div
+    data-iwac-federated-root
+    data-iwac-block-id="<?= $this->escapeHtmlAttr($id) ?>"
+    class="iwac-search-block__root"
+    id="iwac-federated-root-<?= $this->escapeHtmlAttr($id) ?>"
+>
+    <div class="iwac-search-block__skeleton" aria-hidden="true">
+        <div class="iwac-search-block__skeleton-input"></div>
+        <div class="iwac-search-block__skeleton-results">
+            <?php for ($i = 0; $i < 5; $i++): ?>
+                <div class="iwac-search-block__skeleton-row"></div>
+            <?php endfor; ?>
+        </div>
+    </div>
+</div>
+
+<script type="application/json" id="iwac-federated-state-<?= $this->escapeHtmlAttr($id) ?>">
+<?= $this->iwacBootstrapJson($bootstrap) ?>
+</script>

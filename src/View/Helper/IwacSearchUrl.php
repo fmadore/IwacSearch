@@ -8,16 +8,17 @@ use Throwable;
 
 /**
  * Builds the URL of the public search landing page for the current site,
- * in the site's own language.
+ * in the site's own language. The landing page is the federated
+ * "search everything" surface (Content + Entities tabs):
  *
- *   French site  (/s/afrique_ouest) → /s/afrique_ouest/recherche
- *   English site (/s/westafrica)    → /s/westafrica/search
- *   Off-site     (global /search)   → /search
+ *   French site  (/s/afrique_ouest) → /s/afrique_ouest/recherche/tout
+ *   English site (/s/westafrica)    → /s/westafrica/search/everything
+ *   Off-site     (global)           → /search/everything
  *
  * The IWAC-theme header search form calls this to set its `action`, so a
  * visitor who submits the header box lands on the module's faceted
  * Typesense surface *inside their own language site*. Mirrors the
- * /parcourir vs /browse split owned by IwacBrowse + IwacLocale.
+ * /parcourir vs /browse split owned by IwacLocale.
  *
  * The theme guards on this helper's presence and falls back to Omeka core's
  * /index/search form when the module is inactive, so a broken return here
@@ -37,9 +38,9 @@ final class IwacSearchUrl extends AbstractHelper
             $site = null;
         }
 
-        // Off-site (the global /search route has no site mount to nest under).
+        // Off-site (the global route has no site mount to nest under).
         if ($site === null) {
-            return $view->basePath('/search');
+            return $view->basePath('/search/everything');
         }
 
         // Reuse the shared slug→locale heuristic so the /recherche vs /search
@@ -51,14 +52,16 @@ final class IwacSearchUrl extends AbstractHelper
             // Helper missing/failed — default to French, the primary audience.
         }
 
-        $routeName = $locale === 'en' ? 'site/iwac-search' : 'site/iwac-recherche';
+        $routeName = $locale === 'en'
+            ? 'site/iwac-search-everything'
+            : 'site/iwac-recherche-tout';
 
         try {
             return (string) $view->url($routeName, ['site-slug' => $site->slug()]);
         } catch (Throwable) {
             // Route not registered yet, or URL assembly failed — degrade to
             // the global search page rather than emitting a broken link.
-            return $view->basePath('/search');
+            return $view->basePath('/search/everything');
         }
     }
 }

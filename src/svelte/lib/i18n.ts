@@ -98,6 +98,11 @@ const STRINGS: Record<Locale, Record<string, string>> = {
     sort_az: 'A–Z',
     sort_most_recent: 'Plus récent',
     cite_eds: 'dir.',
+    search_everything: 'Rechercher dans toute la collection…',
+    clear_search: 'Effacer la recherche',
+    tab_content: 'Contenu',
+    tab_entities: 'Entités',
+    result_types: 'Types de résultats',
   },
   en: {
     search_placeholder: 'Search the IWAC…',
@@ -157,6 +162,11 @@ const STRINGS: Record<Locale, Record<string, string>> = {
     sort_az: 'A–Z',
     sort_most_recent: 'Most recent',
     cite_eds: 'eds.',
+    search_everything: 'Search the whole collection…',
+    clear_search: 'Clear search',
+    tab_content: 'Content',
+    tab_entities: 'Entities',
+    result_types: 'Result types',
   },
 };
 

@@ -1,39 +1,45 @@
 /**
  * Auto-mount entry point.
  *
- * Walks every [data-iwac-search-root] element on the page, reads the
- * sibling JSON state script, and mounts an App instance into it.
- * Multiple mounts per page (e.g. one block + one /search header
- * promotion) work because each mount has its own bootstrap state and
- * its own TypesenseClient instance.
+ * Two surfaces share this bundle:
+ *   - [data-iwac-search-root]    → an App (the /search shell, /browse pages,
+ *                                  and every page block).
+ *   - [data-iwac-federated-root] → a FederatedApp (the /search/everything
+ *                                  page: Content + Entities tabs over both
+ *                                  collections).
+ *
+ * Each root reads its own sibling JSON state script and mounts its own
+ * component instance, so multiple mounts per page work (each has its own
+ * bootstrap + TypesenseClient).
  */
 
 import { mount } from 'svelte';
 import App from './App.svelte';
-import type { IwacBootstrap } from './lib/types';
+import FederatedApp from './components/FederatedApp.svelte';
+import type { IwacBootstrap, IwacFederatedBootstrap } from './lib/types';
 
-function readBootstrap(rootEl: HTMLElement): IwacBootstrap | null {
-  const blockId = rootEl.getAttribute('data-iwac-block-id') ?? 'standalone';
-  const stateEl = document.getElementById(`iwac-search-state-${blockId}`);
+function parseState<T>(scriptId: string): T | null {
+  const stateEl = document.getElementById(scriptId);
   if (!stateEl?.textContent) {
-    console.error('[iwac-search] no state script for block', blockId);
+    console.error('[iwac-search] no state script', scriptId);
     return null;
   }
   try {
-    return JSON.parse(stateEl.textContent) as IwacBootstrap;
+    return JSON.parse(stateEl.textContent) as T;
   } catch (err) {
-    console.error('[iwac-search] malformed state JSON for block', blockId, err);
+    console.error('[iwac-search] malformed state JSON', scriptId, err);
     return null;
   }
 }
 
-function mountAll(): void {
+function mountSearchRoots(): void {
   const roots = document.querySelectorAll<HTMLElement>('[data-iwac-search-root]');
   roots.forEach((rootEl) => {
     if (rootEl.dataset.iwacMounted === '1') {
       return; // idempotent against double-load (e.g. defer + manual call)
     }
-    const bootstrap = readBootstrap(rootEl);
+    const blockId = rootEl.getAttribute('data-iwac-block-id') ?? 'standalone';
+    const bootstrap = parseState<IwacBootstrap>(`iwac-search-state-${blockId}`);
     if (!bootstrap) {
       return;
     }
@@ -41,6 +47,28 @@ function mountAll(): void {
     rootEl.dataset.iwacMounted = '1';
     mount(App, { target: rootEl, props: { bootstrap } });
   });
+}
+
+function mountFederatedRoots(): void {
+  const roots = document.querySelectorAll<HTMLElement>('[data-iwac-federated-root]');
+  roots.forEach((rootEl) => {
+    if (rootEl.dataset.iwacMounted === '1') {
+      return;
+    }
+    const blockId = rootEl.getAttribute('data-iwac-block-id') ?? 'everything';
+    const bootstrap = parseState<IwacFederatedBootstrap>(`iwac-federated-state-${blockId}`);
+    if (!bootstrap) {
+      return;
+    }
+    rootEl.innerHTML = '';
+    rootEl.dataset.iwacMounted = '1';
+    mount(FederatedApp, { target: rootEl, props: { bootstrap } });
+  });
+}
+
+function mountAll(): void {
+  mountSearchRoots();
+  mountFederatedRoots();
 }
 
 if (document.readyState === 'loading') {

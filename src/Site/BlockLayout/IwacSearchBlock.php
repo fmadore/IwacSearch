@@ -5,6 +5,8 @@ namespace IwacSearch\Site\BlockLayout;
 
 use IwacSearch\Browse\FacetCatalog;
 use IwacSearch\Search\InitialResponseRenderer;
+use IwacSearch\Search\PresetCatalog;
+use IwacSearch\Search\SearchDefaults;
 use Laminas\View\Renderer\PhpRenderer;
 use Omeka\Api\Representation\SitePageBlockRepresentation;
 use Omeka\Api\Representation\SitePageRepresentation;
@@ -22,6 +24,7 @@ use Omeka\Site\BlockLayout\AbstractBlockLayout;
  *
  * Block data shape (persisted as JSON in site_block.data):
  *   {
+ *     "preset":            "all" | "benin" | … | "references" | "index" | "custom",
  *     "mode":              "full" | "compact" | "results-only",
  *     "title":             "Optional H2",
  *     "intro_html":        "Optional intro paragraph",
@@ -31,6 +34,14 @@ use Omeka\Site\BlockLayout\AbstractBlockLayout;
  *     "results_per_page":  10
  *   }
  *
+ * `preset` (the Scope dropdown) is the primary control: a ready-made scope
+ * from {@see PresetCatalog} (whole corpus, one country, references, or the
+ * entity index) drives the collection, locked filter, facet set, and default
+ * sort. `locked_filters` / `prominent_facets` / `default_sort` only apply when
+ * preset is `custom` (a raw content-collection filter). Blocks saved before
+ * the Scope dropdown existed have no `preset` key and default to `custom`, so
+ * their stored filters keep working unchanged.
+ *
  * locked_filters uses Typesense filter_by syntax directly. They're enforced
  * server-side at scoped-key mint time (not just hidden in the UI), so the
  * block instance cannot leak data outside its scope even if the client
@@ -39,7 +50,9 @@ use Omeka\Site\BlockLayout\AbstractBlockLayout;
 class IwacSearchBlock extends AbstractBlockLayout
 {
     public function __construct(
-        private readonly InitialResponseRenderer $initialRenderer
+        private readonly InitialResponseRenderer $initialRenderer,
+        private readonly string $contentAlias = 'iwac_current',
+        private readonly string $indexAlias = 'iwac_index_current',
     ) {
     }
 
@@ -60,6 +73,11 @@ class IwacSearchBlock extends AbstractBlockLayout
         ?SitePageBlockRepresentation $block = null
     ) {
         $data = $block ? $block->data() : [];
+        // New blocks default to the whole-corpus scope; blocks saved before
+        // the Scope dropdown existed (no `preset` key) default to Custom so
+        // their stored locked_filters keep driving the surface.
+        $preset           = $data['preset']
+            ?? ($block !== null ? PresetCatalog::CUSTOM : PresetCatalog::DEFAULT_KEY);
         $mode             = $data['mode']             ?? 'full';
         $title            = $data['title']            ?? '';
         $introHtml        = $data['intro_html']       ?? '';
@@ -90,6 +108,27 @@ class IwacSearchBlock extends AbstractBlockLayout
 
         ob_start();
         ?>
+        <div class="field">
+            <div class="field-meta">
+                <label for="iwac-search-preset"><?= $esc($t('Scope')) ?></label>
+                <div class="field-description">
+                    <?= $esc($t('What this block searches. Pick a ready-made scope, or “Custom…” to set your own content filter + facets in the advanced fields below.')) ?>
+                </div>
+            </div>
+            <div class="inputs">
+                <select id="iwac-search-preset" name="<?= $escAttr($namePrefix) ?>[preset]">
+                    <?php foreach (PresetCatalog::optionsList() as $opt): ?>
+                        <option value="<?= $escAttr($opt['value']) ?>"<?= $opt['value'] === $preset ? ' selected' : '' ?>>
+                            <?= $esc($t($opt['label'])) ?>
+                        </option>
+                    <?php endforeach; ?>
+                    <option value="<?= $escAttr(PresetCatalog::CUSTOM) ?>"<?= $preset === PresetCatalog::CUSTOM ? ' selected' : '' ?>>
+                        <?= $esc($t('Custom…')) ?>
+                    </option>
+                </select>
+            </div>
+        </div>
+
         <div class="field">
             <div class="field-meta">
                 <label for="iwac-search-mode"><?= $esc($t('Render mode')) ?></label>
@@ -136,7 +175,7 @@ class IwacSearchBlock extends AbstractBlockLayout
             <div class="field-meta">
                 <label for="iwac-search-locked"><?= $esc($t('Locked filters (Typesense filter_by)')) ?></label>
                 <div class="field-description">
-                    <?= $esc($t('Enforced server-side. Example: country_ss:=`Burkina Faso` && date:>=946684800')) ?>
+                    <?= $esc($t('Custom scope only. Enforced server-side. Example: country_ss:=`Burkina Faso` && date:>=946684800')) ?>
                 </div>
             </div>
             <div class="inputs">
@@ -151,7 +190,7 @@ class IwacSearchBlock extends AbstractBlockLayout
             <div class="field-meta">
                 <label><?= $esc($t('Prominent facets')) ?></label>
                 <div class="field-description">
-                    <?= $esc($t('Facets shown above the fold. Others move under "More filters".')) ?>
+                    <?= $esc($t('Custom scope only — preset scopes use their own facet set. Facets shown above the fold; others move under "More filters".')) ?>
                 </div>
             </div>
             <div class="inputs">
@@ -171,6 +210,9 @@ class IwacSearchBlock extends AbstractBlockLayout
         <div class="field">
             <div class="field-meta">
                 <label for="iwac-search-sort"><?= $esc($t('Default sort')) ?></label>
+                <div class="field-description">
+                    <?= $esc($t('Custom scope only — preset scopes use their own default sort.')) ?>
+                </div>
             </div>
             <div class="inputs">
                 <select id="iwac-search-sort" name="<?= $escAttr($namePrefix) ?>[default_sort]">
@@ -233,19 +275,55 @@ class IwacSearchBlock extends AbstractBlockLayout
             ['defer' => true]
         );
 
+        // Resolve the block's Scope. A preset (whole corpus, one country,
+        // references, or the entity index) drives the collection, locked
+        // filter, facet set, and default sort. Blocks saved before the Scope
+        // dropdown existed have no `preset` key → Custom, preserving their
+        // stored locked_filters / facets / sort against the content collection.
+        $presetKey = $data['preset'] ?? PresetCatalog::CUSTOM;
+        $preset = $presetKey === PresetCatalog::CUSTOM
+            ? null
+            : PresetCatalog::get($presetKey);
+
+        if ($preset !== null) {
+            $card            = $preset->card;
+            $lockedFilters   = $preset->lockedFilters;
+            $prominentFacets = $preset->facets;
+            $defaultSort     = $preset->defaultSort;
+        } else {
+            $card            = PresetCatalog::CARD_CONTENT;
+            $lockedFilters   = (string) ($data['locked_filters'] ?? '');
+            $prominentFacets = (array) ($data['prominent_facets'] ?? []);
+            $defaultSort     = (string) ($data['default_sort'] ?? '_text_match:desc');
+        }
+
+        $isEntity        = ($card === PresetCatalog::CARD_ENTITY);
+        $collectionAlias = $isEntity ? $this->indexAlias : $this->contentAlias;
+
         // The bootstrap config the Svelte client reads on mount. Same shape
         // as the /search and /browse/{slug} routes emit, so the same client
-        // mount logic works for all three surfaces.
+        // mount logic works for every surface. query_by / highlight_fields are
+        // collection-specific: the entity index lacks ocr_text/abstract/
+        // embedding, so it must pass its own set or Typesense 404s on them.
         $bootstrap = [
             'block_id'         => (int) $block->id(),
-            'mode'             => $data['mode']             ?? 'full',
-            'locked_filters'   => $data['locked_filters']   ?? '',
-            'prominent_facets' => $data['prominent_facets'] ?? [],
-            'default_sort'     => $data['default_sort']     ?? '_text_match:desc',
+            'mode'             => $data['mode'] ?? 'full',
+            'card'             => $card,
+            'locked_filters'   => $lockedFilters,
+            'prominent_facets' => $prominentFacets,
+            'default_sort'     => $defaultSort,
             'results_per_page' => (int) ($data['results_per_page'] ?? 10),
-            // Entity collection alias (fixed) so the block's autocomplete can
-            // federate to the index entities like the other surfaces.
-            'index_collection_alias' => 'iwac_index_current',
+            'collection_alias' => $collectionAlias,
+            // Entity collection alias (always advertised) so the block's
+            // autocomplete can federate to the index entities like the other
+            // surfaces.
+            'index_collection_alias' => $this->indexAlias,
+            'query_by'         => $isEntity
+                ? SearchDefaults::ENTITY_QUERY_BY
+                : SearchDefaults::CONTENT_QUERY_BY,
+            'highlight_fields' => $isEntity
+                ? SearchDefaults::ENTITY_HIGHLIGHT_FIELDS
+                : SearchDefaults::CONTENT_HIGHLIGHT_FIELDS,
             // Endpoint locations — kept here so the client doesn't hardcode
             // Omeka's URL shape, and so site admins can override later.
             'endpoints' => [

@@ -22,8 +22,15 @@ final class IwacSearchBlockFactory implements FactoryInterface
         $requestedName,
         ?array $options = null
     ): IwacSearchBlock {
+        // Collection aliases drive the preset → collection switch (content
+        // vs the entity index). Read from module config so a future alias
+        // rename follows the same single source the controller uses.
+        $typesense = $container->get('Config')['iwac_search']['typesense'] ?? [];
+
         return new IwacSearchBlock(
-            initialRenderer: $container->get(InitialResponseRenderer::class)
+            initialRenderer: $container->get(InitialResponseRenderer::class),
+            contentAlias:    $typesense['collection_alias'] ?? 'iwac_current',
+            indexAlias:      $typesense['index_collection_alias'] ?? 'iwac_index_current',
         );
     }
 }
