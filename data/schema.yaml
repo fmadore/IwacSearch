@@ -29,12 +29,11 @@
 #     the alias. The browser only ever queries the alias, so swaps are
 #     zero-downtime.
 #
-# Source-of-truth for content fields:
-#   - Bulk fields (title, ocr_text, sentiment, topic labels, ...) come from
-#     the HuggingFace dataset (fmadore/islam-west-africa-collection) on the
-#     bulk reindex path. See docs/data-sources.md.
-#   - is_public and the IIIF/thumbnail URLs come from the Omeka S API on the
-#     incremental update path (M4). HF does not expose Omeka ACL state.
+# Source-of-truth: the Omeka S MySQL database. The indexer (OmekaSourceReader)
+# reads every field — title, ocr_text (bibo:content), sentiment (iwac:*),
+# entities, is_public, IIIF/thumbnail URLs — directly via Doctrine DBAL, on
+# both the bulk reindex and the M4 incremental path. No HuggingFace.
+# country_ss is derived (newspaper→country / item-set). See docs/data-sources.md.
 
 name: iwac_v2
 

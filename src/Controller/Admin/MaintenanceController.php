@@ -79,7 +79,7 @@ class MaintenanceController extends AbstractActionController
         return $this->dispatchJob(
             BulkReindex::class,
             sprintf(
-                'Bulk reindex queued — pulls fresh data from HuggingFace, builds a fresh %s_<timestamp> collection alongside the live one, and atomic-swaps the iwac_current alias once verification passes.',
+                'Bulk reindex queued — reads fresh data from the Omeka database, builds a fresh %s_<timestamp> collection alongside the live one, and atomic-swaps the iwac_current alias once verification passes.',
                 $this->collectionBaseName
             )
         );
