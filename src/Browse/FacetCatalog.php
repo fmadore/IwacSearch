@@ -7,7 +7,7 @@ namespace IwacSearch\Browse;
  * Single source of truth for the UI controls that surface browse-config
  * choices:
  *
- *   - FACETABLE_FIELDS — the 12 schema fields an admin can mark as a
+ *   - FACETABLE_FIELDS — the schema fields an admin can mark as a
  *                        prominent (above-the-fold) facet, with their
  *                        display labels.
  *   - SORT_OPTIONS     — the three sort orders the block / browse page
@@ -53,7 +53,6 @@ final class FacetCatalog
         'organisations_ss'   => 'Organisations',
         'events_ss'          => 'Events',
         'date_decade_ss'     => 'Decade',
-        'lda_topic_label'    => 'LDA topic',
         // Sentiment trio — rendered together under one collapsible
         // "Sentiment" group in the client. All three are already indexed
         // (Gemini model); centrality + subjectivity were surfaced in

@@ -12,18 +12,14 @@ use Typesense\Client as TypesenseClient;
 /**
  * Builds the INDEX (authority) collection — the entity browse surface.
  *
- * Deliberately separate from {@see Reindexer} (which builds the content
- * collection and hardcodes skipping the `index` subset): keeping the two
- * apart means this never touches the battle-tested content path, and a
- * failure here can't corrupt the content alias (and vice versa).
+ * No database pass of its own: it iterates the EntityAuthority cache the
+ * content {@see Reindexer} already built, merging in each entity's occurrence
+ * aggregate (frequency / first–last year / countries) accumulated during the
+ * content pass. So it MUST run after Reindexer::run() (which populates both
+ * the shared authority and the occurrences) on the same job.
  *
- * Same safety property as Reindexer: build a fresh timestamped collection,
- * atomic-swap the `iwac_index_current` alias only on success, drop the
- * previous collection last. A failed run leaves the live alias on the
- * previous good collection and drops the half-built one.
- *
- * Run AFTER the content Reindexer in cli/reindex.php + BulkReindex, sharing
- * the already-primed ACL loader (prime() is a cached no-op the 2nd time).
+ * Same safety property as Reindexer: fresh timestamped collection, atomic
+ * alias swap only on success, previous collection dropped last.
  */
 final class IndexReindexer
 {
@@ -32,9 +28,9 @@ final class IndexReindexer
     public function __construct(
         private readonly TypesenseClient $typesense,
         private readonly SchemaLoader $schemaLoader,
-        private readonly HfDatasetLoader $hfLoader,
+        private readonly EntityAuthority $authority,
+        private readonly EntityOccurrences $occurrences,
         private readonly IndexEntityMapper $mapper,
-        private readonly OmekaAclLoaderInterface $aclLoader,
         private readonly LoggerInterface $logger = new NullLogger(),
         private readonly string $aliasTarget = 'iwac_index_current'
     ) {
@@ -47,8 +43,9 @@ final class IndexReindexer
     {
         $start = microtime(true);
 
-        // Shared with the content reindex; cached prime() => no-op here.
-        $this->aclLoader->prime();
+        if ($this->authority->size() === 0) {
+            $this->logger->warning('IndexReindexer: entity authority is empty — did Reindexer run first?');
+        }
 
         $schema   = $this->schemaLoader->loadForReindex($this->aliasTarget);
         $newName  = $schema['name'];
@@ -65,14 +62,10 @@ final class IndexReindexer
         $batch   = [];
 
         try {
-            foreach ($this->hfLoader->stream('index') as $row) {
-                $doc = $this->mapper->map($row);
+            foreach ($this->authority->entities() as $entity) {
+                $doc = $this->mapper->map($entity, $this->occurrences->aggregate($entity['id']));
                 if ($doc === null) {
                     continue;
-                }
-                $oid = (int) ($doc['id'] ?? 0);
-                if ($oid > 0 && $this->aclLoader->isPublic($oid)) {
-                    $doc['is_public'] = true;
                 }
                 $batch[] = $doc;
                 if (count($batch) >= self::BATCH_SIZE) {

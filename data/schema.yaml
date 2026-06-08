@@ -127,7 +127,6 @@ fields:
   # Loosening this requires licensing sign-off — see roadmap "Security model".
   - { name: ocr_text,    type: string, locale: fr, stem: true, optional: true }
   - { name: nb_words,    type: int32,  facet: false, optional: true }
-  - { name: lda_topic_label, type: string, facet: true, optional: true }
 
   # ── Abstract / description (display body, public-safe) ─────────────────
   # Two sources feed this one field, by design:
