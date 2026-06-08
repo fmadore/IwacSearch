@@ -1,133 +1,127 @@
-# Data sources for the IwacSearch indexer
+# Data source for the IwacSearch indexer
 
 ## Decision
 
-**Hybrid: HuggingFace for bulk reindex, Omeka S API for live updates and ACL.**
+**Read directly from the Omeka S MySQL database (Doctrine DBAL). One source
+of truth.**
 
-## Why hybrid
+The indexer was originally hybrid — bulk content from the HuggingFace dataset,
+`is_public` + live updates from Omeka. It now reads everything from Omeka's
+database. The HuggingFace dataset
+([fmadore/islam-west-africa-collection](https://huggingface.co/datasets/fmadore/islam-west-africa-collection))
+still exists as a published research artifact; it is simply no longer the
+search index's source.
 
-The indexer needs to populate ~14,500 Typesense documents with a rich set
-of derived fields (OCR, AI sentiment, LDA topics, lexical metrics,
-embeddings). Two viable upstreams exist:
+## Why the switch
 
-| Source | URL |
-|---|---|
-| HuggingFace | https://huggingface.co/datasets/fmadore/islam-west-africa-collection |
-| Omeka S API | https://islam.zmo.de/api |
+The hybrid design rested on the premise that the enriched fields the search
+index needs (OCR, AI sentiment, AI summary, resolved entities) only existed in
+HF. That turned out to be ~90% false — verified field-by-field against the
+live Omeka API (the Phase 0 parity spike):
 
-### HF pros — used for the bulk reindex path
-
-- All derived fields are precomputed and shipped as parquet:
-  `OCR`, `descriptionAI`, `lda_topic_id` + `lda_topic_label`, the three-model
-  AI sentiment columns (Gemini / ChatGPT / Mistral), lemmatized text,
-  Type-Token Ratio, Flesch readability, and 768-dim Gemini embeddings.
-- A single parquet download replaces ~14,500 Omeka API round trips on a
-  cold reindex.
-- No rate limiting, no auth needed for read-only access.
-- Updated monthly (manual push from the curator) — fine for a corpus that
-  grows by a few hundred items per refresh.
-
-### HF cons — why Omeka still owns part of the pipeline
-
-- `is_public` is **not** in HF. Public scoped keys gate on it
-  (`filter_by: is_public:=true`); it must come from Omeka, fresh.
-- Live edits in Omeka admin should appear in search within seconds,
-  not next month. M4 wires `api.{create,update,delete}.post` listeners
-  to upsert/delete in Typesense directly.
-- HF has 26 `documents` and 45 `audiovisual` rows with no precomputed
-  embeddings. Typesense's in-process `ts/multilingual-e5-small` model
-  embeds those at index time.
-- IIIF manifest URLs and thumbnail URLs can change between HF refreshes.
-
-## Embedding model decision
-
-The HF `embedding_OCR` field uses `gemini-embedding-2-preview` (768d).
-Using it directly would require calling Gemini at *query* time to embed
-user queries — adds an external API dependency, latency, and cost on
-every search.
-
-Cleaner: ignore HF embeddings, let Typesense's bundled
-`ts/multilingual-e5-small` (384d) embed everything. Trade-off:
-
-|  | Gemini (HF) | multilingual-e5-small (Typesense) |
+| Search field | In Omeka? | Source |
 |---|---|---|
-| Dim | 768 | 384 |
-| Quality on French | strong | good |
-| Query-time cost | external API call | in-process, free |
-| Self-contained | no | yes |
-| Index-time cost | precomputed (free) | one-time CPU at index |
+| title / dates / language / type / publisher | ✅ | `dcterms:*` |
+| OCR full text (`ocr_text`) | ✅ | `bibo:content` |
+| AI summary (`abstract`) | ✅ | `bibo:shortDescription` |
+| AI sentiment ×3 (centralité / polarité / subjectivité) | ✅ | `iwac:{model}*` |
+| entities (persons / places / orgs / events / subjects) | ✅ | `dcterms:subject` + `dcterms:spatial` linked resources |
+| `is_public` | ✅ | `resource.is_public` |
+| **semantic embedding** | ✅ (Typesense-side) | generated in-process from title + OCR, source-independent |
+| `nb_words` | ⚙️ recomputed | word count of OCR |
+| **`lda_topic_label`** | ❌ HF-only | **dropped** — gensim LDA, not worth a parallel pipeline |
 
-Picked the bundled model. Quality difference on a 14.5K corpus is
-marginal; self-contained operation matters more.
+So HF bought exactly one facet (`lda_topic_label`) at the cost of a monthly
+refresh lag, a two-source reconciliation (HF content + Omeka ACL overlay), and
+an external dependency at index time. Reading MySQL directly:
 
-## Authority records (the `index` HF subset)
+- **Freshness.** A reindex reflects live Omeka, and incremental single-item
+  updates become possible (M4).
+- **One source of truth.** `is_public`, metadata, sentiment all come from one
+  place. No HF↔Omeka reconciliation, no ACL overlay.
+- **Self-contained.** No HF Datasets Server API at index time.
+- **Same architecture as the sibling DRE-Search module** — the DBAL keyset
+  paging, value-loading, and reverse-count primitives are lifted from it.
 
-The `index` subset (4,697 rows) is the controlled vocabulary for entities
-referenced by `subject` and `spatial` strings in articles / publications /
-references.
+Semantic/hybrid search is unaffected: the `embedding` field is generated by
+Typesense from `title_txt` + `ocr_text` at index time regardless of where that
+text came from.
 
-**Pattern in the indexer:** at bulk-reindex time, load `index` into a
-hashmap keyed by `Titre`. For each content item, split `subject` /
-`spatial` on `|`, look up each token, and emit:
-- `topics_ss` for `Type == "Sujets"`
-- `persons_ss` for `Type == "Personnes"`
-- `places_ss` for `Type == "Lieux"`
-- `organisations_ss` for `Type == "Organisations"`
-- `events_ss` for `Type == "Événements"`
-- `entity_ids` (int32[]) — the `o:id` of each matched entity, for
-  outbound links
-- **`entity_aliases_txt`** (string[], FTS-only) — every alternative
-  spelling of every resolved entity, joined for query-time recall
+## Embedding model
 
-This pre-resolves the join at index time so faceting is a single
-Typesense round trip, not N lookups per search.
+Unchanged, and never depended on HF. Typesense's bundled
+`ts/multilingual-e5-small` (384d, in-process ONNX) embeds documents at index
+time and queries at search time — no external API call, no latency, no cost.
+(The HF dataset ships a 768d `gemini-embedding-2-preview` vector, but the
+search index never used it: using it would mean calling Gemini at query time
+to embed the user's query.)
 
-### Alternative-spelling search
+## How fields are read from MySQL
 
-Entities in the `index` subset carry a pipe-separated `Titre alternatif`
-field. The `AuthorityResolver` reads it twice:
+`OmekaSourceReader` (the only class that touches SQL) streams items by resource
+class with keyset pagination, batch-loading each page's property values, item
+sets, and media thumbnail in one query each.
 
-1. **Input matching** — when an HF row's `subject` or `spatial` field uses
-   an alias (e.g. `Côte d'Ivoire` instead of the canonical
-   `République de Côte d'Ivoire`), we still resolve to the right entity.
-2. **Query expansion** — for every entity referenced in a doc, we collect
-   ALL its known aliases into the doc's `entity_aliases_txt` field. The
-   public search calls `query_by` with this field included, so:
-   - typing `RCI` finds docs about `Radio Côte d'Ivoire`
-   - typing `AOF` finds docs about `Afrique-Occidentale française`
-   - typing `OCAM` finds docs about `Organisation commune africaine et malgache`
+### Entities — resolved by class, not string
 
-   Aliases stay out of the canonical `*_ss` facet fields so faceting UIs
-   show the curated label, not every variant.
+Content links entities through `dcterms:subject` and `dcterms:spatial` as
+*value_resource* links. `EntityAuthority` (built once from the entity classes
+94/9/96/54/244) buckets each linked target by the TARGET's resource class:
 
-## Subset coverage
+| Class | Type | Content facet |
+|---|---|---|
+| 94 `foaf:Person` | Personnes | `persons_ss` |
+| 96 `foaf:Organization` | Organisations | `organisations_ss` |
+| 9 `dcterms:Location` | Lieux | `places_ss` |
+| 54 `bibo:Event` | Événements | `events_ss` |
+| 244 `fabio:AuthorityFile` (item set 1) | Sujets | `topics_ss` |
+| 244 (item set 267) | Notices d'autorité | — (browsable only) |
 
-| HF subset | Rows | Goes into `iwac_v1` as `type_s` | Body text | HF embedding | Mapper |
-|---|---:|---|:---:|:---:|---|
-| `articles` | 12,287 | `article` | OCR | yes (ignored) | `Mapper\ArticleMapper` |
-| `publications` | 1,501 | `publication` | OCR | yes (ignored) | `Mapper\PublicationMapper` |
-| `documents` | 26 | `document` | OCR | no | `Mapper\DocumentMapper` |
-| `audiovisual` | 45 | `audiovisual` | none | no | `Mapper\AudiovisualMapper` |
-| `references` | 864 | `reference` | abstract (~51% fill) | no | `Mapper\ReferenceMapper` |
-| `index` | 4,697 | (consumed by `AuthorityResolver`, not indexed) | — | no | — |
+This is strictly more accurate than the old HF path, which matched entity
+*titles* as strings and silently dropped anything it couldn't resolve.
+`entity_aliases_txt` (FTS-only recall: `RCI` → *Radio Côte d'Ivoire*) is the
+target's `dcterms:alternative`; `entity_ids` are the linked `o:id`s.
 
-Total content items: **14,723** indexed into Typesense.
+### Country — derived, not stored
 
-References were skipped in M0/M1 as "bibliographic only" — secondary
-literature *about* IWAC sources rather than primary material. They now
-ship under `type_s = reference` with their own `/browse/references`
-surface (see `Browse\ReferencesSeeder`) so the discovery experience
-stays scoped by default — the page block / standalone search uses
-`type_s` as a top-level facet, and curated country browse pages don't
-mix academic citations into newspaper archive results.
+`country_ss` is not an Omeka property. `CountryResolver` derives it:
 
-Reference docs carry an `abstract` field instead of `ocr_text`; that
-field is in the public scoped key (NOT excluded) so the abstract
-shows up directly in result cards. The shared search `query_by`
-includes `abstract` so abstract-only matches surface across all
-subsets.
+- **articles / publications / audiovisual** — from the newspaper/publisher name
+  (`dcterms:publisher`, a literal) via `data/newspaper-countries.json` (ported
+  from the HF `country_mapper`).
+- **references / documents** — from membership in a per-country item set
+  (Références / Documents divers).
 
-Adding a new subset = drop a `MyMapper extends AbstractMapper` in
-`src/Indexer/Mapper/`, register it in `cli/reindex.php`'s and
-`Job\BulkReindex`'s `MapperRegistry`. Reindexer iterates
-`MapperRegistry::subsets()`, so no edit to the orchestrator is needed.
+### Sentiment — categorical labels resolved to scores
+
+Centralité and polarité are categorical labels (linked or literal). Subjectivité
+is a linked-resource category for **all three** models (gemini / chatgpt /
+mistral), resolved to a 1–5 score: `Très objectif`→1 … `Très subjectif`→5.
+
+## Subset → resource class
+
+| Subset | Classes | `type_s` | Body | Mapper |
+|---|---|---|:---:|---|
+| articles | 36 | `article` | OCR | `Mapper\ArticleMapper` |
+| publications | 60 | `publication` | OCR | `Mapper\PublicationMapper` |
+| documents | 49 | `document` | OCR | `Mapper\DocumentMapper` |
+| audiovisual | 38 | `audiovisual` | — | `Mapper\AudiovisualMapper` |
+| references | 35, 43, 88, 40, 82, 178, 77, 52, 305 | `reference` | abstract | `Mapper\ReferenceMapper` |
+| entity collection | 94, 9, 96, 54, 244 | (separate `iwac_index`) | — | `Mapper\IndexEntityMapper` |
+
+The entity collection (`iwac_index`) carries occurrence metrics — `frequency`,
+`first_year` / `last_year`, `country_ss` — accumulated by `EntityOccurrences`
+during the content pass (a reverse scan of the public content that references
+each entity), so it needs no second database pass.
+
+Adding a content subset = drop a `MyMapper extends AbstractMapper` declaring its
+`classIds()` + `readTerms()`, and register it in the `MapperRegistry` in
+`cli/reindex.php` and `Job\BulkReindex`. The reindexer iterates
+`MapperRegistry::subsets()`, so the orchestrator needs no edit.
+
+## Connection
+
+- **CLI** (`cli/reindex.php`) — builds the DBAL connection from Omeka's
+  `config/database.ini` (it runs outside the HTTP bootstrap).
+- **Job** (`Job\BulkReindex`, the admin Reindex button) — pulls
+  `Omeka\Connection` from the service container.

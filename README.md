@@ -26,7 +26,7 @@ Admin CRUD mutations are optimistic (row appears / updates / disappears immediat
 | M5         |  ✅ done   | Typeahead dropdown — prefix search, keyboard nav, click-to-navigate               |
 | M6         | 🟡 partial | Mobile filter drawer + result count + empty-state polish; cutover still planned   |
 
-**M4 coverage (partial):** Toggling an item's visibility in the Omeka admin item editor now syncs the `is_public` flag to Typesense within the same request — a just-made-private item stops appearing in public search immediately, not "some time in the next 30 days". Item deletes also remove the corresponding Typesense doc. Metadata edits (title / subject / date) and new items **still require a bulk reindex** to propagate — they go through the HF dataset pipeline, and an on-demand Omeka-to-Typesense mapper would duplicate that work with a different source of truth. Deferring until the lag becomes painful in practice.
+**M4 coverage (partial):** Toggling an item's visibility in the Omeka admin item editor syncs the `is_public` flag to Typesense within the same request — a just-made-private item stops appearing in public search immediately. Item deletes also remove the corresponding Typesense doc. Metadata edits (title / subject / date) and new items still require a bulk reindex to propagate — but since the reindex now reads the Omeka database directly (no HuggingFace pipeline), that's an on-demand rebuild against current data, not a wait for the monthly HF refresh. Promoting the event hooks to full single-item re-mapping (now that the same source is reachable live) is the next step.
 
 ## Testing checklist (after each deploy)
 
@@ -106,21 +106,22 @@ IwacSearch/
 │   ├── Controller/
 │   │   ├── SearchController.php                # /search, /discovery/token, /browse[/:slug]
 │   │   └── Admin/BrowseConfigController.php    # /admin/iwac-search/browse-config[/api[/:id]]
-│   ├── Indexer/                                # Bulk reindex pipeline
+│   ├── Indexer/                                # Bulk reindex pipeline (reads Omeka MySQL)
 │   │   ├── SchemaLoader.php                    #   reads data/schema.yaml
-│   │   ├── HfDatasetLoader.php                 #   streams HF Datasets Server API
-│   │   ├── AuthorityResolver.php               #   joins `index` subset → entity buckets
-│   │   ├── OmekaAclLoader.php                  #   is_public overlay (anonymous /api/items)
+│   │   ├── OmekaSourceReader.php               #   DBAL: keyset item stream + value loading
+│   │   ├── EntityAuthority.php                 #   entity lookup from classes 94/9/96/54/244
+│   │   ├── EntityOccurrences.php               #   per-entity metric accumulator
+│   │   ├── CountryResolver.php                 #   derives country_ss (newspaper / item-set)
 │   │   ├── StopwordsSync.php                   #   PUTs fr_default to Typesense
-│   │   ├── Mapper/                             #   one mapper per HF subset
+│   │   ├── CurationSync.php                    #   PUTs iwac_diversity curation set
+│   │   ├── Mapper/                             #   one mapper per content subset (by class)
 │   │   │   ├── MapperInterface.php
 │   │   │   ├── AbstractMapper.php
-│   │   │   ├── ArticleMapper.php
-│   │   │   ├── PublicationMapper.php
-│   │   │   ├── DocumentMapper.php
-│   │   │   ├── AudiovisualMapper.php
+│   │   │   ├── ArticleMapper.php · PublicationMapper.php · DocumentMapper.php
+│   │   │   ├── AudiovisualMapper.php · ReferenceMapper.php · IndexEntityMapper.php
 │   │   │   └── MapperRegistry.php
-│   │   └── Reindexer.php                       #   orchestrates with atomic alias swap
+│   │   ├── Reindexer.php                       #   content collection, atomic alias swap
+│   │   └── IndexReindexer.php                  #   entity (iwac_index) collection
 │   ├── Browse/                                 # Curated /browse/{slug} surfaces
 │   │   ├── BrowseConfig.php                    #   read-only DTO
 │   │   ├── BrowseConfigRepository.php          #   DBAL CRUD against iwac_browse_config
@@ -177,8 +178,10 @@ IwacSearch/
 ├── cli/
 │   └── reindex.php                             # `discovery:reindex` entry point
 ├── data/
-│   ├── schema.yaml                             # Typesense collection (source of truth, 38 fields)
-│   └── stopwords-fr.json                       # French stopword set (loaded as fr_default)
+│   ├── schema.yaml                             # Content collection (source of truth)
+│   ├── schema-index.yaml                       # Entity (iwac_index) collection
+│   ├── stopwords-fr.json                       # French stopword set (loaded as fr_default)
+│   └── newspaper-countries.json                # Newspaper → country map (derives country_ss)
 ├── view/
 │   ├── iwac-search/search/{index,browse,browse-list}.phtml
 │   ├── iwac-search/admin/browse-config/browse.phtml   # Admin CRUD shell (M3.5)
@@ -195,7 +198,7 @@ IwacSearch/
 │   ├── dependabot.yml                          # weekly grouped updates: npm + composer + actions
 │   └── workflows/ci.yml                        # lint + svelte-check + build + PHP syntax
 ├── docs/
-│   └── data-sources.md                         # Why we pull bulk from HF, live from Omeka
+│   └── data-sources.md                         # Why the indexer reads Omeka MySQL directly
 ├── package.json                                # Vite 8 + Svelte 5 + TypeScript 6 toolchain
 ├── vite.config.ts
 ├── tsconfig.json
@@ -226,7 +229,7 @@ facet set, ordered coarse → fine:
 | `places_ss`          | Mentioned locations                                                                                   |
 | `persons_ss`         | Mentioned persons                                                                                     |
 | `organisations_ss`   | Mentioned organisations                                                                               |
-| `topics_ss`          | Subjects (controlled vocabulary from the `index` HF subset)                                           |
+| `topics_ss`          | Subjects (controlled vocabulary — `fabio:AuthorityFile` authority items)                              |
 | `gemini_polarite_ss` | Sentiment polarity (Gemini model — ChatGPT/Mistral are alternates available via the block admin form) |
 
 Plus a dedicated `pub_year` two-handle range slider (1960..2025 default
@@ -363,9 +366,9 @@ Confirm?`) rather than a modal — two clicks, zero popups.
 docker compose exec php php /var/www/html/modules/IwacSearch/cli/reindex.php
 ```
 
-Builds a versioned collection (`iwac_v2_<UTC timestamp>`), streams content
-from the HuggingFace dataset, batch-imports into Typesense, then atomic-
-swaps the `iwac_current` alias. Live search keeps serving the previous
+Builds a versioned collection (`iwac_v2_<UTC timestamp>`), reads content
+directly from the Omeka MySQL database, batch-imports into Typesense, then
+atomic-swaps the `iwac_current` alias. Live search keeps serving the previous
 collection uninterrupted until the swap completes — a failed reindex
 never affects production.
 

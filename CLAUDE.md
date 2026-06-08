@@ -15,12 +15,13 @@ provides the Typesense container, nginx `/search-api/` proxy, and backups.
   facet panel, browse configs) derives from it. Edit with care; schema
   changes force an `iwac_v1` → `iwac_v2` alias swap.
 
-- **Two data sources, by design.**
-  - Bulk reindex pulls from the [HuggingFace dataset](https://huggingface.co/datasets/fmadore/islam-west-africa-collection)
-    (parquet, monthly cadence, has OCR + sentiment + topics).
-  - Incremental updates (M4) come from the Omeka S API event hooks.
-  - `is_public` always comes from Omeka — HF doesn't expose ACL state.
-  - See `docs/data-sources.md` for the rationale.
+- **Single source: the Omeka S MySQL database.** The indexer reads content,
+  entities, sentiment, OCR (`bibo:content`), and `is_public` directly from
+  Omeka via Doctrine DBAL (`OmekaSourceReader`). The HuggingFace dataset is no
+  longer a search source — it remains a separately-published research artifact.
+  `country_ss` is derived (newspaper→country / item-set), and `lda_topic_label`
+  was dropped (HF-only). See `docs/data-sources.md` for the full rationale and
+  the field→property map.
 
 - **OCR privacy is enforced by scoped keys, not frontend discipline.**
   The public scoped key carries `exclude_fields: ocr_text` AND
@@ -53,8 +54,9 @@ provides the Typesense container, nginx `/search-api/` proxy, and backups.
 ## Adding a new field
 
 1. Add it to `data/schema.yaml`.
-2. Bump the collection name (`iwac_v1` → `iwac_v2`) in the schema.
-3. Update the indexer to populate it from HF (and/or Omeka).
+2. Bump the collection name (e.g. `iwac_v2` → `iwac_v3`) in the schema.
+3. Update the relevant mapper to populate it from its Omeka property
+   (declare the term in the mapper's `readTerms()`).
 4. Run `omeka-s-cli discovery:reindex` — the indexer builds the new
    collection, verifies, then atomic-swaps the `iwac_current` alias.
 5. Update the Svelte client if the field is user-visible.
