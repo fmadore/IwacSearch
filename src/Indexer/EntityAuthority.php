@@ -71,37 +71,69 @@ final class EntityAuthority
         $this->byId = [];
 
         foreach ($reader->streamDocs(self::CLASS_IDS, self::READ_TERMS, null, true) as $doc) {
-            $item = $doc['item'];
-            $values = $doc['values'];
-
-            [$type, $bucket] = $this->classDefault($item['class']);
-            // Refine authority files (class 244): an item in the Notices
-            // d'autorité set (267) is browsable as its own type but is NEVER a
-            // content facet; everything else on 244 is a subject heading
-            // (the classDefault already mapped it to Sujets/topics_ss).
-            if ($item['class'] === self::AUTHORITY_FILE_CLASS
-                && in_array(self::SET_NOTICES, $item['item_sets'], true)
-            ) {
-                $type = "Notices d'autorité";
-                $bucket = null;
-            }
-
-            $this->byId[$item['id']] = [
-                'class'       => $item['class'],
-                'type'        => $type,
-                'bucket'      => $bucket,
-                'title'       => $item['title'],
-                'aliases'     => $this->literals($values, 'dcterms:alternative'),
-                'description' => $this->firstLiteral($values, 'dcterms:description'),
-                'coordinates' => $this->firstLiteral($values, 'curation:coordinates'),
-                'identifier'  => $this->firstLiteral($values, 'dcterms:identifier'),
-                'thumbnail'   => $doc['thumbnail'],
-                'is_public'   => $item['is_public'],
-            ];
+            $this->addRecord($doc['item'], $doc['values'], $doc['thumbnail']);
         }
 
         $this->built = true;
         return $this;
+    }
+
+    /**
+     * Load specific entity ids on demand and cache them — the incremental
+     * path, where rebuilding the whole authority per item save would be far
+     * too expensive. Only ids that are actually authority items (one of
+     * CLASS_IDS) are recorded; anything else is ignored.
+     *
+     * @param list<int> $ids
+     */
+    public function ensureLoaded(OmekaSourceReader $reader, array $ids): void
+    {
+        $missing = array_values(array_filter(
+            array_unique($ids),
+            fn(int $id): bool => !isset($this->byId[$id]),
+        ));
+        if ($missing !== []) {
+            foreach ($reader->loadResources($missing, self::READ_TERMS) as $doc) {
+                if (in_array($doc['item']['class'], self::CLASS_IDS, true)) {
+                    $this->addRecord($doc['item'], $doc['values'], $doc['thumbnail']);
+                }
+            }
+        }
+        $this->built = true;
+    }
+
+    /**
+     * Record one authority item into the cache.
+     *
+     * @param array{id:int,title:string,is_public:bool,class:int,item_sets:list<int>} $item
+     * @param array<string, list<array{vrid:?int,value:?string,uri:?string,title:?string}>> $values
+     */
+    private function addRecord(array $item, array $values, ?string $thumbnail): void
+    {
+        [$type, $bucket] = $this->classDefault($item['class']);
+        // Refine authority files (class 244): an item in the Notices d'autorité
+        // set (267) is browsable as its own type but is NEVER a content facet;
+        // everything else on 244 is a subject heading (classDefault already
+        // mapped it to Sujets/topics_ss).
+        if ($item['class'] === self::AUTHORITY_FILE_CLASS
+            && in_array(self::SET_NOTICES, $item['item_sets'], true)
+        ) {
+            $type = "Notices d'autorité";
+            $bucket = null;
+        }
+
+        $this->byId[$item['id']] = [
+            'class'       => $item['class'],
+            'type'        => $type,
+            'bucket'      => $bucket,
+            'title'       => $item['title'],
+            'aliases'     => $this->literals($values, 'dcterms:alternative'),
+            'description' => $this->firstLiteral($values, 'dcterms:description'),
+            'coordinates' => $this->firstLiteral($values, 'curation:coordinates'),
+            'identifier'  => $this->firstLiteral($values, 'dcterms:identifier'),
+            'thumbnail'   => $thumbnail,
+            'is_public'   => $item['is_public'],
+        ];
     }
 
     /**
@@ -118,11 +150,11 @@ final class EntityAuthority
      */
     public function resolve(array $linkedIds): array
     {
-        if (!$this->built) {
-            throw new \LogicException('EntityAuthority::resolve called before build()');
-        }
         if ($linkedIds === []) {
             return [];
+        }
+        if (!$this->built) {
+            throw new \LogicException('EntityAuthority::resolve called before build() or ensureLoaded()');
         }
 
         $buckets = [];

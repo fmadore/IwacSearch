@@ -4,45 +4,34 @@ declare(strict_types=1);
 namespace IwacSearch\Indexer;
 
 use Closure;
+use IwacSearch\Indexer\Mapper\MapperRegistry;
 use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
 use Throwable;
 use Typesense\Client as TypesenseClient;
 
 /**
- * Live updates to Typesense triggered by Omeka's api.*.post events.
+ * Live updates to the content collection, triggered by Omeka's api.*.post
+ * events.
  *
- * Scope of this first pass (M4):
+ * Now that the indexer reads from the same Omeka database the live site
+ * writes to, an item edit (or a brand-new item) can be re-mapped on the spot
+ * — the full document, not just the is_public flag — and upserted into
+ * Typesense within the request that changed it. This closes the old M4 gap
+ * where metadata edits waited for the monthly bulk reindex.
  *
- *   - `updateItemPublicState()`  — flip is_public when an admin toggles an
- *                                  item's visibility. Critical path: a
- *                                  just-made-private item must stop
- *                                  appearing in public search within the
- *                                  request that changed it, not "some
- *                                  time in the next 30 days when bulk
- *                                  reindex runs".
- *   - `deleteItem()`             — remove a doc when its Omeka resource
- *                                  is deleted, so we don't 404 from
- *                                  stale Typesense hits.
+ *   - reindexItem() — load the one item from MySQL, pick its mapper by class,
+ *     resolve just its linked entities on demand, map, upsert. Covers create
+ *     and update (is_public included, since it's a full re-map).
+ *   - deleteItem()  — remove the doc when the Omeka resource is deleted.
  *
- * NOT in scope here:
+ * NOT handled here: the entity collection's occurrence aggregates (frequency /
+ * year span / countries). Those are corpus-wide reverse scans, refreshed by
+ * the bulk reindex; letting them drift slightly between rebuilds is fine.
  *
- *   - Full doc replacement on metadata edits. The HF mapper pipeline is
- *     the source of truth for content fields (title, ocr_text, facets,
- *     embeddings). An on-demand Omeka → Typesense mapper would
- *     duplicate that pipeline with a different source of truth — we'd
- *     rather run the bulk reindex monthly and accept a ≤30-day lag for
- *     metadata changes than build a parallel mapper we'd have to keep
- *     in sync with the HF one. A future pass can add this if the lag
- *     becomes painful.
- *
- *   - New items. Same reason: a doc without ocr_text, embeddings, and
- *     authority joins is worse than no doc at all (it'd rank poorly
- *     and return useless hits). New items wait for bulk reindex.
- *
- * Resilience: every operation is wrapped in try/catch. A failed
- * Typesense call logs and swallows the error — it MUST NOT block the
- * Omeka save the user is completing, even if Typesense is down.
+ * Resilience: every operation is wrapped in try/catch. A failed Typesense
+ * call logs and swallows the error — it MUST NOT block the Omeka save the
+ * user is completing, even if Typesense is down.
  */
 final class IncrementalIndexer
 {
@@ -51,44 +40,72 @@ final class IncrementalIndexer
     public function __construct(
         /** @var Closure(): TypesenseClient */
         private readonly Closure $clientFactory,
+        private readonly OmekaSourceReader $reader,
+        private readonly MapperRegistry $mappers,
+        private readonly EntityAuthority $authority,
         private readonly string $collectionAlias = 'iwac_current',
         private readonly LoggerInterface $logger = new NullLogger()
     ) {
     }
 
     /**
-     * Partial-update the is_public field on one document.
+     * Re-map one item from the database and upsert the full document.
      *
-     * Typesense's PATCH /collections/x/documents/<id> preserves every
-     * other field; we're not re-indexing content, just flipping one flag.
-     * If the doc doesn't exist yet (item never indexed, or newly created),
-     * the PATCH returns 404 — we log and move on. Bulk reindex will
-     * pick it up.
+     * Skips silently when the id isn't an indexable content item (a
+     * photograph, an authority item, or a class no mapper handles) — those
+     * simply never belong in the content collection.
      */
-    public function updateItemPublicState(int $itemId, bool $isPublic): void
+    public function reindexItem(int $itemId): void
     {
         if ($itemId <= 0) {
             return;
         }
 
         try {
-            $this->collection()->documents[(string) $itemId]->update([
-                'is_public' => $isPublic,
-            ]);
-            $this->logger->info('IwacSearch: is_public updated in Typesense', [
-                'item_id'   => $itemId,
-                'is_public' => $isPublic,
-            ]);
-        } catch (Throwable $e) {
-            // 404 = doc not indexed yet (new item, bulk reindex pending).
-            // Not an error — just an observation.
-            if ($this->isNotFound($e)) {
-                $this->logger->info('IwacSearch: item not in Typesense yet, skipping is_public sync', [
-                    'item_id' => $itemId,
+            $row = $this->reader->loadResources([$itemId], $this->mappers->allReadTerms())[$itemId] ?? null;
+            if ($row === null) {
+                return; // not an Item, or already gone — delete handles removal
+            }
+
+            $mapper = $this->mappers->forClass($row['item']['class']);
+            if ($mapper === null) {
+                return; // not a content class (photograph / authority / …)
+            }
+
+            // Resolve only THIS item's linked entities — rebuilding the whole
+            // authority per save would be far too expensive.
+            $entityIds = array_merge(
+                $this->vrids($row['values'], 'dcterms:subject'),
+                $this->vrids($row['values'], 'dcterms:spatial'),
+            );
+            $this->authority->ensureLoaded($this->reader, $entityIds);
+
+            $doc = $mapper->map($row['item'], $row['values'], $row['thumbnail']);
+            if ($doc === null) {
+                return;
+            }
+
+            $response = $this->collection()->documents->import(
+                json_encode($doc, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+                ['action' => 'upsert']
+            );
+            $line = json_decode(trim((string) $response), true);
+            if (is_array($line) && ($line['success'] ?? true) === false) {
+                $this->logger->warning('IwacSearch: item upsert reported failure', [
+                    'item_id'  => $itemId,
+                    'response' => $line,
                 ]);
                 return;
             }
-            $this->logger->warning('IwacSearch: failed to update is_public in Typesense', [
+
+            $this->logger->info('IwacSearch: item re-indexed in Typesense', [
+                'item_id'   => $itemId,
+                'type'      => $doc['type_s'] ?? null,
+                'is_public' => $doc['is_public'] ?? null,
+            ]);
+        } catch (Throwable $e) {
+            // Never block the Omeka save; bulk reindex is the backstop.
+            $this->logger->warning('IwacSearch: failed to re-index item in Typesense', [
                 'item_id' => $itemId,
                 'error'   => $e->getMessage(),
             ]);
@@ -96,8 +113,8 @@ final class IncrementalIndexer
     }
 
     /**
-     * Delete one document by id. Idempotent — 404 from Typesense is
-     * logged as a no-op, not a failure.
+     * Delete one document by id. Idempotent — 404 from Typesense is logged as
+     * a no-op, not a failure.
      */
     public function deleteItem(int $itemId): void
     {
@@ -124,6 +141,21 @@ final class IncrementalIndexer
         }
     }
 
+    /**
+     * @param array<string, list<array{vrid:?int,value:?string,uri:?string,title:?string}>> $values
+     * @return list<int>
+     */
+    private function vrids(array $values, string $term): array
+    {
+        $out = [];
+        foreach ($values[$term] ?? [] as $v) {
+            if ($v['vrid'] !== null) {
+                $out[] = $v['vrid'];
+            }
+        }
+        return $out;
+    }
+
     private function collection(): object
     {
         // Alias name doubles as a collection name in every Typesense
@@ -137,10 +169,9 @@ final class IncrementalIndexer
     }
 
     /**
-     * Typesense's PHP SDK wraps HTTP errors in a few different
-     * exception classes; rather than import all of them, match on the
-     * error message / status. Good enough for a "did the doc exist"
-     * check.
+     * Typesense's PHP SDK wraps HTTP errors in a few exception classes; match
+     * on the message / status rather than importing all of them. Good enough
+     * for a "did the doc exist" check.
      */
     private function isNotFound(Throwable $e): bool
     {

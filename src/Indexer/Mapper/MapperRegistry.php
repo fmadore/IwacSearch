@@ -57,4 +57,35 @@ final class MapperRegistry
     {
         return array_keys($this->mappers);
     }
+
+    /**
+     * The mapper whose resource classes include $classId, or null if none
+     * handles it (e.g. a photograph or an authority item — not content).
+     */
+    public function forClass(int $classId): ?MapperInterface
+    {
+        foreach ($this->mappers as $mapper) {
+            if (in_array($classId, $mapper->classIds(), true)) {
+                return $mapper;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Union of every mapper's readTerms() — what the incremental indexer must
+     * load for one item before it knows which mapper (and term subset) applies.
+     *
+     * @return list<string>
+     */
+    public function allReadTerms(): array
+    {
+        $terms = [];
+        foreach ($this->mappers as $mapper) {
+            foreach ($mapper->readTerms() as $term) {
+                $terms[$term] = true;
+            }
+        }
+        return array_keys($terms);
+    }
 }

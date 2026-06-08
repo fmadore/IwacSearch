@@ -35,12 +35,11 @@ final class ItemEventListener
     }
 
     /**
-     * Sync is_public to Typesense after Omeka commits an item save.
+     * Re-map and upsert the full document after Omeka commits an item save.
      *
-     * Fires only when the DB write succeeded, so we never push a state
-     * the admin didn't actually persist. Failure to reach Typesense is
-     * swallowed inside the indexer — this listener never throws to the
-     * Omeka dispatcher.
+     * Fires only when the DB write succeeded, so we never push a state the
+     * admin didn't actually persist. Failure to reach Typesense is swallowed
+     * inside the indexer — this listener never throws to the Omeka dispatcher.
      */
     public function onItemUpdate(Event $event): void
     {
@@ -48,10 +47,24 @@ final class ItemEventListener
         if ($item === null) {
             return;
         }
-        $this->indexer->updateItemPublicState(
-            (int) $item->id(),
-            (bool) $item->isPublic()
-        );
+        $this->indexer->reindexItem((int) $item->id());
+    }
+
+    /**
+     * Index a newly-created item (full re-map). Now possible because the
+     * indexer reads the same Omeka database the create just wrote to — a new
+     * item gets a complete document, not the half-baked placeholder the old
+     * HF-only pipeline would have produced (which is why create was not wired
+     * before). Non-content items (photographs, authority records) are skipped
+     * inside the indexer.
+     */
+    public function onItemCreate(Event $event): void
+    {
+        $item = $this->extractItem($event);
+        if ($item === null) {
+            return;
+        }
+        $this->indexer->reindexItem((int) $item->id());
     }
 
     /**

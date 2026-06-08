@@ -109,15 +109,16 @@ class Module extends AbstractModule
      *
      *   - view.layout on SearchController → asset injection for /search,
      *     /browse, /browse/{slug} (M1).
-     *   - api.update.post on ItemAdapter → sync is_public changes + any
-     *     future incremental doc refresh to Typesense (M4).
+     *   - api.create.post / api.update.post on ItemAdapter → re-map the
+     *     full document from MySQL and upsert it to Typesense (M4).
      *   - api.delete.post on ItemAdapter → remove the doc from Typesense
      *     so stale hits don't survive a resource delete (M4).
      *
-     * NOT attached: api.create.post. New items need the full mapper
-     * pipeline (authorities, OCR overlay, embeddings) that only the
-     * bulk reindex provides — a half-indexed doc ranks worse than no
-     * doc. New items wait for the next nightly / monthly reindex.
+     * api.create.post IS now attached: since the indexer reads the same
+     * Omeka database the save just wrote to, a new item gets a complete
+     * document immediately — no longer the half-baked placeholder the old
+     * HF-only pipeline would have produced. Non-content items (photographs,
+     * authority records) are skipped inside the indexer.
      *
      * The admin CRUD surface (M3.5) doesn't need event wiring; it loads
      * its own bundle via the view template.
@@ -152,6 +153,11 @@ class Module extends AbstractModule
         // TypesenseClient on first use.
         $listener = $this->resolveItemEventListener();
         if ($listener !== null) {
+            $sharedEventManager->attach(
+                \Omeka\Api\Adapter\ItemAdapter::class,
+                'api.create.post',
+                [$listener, 'onItemCreate']
+            );
             $sharedEventManager->attach(
                 \Omeka\Api\Adapter\ItemAdapter::class,
                 'api.update.post',

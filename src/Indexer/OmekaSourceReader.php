@@ -117,6 +117,58 @@ final class OmekaSourceReader
     }
 
     /**
+     * Load specific resources by id (resource_type = Item), each enriched with
+     * its values / item-sets / thumbnail — the same shape streamDocs() yields.
+     * Used by the incremental indexer (the one changed content item) and by
+     * EntityAuthority's on-demand entity loading.
+     *
+     * @param  list<int>    $ids
+     * @param  list<string> $terms
+     * @return array<int, array{
+     *     item: array{id:int,title:string,is_public:bool,class:int,item_sets:list<int>},
+     *     values: array<string, list<array{vrid:?int,value:?string,uri:?string,title:?string}>>,
+     *     thumbnail: ?string
+     * }>
+     */
+    public function loadResources(array $ids, array $terms): array
+    {
+        $idList = implode(',', array_map('intval', $ids));
+        if ($idList === '') {
+            return [];
+        }
+        $rows = $this->connection->executeQuery(
+            'SELECT id, title, is_public, resource_class_id FROM resource'
+            . ' WHERE resource_type = :rt AND id IN (' . $idList . ')',
+            ['rt' => Item::class],
+        )->fetchAllAssociative();
+        if ($rows === []) {
+            return [];
+        }
+
+        $found = array_map(static fn(array $r): int => (int) $r['id'], $rows);
+        $valuesByItem = $this->loadValues($found, $terms);
+        $sets = $this->loadItemSets($found);
+        $thumbs = $this->mediaThumbnails($found);
+
+        $out = [];
+        foreach ($rows as $r) {
+            $id = (int) $r['id'];
+            $out[$id] = [
+                'item' => [
+                    'id'        => $id,
+                    'title'     => (string) ($r['title'] ?? ''),
+                    'is_public' => (bool) $r['is_public'],
+                    'class'     => (int) $r['resource_class_id'],
+                    'item_sets' => $sets[$id] ?? [],
+                ],
+                'values'    => $valuesByItem[$id] ?? [],
+                'thumbnail' => $thumbs[$id] ?? null,
+            ];
+        }
+        return $out;
+    }
+
+    /**
      * Grouped property values for a set of resource ids, limited to the given
      * terms. Returns, per resource: term → list of value rows, each carrying
      * the linked-resource id + its title (for value_resource links), the
