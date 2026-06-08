@@ -30,17 +30,19 @@ use Omeka\Site\BlockLayout\AbstractBlockLayout;
  *     "intro_html":        "Optional intro paragraph",
  *     "locked_filters":    "country_ss:=Burkina Faso && newspaper_ss:=Sidwaya",
  *     "prominent_facets":  ["country_ss", "newspaper_ss", "topics_ss"],
- *     "default_sort":      "_text_match:desc" | "date:desc" | "date:asc",
+ *     "default_sort":      "" | "_text_match:desc" | "date:desc" | "frequency:desc" | …,
  *     "results_per_page":  10
  *   }
  *
  * `preset` (the Scope dropdown) is the primary control: a ready-made scope
  * from {@see PresetCatalog} (whole corpus, one country, references, or the
- * entity index) drives the collection, locked filter, facet set, and default
- * sort. `locked_filters` / `prominent_facets` / `default_sort` only apply when
- * preset is `custom` (a raw content-collection filter). Blocks saved before
- * the Scope dropdown existed have no `preset` key and default to `custom`, so
- * their stored filters keep working unchanged.
+ * entity index) drives the collection, locked filter, and facet set.
+ * `locked_filters` / `prominent_facets` only apply when preset is `custom`
+ * (a raw content-collection filter). `default_sort` applies to ANY scope when
+ * it's a valid order for that scope's collection (content vs the entity index);
+ * empty means "use the scope's own default sort". Blocks saved before the Scope
+ * dropdown existed have no `preset` key and default to `custom`, so their stored
+ * filters keep working unchanged.
  *
  * locked_filters uses Typesense filter_by syntax directly. They're enforced
  * server-side at scoped-key mint time (not just hidden in the UI), so the
@@ -97,7 +99,9 @@ class IwacSearchBlock extends AbstractBlockLayout
                 'gemini_centralite_ss',
                 'gemini_subjectivite',
             ];
-        $defaultSort      = $data['default_sort']     ?? '_text_match:desc';
+        // Empty = "use the scope's own default sort". An explicit choice
+        // overrides it (when valid for the scope's collection — see render()).
+        $defaultSort      = $data['default_sort']     ?? '';
         $resultsPerPage   = (int) ($data['results_per_page'] ?? 10);
 
         $esc     = fn(string $s): string => $view->escapeHtml($s);
@@ -217,16 +221,28 @@ class IwacSearchBlock extends AbstractBlockLayout
             <div class="field-meta">
                 <label for="iwac-search-sort-<?= $escAttr($uid) ?>"><?= $esc($t('Default sort')) ?></label>
                 <div class="field-description">
-                    <?= $esc($t('Custom scope only — preset scopes use their own default sort.')) ?>
+                    <?= $esc($t('Initial result order. Leave on “Use scope default” to follow the scope (e.g. most-mentioned for the Entity index, newest for a country). The Entity index orders apply only when the scope is the Entity index; an order that does not fit the chosen scope is ignored.')) ?>
                 </div>
             </div>
             <div class="inputs">
                 <select id="iwac-search-sort-<?= $escAttr($uid) ?>" name="<?= $escAttr($namePrefix) ?>[default_sort]">
-                    <?php foreach (FacetCatalog::SORT_OPTIONS as $key => $label): ?>
-                        <option value="<?= $escAttr($key) ?>"<?= $key === $defaultSort ? ' selected' : '' ?>>
-                            <?= $esc($t($label)) ?>
-                        </option>
-                    <?php endforeach; ?>
+                    <option value=""<?= $defaultSort === '' ? ' selected' : '' ?>>
+                        <?= $esc($t('Use scope default')) ?>
+                    </option>
+                    <optgroup label="<?= $escAttr($t('Content (articles, references…)')) ?>">
+                        <?php foreach (FacetCatalog::sortOptionsFor('content') as $key => $label): ?>
+                            <option value="<?= $escAttr($key) ?>"<?= $key === $defaultSort ? ' selected' : '' ?>>
+                                <?= $esc($t($label)) ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </optgroup>
+                    <optgroup label="<?= $escAttr($t('Entity index')) ?>">
+                        <?php foreach (FacetCatalog::sortOptionsFor('entity') as $key => $label): ?>
+                            <option value="<?= $escAttr($key) ?>"<?= $key === $defaultSort ? ' selected' : '' ?>>
+                                <?= $esc($t($label)) ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </optgroup>
                 </select>
             </div>
         </div>
@@ -292,16 +308,26 @@ class IwacSearchBlock extends AbstractBlockLayout
             : PresetCatalog::get($presetKey);
 
         if ($preset !== null) {
-            $card            = $preset->card;
-            $lockedFilters   = $preset->lockedFilters;
-            $prominentFacets = $preset->facets;
-            $defaultSort     = $preset->defaultSort;
+            $card             = $preset->card;
+            $lockedFilters    = $preset->lockedFilters;
+            $prominentFacets  = $preset->facets;
+            $scopeDefaultSort = $preset->defaultSort;
         } else {
-            $card            = PresetCatalog::CARD_CONTENT;
-            $lockedFilters   = (string) ($data['locked_filters'] ?? '');
-            $prominentFacets = (array) ($data['prominent_facets'] ?? []);
-            $defaultSort     = (string) ($data['default_sort'] ?? '_text_match:desc');
+            $card             = PresetCatalog::CARD_CONTENT;
+            $lockedFilters    = (string) ($data['locked_filters'] ?? '');
+            $prominentFacets  = (array) ($data['prominent_facets'] ?? []);
+            $scopeDefaultSort = '_text_match:desc';
         }
+
+        // The admin's Default-sort choice (any scope) wins when it's a valid
+        // order for this scope's collection — content vs the entity index;
+        // otherwise fall back to the scope's own default. Empty / mismatched
+        // (e.g. a stale content sort left on an Entity index block) → scope
+        // default, so the bootstrap sort always matches what SortSelect offers.
+        $adminSort   = (string) ($data['default_sort'] ?? '');
+        $defaultSort = ($adminSort !== '' && FacetCatalog::isValidSortFor($card, $adminSort))
+            ? $adminSort
+            : $scopeDefaultSort;
 
         $isEntity        = ($card === PresetCatalog::CARD_ENTITY);
         $collectionAlias = $isEntity ? $this->indexAlias : $this->contentAlias;

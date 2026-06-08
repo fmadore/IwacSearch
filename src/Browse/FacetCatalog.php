@@ -10,9 +10,10 @@ namespace IwacSearch\Browse;
  *   - FACETABLE_FIELDS — the schema fields an admin can mark as a
  *                        prominent (above-the-fold) facet, with their
  *                        display labels.
- *   - SORT_OPTIONS     — the content-collection sort orders the block can
- *                        default to (the entity index sorts live client-side
- *                        in src/svelte/lib/i18n.ts).
+ *   - SORT_OPTIONS / SORT_OPTIONS_ENTITY — the content and entity-index sort
+ *                        orders the block can default to. Both mirror the
+ *                        client sort sets in src/svelte/lib/i18n.ts so the
+ *                        block-config picker and the live SortSelect agree.
  *   - RENDER_MODES     — shared by the page block today; kept here so
  *                        later surfaces (embed snippets, external
  *                        integrations) can pull from the same list
@@ -70,9 +71,21 @@ final class FacetCatalog
         // Optional scalar creator_sort field — author-less docs sort last
         // (missing_values rule applied in typesense.ts + InitialResponseRenderer).
         // Mirrors the client content sort set in src/svelte/lib/i18n.ts
-        // (sortOptions). The entity index uses frequency/title sorts defined
-        // only client-side, since no PHP surface defaults to them.
+        // (sortOptions, card='content').
         'creator_sort:asc' => 'Author (A–Z)',
+    ];
+
+    /**
+     * Sort orders for the entity index (the authority collection). Its
+     * sortable fields differ from content's — frequency (occurrence count)
+     * and title, no relevance/author — so it carries its own list. Mirrors
+     * the client entity sort set in src/svelte/lib/i18n.ts (card='entity').
+     */
+    public const SORT_OPTIONS_ENTITY = [
+        'frequency:desc' => 'Most mentioned',
+        'frequency:asc'  => 'Least mentioned',
+        'title:asc'      => 'Title (A–Z)',
+        'date:desc'      => 'Newest first',
     ];
 
     public const RENDER_MODES = [
@@ -142,5 +155,23 @@ final class FacetCatalog
     public static function isValidSort(string $sort): bool
     {
         return isset(self::SORT_OPTIONS[$sort]);
+    }
+
+    /**
+     * The sort orders valid for a given card. Content surfaces use
+     * SORT_OPTIONS; the entity index has its own sortable fields
+     * (SORT_OPTIONS_ENTITY).
+     *
+     * @return array<string, string> sort value => label
+     */
+    public static function sortOptionsFor(string $card): array
+    {
+        return $card === 'entity' ? self::SORT_OPTIONS_ENTITY : self::SORT_OPTIONS;
+    }
+
+    /** Whether $sort is a valid order for the given card's collection. */
+    public static function isValidSortFor(string $card, string $sort): bool
+    {
+        return isset(self::sortOptionsFor($card)[$sort]);
     }
 }
