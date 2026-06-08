@@ -21,14 +21,25 @@ use RuntimeException;
  */
 final class CountryResolver
 {
-    /** Per-country "Références" item set → country (accented). */
-    private const REFERENCE_COUNTRY_SETS = [
+    /**
+     * Per-country item set → country (accented), for subsets that carry no
+     * newspaper: the "Références" sets (references subset) and the "Documents
+     * divers" sets (documents subset). The two families don't overlap, so one
+     * lookup serves both.
+     */
+    private const COUNTRY_ITEM_SETS = [
+        // Références
         2193 => 'Bénin',
         2212 => 'Burkina Faso',
         2217 => "Côte d'Ivoire",
         2222 => 'Niger',
         2225 => 'Nigeria',
         2228 => 'Togo',
+        // Documents divers
+        23452 => 'Bénin',
+        23453 => 'Burkina Faso',
+        76366 => "Côte d'Ivoire",
+        26327 => 'Togo',
     ];
 
     /** @var array<string, string> normalised newspaper name → country */
@@ -83,7 +94,7 @@ final class CountryResolver
     {
         $out = [];
         foreach ($itemSetIds as $setId) {
-            $country = self::REFERENCE_COUNTRY_SETS[$setId] ?? null;
+            $country = self::COUNTRY_ITEM_SETS[$setId] ?? null;
             if ($country !== null) {
                 $out[] = $country;
             }

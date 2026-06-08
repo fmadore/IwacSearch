@@ -4,142 +4,84 @@ declare(strict_types=1);
 namespace IwacSearch\Indexer\Mapper;
 
 /**
- * Maps a row of the HF `index` subset (an authority record) to a document
- * for the dedicated entity collection (data/schema-index.yaml).
+ * Maps one authority record (an {@see \IwacSearch\Indexer\EntityAuthority}
+ * entry) plus its occurrence aggregate into a document for the entity
+ * collection (data/schema-index.yaml).
  *
- * Standalone — unlike the content mappers it does NOT extend AbstractMapper
- * (no AuthorityResolver dependency: entities don't resolve other entities)
- * and it is driven directly by IndexReindexer, not the MapperRegistry.
+ * The static fields (title, type, aliases, description, coordinates) come from
+ * the entity item itself; the occurrence metrics (frequency / first–last year
+ * / countries) are accumulated during the content reindex — they're a reverse
+ * scan of the content items that reference this entity — and passed in here.
  *
- * Source fields (see the HF index subset):
- *   Titre, Titre alternatif, Type, Description, frequency, countries,
- *   first_occurrence, last_occurrence, Coordonnées, iwac_url, thumbnail.
+ * Standalone (no AbstractMapper / no AuthorityResolver): an entity doesn't
+ * resolve other entities. Driven by IndexReindexer.
  */
 final class IndexEntityMapper
 {
-    /**
-     * The `countries` field on the index subset spells Benin without the
-     * acute accent, unlike the content `country_ss` ("Bénin"). Normalise so
-     * the entity-page Country facet reads correctly in French. The other
-     * five IWAC countries match already.
-     */
-    private const COUNTRY_NORMALISE = [
-        'Benin' => 'Bénin',
-    ];
+    private const SITE_BASE = 'https://islam.zmo.de';
+    private const SITE_SLUG = 'afrique_ouest';
 
     /**
-     * @param  array<string, mixed> $row
-     * @return array<string, mixed>|null  null = skip (no id / title / type)
+     * @param array{
+     *   id:int, type:string, title:string, aliases:list<string>, description:string,
+     *   coordinates:string, identifier:string, thumbnail:?string, is_public:bool
+     * } $entity
+     * @param array{frequency:int, countries:list<string>, first_year:?int, last_year:?int} $aggregate
+     * @return array<string, mixed>|null  null = skip (no title / type)
      */
-    public function map(array $row): ?array
+    public function map(array $entity, array $aggregate): ?array
     {
-        $oid   = $this->intOr($row['o:id'] ?? null, 0);
-        $title = $this->str($row['Titre'] ?? '');
-        $type  = $this->str($row['Type'] ?? '');
-        if ($oid === 0 || $title === '' || $type === '') {
+        $title = trim($entity['title']);
+        if ($title === '' || $entity['type'] === '') {
             return null;
         }
 
+        $oid = $entity['id'];
         $doc = [
             'id'            => (string) $oid,
             'title'         => $title,
             'title_txt'     => $title,
-            'entity_type_s' => $type,
-            'frequency'     => $this->intOr($row['frequency'] ?? null, 0),
-            'is_public'     => false, // overlaid by IndexReindexer via the ACL loader
+            'entity_type_s' => $entity['type'],
+            'frequency'     => $aggregate['frequency'] ?? 0,
+            'is_public'     => $entity['is_public'],
+            'omeka_url'     => sprintf('%s/s/%s/item/%d', self::SITE_BASE, self::SITE_SLUG, $oid),
         ];
 
-        $this->maybeAdd($doc, 'identifier',    $this->str($row['identifier'] ?? ''));
-        $this->maybeAdd($doc, 'omeka_url',     $this->str($row['iwac_url'] ?? ''));
-        $this->maybeAdd($doc, 'thumbnail_url', $this->str($row['thumbnail'] ?? ''));
-        $this->maybeAdd($doc, 'description',   $this->str($row['Description'] ?? ''));
-        $this->maybeAdd($doc, 'coordinates',   $this->str($row['Coordonnées'] ?? ''));
+        $this->maybeAdd($doc, 'identifier',    $entity['identifier']);
+        $this->maybeAdd($doc, 'thumbnail_url', $entity['thumbnail'] ?? '');
+        $this->maybeAdd($doc, 'description',   $entity['description']);
+        $this->maybeAdd($doc, 'coordinates',   $entity['coordinates']);
 
-        $aliases = $this->splitPipe($this->str($row['Titre alternatif'] ?? ''));
-        if ($aliases !== []) {
-            $doc['entity_aliases_txt'] = $aliases;
+        if ($entity['aliases'] !== []) {
+            $doc['entity_aliases_txt'] = $entity['aliases'];
         }
 
-        $countries = array_values(array_unique(array_map(
-            static fn(string $c): string => self::COUNTRY_NORMALISE[$c] ?? $c,
-            $this->splitPipe($this->str($row['countries'] ?? ''))
-        )));
+        $countries = $aggregate['countries'] ?? [];
         if ($countries !== []) {
-            $doc['country_ss'] = $countries;
+            $doc['country_ss'] = array_values(array_unique($countries));
         }
 
-        $firstYear = $this->yearOf($this->str($row['first_occurrence'] ?? ''));
-        $lastYear  = $this->yearOf($this->str($row['last_occurrence'] ?? ''));
+        $firstYear = $aggregate['first_year'] ?? null;
+        $lastYear  = $aggregate['last_year'] ?? null;
         if ($firstYear !== null) {
             $doc['first_year'] = $firstYear;
         }
         if ($lastYear !== null) {
             $doc['last_year'] = $lastYear;
             // Reuse the content client's date handling: pub_year drives the
-            // year slider, date (epoch of last mention) drives date:desc.
+            // year slider; date (epoch of last mention) drives date:desc.
             $doc['pub_year'] = $lastYear;
-            $epoch = $this->epochOf($this->str($row['last_occurrence'] ?? ''));
-            if ($epoch !== null) {
-                $doc['date'] = $epoch;
-            }
+            $doc['date'] = (int) gmmktime(0, 0, 0, 1, 1, $lastYear);
         }
 
         return $doc;
     }
 
-    // ── Helpers (mirrors AbstractMapper's, kept local to stay standalone) ─
-
-    /**
-     * Set $doc[$key] only when $value is non-empty — mirrors
-     * AbstractMapper::maybeAdd() for this standalone mapper.
-     *
-     * @param array<string, mixed> $doc
-     */
+    /** @param array<string, mixed> $doc */
     private function maybeAdd(array &$doc, string $key, string $value): void
     {
         if ($value !== '') {
             $doc[$key] = $value;
         }
-    }
-
-    private function str(mixed $v): string
-    {
-        return is_string($v) ? trim($v) : '';
-    }
-
-    private function intOr(mixed $v, int $default): int
-    {
-        return is_numeric($v) ? (int) $v : $default;
-    }
-
-    /** @return list<string> */
-    private function splitPipe(string $v): array
-    {
-        if ($v === '') {
-            return [];
-        }
-        return array_values(array_filter(
-            array_map('trim', explode('|', $v)),
-            static fn(string $s): bool => $s !== ''
-        ));
-    }
-
-    private function yearOf(string $iso): ?int
-    {
-        return preg_match('/^(\d{4})/', $iso, $m) ? (int) $m[1] : null;
-    }
-
-    private function epochOf(string $iso): ?int
-    {
-        if ($iso === '') {
-            return null;
-        }
-        if (preg_match('/^\d{4}$/', $iso)) {
-            $iso .= '-01-01';
-        } elseif (preg_match('/^\d{4}-\d{2}$/', $iso)) {
-            $iso .= '-01';
-        }
-        $ts = strtotime($iso . ' UTC');
-        return is_int($ts) ? $ts : null;
     }
 }

@@ -48,7 +48,6 @@ final class EntityAuthority
     ];
 
     private const AUTHORITY_FILE_CLASS = 244;
-    private const SET_SUJETS = 1;
     private const SET_NOTICES = 267;
 
     /** @var array<int, array{
@@ -70,19 +69,25 @@ final class EntityAuthority
     public function build(OmekaSourceReader $reader): self
     {
         $this->byId = [];
-        $authorityFileIds = [];
 
         foreach ($reader->streamDocs(self::CLASS_IDS, self::READ_TERMS, null, true) as $doc) {
             $item = $doc['item'];
             $values = $doc['values'];
-            $id = $item['id'];
-            $class = $item['class'];
 
-            // Default type/bucket from class; 244 is refined below by item-set.
-            [$type, $bucket] = $this->classDefault($class);
+            [$type, $bucket] = $this->classDefault($item['class']);
+            // Refine authority files (class 244): an item in the Notices
+            // d'autorité set (267) is browsable as its own type but is NEVER a
+            // content facet; everything else on 244 is a subject heading
+            // (the classDefault already mapped it to Sujets/topics_ss).
+            if ($item['class'] === self::AUTHORITY_FILE_CLASS
+                && in_array(self::SET_NOTICES, $item['item_sets'], true)
+            ) {
+                $type = "Notices d'autorité";
+                $bucket = null;
+            }
 
-            $this->byId[$id] = [
-                'class'       => $class,
+            $this->byId[$item['id']] = [
+                'class'       => $item['class'],
                 'type'        => $type,
                 'bucket'      => $bucket,
                 'title'       => $item['title'],
@@ -93,26 +98,6 @@ final class EntityAuthority
                 'thumbnail'   => $doc['thumbnail'],
                 'is_public'   => $item['is_public'],
             ];
-
-            if ($class === self::AUTHORITY_FILE_CLASS) {
-                $authorityFileIds[] = $id;
-            }
-        }
-
-        if ($authorityFileIds !== []) {
-            $setsById = $reader->loadItemSets($authorityFileIds);
-            foreach ($authorityFileIds as $id) {
-                $sets = $setsById[$id] ?? [];
-                if (in_array(self::SET_NOTICES, $sets, true)) {
-                    // Authority notice — browsable as its own type, never a content facet.
-                    $this->byId[$id]['type'] = "Notices d'autorité";
-                    $this->byId[$id]['bucket'] = null;
-                } else {
-                    // Everything else on class 244 is a subject heading.
-                    $this->byId[$id]['type'] = 'Sujets';
-                    $this->byId[$id]['bucket'] = 'topics_ss';
-                }
-            }
         }
 
         $this->built = true;

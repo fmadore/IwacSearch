@@ -51,7 +51,7 @@ final class OmekaSourceReader
      * @param  list<int>|null $itemSetIds optional item-set scope (AND membership)
      * @param  bool           $withThumbnail resolve the item's first thumbnailed media
      * @return Generator<int, array{
-     *     item: array{id:int,title:string,is_public:bool,class:int},
+     *     item: array{id:int,title:string,is_public:bool,class:int,item_sets:list<int>},
      *     values: array<string, list<array{vrid:?int,value:?string,uri:?string,title:?string}>>,
      *     thumbnail: ?string
      * }>
@@ -96,6 +96,7 @@ final class OmekaSourceReader
             $lastId = (int) end($ids);
 
             $valuesByItem = $this->loadValues($ids, $terms);
+            $sets = $this->loadItemSets($ids);
             $thumbs = $withThumbnail ? $this->mediaThumbnails($ids) : [];
 
             foreach ($rows as $r) {
@@ -106,6 +107,7 @@ final class OmekaSourceReader
                         'title'     => (string) ($r['title'] ?? ''),
                         'is_public' => (bool) $r['is_public'],
                         'class'     => (int) $r['resource_class_id'],
+                        'item_sets' => $sets[$id] ?? [],
                     ],
                     'values'    => $valuesByItem[$id] ?? [],
                     'thumbnail' => $thumbs[$id] ?? null,

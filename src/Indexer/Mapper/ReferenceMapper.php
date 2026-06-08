@@ -4,41 +4,44 @@ declare(strict_types=1);
 namespace IwacSearch\Indexer\Mapper;
 
 /**
- * References subset (~864 rows) — bibliographic citations.
+ * References — bibliographic citations across 9 RDF classes. Unlike the
+ * primary-source subsets these are catalogued with bibliographic vocab:
  *
- * Heterogeneous content: 9 RDF classes (Article de revue · Chapitre ·
- * Thèse · Livre · Rapport · Communication · Compte rendu · Ouvrage
- * collectif · Article de blog). The dedicated `reference_type_ss`
- * facet lets users narrow within the subset; `type_s = "reference"`
- * keeps them filterable as a single bucket against primary-source
- * subsets (article / publication / document / audiovisual).
+ *   - author  ← `bibo:authorList`  (NOT dcterms:creator)
+ *   - editor  ← `bibo:editorList`
+ *   - venue   ← `dcterms:publisher` (journal title or book publisher)
+ *   - abstract← `dcterms:abstract`  (the real, human-written abstract — there
+ *               is no OCR and no AI summary here)
+ *   - volume/issue/pages/doi/edition ← `bibo:*`
+ *   - country ← per-country "Références" item set (no newspaper)
+ *   - reference_type_ss ← the resource CLASS, mapped to its French label
  *
- * Notable shape differences from the primary-source subsets:
- *   - No OCR. The `abstract` field carries the body text we'd FTS-search.
- *   - No AI sentiment, no LDA topics, no embeddings.
- *   - `URL` is the original publisher URL (DOI page, journal site, etc.);
- *     `iwac_url` is the IWAC item page. Both kept.
- *   - `country` is pipe-separated (academic literature often discusses
- *     multiple countries). The `addCommonFacets()` helper in
- *     AbstractMapper splits this into the country_ss[] facet uniformly
- *     across every subset, so `Niger|Nigeria` becomes two facet values.
- *   - `language` carries French labels ("Français", "Anglais", ...) rather
- *     than ISO codes. Kept as-is to match the source data; the references
- *     browse page lives on its own slug so the value mismatch with other
- *     subsets only matters in cross-subset searches.
- *
- * Fill rates (from the May 2026 parquet):
- *   - 100% have title, author, pub_date
- *   - ~51% have abstract (median 1170 chars, p90 ~2300, max ~9300)
- *   - DOI fill is partial — kept as a stored, non-indexed link target.
- *
- * @see references/subsets-schema.md (iwac-dataset skill) — full field list
+ * `type_s = "reference"` keeps them filterable as one bucket against the
+ * primary subsets; `reference_type_ss` narrows within.
  */
 final class ReferenceMapper extends AbstractMapper
 {
+    /** The 9 reference classes → their French type label (o:resource_class). */
+    private const CLASS_LABELS = [
+        35  => 'Article de revue',
+        43  => 'Chapitre',
+        88  => 'Thèse',
+        40  => 'Livre',
+        82  => 'Rapport',
+        178 => 'Compte rendu',
+        77  => 'Communication',
+        52  => 'Ouvrage collectif',
+        305 => 'Article de blog',
+    ];
+
     public function subsetName(): string
     {
         return 'references';
+    }
+
+    public function classIds(): array
+    {
+        return array_keys(self::CLASS_LABELS);
     }
 
     protected function typeTag(): string
@@ -46,80 +49,63 @@ final class ReferenceMapper extends AbstractMapper
         return 'reference';
     }
 
-    public function map(array $row): ?array
+    public function readTerms(): array
     {
-        $doc = $this->buildBase($row);
-        if ($doc === null) {
-            return null;
+        return [
+            'dcterms:identifier', 'dcterms:language', 'dcterms:publisher',
+            'dcterms:subject', 'dcterms:spatial', 'dcterms:date', 'fabio:hasURL',
+            'bibo:authorList', 'bibo:editorList', 'bibo:doi', 'bibo:volume',
+            'bibo:issue', 'bibo:pageStart', 'bibo:pageEnd', 'bibo:edition',
+            'dcterms:abstract', 'dcterms:isPartOf',
+        ];
+    }
+
+    public function map(array $item, array $values, ?string $thumbnailUrl): ?array
+    {
+        $doc = $this->buildBase($item, $values, $thumbnailUrl);
+
+        // ── Authorship (bibo:authorList, not dcterms:creator) ──────────────
+        $creators = $this->disp($values, 'bibo:authorList');
+        $this->maybeAddList($doc, 'creator_ss', $creators);
+        if ($creators !== []) {
+            $this->maybeAdd($doc, 'creator_sort', $this->authorSortKey($creators[0]));
+        }
+        $this->maybeAddList($doc, 'language_ss', $this->disp($values, 'dcterms:language'));
+
+        // ── Country from the per-country Références item set ────────────────
+        $this->maybeAddList($doc, 'country_ss', $this->countries->forItemSets($item['item_sets']));
+
+        // ── Reference type from the RDF class ───────────────────────────────
+        $label = self::CLASS_LABELS[$item['class']] ?? '';
+        if ($label !== '') {
+            $doc['reference_type_ss'] = [$label];
         }
 
-        // ── Authorship + provenance ────────────────────────────────────
-        // References use `author`, `language`, and `country` the same way
-        // as primary subsets — pipe-separated multi-values, all split
-        // through addCommonFacets() into their respective *_ss[] facets.
-        // Newspaper is irrelevant for references; the helper just no-ops
-        // on the empty / missing column.
-        $this->addCommonFacets($doc, $row);
-
-        // ── Reference type (the 9 RDF classes) ─────────────────────────
-        // Stored as a single-value string[] so it parallels country_ss /
-        // newspaper_ss in the facet UI. `type` (the finer 12-value
-        // sub-classification — `Mémoire de licence`, `Working paper`, …)
-        // is intentionally NOT indexed; it adds noise without enough
-        // facet leverage at 864 docs total.
-        $resourceClass = $this->str($row['o:resource_class'] ?? '');
-        if ($resourceClass !== '') {
-            $doc['reference_type_ss'] = [$resourceClass];
-        }
-
-        // ── Bibliographic detail (display-only source line) ────────────
-        // `publisher` is the JOURNAL title for journal articles, the publisher
-        // for books/chapters/theses/reports; `book_title` is the containing
-        // book for chapters. volume/issue are pipe-separated upstream (take the
-        // first); pages come from page_start/page_end. The client formats these
-        // into a citation per reference type — see ResultItem.svelte. Only
-        // references carry these columns, so other subsets never set them.
-        $this->maybeAdd($doc, 'publisher_s',  $this->str($row['publisher']  ?? ''));
-        $this->maybeAdd($doc, 'book_title_s', $this->str($row['book_title'] ?? ''));
-        $this->maybeAdd($doc, 'edition_s',    $this->str($row['edition']    ?? ''));
-        $this->maybeAddList($doc, 'editor_ss', $this->splitPipe($row['editor'] ?? null));
-
-        $volume = $this->splitPipe($row['volume'] ?? null);
-        $issue  = $this->splitPipe($row['issue']  ?? null);
-        if (isset($volume[0])) { $this->maybeAdd($doc, 'volume_s', $volume[0]); }
-        if (isset($issue[0]))  { $this->maybeAdd($doc, 'issue_s',  $issue[0]); }
-
+        // ── Bibliographic detail (display-only citation line) ───────────────
+        $this->maybeAdd($doc, 'publisher_s',  $this->firstDisp($values, 'dcterms:publisher'));
+        $this->maybeAdd($doc, 'book_title_s', $this->firstDisp($values, 'dcterms:isPartOf'));
+        $this->maybeAdd($doc, 'edition_s',    $this->firstLiteral($values, 'bibo:edition'));
+        $this->maybeAddList($doc, 'editor_ss', $this->disp($values, 'bibo:editorList'));
+        $this->maybeAdd($doc, 'volume_s', $this->firstLiteral($values, 'bibo:volume'));
+        $this->maybeAdd($doc, 'issue_s',  $this->firstLiteral($values, 'bibo:issue'));
         $this->maybeAdd($doc, 'pages_s', $this->pageRange(
-            $this->str($row['page_start'] ?? ''),
-            $this->str($row['page_end']   ?? '')
+            $this->firstLiteral($values, 'bibo:pageStart'),
+            $this->firstLiteral($values, 'bibo:pageEnd'),
         ));
 
-        // ── Body text ──────────────────────────────────────────────────
-        // Abstract is the FTS body — distinct field from ocr_text because
-        // we want it visible in public results (see schema.yaml comment).
-        $this->maybeAdd($doc, 'abstract', $this->str($row['abstract'] ?? ''));
+        // ── Body = the real abstract; outbound links ────────────────────────
+        $this->maybeAdd($doc, 'abstract',   $this->firstLiteral($values, 'dcterms:abstract'));
+        $this->maybeAdd($doc, 'source_url', $this->firstScalar($values, 'fabio:hasURL'));
+        $this->maybeAdd($doc, 'doi',        $this->firstScalar($values, 'bibo:doi'));
 
-        // ── Outbound link target ───────────────────────────────────────
-        // Stored, not indexed. `URL` is the original publisher / DOI page
-        // (when present) — handy for "follow the citation" UX in the
-        // result panel without polluting the FTS index.
-        $this->maybeAdd($doc, 'source_url', $this->str($row['URL'] ?? ''));
-        $this->maybeAdd($doc, 'doi',        $this->str($row['doi'] ?? ''));
-
-        // ── Authority entities + dates (shared with every subset) ──────
-        $this->addAuthorityEntities($doc, $row);
-        $this->addDateFields($doc, $row);
-
-        // No OCR body, no AI sentiment, no LDA — references don't carry
-        // any of those upstream.
+        // ── Shared: authority entities + dates ──────────────────────────────
+        $this->addAuthorityEntities($doc, $values);
+        $this->addDateFields($doc, $values);
 
         return $doc;
     }
 
-    /**
-     * Format a page range for display: "185–209" (en dash), or a single page
-     * when only one bound is present / both match. Empty when neither is set.
-     */
+    /** Format a page range for display: "185–209" (en dash), or a single page. */
     private function pageRange(string $start, string $end): string
     {
         if ($start === '' && $end === '') {

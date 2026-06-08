@@ -4,10 +4,14 @@ declare(strict_types=1);
 namespace IwacSearch\Indexer\Mapper;
 
 /**
- * Audiovisual subset (~45 rows) — audio/video, primarily Nigerian.
+ * Audiovisual (bibo:AudioVisualDocument, class 38) — audio/video recordings,
+ * primarily Nigerian. No OCR, no sentiment: identity + facets + entities +
+ * date + AI summary.
  *
- * No OCR, no AI sentiment, no LDA topics. Just identity + facets +
- * authority-resolved entities + date.
+ * Note: most AV is Nigerian, and Nigerian outlets aren't in the
+ * newspaper→country map (Nigeria is barely present in the press subsets
+ * upstream), so country_ss is often empty here — matching the sparse country
+ * coverage of the HF audiovisual subset.
  */
 final class AudiovisualMapper extends AbstractMapper
 {
@@ -16,23 +20,32 @@ final class AudiovisualMapper extends AbstractMapper
         return 'audiovisual';
     }
 
+    public function classIds(): array
+    {
+        return [38];
+    }
+
     protected function typeTag(): string
     {
         return 'audiovisual';
     }
 
-    public function map(array $row): ?array
+    public function readTerms(): array
     {
-        $doc = $this->buildBase($row);
-        if ($doc === null) {
-            return null;
-        }
+        return array_values(array_unique(array_merge(
+            self::COMMON_TERMS,
+            self::DESCRIPTION_TERMS,
+        )));
+    }
 
-        $this->addCommonFacets($doc, $row);
-        $this->addAuthorityEntities($doc, $row);
-        $this->addDateFields($doc, $row);
-        $this->addDescription($doc, $row);
-        // No body, no sentiment.
+    public function map(array $item, array $values, ?string $thumbnailUrl): ?array
+    {
+        $doc = $this->buildBase($item, $values, $thumbnailUrl);
+
+        $this->addCommonFacets($doc, $values);
+        $this->addAuthorityEntities($doc, $values);
+        $this->addDateFields($doc, $values);
+        $this->addDescription($doc, $values);
 
         return $doc;
     }

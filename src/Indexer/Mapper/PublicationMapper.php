@@ -4,13 +4,10 @@ declare(strict_types=1);
 namespace IwacSearch\Indexer\Mapper;
 
 /**
- * Publications subset (~1,501 rows) — Islamic magazines / journals
- * captured at the issue level (bibo:Issue).
- *
- * Same Omeka template as articles but split off by RDF class. Carries
- * full OCR + table-of-contents, but does NOT have the three-model AI
- * sentiment fields (those are computed per-article in the Omeka
- * pipeline, not per-issue).
+ * Publications (bibo:Issue, class 60) — Islamic magazines / journals captured
+ * at the issue level. Full OCR, but no AI sentiment and no AI summary (those
+ * are computed per-article upstream, not per-issue). country_ss derives from
+ * the publisher (magazine title) via the same newspaper→country map.
  */
 final class PublicationMapper extends AbstractMapper
 {
@@ -19,23 +16,32 @@ final class PublicationMapper extends AbstractMapper
         return 'publications';
     }
 
+    public function classIds(): array
+    {
+        return [60];
+    }
+
     protected function typeTag(): string
     {
         return 'publication';
     }
 
-    public function map(array $row): ?array
+    public function readTerms(): array
     {
-        $doc = $this->buildBase($row);
-        if ($doc === null) {
-            return null;
-        }
+        return array_values(array_unique(array_merge(
+            self::COMMON_TERMS,
+            self::BODY_TERMS,
+        )));
+    }
 
-        $this->addCommonFacets($doc, $row);
-        $this->addAuthorityEntities($doc, $row);
-        $this->addDateFields($doc, $row);
-        $this->addBodyFields($doc, $row);
-        // No AI sentiment for issues — intentionally skipped.
+    public function map(array $item, array $values, ?string $thumbnailUrl): ?array
+    {
+        $doc = $this->buildBase($item, $values, $thumbnailUrl);
+
+        $this->addCommonFacets($doc, $values);
+        $this->addAuthorityEntities($doc, $values);
+        $this->addDateFields($doc, $values);
+        $this->addBodyFields($doc, $values);
 
         return $doc;
     }

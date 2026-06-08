@@ -3,185 +3,184 @@ declare(strict_types=1);
 
 namespace IwacSearch\Indexer\Mapper;
 
-use IwacSearch\Indexer\AuthorityResolver;
+use IwacSearch\Indexer\CountryResolver;
+use IwacSearch\Indexer\EntityAuthority;
 
 /**
- * Shared infrastructure for per-subset mappers.
+ * Shared infrastructure for the content mappers, reading Omeka grouped
+ * property values (the OmekaSourceReader shape) rather than HF rows.
  *
- * Subclasses should:
- *   - declare subsetName() with their HF subset key
- *   - declare typeTag() with the value to put in type_s (article|publication|...)
- *   - implement map() by calling buildBase() then layering subset-specific fields
+ * $values is term => list of value rows, each:
+ *   ['vrid' => ?int, 'value' => ?string, 'uri' => ?string, 'title' => ?string]
+ * where vrid + title come from a value_resource link, value is the literal,
+ * uri is a uri value's @id.
  *
- * The protected helpers cover the parsing patterns that recur in every
- * IWAC subset: pipe-separated multi-values, ISO-ish dates with year-only
- * fallbacks, optional integer/float casts, three-model AI sentiment,
- * and authority-resolved entity buckets.
+ * Subclasses declare classIds()/typeTag()/readTerms() and compose map() from
+ * the protected builders. Field derivations mirror the IWAC-Hugging-Face
+ * pipeline 1:1 (verified by the Phase 0 parity spike) so the produced
+ * documents match the previous HF-built collection.
  */
 abstract class AbstractMapper implements MapperInterface
 {
+    /** Public IWAC site, used to construct omeka_url + the IIIF manifest URL. */
+    protected const SITE_BASE = 'https://islam.zmo.de';
+    protected const SITE_SLUG = 'afrique_ouest';
+
+    /** Terms every content subset reads (identity, facets, entities, date, link). */
+    protected const COMMON_TERMS = [
+        'dcterms:identifier',
+        'dcterms:creator',
+        'dcterms:language',
+        'dcterms:publisher',
+        'dcterms:subject',
+        'dcterms:spatial',
+        'dcterms:date',
+        'fabio:hasURL',
+    ];
+
+    protected const BODY_TERMS = ['bibo:content'];
+    protected const DESCRIPTION_TERMS = ['bibo:shortDescription'];
+    protected const SENTIMENT_TERMS = [
+        'iwac:geminiCentralite', 'iwac:geminiPolarite', 'iwac:geminiSubjectiviteScore',
+        'iwac:chatgptCentralite', 'iwac:chatgptPolarite', 'iwac:chatgptSubjectiviteScore',
+        'iwac:mistralCentralite', 'iwac:mistralPolarite', 'iwac:mistralSubjectiviteScore',
+    ];
+
+    /**
+     * Subjectivité is stored as a linked-resource CATEGORY (not a number) for
+     * ALL THREE models — confirmed live (the iwac-data note claiming only
+     * Mistral is categorical is stale). The HF pipeline converts the label to
+     * the 1–5 score; we do the same. Scale derived empirically by pairing the
+     * Omeka label against the HF *_subjectivite_score for 25 articles.
+     */
+    private const SUBJECTIVITE_LABELS = [
+        'Très objectif'    => 1.0,
+        'Plutôt objectif'  => 2.0,
+        'Mixte'            => 3.0,
+        'Plutôt subjectif' => 4.0,
+        'Très subjectif'   => 5.0,
+    ];
+
     public function __construct(
-        protected readonly AuthorityResolver $authority
+        protected readonly EntityAuthority $authority,
+        protected readonly CountryResolver $countries,
     ) {
     }
 
     abstract public function subsetName(): string;
 
+    /** @return list<int> */
+    abstract public function classIds(): array;
+
     /** Value placed in the document's type_s field. */
     abstract protected function typeTag(): string;
+
+    /** @return list<int>|null Most subsets are scoped by class alone. */
+    public function itemSetIds(): ?array
+    {
+        return null;
+    }
 
     // ────────────────────────────────────────────────────────────────────
     // Builders
     // ────────────────────────────────────────────────────────────────────
 
     /**
-     * Build the identity + display + ACL skeleton common to every subset.
-     * Returns null if the row has no Omeka ID (skip signal).
+     * Identity + display + ACL skeleton common to every subset.
      *
-     * @param  array<string, mixed> $row
-     * @return array<string, mixed>|null
+     * @param array{id:int,title:string,is_public:bool,class:int,item_sets:list<int>} $item
+     * @param array<string, list<array{vrid:?int,value:?string,uri:?string,title:?string}>> $values
+     * @return array<string, mixed>
      */
-    protected function buildBase(array $row): ?array
+    protected function buildBase(array $item, array $values, ?string $thumbnailUrl): array
     {
-        $oid = $this->intOr($row['o:id'] ?? null, 0);
-        if ($oid === 0) {
-            return null;
-        }
+        $oid = $item['id'];
+        $title = trim($item['title']);
 
-        $title = $this->str($row['title'] ?? '');
         $doc = [
             'id'        => (string) $oid,
             'type_s'    => $this->typeTag(),
             'title'     => $title !== '' ? $title : sprintf('[Untitled #%d]', $oid),
             'title_txt' => $title,
-            'is_public' => false, // overlaid by Reindexer
+            'is_public' => $item['is_public'],
+            'omeka_url' => sprintf('%s/s/%s/item/%d', self::SITE_BASE, self::SITE_SLUG, $oid),
         ];
 
-        $this->maybeAdd($doc, 'identifier',    $this->str($row['identifier']    ?? ''));
-        $this->maybeAdd($doc, 'omeka_url',     $this->str($row['iwac_url']      ?? ''));
-        $this->maybeAdd($doc, 'thumbnail_url', $this->str($row['thumbnail']     ?? ''));
-        $this->maybeAdd($doc, 'iiif_manifest', $this->str($row['iiif_manifest'] ?? ''));
+        $this->maybeAdd($doc, 'identifier', $this->firstScalar($values, 'dcterms:identifier'));
+
+        // A thumbnailed media is our proxy for "has primary media", which is
+        // the precondition the HF pipeline used to emit the IIIF manifest.
+        if ($thumbnailUrl !== null) {
+            $doc['thumbnail_url']  = $thumbnailUrl;
+            $doc['iiif_manifest']  = sprintf('%s/iiif/3/%d/manifest', self::SITE_BASE, $oid);
+        }
 
         return $doc;
     }
 
     /**
-     * Layer the country/newspaper/language/creator facets that appear in
-     * articles, publications, and (sometimes) documents.
-     *
-     * All four fields go through the same `splitPipe()` helper so a row
-     * like `"Niger|Nigeria"` becomes two distinct facet values
-     * (`Niger`, `Nigeria`) rather than one literal string. The IWAC
-     * upstream sometimes joins multiple countries / publishing
-     * newspapers with `|`, especially for cross-border references and
-     * Niger/Nigeria coverage in the Hausa press — the previous "first
-     * value wins" code surfaced those joined strings as single facet
-     * tokens (`Niger|Nigeria`), polluting the country dropdown.
-     *
-     * Centralising on splitPipe() also means new pipe-separated fields
-     * (added in future schema bumps) can join this method without
-     * inventing a parallel code path.
+     * creator / language / newspaper facets, plus country_ss derived from the
+     * newspaper name. Used by articles / publications / documents / audiovisual
+     * (references override creator + country — see ReferenceMapper).
      *
      * @param array<string, mixed> $doc
-     * @param array<string, mixed> $row
+     * @param array<string, list<array{vrid:?int,value:?string,uri:?string,title:?string}>> $values
      */
-    protected function addCommonFacets(array &$doc, array $row): void
+    protected function addCommonFacets(array &$doc, array $values): void
     {
-        $creators = $this->splitPipe($row['author'] ?? null);
+        $creators = $this->disp($values, 'dcterms:creator');
         $this->maybeAddList($doc, 'creator_ss', $creators);
-        // Scalar sort key from the FIRST author. creator_ss is a string[] and
-        // Typesense can't sort on an array, so the references page's
-        // "sort by author" sorts on this single-value field instead.
         if ($creators !== []) {
+            // creator_ss is a string[]; Typesense can't sort on it, so the
+            // references page's "sort by author" sorts on this scalar instead.
             $this->maybeAdd($doc, 'creator_sort', $this->authorSortKey($creators[0]));
         }
 
-        $this->maybeAddList($doc, 'language_ss',  $this->splitPipe($row['language']  ?? null));
-        $this->maybeAddList($doc, 'country_ss',   $this->splitPipe($row['country']   ?? null));
-        $this->maybeAddList($doc, 'newspaper_ss', $this->splitPipe($row['newspaper'] ?? null));
+        $this->maybeAddList($doc, 'language_ss', $this->disp($values, 'dcterms:language'));
+
+        $newspapers = $this->disp($values, 'dcterms:publisher');
+        $this->maybeAddList($doc, 'newspaper_ss', $newspapers);
+        $this->maybeAddList($doc, 'country_ss', $this->countries->forNewspapers($newspapers));
     }
 
     /**
-     * Build a single-value sort key from one author name.
-     *
-     * Surname-first so a "sort by author" reads like a bibliography
-     * ("Marie Miran-Guyon" → "miran-guyon marie"); lowercased and with
-     * Latin diacritics folded so "Ménard" sorts beside "Menard" rather
-     * than after "Z" (Typesense string sort is codepoint-ordered, and
-     * accented letters sit above the ASCII range). A single-token name is
-     * used as-is. Pure string work — no intl dependency.
-     */
-    final protected function authorSortKey(string $author): string
-    {
-        $name = trim($author);
-        if ($name === '') {
-            return '';
-        }
-        $parts = preg_split('/\s+/', $name) ?: [$name];
-        if (count($parts) > 1) {
-            $surname = array_pop($parts);
-            $name = $surname . ' ' . implode(' ', $parts);
-        }
-        return $this->foldDiacritics(mb_strtolower($name, 'UTF-8'));
-    }
-
-    /**
-     * Fold the Latin-1/French diacritics that occur in the corpus's author
-     * names down to ASCII, for predictable A–Z collation. Deliberately small
-     * and dependency-free (no ext-intl) — it only needs to cover the
-     * accented characters that actually appear in West-African scholarship
-     * bylines, not the whole Unicode range.
-     */
-    final protected function foldDiacritics(string $s): string
-    {
-        static $map = [
-            'à' => 'a', 'á' => 'a', 'â' => 'a', 'ã' => 'a', 'ä' => 'a', 'å' => 'a',
-            'ç' => 'c', 'è' => 'e', 'é' => 'e', 'ê' => 'e', 'ë' => 'e',
-            'ì' => 'i', 'í' => 'i', 'î' => 'i', 'ï' => 'i', 'ñ' => 'n',
-            'ò' => 'o', 'ó' => 'o', 'ô' => 'o', 'õ' => 'o', 'ö' => 'o', 'ø' => 'o',
-            'ù' => 'u', 'ú' => 'u', 'û' => 'u', 'ü' => 'u', 'ý' => 'y', 'ÿ' => 'y',
-            'œ' => 'oe', 'æ' => 'ae', 'ß' => 'ss',
-        ];
-        return strtr($s, $map);
-    }
-
-    /**
-     * Resolve subject + spatial through the authority lookup and merge
-     * the resulting persons_ss / places_ss / etc. buckets into $doc.
+     * Resolve dcterms:subject + dcterms:spatial linked targets to the
+     * persons_ss / places_ss / … buckets (+ entity_ids + alias FTS) via the
+     * class-keyed EntityAuthority.
      *
      * @param array<string, mixed> $doc
-     * @param array<string, mixed> $row
+     * @param array<string, list<array{vrid:?int,value:?string,uri:?string,title:?string}>> $values
      */
-    protected function addAuthorityEntities(array &$doc, array $row): void
+    protected function addAuthorityEntities(array &$doc, array $values): void
     {
-        foreach ([
-            $this->authority->resolve($this->str($row['subject'] ?? '')),
-            $this->authority->resolve($this->str($row['spatial'] ?? '')),
-        ] as $resolved) {
-            foreach ($resolved as $field => $values) {
-                if (isset($doc[$field])) {
-                    $doc[$field] = array_values(array_unique(array_merge($doc[$field], $values)));
-                } else {
-                    $doc[$field] = $values;
-                }
-            }
+        $ids = array_merge(
+            $this->linkedIds($values, 'dcterms:subject'),
+            $this->linkedIds($values, 'dcterms:spatial'),
+        );
+        foreach ($this->authority->resolve($ids) as $field => $vals) {
+            $doc[$field] = isset($doc[$field])
+                ? array_values(array_unique(array_merge($doc[$field], $vals)))
+                : $vals;
         }
     }
 
     /**
-     * Add date / pub_year / date_decade_ss derived from pub_date.
+     * date / pub_year / date_decade_ss from dcterms:date.
      *
      * @param array<string, mixed> $doc
-     * @param array<string, mixed> $row
+     * @param array<string, list<array{vrid:?int,value:?string,uri:?string,title:?string}>> $values
      */
-    protected function addDateFields(array &$doc, array $row): void
+    protected function addDateFields(array &$doc, array $values): void
     {
-        $iso = $this->str($row['pub_date'] ?? '');
-        if ($iso === '') { return; }
-
+        $iso = $this->firstScalar($values, 'dcterms:date');
+        if ($iso === '') {
+            return;
+        }
         $epoch = $this->dateToEpoch($iso);
         $year  = $this->dateToYear($iso);
-        if ($epoch !== null) { $doc['date'] = $epoch; }
+        if ($epoch !== null) {
+            $doc['date'] = $epoch;
+        }
         if ($year !== null) {
             $doc['pub_year'] = $year;
             $decade = (int) (floor($year / 10) * 10);
@@ -190,66 +189,141 @@ abstract class AbstractMapper implements MapperInterface
     }
 
     /**
-     * Add OCR + body metrics + LDA topic label. Only meaningful for
-     * subsets with the OCR pipeline (articles, publications, documents).
+     * OCR body + word count from bibo:content. (lda_topic_label is dropped in
+     * the MySQL model — it was an HF-only LDA computation.)
      *
      * @param array<string, mixed> $doc
-     * @param array<string, mixed> $row
+     * @param array<string, list<array{vrid:?int,value:?string,uri:?string,title:?string}>> $values
      */
-    protected function addBodyFields(array &$doc, array $row): void
+    protected function addBodyFields(array &$doc, array $values): void
     {
-        $this->maybeAdd($doc, 'ocr_text',        $this->str($row['OCR'] ?? ''));
-        $this->maybeAddInt($doc, 'nb_words',     $row['nb_mots'] ?? null);
-        $this->maybeAdd($doc, 'lda_topic_label', $this->str($row['lda_topic_label'] ?? ''));
+        $ocr = $this->firstLiteral($values, 'bibo:content');
+        if ($ocr === '') {
+            return;
+        }
+        $doc['ocr_text'] = $ocr;
+        // Unicode-aware word count (French accents stay inside words).
+        $doc['nb_words'] = preg_match_all('/[\p{L}\p{N}]+/u', $ocr);
     }
 
     /**
-     * Populate the public-facing `abstract` from the AI-generated
-     * `descriptionAI` column.
-     *
-     * Distinct from references (whose `abstract` IS the real, human-written
-     * abstract): for primary sources `descriptionAI` is a short, clean
-     * French summary that is safe to surface publicly — unlike the
-     * licensing-restricted `ocr_text`, which the scoped key excludes.
-     * Articles, documents, and audiovisual carry it; publications do not
-     * (they have a table of contents instead). Reusing the existing
-     * `abstract` field means the result card renders one body field for
-     * every type and the summary becomes lightly FTS-searchable (it's in
-     * `query_by`), which only helps recall.
+     * Public-safe display body from the AI summary (bibo:shortDescription).
      *
      * @param array<string, mixed> $doc
-     * @param array<string, mixed> $row
+     * @param array<string, list<array{vrid:?int,value:?string,uri:?string,title:?string}>> $values
      */
-    protected function addDescription(array &$doc, array $row): void
+    protected function addDescription(array &$doc, array $values): void
     {
-        $this->maybeAdd($doc, 'abstract', $this->str($row['descriptionAI'] ?? ''));
+        $this->maybeAdd($doc, 'abstract', $this->firstLiteral($values, 'bibo:shortDescription'));
     }
 
     /**
-     * Add the three-model AI sentiment fields if present in the row.
-     * Articles are the only subset that currently carries these.
+     * Three-model AI sentiment. Centralité + polarité are categorical labels
+     * (linked or literal — disp() handles both); subjectivité is a linked
+     * category resolved to its 1–5 score for every model.
      *
      * @param array<string, mixed> $doc
-     * @param array<string, mixed> $row
+     * @param array<string, list<array{vrid:?int,value:?string,uri:?string,title:?string}>> $values
      */
-    protected function addAiSentiment(array &$doc, array $row): void
+    protected function addAiSentiment(array &$doc, array $values): void
     {
         foreach (['gemini', 'chatgpt', 'mistral'] as $model) {
-            $cent = $this->str($row["{$model}_centralite_islam_musulmans"] ?? '');
-            $pol  = $this->str($row["{$model}_polarite"]                   ?? '');
-            $subj = $row["{$model}_subjectivite_score"] ?? null;
+            $cent = $this->firstDisp($values, "iwac:{$model}Centralite");
+            $pol  = $this->firstDisp($values, "iwac:{$model}Polarite");
+            if ($cent !== '') {
+                $doc["{$model}_centralite_ss"] = [$cent];
+            }
+            if ($pol !== '') {
+                $doc["{$model}_polarite_ss"] = [$pol];
+            }
 
-            if ($cent !== '') { $doc["{$model}_centralite_ss"] = [$cent]; }
-            if ($pol  !== '') { $doc["{$model}_polarite_ss"]   = [$pol]; }
-            if (is_numeric($subj)) {
-                $doc["{$model}_subjectivite"] = (float) $subj;
+            $subjLabel = $this->firstDisp($values, "iwac:{$model}SubjectiviteScore");
+            $score = self::SUBJECTIVITE_LABELS[$subjLabel]
+                ?? (is_numeric($subjLabel) ? (float) $subjLabel : null);
+            if ($score !== null) {
+                $doc["{$model}_subjectivite"] = $score;
             }
         }
     }
 
     // ────────────────────────────────────────────────────────────────────
-    // Low-level helpers (final to discourage subclass override)
+    // Value extraction (final — discourage subclass override)
     // ────────────────────────────────────────────────────────────────────
+
+    /**
+     * Display values for a term: the linked-resource title when present, else
+     * the literal. The multi-value facet primitive.
+     *
+     * @param array<string, list<array{vrid:?int,value:?string,uri:?string,title:?string}>> $values
+     * @return list<string>
+     */
+    final protected function disp(array $values, string $term): array
+    {
+        $out = [];
+        foreach ($values[$term] ?? [] as $v) {
+            $s = trim((string) (($v['title'] ?? '') !== '' ? $v['title'] : ($v['value'] ?? '')));
+            if ($s !== '') {
+                $out[] = $s;
+            }
+        }
+        return array_values(array_unique($out));
+    }
+
+    /** First display value (title||literal) or ''. */
+    final protected function firstDisp(array $values, string $term): string
+    {
+        return $this->disp($values, $term)[0] ?? '';
+    }
+
+    /**
+     * First literal (@value) only — for fields that are always literals
+     * (OCR, abstract).
+     *
+     * @param array<string, list<array{vrid:?int,value:?string,uri:?string,title:?string}>> $values
+     */
+    final protected function firstLiteral(array $values, string $term): string
+    {
+        foreach ($values[$term] ?? [] as $v) {
+            $s = trim((string) ($v['value'] ?? ''));
+            if ($s !== '') {
+                return $s;
+            }
+        }
+        return '';
+    }
+
+    /**
+     * First scalar: literal, else uri @id (for identifier / date / DOI-like).
+     *
+     * @param array<string, list<array{vrid:?int,value:?string,uri:?string,title:?string}>> $values
+     */
+    final protected function firstScalar(array $values, string $term): string
+    {
+        foreach ($values[$term] ?? [] as $v) {
+            $s = trim((string) (($v['value'] ?? '') !== '' ? $v['value'] : ($v['uri'] ?? '')));
+            if ($s !== '') {
+                return $s;
+            }
+        }
+        return '';
+    }
+
+    /**
+     * value_resource ids for a term (linked-resource targets only).
+     *
+     * @param array<string, list<array{vrid:?int,value:?string,uri:?string,title:?string}>> $values
+     * @return list<int>
+     */
+    final protected function linkedIds(array $values, string $term): array
+    {
+        $out = [];
+        foreach ($values[$term] ?? [] as $v) {
+            if ($v['vrid'] !== null) {
+                $out[] = $v['vrid'];
+            }
+        }
+        return $out;
+    }
 
     /** @param array<string,mixed> $doc */
     final protected function maybeAdd(array &$doc, string $key, string $value): void
@@ -267,45 +341,49 @@ abstract class AbstractMapper implements MapperInterface
         }
     }
 
-    /** @param array<string,mixed> $doc */
-    final protected function maybeAddInt(array &$doc, string $key, mixed $value): void
-    {
-        if (is_numeric($value)) {
-            $doc[$key] = (int) $value;
-        }
-    }
-
-    final protected function str(mixed $v): string
-    {
-        return is_string($v) ? trim($v) : '';
-    }
-
-    final protected function intOr(mixed $v, int $default): int
-    {
-        return is_numeric($v) ? (int) $v : $default;
-    }
-
-    /** @return list<string> */
-    final protected function splitPipe(?string $v): array
-    {
-        if ($v === null || $v === '') {
-            return [];
-        }
-        return array_values(array_filter(
-            array_map('trim', explode('|', $v)),
-            static fn(string $s): bool => $s !== ''
-        ));
-    }
-
     /**
-     * Parse an ISO-8601 date that may be year-only, year-month, or full.
-     * Returns Unix epoch seconds (UTC) for the start of the period.
+     * Surname-first, lowercased, diacritics-folded sort key from one author
+     * name — so "sort by author" reads like a bibliography and collates A–Z.
      */
+    final protected function authorSortKey(string $author): string
+    {
+        $name = trim($author);
+        if ($name === '') {
+            return '';
+        }
+        $parts = preg_split('/\s+/', $name) ?: [$name];
+        if (count($parts) > 1) {
+            $surname = array_pop($parts);
+            $name = $surname . ' ' . implode(' ', $parts);
+        }
+        return $this->foldDiacritics(mb_strtolower($name, 'UTF-8'));
+    }
+
+    /** Fold the French/Latin-1 diacritics that occur in bylines down to ASCII. */
+    final protected function foldDiacritics(string $s): string
+    {
+        static $map = [
+            'à' => 'a', 'á' => 'a', 'â' => 'a', 'ã' => 'a', 'ä' => 'a', 'å' => 'a',
+            'ç' => 'c', 'è' => 'e', 'é' => 'e', 'ê' => 'e', 'ë' => 'e',
+            'ì' => 'i', 'í' => 'i', 'î' => 'i', 'ï' => 'i', 'ñ' => 'n',
+            'ò' => 'o', 'ó' => 'o', 'ô' => 'o', 'õ' => 'o', 'ö' => 'o', 'ø' => 'o',
+            'ù' => 'u', 'ú' => 'u', 'û' => 'u', 'ü' => 'u', 'ý' => 'y', 'ÿ' => 'y',
+            'œ' => 'oe', 'æ' => 'ae', 'ß' => 'ss',
+        ];
+        return strtr($s, $map);
+    }
+
+    /** ISO-8601 (year, year-month, or full) → Unix epoch seconds (UTC, period start). */
     final protected function dateToEpoch(string $iso): ?int
     {
-        if ($iso === '')                            { return null; }
-        if (preg_match('/^\d{4}$/', $iso))           { $iso .= '-01-01'; }
-        elseif (preg_match('/^\d{4}-\d{2}$/', $iso)) { $iso .= '-01'; }
+        if ($iso === '') {
+            return null;
+        }
+        if (preg_match('/^\d{4}$/', $iso)) {
+            $iso .= '-01-01';
+        } elseif (preg_match('/^\d{4}-\d{2}$/', $iso)) {
+            $iso .= '-01';
+        }
         $ts = strtotime($iso . ' UTC');
         return is_int($ts) ? $ts : null;
     }

@@ -4,14 +4,10 @@ declare(strict_types=1);
 namespace IwacSearch\Indexer\Mapper;
 
 /**
- * Documents subset (~26 rows) — heterogeneous miscellaneous written
- * documents: official letters, communiqués, sermons, leaflets,
- * manuscripts, reports, posters, etc.
- *
- * Has OCR but no AI sentiment, no LDA topics, no lexical metrics. The
- * row-level `type` field discriminates the document type within this
- * heterogeneous bucket — we pass it through as a free-text tag rather
- * than mapping to a controlled facet.
+ * Documents (bibo:Document, class 49) — miscellaneous written documents
+ * (letters, communiqués, sermons, leaflets, reports, …). OCR + AI summary,
+ * no sentiment. Carries no newspaper, so country falls back to the per-country
+ * "Documents divers" item set when the publisher→country lookup finds nothing.
  */
 final class DocumentMapper extends AbstractMapper
 {
@@ -20,23 +16,38 @@ final class DocumentMapper extends AbstractMapper
         return 'documents';
     }
 
+    public function classIds(): array
+    {
+        return [49];
+    }
+
     protected function typeTag(): string
     {
         return 'document';
     }
 
-    public function map(array $row): ?array
+    public function readTerms(): array
     {
-        $doc = $this->buildBase($row);
-        if ($doc === null) {
-            return null;
-        }
+        return array_values(array_unique(array_merge(
+            self::COMMON_TERMS,
+            self::BODY_TERMS,
+            self::DESCRIPTION_TERMS,
+        )));
+    }
 
-        $this->addCommonFacets($doc, $row);
-        $this->addAuthorityEntities($doc, $row);
-        $this->addDateFields($doc, $row);
-        $this->addBodyFields($doc, $row);
-        $this->addDescription($doc, $row);
+    public function map(array $item, array $values, ?string $thumbnailUrl): ?array
+    {
+        $doc = $this->buildBase($item, $values, $thumbnailUrl);
+
+        $this->addCommonFacets($doc, $values);
+        // Documents rarely carry a newspaper; fall back to the country item set.
+        if (!isset($doc['country_ss'])) {
+            $this->maybeAddList($doc, 'country_ss', $this->countries->forItemSets($item['item_sets']));
+        }
+        $this->addAuthorityEntities($doc, $values);
+        $this->addDateFields($doc, $values);
+        $this->addBodyFields($doc, $values);
+        $this->addDescription($doc, $values);
 
         return $doc;
     }

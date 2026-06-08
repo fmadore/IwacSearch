@@ -4,10 +4,10 @@ declare(strict_types=1);
 namespace IwacSearch\Indexer\Mapper;
 
 /**
- * Articles subset (~12,287 rows) — digitized newspaper articles.
+ * Articles (bibo:Article, class 36) — digitised newspaper articles.
  *
- * Richest subset: full OCR, three-model AI sentiment, LDA topic labels,
- * lexical metrics, original-source URL.
+ * Richest subset: full OCR, three-model AI sentiment, original-source URL,
+ * AI summary. (LDA topic labels were HF-only and are intentionally dropped.)
  */
 final class ArticleMapper extends AbstractMapper
 {
@@ -16,27 +16,37 @@ final class ArticleMapper extends AbstractMapper
         return 'articles';
     }
 
+    public function classIds(): array
+    {
+        return [36];
+    }
+
     protected function typeTag(): string
     {
         return 'article';
     }
 
-    public function map(array $row): ?array
+    public function readTerms(): array
     {
-        $doc = $this->buildBase($row);
-        if ($doc === null) {
-            return null;
-        }
+        return array_values(array_unique(array_merge(
+            self::COMMON_TERMS,
+            self::BODY_TERMS,
+            self::DESCRIPTION_TERMS,
+            self::SENTIMENT_TERMS,
+        )));
+    }
 
-        // Articles only — original publisher URL
-        $this->maybeAdd($doc, 'source_url', $this->str($row['URL'] ?? ''));
+    public function map(array $item, array $values, ?string $thumbnailUrl): ?array
+    {
+        $doc = $this->buildBase($item, $values, $thumbnailUrl);
 
-        $this->addCommonFacets($doc, $row);
-        $this->addAuthorityEntities($doc, $row);
-        $this->addDateFields($doc, $row);
-        $this->addBodyFields($doc, $row);
-        $this->addDescription($doc, $row);
-        $this->addAiSentiment($doc, $row);
+        $this->maybeAdd($doc, 'source_url', $this->firstScalar($values, 'fabio:hasURL'));
+        $this->addCommonFacets($doc, $values);
+        $this->addAuthorityEntities($doc, $values);
+        $this->addDateFields($doc, $values);
+        $this->addBodyFields($doc, $values);
+        $this->addDescription($doc, $values);
+        $this->addAiSentiment($doc, $values);
 
         return $doc;
     }
