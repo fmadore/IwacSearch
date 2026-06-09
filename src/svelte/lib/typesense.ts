@@ -2,6 +2,7 @@ import type {
   ActiveFilters,
   EntitySuggestion,
   IwacBootstrap,
+  IwacFacetCount,
   IwacSearchResponse,
   ScopedKeyResponse,
   SuggestResult,
@@ -127,9 +128,9 @@ export class TypesenseClient {
           highlight_full_fields: 'title_txt',
           snippet_threshold: 30,
           highlight_affix_num_tokens: 8,
-          // Cap total hits we'll page through — protects from runaway
-          // crawler-style requests.
-          limit_hits: 250,
+          // No limit_hits: Typesense's default is no cap, so users can page
+          // through every match (not just the first 250). per_page stays ≤ 50,
+          // and Pagination windows the page bar, so deep result sets are fine.
           facet_by: facets.length > 0 ? facets.join(',') : undefined,
           // Show up to 50 values per facet — enough for "show more" inside
           // a facet group without paging the facet API.
@@ -215,6 +216,88 @@ export class TypesenseClient {
       throw new Error(result.message);
     }
     return validateSearchResult('Search', result.payload.results?.[0]);
+  }
+
+  /**
+   * Search the VALUES of a single facet field server-side, so a user can find
+   * and filter on a value that isn't in the top `max_facet_values` the main
+   * search returns (e.g. an author beyond the first 50 on the references
+   * surface). Uses Typesense `facet_query` — the same mechanism suggest() uses
+   * for entities — scoped to the same locked_filters + active filters + year
+   * range + current query as the live results, so the counts shown match what
+   * selecting the value would yield.
+   *
+   * Returns the matching facet counts (value + count). Blank query → [].
+   */
+  async searchFacetValues(args: {
+    field: string;
+    /** Text typed in the facet's search box. */
+    query: string;
+    /** The surface's current main query, for contextual counts. */
+    q: string;
+    activeFilters?: ActiveFilters;
+    yearRange?: YearRange | null;
+    maxValues?: number;
+  }): Promise<IwacFacetCount[]> {
+    const text = args.query.trim();
+    if (!text) return [];
+
+    const key = await this.getKey();
+    const collection = this.bootstrap.collection_alias ?? key.collection;
+    const filterBy = combineFilters(
+      this.bootstrap.locked_filters,
+      buildFilterBy(args.activeFilters ?? {}),
+      buildYearRangeFilter(args.yearRange ?? null),
+    );
+    const isBrowse = !args.q.trim();
+    const q = isBrowse ? '*' : args.q;
+    const queryBy =
+      this.bootstrap.query_by ?? 'title_txt,ocr_text,abstract,entity_aliases_txt,embedding';
+
+    const body = {
+      searches: [
+        {
+          collection,
+          q,
+          query_by: queryBy,
+          filter_by: filterBy || undefined,
+          facet_by: args.field,
+          // Typo-tolerant prefix/substring match of facet values vs the typed
+          // text. Highlight is returned too, but we render the plain value.
+          facet_query: `${args.field}:${text}`,
+          max_facet_values: Math.max(1, Math.min(250, args.maxValues ?? 100)),
+          // Counts only — a facet lookup needs no hits.
+          per_page: 0,
+        },
+      ],
+    };
+
+    const res = await fetch(this.bootstrap.endpoints.search, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-TYPESENSE-API-KEY': key.key,
+      },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) {
+      throw new Error(await formatHttpError('Facet', res));
+    }
+    const json = (await res.json()) as {
+      results: Array<IwacSearchResponse | TypesensePerSearchError>;
+    };
+    const first = json.results?.[0];
+    if (!first) {
+      throw new Error('Facet response missing results[0]');
+    }
+    // per_page:0 responses carry no hits[], so we read facet_counts directly
+    // (like suggest()) rather than validateSearchResult, which requires hits[].
+    if ('error' in first && typeof first.error === 'string') {
+      const code = 'code' in first ? first.code : '';
+      throw new Error(`Facet HTTP ${code}: ${first.error}`);
+    }
+    const fc = (first as IwacSearchResponse).facet_counts?.find((f) => f.field_name === args.field);
+    return fc?.counts ?? [];
   }
 
   /**

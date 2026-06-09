@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { IwacSearchResponse } from '../lib/types';
+  import type { ActiveFilters, IwacSearchResponse } from '../lib/types';
   import { useI18n } from '../lib/i18n';
   import ResultItem from './ResultItem.svelte';
   import Pagination from './Pagination.svelte';
@@ -20,30 +20,26 @@
    *     but the UI never surfaced the page number. Numbered pagination
    *     finishes that loop.
    *
-   * Typesense's `limit_hits` cap (250 in lib/typesense.ts) bounds the
-   * deepest page the user can request. We compute totalPages from the
-   * lesser of `found` and that cap so the bar never invites a click
-   * that would 422.
+   * No hits cap: the search request sends no `limit_hits`, so totalPages is
+   * computed straight from `found` — every match is reachable. Pagination
+   * windows the bar (1 … 4998 [4999] 5000), so a deep result set is fine.
    */
 
   interface Props {
     response: IwacSearchResponse;
     perPage: number;
-    /**
-     * Match the `limit_hits` value sent in the search request so the
-     * deepest page is always within Typesense's reach. App.svelte
-     * passes the same constant the typesense client uses (250).
-     */
-    hitsCap: number;
     onPageChange: (next: number) => void;
+    /** Currently-active categorical filters — drives the cards' badge state. */
+    activeFilters: ActiveFilters;
+    /** Toggle a facet from a result-card badge (author, newspaper, type…). */
+    onFacetToggle: (field: string, value: string, nextChecked: boolean) => void;
   }
 
-  const { response, perPage, hitsCap, onPageChange }: Props = $props();
+  const { response, perPage, onPageChange, activeFilters, onFacetToggle }: Props = $props();
 
   const { t } = useI18n();
 
-  const reachable = $derived(Math.min(response.found, hitsCap));
-  const totalPages = $derived(Math.max(1, Math.ceil(reachable / Math.max(1, perPage))));
+  const totalPages = $derived(Math.max(1, Math.ceil(response.found / Math.max(1, perPage))));
 </script>
 
 <div class="iwac-results">
@@ -53,18 +49,12 @@
     <ol class="iwac-results__list">
       {#each response.hits as hit (hit.document.id)}
         <li class="iwac-results__item">
-          <ResultItem {hit} />
+          <ResultItem {hit} {activeFilters} {onFacetToggle} />
         </li>
       {/each}
     </ol>
 
     <Pagination currentPage={response.page} {totalPages} {onPageChange} />
-
-    {#if response.found > hitsCap}
-      <p class="iwac-results__cap-note" role="note">
-        {t('cap_note', { cap: hitsCap.toLocaleString() })}
-      </p>
-    {/if}
   {/if}
 </div>
 
@@ -91,11 +81,5 @@
     background: var(--surface-sunken, #f3f3f1);
     border-radius: var(--radius-md, 0.5rem);
     margin: 0;
-  }
-  .iwac-results__cap-note {
-    margin: 0;
-    text-align: center;
-    color: var(--muted, #767880);
-    font-size: var(--text-xs, 0.8125rem);
   }
 </style>

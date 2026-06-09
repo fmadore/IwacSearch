@@ -1,6 +1,12 @@
 <script lang="ts">
-  import type { IwacHit } from '../lib/types';
-  import { countryLabel, entityTypeLabel, typeLabel as typeLabelFor, useI18n } from '../lib/i18n';
+  import type { ActiveFilters, IwacHit } from '../lib/types';
+  import {
+    countryLabel,
+    entityTypeLabel,
+    facetLabel,
+    typeLabel as typeLabelFor,
+    useI18n,
+  } from '../lib/i18n';
 
   /**
    * One result rendered as a card.
@@ -24,6 +30,15 @@
    *     letter-spaced) — that's where editors expect publication date
    *     in the IWAC theme, so the cards match the surrounding chrome.
    *
+   * Clickable metadata: the type badge, author byline, newspaper and
+   * country are rendered as toggle buttons. Clicking one applies (or
+   * removes) the matching facet on the parent search via onFacetToggle —
+   * the same handler the FacetPanel uses — so a card doubles as a filter
+   * affordance. Active filters render brand-filled (aria-pressed reflects
+   * it). For references the badge shows the publication type (Chapitre,
+   * Article de revue…) and filters reference_type_ss, not the generic
+   * "Référence" type_s pill.
+   *
    * Snippet sanitisation: Typesense returns highlighted HTML containing
    * <mark>...</mark> tags around matched tokens. We do NOT trust this
    * verbatim — the snippet is HTML-escaped client-side and only literal
@@ -34,11 +49,32 @@
 
   interface Props {
     hit: IwacHit;
+    /** Currently-active categorical filters — drives badge pressed-state. */
+    activeFilters: ActiveFilters;
+    /** Toggle a facet from a card badge. Same signature FacetPanel uses. */
+    onFacetToggle: (field: string, value: string, nextChecked: boolean) => void;
   }
 
-  const { hit }: Props = $props();
+  const { hit, activeFilters, onFacetToggle }: Props = $props();
 
   const { locale, card, t } = useI18n();
+
+  /** A clickable card badge: a facet field + its raw filter value + display. */
+  type FilterChip = { field: string; value: string; display: string };
+
+  function isActive(field: string, value: string): boolean {
+    return activeFilters[field]?.includes(value) ?? false;
+  }
+  function toggle(field: string, value: string): void {
+    onFacetToggle(field, value, !isActive(field, value));
+  }
+  /** aria-label that announces what clicking the chip will do. */
+  function chipAria(chip: FilterChip): string {
+    const label = facetLabel(chip.field, locale);
+    return isActive(chip.field, chip.value)
+      ? t('remove_filter', { label, value: chip.display })
+      : t('add_filter', { label, value: chip.display });
+  }
 
   const doc = $derived(hit.document);
   const title = $derived(doc.title || t('untitled', { id: doc.id }));
@@ -51,9 +87,33 @@
   const typeKey = $derived(doc.type_s ?? '');
   const typeLabel = $derived(typeKey ? typeLabelFor(typeKey, locale) : '');
 
+  // Type badge → a clickable facet. References surface their publication type
+  // (reference_type_ss) so the badge reads "Chapitre" / "Article de revue…"
+  // and filters academic literature by kind; every other subset shows its
+  // type_s label and filters on that. null when neither is known.
+  const isReference = $derived(typeKey === 'reference');
+  const referenceType = $derived(doc.reference_type_ss?.[0] ?? '');
+  const typeChip = $derived.by<FilterChip | null>(() => {
+    if (isReference && referenceType) {
+      return { field: 'reference_type_ss', value: referenceType, display: referenceType };
+    }
+    if (typeKey && typeLabel) {
+      return { field: 'type_s', value: typeKey, display: typeLabel };
+    }
+    return null;
+  });
+  // Tint attribute for the badge: references get their own scholarly tint;
+  // everything else keys off the type_s value.
+  const typeTint = $derived(typeChip?.field === 'reference_type_ss' ? 'reference' : typeKey);
+
   // ── Entity (index) card variant ──────────────────────────────────────
   const isEntity = $derived(card === 'entity');
   const entityType = $derived(doc.entity_type_s ? entityTypeLabel(doc.entity_type_s, locale) : '');
+  const entityTypeChip = $derived.by<FilterChip | null>(() =>
+    doc.entity_type_s
+      ? { field: 'entity_type_s', value: doc.entity_type_s, display: entityType }
+      : null,
+  );
   const frequency = $derived(typeof doc.frequency === 'number' ? doc.frequency : null);
   const mentionsLabel = $derived(
     frequency != null
@@ -66,11 +126,30 @@
     if (a && b) return a === b ? String(a) : `${a} – ${b}`;
     return a ? String(a) : b ? String(b) : '';
   });
-  const entityCountries = $derived((doc.country_ss ?? []).map((c) => countryLabel(c, locale)));
-  // Compact source line: Newspaper · Country. Kept inside the body so
-  // the eyebrow row above the title only carries the date + type chip
-  // — too many tokens up there reads as visual noise.
-  const sourceChips = $derived(buildSourceChips(doc));
+  const entityCountryChips = $derived.by<FilterChip[]>(() =>
+    (doc.country_ss ?? []).map((c) => ({
+      field: 'country_ss',
+      value: c,
+      display: countryLabel(c, locale),
+    })),
+  );
+  // Compact source line: Newspaper · Country, each a clickable filter. Kept
+  // inside the body so the eyebrow row above the title only carries the date
+  // + type chip — too many tokens up there reads as visual noise.
+  const sourceChips = $derived.by<FilterChip[]>(() => {
+    const out: FilterChip[] = [];
+    if (doc.newspaper_ss?.[0]) {
+      out.push({ field: 'newspaper_ss', value: doc.newspaper_ss[0], display: doc.newspaper_ss[0] });
+    }
+    if (doc.country_ss?.[0]) {
+      out.push({
+        field: 'country_ss',
+        value: doc.country_ss[0],
+        display: countryLabel(doc.country_ss[0], locale),
+      });
+    }
+    return out;
+  });
 
   // Prefer the OCR snippet (more contextual than the title snippet).
   const rawSnippet = $derived(
@@ -86,8 +165,9 @@
   const abstract = $derived((doc.abstract ?? '').trim());
   // Author byline — essential for references (a citation without its author
   // is useless), informative for signed articles; simply absent when a doc
-  // carries no creator_ss (e.g. unsigned press).
-  const byline = $derived((doc.creator_ss ?? []).join(', '));
+  // carries no creator_ss (e.g. unsigned press). Each author is an individual
+  // creator_ss filter toggle.
+  const authors = $derived(doc.creator_ss ?? []);
 
   // Bibliographic source line for references — "journal vol(issue), pages",
   // "Book title (eds. …), pages — Publisher", etc. Built per reference type
@@ -139,13 +219,6 @@
     return year ? String(year) : '';
   }
 
-  function buildSourceChips(d: IwacHit['document']): string[] {
-    const parts: string[] = [];
-    if (d.newspaper_ss?.[0]) parts.push(d.newspaper_ss[0]);
-    if (d.country_ss?.[0]) parts.push(countryLabel(d.country_ss[0], locale));
-    return parts;
-  }
-
   /**
    * Escape every HTML-significant character, then re-introduce only the
    * literal <mark>/</mark> tags Typesense uses to surround matches.
@@ -170,6 +243,20 @@
   }
 </script>
 
+<!-- A source/country chip rendered as a facet toggle button. -->
+{#snippet filterChip(chip: FilterChip)}
+  <li>
+    <button
+      type="button"
+      class="iwac-card__chip iwac-card__chip--filter"
+      class:is-active={isActive(chip.field, chip.value)}
+      aria-pressed={isActive(chip.field, chip.value)}
+      aria-label={chipAria(chip)}
+      onclick={() => toggle(chip.field, chip.value)}>{chip.display}</button
+    >
+  </li>
+{/snippet}
+
 <article class="iwac-card" class:iwac-card--no-thumb={!doc.thumbnail_url}>
   {#if doc.thumbnail_url}
     <a class="iwac-card__thumb" href={itemUrl} aria-hidden="true" tabindex="-1">
@@ -185,8 +272,17 @@
         {#if yearRange}
           <time class="iwac-card__eyebrow">{yearRange}</time>
         {/if}
-        {#if entityType}
-          <span class="iwac-card__type" data-entity-type={doc.entity_type_s}>{entityType}</span>
+        {#if entityTypeChip}
+          <button
+            type="button"
+            class="iwac-card__type iwac-card__type--filter"
+            class:is-active={isActive(entityTypeChip.field, entityTypeChip.value)}
+            data-entity-type={doc.entity_type_s}
+            aria-pressed={isActive(entityTypeChip.field, entityTypeChip.value)}
+            aria-label={chipAria(entityTypeChip)}
+            onclick={() => toggle(entityTypeChip.field, entityTypeChip.value)}
+            >{entityTypeChip.display}</button
+          >
         {/if}
       </header>
 
@@ -194,13 +290,13 @@
         <a href={itemUrl}>{title}</a>
       </h3>
 
-      {#if mentionsLabel || entityCountries.length > 0}
+      {#if mentionsLabel || entityCountryChips.length > 0}
         <ul class="iwac-card__source" aria-label={t('source')}>
           {#if mentionsLabel}
             <li class="iwac-card__chip iwac-card__chip--count">{mentionsLabel}</li>
           {/if}
-          {#each entityCountries as c (c)}
-            <li class="iwac-card__chip">{c}</li>
+          {#each entityCountryChips as chip (chip.field + '|' + chip.value)}
+            {@render filterChip(chip)}
           {/each}
         </ul>
       {/if}
@@ -209,8 +305,16 @@
         {#if dateLabel}
           <time class="iwac-card__eyebrow">{dateLabel}</time>
         {/if}
-        {#if typeLabel}
-          <span class="iwac-card__type" data-type={typeKey}>{typeLabel}</span>
+        {#if typeChip}
+          <button
+            type="button"
+            class="iwac-card__type iwac-card__type--filter"
+            class:is-active={isActive(typeChip.field, typeChip.value)}
+            data-type={typeTint}
+            aria-pressed={isActive(typeChip.field, typeChip.value)}
+            aria-label={chipAria(typeChip)}
+            onclick={() => toggle(typeChip.field, typeChip.value)}>{typeChip.display}</button
+          >
         {/if}
       </header>
 
@@ -218,8 +322,17 @@
         <a href={itemUrl}>{title}</a>
       </h3>
 
-      {#if byline}
-        <p class="iwac-card__byline">{byline}</p>
+      {#if authors.length > 0}
+        <p class="iwac-card__byline">
+          {#each authors as author, i (author)}<button
+              type="button"
+              class="iwac-card__author"
+              class:is-active={isActive('creator_ss', author)}
+              aria-pressed={isActive('creator_ss', author)}
+              aria-label={chipAria({ field: 'creator_ss', value: author, display: author })}
+              onclick={() => toggle('creator_ss', author)}>{author}</button
+            >{#if i < authors.length - 1}<span class="iwac-card__byline-sep">, </span>{/if}{/each}
+        </p>
       {/if}
 
       {#if citation}
@@ -236,8 +349,8 @@
 
       {#if sourceChips.length > 0}
         <ul class="iwac-card__source" aria-label={t('source')}>
-          {#each sourceChips as chip (chip)}
-            <li class="iwac-card__chip">{chip}</li>
+          {#each sourceChips as chip (chip.field + '|' + chip.value)}
+            {@render filterChip(chip)}
           {/each}
         </ul>
       {/if}
@@ -345,6 +458,11 @@
   .iwac-card__type[data-type='document'] {
     background: color-mix(in oklab, var(--warning, #e89c4a) 18%, var(--surface, #fdfdfd));
   }
+  /* References get a quiet, scholarly grey so the bibliography reads
+     distinctly from primary-source rows. */
+  .iwac-card__type[data-type='reference'] {
+    background: color-mix(in oklab, var(--ink, #2c2f37) 10%, var(--surface, #fdfdfd));
+  }
   /* Entity-type tints so persons / places / organisations read distinctly
      when scanning the index. */
   .iwac-card__type[data-entity-type='Personnes'] {
@@ -355,6 +473,38 @@
   }
   .iwac-card__type[data-entity-type='Organisations'] {
     background: color-mix(in oklab, var(--warning, #e89c4a) 18%, var(--surface, #fdfdfd));
+  }
+
+  /*
+   * Clickable type badge. The IWAC theme paints every <button> primary +
+   * glow + hover-translate; class-level overrides win on specificity, but we
+   * also zero box-shadow/transform explicitly so the theme can't leak through.
+   * The per-type tints above still paint the resting background (equal
+   * specificity, declared earlier → these hover/active rules win).
+   */
+  .iwac-card__type--filter {
+    border: none;
+    cursor: pointer;
+    font-family: inherit;
+    box-shadow: none;
+    transition:
+      background var(--transition-fast, 150ms ease),
+      color var(--transition-fast, 150ms ease),
+      box-shadow var(--transition-fast, 150ms ease);
+  }
+  .iwac-card__type--filter:hover {
+    background: color-mix(in oklab, var(--primary, #e64a19) 45%, var(--surface, #fdfdfd));
+    color: var(--ink-strong, var(--ink, #2c2f37));
+    box-shadow: none;
+    transform: none;
+  }
+  .iwac-card__type--filter.is-active {
+    background: var(--primary, #e64a19);
+    color: var(--white, #fff);
+  }
+  .iwac-card__type--filter:focus-visible {
+    outline: none;
+    box-shadow: var(--ring-focus, 0 0 0 3px rgba(0, 0, 0, 0.1));
   }
 
   .iwac-card__title {
@@ -385,6 +535,45 @@
     line-clamp: 2;
     -webkit-box-orient: vertical;
     overflow: hidden;
+  }
+  /*
+   * Each author is an inline creator_ss filter toggle. Reset the theme's
+   * button paint so the byline still reads as text; brand the active author.
+   */
+  .iwac-card__author {
+    display: inline;
+    margin: 0;
+    padding: 0;
+    border: none;
+    background: none;
+    box-shadow: none;
+    font: inherit;
+    color: inherit;
+    cursor: pointer;
+    text-align: start;
+    transition: color var(--transition-fast, 150ms ease);
+  }
+  .iwac-card__author:hover {
+    color: var(--primary, #e64a19);
+    background: none;
+    box-shadow: none;
+    transform: none;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+  .iwac-card__author.is-active {
+    color: var(--primary, #e64a19);
+    font-weight: 600;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+  .iwac-card__author:focus-visible {
+    outline: none;
+    box-shadow: var(--ring-focus, 0 0 0 3px rgba(0, 0, 0, 0.1));
+    border-radius: var(--radius-sm, 0.375rem);
+  }
+  .iwac-card__byline-sep {
+    color: var(--ink-light, var(--ink, #2c2f37));
   }
 
   /* Source line for references (journal · volume · pages, book · publisher).
@@ -451,6 +640,34 @@
     font-size: var(--text-xs, 0.8125rem);
     font-weight: 500;
     line-height: 1.4;
+  }
+  /*
+   * Clickable source chip (newspaper / country). Theme-button paint reset;
+   * brand-filled when its filter is active. No border so toggling never
+   * shifts the row's baseline against the static count chip.
+   */
+  .iwac-card__chip--filter {
+    border: none;
+    cursor: pointer;
+    font-family: inherit;
+    box-shadow: none;
+    transition:
+      background var(--transition-fast, 150ms ease),
+      color var(--transition-fast, 150ms ease);
+  }
+  .iwac-card__chip--filter:hover {
+    background: color-mix(in oklab, var(--primary, #e64a19) 16%, var(--surface-sunken, #f3f3f1));
+    color: var(--ink-strong, var(--ink, #2c2f37));
+    box-shadow: none;
+    transform: none;
+  }
+  .iwac-card__chip--filter.is-active {
+    background: var(--primary, #e64a19);
+    color: var(--white, #fff);
+  }
+  .iwac-card__chip--filter:focus-visible {
+    outline: none;
+    box-shadow: var(--ring-focus, 0 0 0 3px rgba(0, 0, 0, 0.1));
   }
   /* Occurrence count on entity cards — the headline metric, so tint it. */
   .iwac-card__chip--count {

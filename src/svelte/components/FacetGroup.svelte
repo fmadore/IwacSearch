@@ -46,15 +46,15 @@
    *     alone) and renders as a small-caps eyebrow so the column reads
    *     like a sequence of editorial sections, not a config dialog.
    *   - When the facet has more than `searchThreshold` values (default 10),
-   *     a small search box appears above the list. Typing filters the
-   *     visible options client-side using diacritic-insensitive substring
-   *     matching, so "cote" finds "Côte d'Ivoire". Selected values stay
-   *     visible regardless of the filter — toggling them off shouldn't
-   *     make them vanish from the panel.
-   *   - "Show more" reveals all values up to Typesense's max_facet_values
-   *     (50). When a search query is active, the show-more affordance is
-   *     replaced by an "out of N" hint so the user knows how many matched
-   *     their filter.
+   *     a small search box appears above the list. If the field holds more
+   *     values than were loaded (totalValues > counts.length) AND a server
+   *     search callback is wired, typing queries Typesense (facet_query) so a
+   *     value beyond the loaded top-N — e.g. an author past the first 50 — is
+   *     still findable. Otherwise typing filters the loaded values
+   *     client-side using diacritic-insensitive substring matching, so "cote"
+   *     finds "Côte d'Ivoire". Selected values stay visible regardless.
+   *   - "Show more" reveals the rest of the loaded values. With a query
+   *     active, the show-more affordance is replaced by a match-count hint.
    *   - Counts come from Typesense's facet_counts response — they're
    *     post-filter, so they update as other facets are toggled.
    *
@@ -67,12 +67,25 @@
   interface Props {
     field: string;
     counts: IwacFacetCount[];
+    /**
+     * Total distinct values for this facet in the current result set
+     * (Typesense facet stats.total_values). When it exceeds the loaded
+     * `counts.length`, the field has MORE values than were returned, so the
+     * in-facet search routes to the server to reach them.
+     */
+    totalValues?: number;
     selected: string[];
     /** Initially-shown count before "show more" expands. */
     visibleByDefault?: number;
     /** Show the in-facet search box once counts.length exceeds this. */
     searchThreshold?: number;
     onToggle: (field: string, value: string, nextChecked: boolean) => void;
+    /**
+     * Search this field's values server-side (Typesense facet_query), so a
+     * value beyond the loaded top-N is still findable. Absent → the search
+     * box filters the loaded values client-side only.
+     */
+    onFacetSearch?: (field: string, text: string) => Promise<IwacFacetCount[]>;
     /** Optional override; defaults to the locale label table. */
     label?: string;
     /**
@@ -87,10 +100,12 @@
   const {
     field,
     counts,
+    totalValues,
     selected,
     visibleByDefault = 8,
     searchThreshold = 10,
     onToggle,
+    onFacetSearch,
     label,
     sortMode = 'count',
   }: Props = $props();
@@ -106,20 +121,23 @@
 
   // Sort: selected first (so toggling doesn't make a value vanish under
   // the "show more" fold), then by the chosen order (count desc, or
-  // numeric ascending for scale facets like subjectivity).
-  const sorted = $derived.by(() => {
-    return [...counts].sort((a, b) => {
+  // numeric ascending for scale facets like subjectivity). Shared by the
+  // loaded list and the server search results.
+  function orderValues(list: IwacFacetCount[]): IwacFacetCount[] {
+    return [...list].sort((a, b) => {
       const aSel = selectedSet.has(a.value);
       const bSel = selectedSet.has(b.value);
       if (aSel !== bSel) return aSel ? -1 : 1;
       if (sortMode === 'value-asc') return Number(a.value) - Number(b.value);
       return b.count - a.count;
     });
-  });
+  }
 
-  // Apply the in-facet search filter. Selected values always pass the
-  // filter so unchecking one mid-search doesn't lose the row.
-  const filtered = $derived.by(() => {
+  const sorted = $derived(orderValues(counts));
+
+  // Client-side filter over the loaded values. Selected values always pass so
+  // unchecking one mid-search doesn't lose the row.
+  const localFiltered = $derived.by(() => {
     const q = fold(filterText.trim());
     if (!q) return sorted;
     return sorted.filter((fc) => selectedSet.has(fc.value) || fold(fc.value).includes(q));
@@ -127,10 +145,64 @@
 
   const isFiltering = $derived(filterText.trim() !== '');
   const showSearch = $derived(counts.length > searchThreshold);
-  const visible = $derived(
-    isFiltering || expanded ? filtered : filtered.slice(0, visibleByDefault),
+
+  // Does the facet hold more values than were loaded? If so, the search box
+  // must hit the server to reach them; otherwise the loaded list is complete.
+  // 50 = the max_facet_values the search request sends (a full page implies
+  // truncation when total_values isn't reported).
+  const hasMoreValues = $derived(
+    totalValues != null ? totalValues > counts.length : counts.length >= 50,
   );
-  const hiddenCount = $derived(Math.max(0, filtered.length - visibleByDefault));
+  const useServerSearch = $derived(!!onFacetSearch && hasMoreValues);
+
+  // ── Server-side value search (debounced) ─────────────────────────────
+  let serverCounts = $state<IwacFacetCount[] | null>(null);
+  let searchLoading = $state(false);
+  let searchSeq = 0; // race guard — only the latest request may set state
+
+  $effect(() => {
+    const text = filterText.trim();
+    // Bump first so any in-flight request from a previous run is invalidated,
+    // even when this run early-returns (e.g. the box was just cleared).
+    const seq = ++searchSeq;
+    if (!useServerSearch || !onFacetSearch || text === '') {
+      serverCounts = null;
+      searchLoading = false;
+      return;
+    }
+    searchLoading = true;
+    const timer = window.setTimeout(() => {
+      onFacetSearch(field, text)
+        .then((c) => {
+          if (seq === searchSeq) serverCounts = c;
+        })
+        .catch(() => {
+          // Show "no matches" rather than stale/incorrect values on error.
+          if (seq === searchSeq) serverCounts = [];
+        })
+        .finally(() => {
+          if (seq === searchSeq) searchLoading = false;
+        });
+    }, 250);
+    return () => clearTimeout(timer);
+  });
+
+  const serverSorted = $derived(orderValues(serverCounts ?? []));
+
+  // When the server search is active, its results replace the local list
+  // entirely (they already span the whole field, not just the loaded top-N).
+  const usingServerResults = $derived(useServerSearch && isFiltering);
+  const visible = $derived.by(() => {
+    if (usingServerResults) return serverSorted;
+    if (isFiltering || expanded) return localFiltered;
+    return localFiltered.slice(0, visibleByDefault);
+  });
+  const hiddenCount = $derived(
+    usingServerResults ? 0 : Math.max(0, localFiltered.length - visibleByDefault),
+  );
+  // A server search is mid-flight with nothing to show yet → render a
+  // "searching…" placeholder instead of a premature "no matches".
+  const searchPending = $derived(usingServerResults && searchLoading && visible.length === 0);
 </script>
 
 <section class="iwac-facet" class:iwac-facet--collapsed={collapsed}>
@@ -179,7 +251,9 @@
           </div>
         {/if}
 
-        {#if visible.length === 0}
+        {#if searchPending}
+          <p class="iwac-facet__empty" aria-live="polite">{t('searching')}</p>
+        {:else if visible.length === 0}
           <p class="iwac-facet__empty">{t('no_matches')}</p>
         {:else}
           <ul class="iwac-facet__list">
@@ -201,9 +275,15 @@
           </ul>
         {/if}
 
-        {#if isFiltering}
+        {#if usingServerResults}
+          {#if visible.length > 0}
+            <p class="iwac-facet__hint" aria-live="polite">
+              {searchLoading ? t('searching') : t('facet_search_count', { n: visible.length })}
+            </p>
+          {/if}
+        {:else if isFiltering}
           <p class="iwac-facet__hint">
-            {t('match_count', { shown: filtered.length, total: counts.length })}
+            {t('match_count', { shown: localFiltered.length, total: counts.length })}
           </p>
         {:else if hiddenCount > 0}
           <button type="button" class="iwac-facet__more" onclick={() => (expanded = !expanded)}>

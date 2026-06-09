@@ -1,16 +1,8 @@
-<script module lang="ts">
-  /**
-   * Match the `limit_hits` cap sent in lib/typesense.ts. Kept here so
-   * ResultsList can build a pagination bar that never invites a click
-   * past the deepest page Typesense will return.
-   */
-  const HITS_CAP = 250;
-</script>
-
 <script lang="ts">
   import type {
     ActiveFilters,
     IwacBootstrap,
+    IwacFacetCount,
     IwacSearchResponse,
     SearchState,
     YearRange,
@@ -65,19 +57,29 @@
 
   const isStandalone = $derived(String(bootstrap.block_id) === 'standalone');
 
+  // URL ↔ state sync. The standalone /search route uses bare, shareable
+  // params; full-mode page blocks namespace their params by block id so
+  // several search blocks on one page (and the host page's own ?page=/?q=)
+  // never collide. Federated inner apps (showSearchBox=false, they own ?q/?tab
+  // via FederatedApp) and compact/results-only blocks (no facet panel) don't
+  // sync — they keep state in memory.
+  const syncUrl = $derived(isStandalone || (showSearchBox && bootstrap.mode === 'full'));
+  const urlPrefix = $derived(isStandalone ? '' : `b${bootstrap.block_id}.`);
+
   // TypesenseClient caches a scoped key, so we want exactly one per
   // mount. $derived.by reruns only if bootstrap changes, which it
   // doesn't post-mount — same effect as `const`, but satisfies
   // svelte-check's reactivity rules.
   const client = $derived.by(() => new TypesenseClient(bootstrap));
 
-  // Initial state — URL for /search, empty for blocks. `isStandalone`
-  // and `bootstrap` are read once at mount; svelte-check warns because
-  // the read isn't reactive, but neither value can change post-mount
-  // (bootstrap is server-emitted, isStandalone is derived from it).
+  // Initial state — hydrated from the URL on every surface that syncs
+  // (standalone /search and full-mode page blocks, each via its own prefix),
+  // empty otherwise. `syncUrl`, `urlPrefix` and `bootstrap` are read once at
+  // mount; svelte-check warns because the read isn't reactive, but none can
+  // change post-mount (bootstrap is server-emitted, the rest derive from it).
   // svelte-ignore state_referenced_locally
-  const initial: SearchState = isStandalone
-    ? readUrlState()
+  const initial: SearchState = syncUrl
+    ? readUrlState(window.location.href, urlPrefix)
     : {
         // initial_query is set by the federated page so the tab seeds with
         // the shared query; empty on page blocks.
@@ -132,7 +134,7 @@
 
   // Push state → URL whenever anything observable changes.
   $effect(() => {
-    if (!isStandalone) return;
+    if (!syncUrl) return;
     const next: SearchState = {
       q: query,
       page,
@@ -140,7 +142,7 @@
       filters,
       yearRange,
     };
-    syncToUrl(next, prevState);
+    syncToUrl(next, prevState, urlPrefix);
     // Snapshot for the next diff. NOT structuredClone(next): `filters` and
     // `yearRange` are deep Svelte 5 reactive proxies, and structuredClone
     // throws DataCloneError on a proxy. Build a plain deep copy by hand so
@@ -156,14 +158,14 @@
 
   // Back / forward → re-hydrate state from URL.
   $effect(() => {
-    if (!isStandalone) return;
+    if (!syncUrl) return;
     return onUrlPop((s) => {
       query = s.q;
       page = s.page;
       sort = s.sort;
       filters = s.filters;
       yearRange = s.yearRange;
-    });
+    }, urlPrefix);
   });
 
   // Query → search. Tracks every reactive state field by reading it.
@@ -355,6 +357,23 @@
     page = 1;
   }
 
+  /**
+   * Server-side facet-value search. Lets a FacetGroup find values beyond the
+   * top-50 the main response carries (e.g. an author not in the first 50 on
+   * the references surface). Scoped to the live query + filters + year range
+   * so the counts match the current result set. Returns a promise the
+   * FacetGroup awaits; errors propagate for it to surface.
+   */
+  function handleFacetSearch(field: string, text: string): Promise<IwacFacetCount[]> {
+    return client.searchFacetValues({
+      field,
+      query: text,
+      q: query,
+      activeFilters: filters,
+      yearRange,
+    });
+  }
+
   function handleClearField(field: string): void {
     const next = { ...filters };
     delete next[field];
@@ -490,6 +509,7 @@
               onClearAll={handleClearAll}
               onClearField={handleClearField}
               onYearRangeChange={handleYearRangeChange}
+              onFacetSearch={handleFacetSearch}
             />
           </div>
         </Drawer>
@@ -504,6 +524,7 @@
             onClearAll={handleClearAll}
             onClearField={handleClearField}
             onYearRangeChange={handleYearRangeChange}
+            onFacetSearch={handleFacetSearch}
           />
         </aside>
       {/if}
@@ -565,14 +586,26 @@
             {/if}
           </div>
         {:else if response}
-          <ResultsList {response} {perPage} hitsCap={HITS_CAP} onPageChange={handlePageChange} />
+          <ResultsList
+            {response}
+            {perPage}
+            onPageChange={handlePageChange}
+            activeFilters={filters}
+            onFacetToggle={handleFacetToggle}
+          />
         {/if}
       </div>
     </div>
   {:else if isLoading && !response}
     <p class="iwac-search__status" aria-live="polite">{t('searching')}</p>
   {:else if response}
-    <ResultsList {response} {perPage} hitsCap={HITS_CAP} onPageChange={handlePageChange} />
+    <ResultsList
+      {response}
+      {perPage}
+      onPageChange={handlePageChange}
+      activeFilters={filters}
+      onFacetToggle={handleFacetToggle}
+    />
   {/if}
 </div>
 

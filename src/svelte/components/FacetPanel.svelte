@@ -8,7 +8,7 @@
 </script>
 
 <script lang="ts">
-  import type { ActiveFilters, IwacFacet, YearRange } from '../lib/types';
+  import type { ActiveFilters, IwacFacet, IwacFacetCount, YearRange } from '../lib/types';
   import {
     facetLabel,
     facetValueLabel,
@@ -62,6 +62,12 @@
     onClearAll: () => void;
     onClearField: (field: string) => void;
     onYearRangeChange: (next: YearRange | null) => void;
+    /**
+     * Search a facet field's values server-side (beyond the top-N the main
+     * response carries). Passed straight to each FacetGroup; when absent, the
+     * group falls back to filtering its loaded values client-side only.
+     */
+    onFacetSearch?: (field: string, text: string) => Promise<IwacFacetCount[]>;
   }
 
   const {
@@ -75,6 +81,7 @@
     onClearAll,
     onClearField,
     onYearRangeChange,
+    onFacetSearch,
   }: Props = $props();
 
   const { locale, t } = useI18n();
@@ -195,9 +202,11 @@
         <FacetGroup
           field={f.field_name}
           counts={f.counts}
+          totalValues={f.stats?.total_values}
           selected={selected[f.field_name] ?? []}
           label={labels?.[f.field_name]}
           onToggle={toggleFacet}
+          {onFacetSearch}
         />
       {/each}
 
@@ -224,10 +233,12 @@
                 <FacetGroup
                   field={f.field_name}
                   counts={f.counts}
+                  totalValues={f.stats?.total_values}
                   selected={selected[f.field_name] ?? []}
                   label={labels?.[f.field_name]}
                   sortMode={NUMERIC_FACET_FIELDS.has(f.field_name) ? 'value-asc' : 'count'}
                   onToggle={toggleFacet}
+                  {onFacetSearch}
                 />
               {/each}
             </div>

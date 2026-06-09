@@ -123,7 +123,9 @@ final class InitialResponseRenderer
                 'snippet_threshold'     => 30,
                 'facet_by'              => $facets === [] ? null : implode(',', $this->dedupeFacets($facets)),
                 'max_facet_values'      => 50,
-                'limit_hits'            => 250,
+                // No limit_hits — the live client pages through all matches
+                // (Typesense default is uncapped); the SSR only renders page 1,
+                // so this just keeps the two request shapes consistent.
             ]],
         ];
         // Remove null keys that Typesense rejects.
