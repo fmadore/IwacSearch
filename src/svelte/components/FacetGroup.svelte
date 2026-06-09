@@ -203,6 +203,13 @@
   // A server search is mid-flight with nothing to show yet → render a
   // "searching…" placeholder instead of a premature "no matches".
   const searchPending = $derived(usingServerResults && searchLoading && visible.length === 0);
+
+  // Bound the list height (with its own scroll) once it shows more than the
+  // default truncated view — i.e. after "show more" or while searching — so a
+  // 50- (or up to 100-) value facet doesn't shove the groups below it
+  // off-screen. The default 8-item view is never bounded, so this does NOT
+  // bring back a scrollbar on every facet.
+  const listBounded = $derived(expanded || isFiltering);
 </script>
 
 <section class="iwac-facet" class:iwac-facet--collapsed={collapsed}>
@@ -256,7 +263,7 @@
         {:else if visible.length === 0}
           <p class="iwac-facet__empty">{t('no_matches')}</p>
         {:else}
-          <ul class="iwac-facet__list">
+          <ul class="iwac-facet__list" class:iwac-facet__list--bounded={listBounded}>
             {#each visible as fc (fc.value)}
               <li class="iwac-facet__item">
                 <label class="iwac-facet__option" class:is-selected={selectedSet.has(fc.value)}>
@@ -441,11 +448,27 @@
     display: flex;
     flex-direction: column;
     gap: 0.0625rem;
-    /* No inner scroll: the list grows to its natural height and the
-       "Show more / Show less" control bounds it instead. Per-facet
-       scroll containers stacked on top of the sidebar scroll produced
-       the "so many scrollbars" problem; the sidebar column owns the one
-       scroll now (see .iwac-search__facets-inline in App.svelte). */
+    /* The default (truncated) list grows to its natural height — no inner
+       scroll, so a column of collapsed facets shows the single sidebar
+       scroll only (see .iwac-search__facets-inline in App.svelte). Only the
+       EXPANDED / searching list gets its own bounded scroll (below). */
+  }
+  /*
+   * Expanded ("show more") or searching: the list can run to ~50 loaded
+   * values — or up to 100 server matches — which would push every facet
+   * below it off-screen. Bound the height and let it scroll WITHIN the
+   * group. Only this state scrolls; the default 8-item view never does, so
+   * we don't reintroduce the old "a scrollbar on every facet" problem.
+   * overscroll-behavior keeps the scroll from chaining into the sidebar at
+   * the ends; the inline padding keeps option focus rings from being clipped.
+   */
+  .iwac-facet__list--bounded {
+    max-height: min(24rem, 60vh);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+    scrollbar-gutter: stable;
+    padding-inline: 0.1875rem;
   }
   .iwac-facet__item {
     margin: 0;
