@@ -8,9 +8,13 @@
  * `.iwac-header-suggest` so the two never collide on the /search page,
  * where both the full app and this enhancer are present.
  *
- * Anchoring: the header search sits at the right edge of a right-aligned
- * top bar, so the panel pins its right edge to the box and grows leftward
- * with a comfortable min-width (the pill itself is only ~200–240px).
+ * Anchoring: the header search sits toward the right of the top bar, so the
+ * panel pins its right edge to the box and grows leftward with a comfortable
+ * min-width (the pill itself is only ~200–240px). Because that box floats in
+ * the middle of the header (the language/theme toggles sit to its right), a
+ * wide panel could otherwise spill off the left of the viewport — header.ts
+ * clamps the panel's horizontal position to an 8px viewport gutter on open,
+ * resize and every content change, so it can never overflow either edge.
  */
 
 .iwac-header-suggest {
@@ -19,7 +23,9 @@
   inset-inline-end: 0;
   z-index: 1000;
   min-width: min(22rem, 92vw);
-  max-width: 92vw;
+  /* Cap the width so a long title can't stretch the panel toward full-bleed
+     (keeps the header typeahead tight and the JS clamp's nudge small). */
+  max-width: min(28rem, 92vw);
   background: var(--surface, #fdfdfd);
   border: 1px solid var(--border, #d4d6da);
   border-radius: var(--radius-md, 0.5rem);

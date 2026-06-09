@@ -122,6 +122,7 @@ class HeaderSearch {
   private readonly locale: Locale;
   private readonly landing: string;
   private readonly listbox: HTMLDivElement;
+  private readonly host: HTMLElement;
 
   private rows: Row[] = [];
   private highlighted = 0;
@@ -141,13 +142,13 @@ class HeaderSearch {
     // the global federated route.
     this.landing = form.getAttribute('action') || '/search/everything';
 
-    const host = this.resolveHost();
+    this.host = this.resolveHost();
     this.listbox = document.createElement('div');
     this.listbox.className = 'iwac-header-suggest';
     this.listbox.id = `iwac-header-suggest-${++uid}`;
     this.listbox.setAttribute('role', 'listbox');
     this.listbox.setAttribute('aria-label', translate(this.locale, 'suggestions'));
-    host.appendChild(this.listbox);
+    this.host.appendChild(this.listbox);
 
     // ARIA combobox wiring on the existing input.
     input.setAttribute('role', 'combobox');
@@ -185,6 +186,14 @@ class HeaderSearch {
       // Defer so a click on a row lands before the dropdown is hidden.
       window.setTimeout(() => this.close(), BLUR_CLOSE_MS);
     });
+    // Re-clamp to the viewport on resize/rotate while the panel is open.
+    window.addEventListener(
+      'resize',
+      () => {
+        if (this.isOpen) this.clampHorizontal();
+      },
+      { passive: true },
+    );
     // Submit (button click, or Enter while the dropdown is closed) runs a
     // full-text search for exactly what was typed.
     this.form.addEventListener('submit', (e) => {
@@ -247,6 +256,8 @@ class HeaderSearch {
       this.listbox.appendChild(empty);
     }
     this.renderHighlight();
+    // Row content (and therefore the panel's width) just changed — re-clamp.
+    if (this.isOpen) this.clampHorizontal();
   }
 
   private renderRow(row: Row, index: number, q: string): HTMLElement {
@@ -366,6 +377,7 @@ class HeaderSearch {
     this.isOpen = true;
     this.listbox.classList.add('iwac-header-suggest--open');
     this.input.setAttribute('aria-expanded', 'true');
+    this.clampHorizontal();
   }
 
   private close(): void {
@@ -373,6 +385,49 @@ class HeaderSearch {
     this.isOpen = false;
     this.listbox.classList.remove('iwac-header-suggest--open');
     this.input.setAttribute('aria-expanded', 'false');
+    // Drop the inline clamp so the next open re-measures from the CSS anchor.
+    this.listbox.style.left = '';
+    this.listbox.style.right = '';
+  }
+
+  /**
+   * Keep the dropdown within the viewport at any screen size.
+   *
+   * CSS anchors the panel to one edge of the search box (its right edge ≥md,
+   * its left edge <md). But the box floats in the middle of the header with
+   * variable-width language/theme toggles beside it, so a wide panel — long
+   * article titles stretch it toward its max-width — can spill past the
+   * opposite viewport edge. After CSS has placed it, measure; if either edge
+   * crosses an 8px gutter, pin an explicit physical `left` that pulls it back
+   * in. Physical-pixel math is RTL-safe, and `left` never collides with the
+   * open animation's `transform: translateY`.
+   */
+  private clampHorizontal(): void {
+    const panel = this.listbox;
+    // Re-measure from the CSS baseline every call: drop any prior nudge first.
+    panel.style.left = '';
+    panel.style.right = '';
+    if (!this.isOpen) return;
+
+    const gutter = 8;
+    const viewport = document.documentElement.clientWidth;
+    const rect = panel.getBoundingClientRect();
+
+    let targetLeft = rect.left;
+    // Pull in from the right edge first, then guarantee the left edge — so if
+    // the panel is somehow wider than the viewport the left gutter wins and
+    // the start of each row stays readable rather than being clipped.
+    if (targetLeft + rect.width > viewport - gutter) {
+      targetLeft = viewport - gutter - rect.width;
+    }
+    if (targetLeft < gutter) {
+      targetLeft = gutter;
+    }
+    if (Math.abs(targetLeft - rect.left) < 0.5) return; // already in bounds
+
+    const hostLeft = this.host.getBoundingClientRect().left;
+    panel.style.left = `${Math.round(targetLeft - hostLeft)}px`;
+    panel.style.right = 'auto';
   }
 }
 
