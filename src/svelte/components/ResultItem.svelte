@@ -640,38 +640,39 @@
     padding-inline: 0.15em;
   }
 
+  /*
+   * Source line: quiet text tokens separated by interpuncts — a byline,
+   * not a chip tray. Plain INLINE flow (not flex) so every token and
+   * separator shares one text baseline; flex items drifted vertically.
+   * Each token is still a working facet toggle.
+   */
   .iwac-card__source {
     list-style: none;
     margin: var(--space-xs, 0.25rem) 0 0;
     padding: 0;
-    display: flex;
-    flex-wrap: wrap;
-    gap: var(--space-xs, 0.25rem);
+    font-size: var(--text-xs, 0.8125rem);
+    line-height: 1.5;
   }
-  /*
-   * Source line: quiet text tokens separated by interpuncts — a byline,
-   * not a chip tray. Each token is still a working facet toggle.
-   */
   .iwac-card__source li {
-    display: inline-flex;
-    align-items: baseline;
+    display: inline;
   }
   .iwac-card__source li + li::before {
     content: '·';
     color: var(--muted, #767880);
-    padding-inline: 0.45em 0.55em;
+    padding-inline: 0.35em 0.5em;
     font-weight: 700;
   }
   .iwac-card__chip {
     display: inline;
+    margin: 0;
     padding: 0;
     background: transparent;
     color: var(--muted, #767880);
     border: none;
     border-radius: 0;
-    font-size: var(--text-xs, 0.8125rem);
+    font: inherit;
     font-weight: 500;
-    line-height: 1.4;
+    vertical-align: baseline;
   }
   .iwac-card__chip--filter {
     cursor: pointer;
