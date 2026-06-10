@@ -305,18 +305,9 @@
     border-bottom: none;
   }
   .iwac-facets__section--active {
-    /* Subtle tint behind the active chips so users can tell at a
-       glance "these are what I've selected" vs. "these are options". */
-    margin-inline: calc(-1 * var(--space-sm, 0.5rem));
-    padding-inline: var(--space-sm, 0.5rem);
-    background: color-mix(
-      in oklab,
-      var(--primary, #e64a19) var(--accent-mix-subtle, 25%),
-      transparent
-    );
-    border-radius: var(--radius-md, 0.5rem);
-    border-bottom: none;
-    margin-block-end: var(--space-sm, 0.5rem);
+    /* The chips themselves carry the active state (primary dot + border);
+       the old block-level orange wash made the whole corner shout. */
+    padding-block-start: var(--space-sm, 0.5rem);
   }
 
   .iwac-facets__chips {
@@ -332,13 +323,8 @@
     align-items: center;
     gap: var(--space-xs, 0.25rem);
     padding: 0.25rem 0.625rem;
-    background: var(--surface, #fdfdfd);
-    border: 1px solid
-      color-mix(
-        in oklab,
-        var(--primary, #e64a19) var(--accent-mix-medium, 40%),
-        var(--border, #d4d6da)
-      );
+    background: transparent;
+    border: 1px solid var(--primary, #e64a19);
     border-radius: var(--radius-full, 9999px);
     box-shadow: none;
     cursor: pointer;
@@ -352,9 +338,9 @@
       color var(--transition-fast, 150ms ease);
   }
   .iwac-facets__chip:hover {
-    background: var(--primary, #e64a19);
+    background: color-mix(in oklab, var(--primary, #e64a19) 10%, transparent);
     border-color: var(--primary, #e64a19);
-    color: var(--white, #fff);
+    color: var(--ink-strong, var(--ink, #2c2f37));
     box-shadow: none;
     transform: none;
   }
@@ -432,17 +418,10 @@
     flex: 1;
   }
   .iwac-facets__group-count {
-    background: var(--primary, #e64a19);
-    color: var(--white, #fff);
-    border-radius: var(--radius-full, 9999px);
-    padding: 0 0.5rem;
-    min-width: 1.25rem;
-    height: 1.25rem;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
+    color: var(--primary, #e64a19);
     font-size: var(--text-xs, 0.8125rem);
-    font-weight: 600;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
     letter-spacing: 0;
     text-transform: none;
   }
@@ -453,10 +432,8 @@
   }
   .iwac-facets__group-body {
     margin-block-start: var(--space-xs, 0.25rem);
-    padding-inline-start: var(--space-sm, 0.5rem);
-    /* Subtle accent rail so the three sub-facets read as one subsection. */
-    border-inline-start: 2px solid
-      color-mix(in oklab, var(--primary, #e64a19) 30%, var(--border-light, #e6e7eb));
+    padding-inline-start: var(--space-md, 1rem);
+    /* Indentation alone groups the sub-facets; no accent rail. */
   }
   /* Tighten the nested sub-facets; the parent owns the section rhythm. */
   .iwac-facets__group-body :global(.iwac-facet) {

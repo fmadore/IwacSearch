@@ -350,17 +350,10 @@
     flex: 1;
   }
   .iwac-facet__active-count {
-    background: var(--primary, #e64a19);
-    color: var(--white, #fff);
-    border-radius: var(--radius-full, 9999px);
-    padding: 0 0.5rem;
-    min-width: 1.25rem;
-    height: 1.25rem;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
+    color: var(--primary, #e64a19);
     font-size: var(--text-xs, 0.8125rem);
-    font-weight: 600;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
     letter-spacing: 0;
     text-transform: none;
   }

@@ -762,8 +762,11 @@
   }
   .iwac-search__count-number {
     color: var(--ink-strong, var(--ink, #2c2f37));
-    font-size: var(--text-lg, 1.1875rem);
+    /* Ledger numeral: display serif, tabular figures. */
+    font-family: var(--font-headings, Georgia, serif);
+    font-size: var(--text-xl, 1.5rem);
     font-weight: 700;
+    line-height: 1;
   }
   .iwac-search__count-label {
     font-weight: 500;
@@ -788,10 +791,9 @@
   }
 
   .iwac-search__empty {
-    background: var(--surface-sunken, #f3f3f1);
-    border: 1px dashed var(--border, #d4d6da);
-    border-radius: var(--radius-md, 0.5rem);
+    /* Quiet text on the page surface — an empty ledger, not a dashed bin. */
     padding: var(--space-2xl, 3rem) var(--space-lg, 1.5rem);
+    border-block-end: 1px solid var(--border-light, #e6e7eb);
     text-align: center;
     color: var(--muted, #767880);
     display: flex;

@@ -64,16 +64,19 @@
     flex-direction: column;
     gap: var(--space-md, 1rem);
   }
+  /* Ruled ledger: hairlines between rows, closed top and bottom. */
   .iwac-results__list {
     list-style: none;
     margin: 0;
     padding: 0;
     display: flex;
     flex-direction: column;
-    gap: var(--space-md, 1rem);
+    gap: 0;
+    border-block-end: 1px solid var(--border-light, #e6e7eb);
   }
   .iwac-results__item {
     margin: 0;
+    border-block-start: 1px solid var(--border-light, #e6e7eb);
   }
   .iwac-results__empty {
     color: var(--muted, #767880);

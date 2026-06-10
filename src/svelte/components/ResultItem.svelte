@@ -359,33 +359,28 @@
 </article>
 
 <style>
+  /*
+   * Ledger row, not a card. Rows are separated by hairlines owned by
+   * ResultsList; the row itself is a flat grid with a hover wash. This
+   * roughly doubles results-per-screen versus the boxed cards and reads
+   * like the press archive it serves.
+   */
   .iwac-card {
     display: grid;
     grid-template-columns: auto 1fr;
     gap: var(--space-md, 1rem);
-    padding: var(--space-md, 1rem);
-    background: var(--panel-bg, var(--surface, #fdfdfd));
-    border: var(--panel-border, 1px solid var(--border-light, #e6e7eb));
-    border-radius: var(--panel-radius, var(--radius-md, 0.5rem));
-    box-shadow: var(--shadow-xs, 0 1px 2px rgba(0, 0, 0, 0.04));
-    transition:
-      border-color var(--transition-base, 200ms ease),
-      box-shadow var(--transition-base, 200ms ease),
-      transform var(--transition-base, 200ms ease);
+    padding: var(--space-md, 1rem) var(--space-sm, 0.5rem);
+    background: transparent;
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+    transition: background-color var(--transition-fast, 150ms ease);
   }
   .iwac-card:hover {
-    border-color: color-mix(
-      in oklab,
-      var(--primary, #e64a19) var(--accent-mix-medium, 40%),
-      var(--border, #d4d6da)
-    );
-    box-shadow: var(--shadow-md, 0 4px 12px rgba(0, 0, 0, 0.08));
-    transform: translateY(var(--lift-xxs, -1px));
+    background: color-mix(in oklab, var(--primary, #e64a19) 4%, transparent);
   }
   .iwac-card:has(:focus-visible) {
-    box-shadow:
-      var(--shadow-md, 0 4px 12px rgba(0, 0, 0, 0.08)),
-      var(--ring-focus, 0 0 0 3px rgba(0, 0, 0, 0.1));
+    box-shadow: var(--ring-focus, 0 0 0 3px rgba(0, 0, 0, 0.1));
   }
   /* Drop the thumb column when there's no image. */
   .iwac-card--no-thumb {
@@ -394,8 +389,8 @@
 
   .iwac-card__thumb {
     display: block;
-    width: 6.5rem;
-    height: 6.5rem;
+    width: 5rem;
+    height: 5rem;
     border-radius: var(--radius-sm, 0.375rem);
     overflow: hidden;
     background: var(--surface-sunken, #f3f3f1);
@@ -406,6 +401,17 @@
     height: 100%;
     object-fit: cover;
     display: block;
+    /* Newsprint at rest, full plate on engagement. */
+    filter: saturate(0.4) contrast(1.02);
+    transition: filter var(--transition-base, 200ms ease);
+  }
+  .iwac-card:hover .iwac-card__thumb img {
+    filter: none;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .iwac-card__thumb img {
+      transition: none;
+    }
   }
 
   .iwac-card__body {
@@ -429,16 +435,22 @@
     text-transform: uppercase;
     font-variant-numeric: tabular-nums;
   }
+  /*
+   * Type badge: outlined chip with a categorical dot. The dot carries the
+   * type colour (semantic theme tokens only — see the per-type rules), so a
+   * scan down the list reads category from the dots without a pastel fill
+   * shouting on every row. The old filled-orange active state put the brand
+   * on every card of a filtered list; active is now border + ink + wash.
+   */
   .iwac-card__type {
+    --iwac-type-dot: var(--muted, #767880);
     display: inline-flex;
     align-items: center;
+    gap: 0.4em;
     padding: 0.125rem 0.5rem;
-    background: color-mix(
-      in oklab,
-      var(--primary, #e64a19) var(--accent-mix-subtle, 25%),
-      var(--surface, #fdfdfd)
-    );
-    color: var(--ink-on-pastel, var(--ink-strong, var(--ink, #2c2f37)));
+    background: transparent;
+    color: var(--ink-light, var(--ink, #2c2f37));
+    border: 1px solid var(--border, #d4d6da);
     border-radius: var(--radius-full, 9999px);
     font-size: var(--text-xs, 0.8125rem);
     font-weight: 600;
@@ -446,61 +458,66 @@
     text-transform: uppercase;
     white-space: nowrap;
   }
-  /* Subtle per-type tint so audiovisual / publication rows are
-     scannable without reading the badge text. Falls through to the
-     default tint for any type the schema doesn't enumerate. */
+  .iwac-card__type::before {
+    content: '';
+    width: 0.5em;
+    height: 0.5em;
+    border-radius: 50%;
+    background: var(--iwac-type-dot);
+    flex-shrink: 0;
+  }
+  /* Categorical dot colours — semantic theme tokens, no new hexes. */
+  .iwac-card__type[data-type='article'] {
+    --iwac-type-dot: var(--primary, #e64a19);
+  }
   .iwac-card__type[data-type='audiovisual'] {
-    background: color-mix(in oklab, var(--info, #4a90c8) 18%, var(--surface, #fdfdfd));
+    --iwac-type-dot: var(--info, #4a90c8);
   }
   .iwac-card__type[data-type='publication'] {
-    background: color-mix(in oklab, var(--success, #6cc18b) 18%, var(--surface, #fdfdfd));
+    --iwac-type-dot: var(--secondary, #394f68);
   }
   .iwac-card__type[data-type='document'] {
-    background: color-mix(in oklab, var(--warning, #e89c4a) 18%, var(--surface, #fdfdfd));
+    --iwac-type-dot: var(--warning, #e89c4a);
   }
-  /* References get a quiet, scholarly grey so the bibliography reads
-     distinctly from primary-source rows. */
   .iwac-card__type[data-type='reference'] {
-    background: color-mix(in oklab, var(--ink, #2c2f37) 10%, var(--surface, #fdfdfd));
+    --iwac-type-dot: var(--muted, #767880);
   }
-  /* Entity-type tints so persons / places / organisations read distinctly
-     when scanning the index. */
   .iwac-card__type[data-entity-type='Personnes'] {
-    background: color-mix(in oklab, var(--info, #4a90c8) 18%, var(--surface, #fdfdfd));
+    --iwac-type-dot: var(--info, #4a90c8);
   }
   .iwac-card__type[data-entity-type='Lieux'] {
-    background: color-mix(in oklab, var(--success, #6cc18b) 18%, var(--surface, #fdfdfd));
+    --iwac-type-dot: var(--success, #6cc18b);
   }
   .iwac-card__type[data-entity-type='Organisations'] {
-    background: color-mix(in oklab, var(--warning, #e89c4a) 18%, var(--surface, #fdfdfd));
+    --iwac-type-dot: var(--warning, #e89c4a);
   }
 
   /*
    * Clickable type badge. The IWAC theme paints every <button> primary +
    * glow + hover-translate; class-level overrides win on specificity, but we
    * also zero box-shadow/transform explicitly so the theme can't leak through.
-   * The per-type tints above still paint the resting background (equal
-   * specificity, declared earlier → these hover/active rules win).
    */
   .iwac-card__type--filter {
-    border: none;
     cursor: pointer;
     font-family: inherit;
     box-shadow: none;
     transition:
       background var(--transition-fast, 150ms ease),
+      border-color var(--transition-fast, 150ms ease),
       color var(--transition-fast, 150ms ease),
       box-shadow var(--transition-fast, 150ms ease);
   }
   .iwac-card__type--filter:hover {
-    background: color-mix(in oklab, var(--primary, #e64a19) 45%, var(--surface, #fdfdfd));
+    background: transparent;
+    border-color: var(--ink-strong, var(--ink, #2c2f37));
     color: var(--ink-strong, var(--ink, #2c2f37));
     box-shadow: none;
     transform: none;
   }
   .iwac-card__type--filter.is-active {
-    background: var(--primary, #e64a19);
-    color: var(--white, #fff);
+    background: color-mix(in oklab, var(--primary, #e64a19) 12%, transparent);
+    border-color: var(--primary, #e64a19);
+    color: var(--ink-strong, var(--ink, #2c2f37));
   }
   .iwac-card__type--filter:focus-visible {
     outline: none;
@@ -510,9 +527,10 @@
   .iwac-card__title {
     margin: 0;
     font-size: var(--text-lg, 1.1875rem);
-    line-height: 1.35;
+    line-height: 1.3;
     color: var(--ink-strong, var(--ink, #2c2f37));
-    letter-spacing: var(--tracking-tight, -0.02em);
+    /* Clarendon slabs clog at tighter tracking. */
+    letter-spacing: -0.01em;
   }
   .iwac-card__title a {
     color: inherit;
@@ -630,50 +648,61 @@
     flex-wrap: wrap;
     gap: var(--space-xs, 0.25rem);
   }
-  .iwac-card__chip {
+  /*
+   * Source line: quiet text tokens separated by interpuncts — a byline,
+   * not a chip tray. Each token is still a working facet toggle.
+   */
+  .iwac-card__source li {
     display: inline-flex;
-    align-items: center;
-    padding: 0.125rem 0.5rem;
-    background: var(--surface-sunken, #f3f3f1);
-    color: var(--ink-light, var(--ink, #2c2f37));
-    border-radius: var(--radius-sm, 0.375rem);
+    align-items: baseline;
+  }
+  .iwac-card__source li + li::before {
+    content: '·';
+    color: var(--muted, #767880);
+    padding-inline: 0.45em 0.55em;
+    font-weight: 700;
+  }
+  .iwac-card__chip {
+    display: inline;
+    padding: 0;
+    background: transparent;
+    color: var(--muted, #767880);
+    border: none;
+    border-radius: 0;
     font-size: var(--text-xs, 0.8125rem);
     font-weight: 500;
     line-height: 1.4;
   }
-  /*
-   * Clickable source chip (newspaper / country). Theme-button paint reset;
-   * brand-filled when its filter is active. No border so toggling never
-   * shifts the row's baseline against the static count chip.
-   */
   .iwac-card__chip--filter {
-    border: none;
     cursor: pointer;
     font-family: inherit;
     box-shadow: none;
-    transition:
-      background var(--transition-fast, 150ms ease),
-      color var(--transition-fast, 150ms ease);
+    transition: color var(--transition-fast, 150ms ease);
   }
   .iwac-card__chip--filter:hover {
-    background: color-mix(in oklab, var(--primary, #e64a19) 16%, var(--surface-sunken, #f3f3f1));
-    color: var(--ink-strong, var(--ink, #2c2f37));
+    background: transparent;
+    color: var(--primary, #e64a19);
+    text-decoration: underline;
+    text-underline-offset: 2px;
     box-shadow: none;
     transform: none;
   }
   .iwac-card__chip--filter.is-active {
-    background: var(--primary, #e64a19);
-    color: var(--white, #fff);
+    background: transparent;
+    color: var(--primary, #e64a19);
+    font-weight: 600;
+    text-decoration: underline;
+    text-underline-offset: 2px;
   }
   .iwac-card__chip--filter:focus-visible {
     outline: none;
     box-shadow: var(--ring-focus, 0 0 0 3px rgba(0, 0, 0, 0.1));
+    border-radius: var(--radius-sm, 0.375rem);
   }
-  /* Occurrence count on entity cards — the headline metric, so tint it. */
+  /* Occurrence count on entity cards — the headline metric. */
   .iwac-card__chip--count {
-    background: color-mix(in oklab, var(--primary, #e64a19) 14%, var(--surface, #fdfdfd));
     color: var(--ink-strong, var(--ink, #2c2f37));
-    font-weight: 600;
+    font-weight: 700;
     font-variant-numeric: tabular-nums;
   }
 
