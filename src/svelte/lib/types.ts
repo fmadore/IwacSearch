@@ -97,6 +97,10 @@ export interface IwacDoc {
   abstract?: string;
   /** Author(s) / creator(s). Pipe-split upstream into one value per author. */
   creator_ss?: string[];
+  /** Alternative titles (dcterms:alternative) — FTS channel, rarely shown. */
+  alt_title_txt?: string[];
+  /** Whether the full text (bibo:content) is publicly readable on the item page. */
+  has_fulltext?: boolean;
   // ── Reference bibliographic detail (references subset only) ──
   /** RDF class: "Article de revue" | "Chapitre" | "Livre" | … — drives citation format. */
   reference_type_ss?: string[];
@@ -118,6 +122,8 @@ export interface IwacDoc {
   places_ss?: string[];
   organisations_ss?: string[];
   events_ss?: string[];
+  /** Merged dcterms:subject facet (persons + organisations + topics). */
+  subjects_ss?: string[];
   thumbnail_url?: string;
   iiif_manifest?: string;
   omeka_url?: string;
@@ -130,6 +136,8 @@ export interface IwacDoc {
   /** Mention span (years), shown as the entity card eyebrow. */
   first_year?: number;
   last_year?: number;
+  /** Entity category via dcterms:isPartOf (org kind for organisations). */
+  is_part_of_ss?: string[];
 }
 
 /**
@@ -154,8 +162,22 @@ export interface SuggestResult {
 
 export interface IwacHighlight {
   field: string;
+  /** Scalar string fields: the marked-up snippet (WINDOWED for long text). */
   snippet?: string;
-  matched_tokens?: string[];
+  /**
+   * Full marked-up field text — present for fields in
+   * highlight_full_fields (title_txt). Prefer this over `snippet` when
+   * rendering a complete value: past ~30 tokens the snippet is a window.
+   */
+  value?: string;
+  /**
+   * Array (string[]) fields: one marked-up snippet per matched element,
+   * with `indices` pointing at the matching positions in the source array.
+   * Used for the matched-in attribution chips (creator_ss, subjects_ss, …).
+   */
+  snippets?: string[];
+  indices?: number[];
+  matched_tokens?: string[] | string[][];
 }
 
 export interface IwacHit {

@@ -40,6 +40,7 @@ final class PresetCatalog
     private const CONTENT_ALL_FACETS = [
         'country_ss',
         'type_s',
+        'has_fulltext',
         'newspaper_ss',
         'language_ss',
         'places_ss',
@@ -59,6 +60,7 @@ final class PresetCatalog
      */
     private const CONTENT_COUNTRY_FACETS = [
         'type_s',
+        'has_fulltext',
         'newspaper_ss',
         'language_ss',
         'places_ss',
@@ -71,8 +73,11 @@ final class PresetCatalog
     ];
 
     /**
-     * Bibliography facet stack tuned for academic literature.
-     * From ReferencesSeeder::DEFAULT_FACETS.
+     * Bibliography facet stack tuned for academic literature: journal /
+     * publisher (publisher_s) joins the stack, the split entity facets
+     * (topics / persons / organisations) are replaced by the MERGED
+     * subjects_ss, and spatial coverage (places_ss) is dropped — on
+     * citations it read as noise next to country_ss.
      *
      * @var list<string>
      */
@@ -80,21 +85,21 @@ final class PresetCatalog
         'country_ss',
         'reference_type_ss',
         'creator_ss',
+        'publisher_s',
+        'subjects_ss',
         'language_ss',
-        'topics_ss',
-        'persons_ss',
-        'places_ss',
-        'organisations_ss',
         'date_decade_ss',
     ];
 
     /**
-     * Entity-collection facet stack. From IndexSeeder::DEFAULT_FACETS.
+     * Entity-collection facet stack. is_part_of_ss slices organisations by
+     * category ("Organisation islamique", …) via dcterms:isPartOf.
      *
      * @var list<string>
      */
     private const ENTITY_FACETS = [
         'entity_type_s',
+        'is_part_of_ss',
         'country_ss',
     ];
 
@@ -136,13 +141,17 @@ final class PresetCatalog
         );
 
         // One scope per country — content collection, country locked.
+        // References are EXCLUDED: a country page block surfaces the primary
+        // sources (press, publications, documents, audiovisual); the academic
+        // bibliography has its own References scope, and per-country
+        // references were drowning the archival material on country pages.
         foreach (self::COUNTRIES as $country) {
             $presets[$country['slug']] = new Preset(
                 key:           $country['slug'],
                 label:         $country['name'], // @translate
                 card:          self::CARD_CONTENT,
                 // Backticks escape spaces + the apostrophe in Côte d'Ivoire.
-                lockedFilters: sprintf('country_ss:=`%s`', $country['name']),
+                lockedFilters: sprintf('country_ss:=`%s` && type_s:!=reference', $country['name']),
                 facets:        self::CONTENT_COUNTRY_FACETS,
                 defaultSort:   'date:desc',
                 legacySlug:    $country['slug'],

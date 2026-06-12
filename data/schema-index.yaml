@@ -6,17 +6,19 @@
 # authority notices) — so they can be browsed on their own faceted page
 # without polluting the article/document search.
 #
-# Built by IndexReindexer from the HF `index` subset, on the same
+# Built by IndexReindexer from the Omeka authority records, on the same
 # discovery:reindex run that rebuilds the content collection. Versioned +
 # alias-swapped exactly like the content collection:
-#   real collection `iwac_index_v1`, aliased `iwac_index_current`.
+#   real collection `iwac_index_v2`, aliased `iwac_index_current`.
+#   (v1 → v2: accent-insensitive indexing — locale dropped, see the ACCENTS
+#    note in schema.yaml — plus the is_part_of_ss facet.)
 #
 # The public scoped key (collections: ['*']) covers this collection too,
 # and still carries filter_by:is_public:=true — entities default to
 # is_public=false in the mapper and are flipped true via the Omeka ACL
 # overlay, same safe-closed model as content.
 
-name: iwac_index_v1
+name: iwac_index_v2
 
 # frequency (occurrence count) is present on every row, so it's a valid
 # default sort — "most mentioned first" is the natural browse order.
@@ -35,15 +37,24 @@ fields:
   - { name: thumbnail_url, type: string, index: false, optional: true }
 
   # ── Display + sort + FTS ──────────────────────────────────────────────
+  # No locale on the FTS fields: the default pipeline folds diacritics at
+  # index + query time (accent-insensitive search) — see schema.yaml.
   - { name: title,     type: string, sort: true }               # entity name (A–Z sort)
-  - { name: title_txt, type: string, locale: fr }               # FTS, French analyser
+  - { name: title_txt, type: string }                           # FTS, accent-folded
   # Alternative spellings ("RCI" → "Radio Côte d'Ivoire"), FTS only.
-  - { name: entity_aliases_txt, type: "string[]", locale: fr, facet: false, optional: true }
-  - { name: description, type: string, locale: fr, optional: true }
+  - { name: entity_aliases_txt, type: "string[]", facet: false, optional: true }
+  - { name: description, type: string, optional: true }
 
   # ── Entity type (the facet that slices the index) ─────────────────────
   # Personnes | Lieux | Organisations | Événements | Sujets | Notices d'autorité
   - { name: entity_type_s, type: string, facet: true }
+
+  # dcterms:isPartOf on the entity item. For organisations this is the
+  # ORGANISATION CATEGORY ("Organisation islamique", …); other types use it
+  # for broader-entity links. Faceted so the index page can slice
+  # organisations by kind — and so inconsistent values are visible (the
+  # facet doubles as the data-cleaning worklist).
+  - { name: is_part_of_ss, type: "string[]", facet: true, optional: true }
 
   # ── Occurrence metrics ────────────────────────────────────────────────
   # frequency = how many content items reference this entity. Sort key +

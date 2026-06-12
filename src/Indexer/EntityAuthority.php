@@ -45,6 +45,9 @@ final class EntityAuthority
         'dcterms:description',
         'curation:coordinates',
         'dcterms:identifier',
+        // Entity category — for organisations this holds the organisation
+        // kind ("Organisation islamique", …). Linked or literal.
+        'dcterms:isPartOf',
     ];
 
     private const AUTHORITY_FILE_CLASS = 244;
@@ -53,7 +56,7 @@ final class EntityAuthority
     /** @var array<int, array{
      *   class:int, type:string, bucket:?string, title:string, aliases:list<string>,
      *   description:string, coordinates:string, identifier:string,
-     *   thumbnail:?string, is_public:bool
+     *   is_part_of:list<string>, thumbnail:?string, is_public:bool
      * }> */
     private array $byId = [];
 
@@ -131,6 +134,9 @@ final class EntityAuthority
             'description' => $this->firstLiteral($values, 'dcterms:description'),
             'coordinates' => $this->firstLiteral($values, 'curation:coordinates'),
             'identifier'  => $this->firstLiteral($values, 'dcterms:identifier'),
+            // Linked-resource title OR literal — isPartOf is catalogued both
+            // ways in the IWAC index.
+            'is_part_of'  => $this->displays($values, 'dcterms:isPartOf'),
             'thumbnail'   => $thumbnail,
             'is_public'   => $item['is_public'],
         ];
@@ -191,7 +197,8 @@ final class EntityAuthority
      *
      * @return iterable<int, array{
      *   id:int, type:string, title:string, aliases:list<string>, description:string,
-     *   coordinates:string, identifier:string, thumbnail:?string, is_public:bool
+     *   coordinates:string, identifier:string, is_part_of:list<string>,
+     *   thumbnail:?string, is_public:bool
      * }>
      */
     public function entities(): iterable
@@ -205,6 +212,7 @@ final class EntityAuthority
                 'description' => $e['description'],
                 'coordinates' => $e['coordinates'],
                 'identifier'  => $e['identifier'],
+                'is_part_of'  => $e['is_part_of'],
                 'thumbnail'   => $e['thumbnail'],
                 'is_public'   => $e['is_public'],
             ];
@@ -228,6 +236,24 @@ final class EntityAuthority
             244 => ['Sujets', 'topics_ss'],
             default => ['', null],
         };
+    }
+
+    /**
+     * Display values: linked-resource title when present, else the literal.
+     *
+     * @param array<string, list<array{vrid:?int,value:?string,uri:?string,title:?string}>> $values
+     * @return list<string>
+     */
+    private function displays(array $values, string $term): array
+    {
+        $out = [];
+        foreach ($values[$term] ?? [] as $v) {
+            $s = trim((string) (($v['title'] ?? '') !== '' ? $v['title'] : ($v['value'] ?? '')));
+            if ($s !== '') {
+                $out[] = $s;
+            }
+        }
+        return array_values(array_unique($out));
     }
 
     /**

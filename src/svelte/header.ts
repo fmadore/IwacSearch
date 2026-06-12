@@ -82,6 +82,9 @@ function buildBootstrap(cfg: HeaderConfig): IwacBootstrap {
     prominent_facets: [],
     default_sort: '_text_match:desc',
     results_per_page: 10,
+    // Lets the typeahead reconcile entity aliases ("RCI" → "Radio Côte
+    // d'Ivoire") via the index collection, like the in-app surfaces.
+    index_collection_alias: 'iwac_index_current',
     endpoints: cfg.endpoints,
   };
 }
@@ -98,8 +101,10 @@ function escapeHtml(value: string): string {
 
 function titleMarkupOf(hit: IwacHit): string {
   const titleHl = hit.highlights.find((h) => h.field === 'title_txt');
-  if (titleHl?.snippet) {
-    return safeMarkup(titleHl.snippet);
+  // `value` is the full marked-up title; `snippet` windows long titles.
+  const markup = titleHl?.value ?? titleHl?.snippet;
+  if (markup) {
+    return safeMarkup(markup);
   }
   return escapeHtml(hit.document.title ?? '');
 }

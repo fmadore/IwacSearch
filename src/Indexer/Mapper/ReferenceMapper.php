@@ -52,8 +52,9 @@ final class ReferenceMapper extends AbstractMapper
     public function readTerms(): array
     {
         return [
-            'dcterms:identifier', 'dcterms:language', 'dcterms:publisher',
-            'dcterms:subject', 'dcterms:spatial', 'dcterms:date', 'fabio:hasURL',
+            'dcterms:identifier', 'dcterms:alternative', 'dcterms:language',
+            'dcterms:publisher', 'dcterms:subject', 'dcterms:spatial',
+            'dcterms:date', 'fabio:hasURL',
             'bibo:authorList', 'bibo:editorList', 'bibo:doi', 'bibo:volume',
             'bibo:issue', 'bibo:pageStart', 'bibo:pageEnd', 'bibo:edition',
             'dcterms:abstract', 'dcterms:isPartOf',

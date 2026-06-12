@@ -172,11 +172,14 @@ final class OmekaSourceReader
      * Grouped property values for a set of resource ids, limited to the given
      * terms. Returns, per resource: term → list of value rows, each carrying
      * the linked-resource id + its title (for value_resource links), the
-     * literal value, and the uri. Mirrors DRE-Search::loadValues.
+     * literal value, the uri, and the VALUE-LEVEL visibility (`vpub`,
+     * value.is_public — drives the has_fulltext flag: licensing-restricted
+     * bibo:content is indexed but flagged as not publicly readable).
+     * Mirrors DRE-Search::loadValues.
      *
      * @param  list<int>    $ids
      * @param  list<string> $terms
-     * @return array<int, array<string, list<array{vrid:?int,value:?string,uri:?string,title:?string}>>>
+     * @return array<int, array<string, list<array{vrid:?int,value:?string,uri:?string,title:?string,vpub:bool}>>>
      */
     public function loadValues(array $ids, array $terms): array
     {
@@ -191,7 +194,8 @@ final class OmekaSourceReader
         )) . "'";
 
         $sql = "SELECT v.resource_id AS rid, CONCAT(vo.prefix, ':', p.local_name) AS term,"
-            . ' v.value_resource_id AS vrid, v.value AS val, v.uri AS turi, t.title AS ttitle'
+            . ' v.value_resource_id AS vrid, v.value AS val, v.uri AS turi, v.is_public AS vpub,'
+            . ' t.title AS ttitle'
             . ' FROM value v'
             . ' JOIN property p ON v.property_id = p.id'
             . ' JOIN vocabulary vo ON p.vocabulary_id = vo.id'
@@ -209,6 +213,7 @@ final class OmekaSourceReader
                 'value' => $row['val'] !== null ? (string) $row['val'] : null,
                 'uri'   => $row['turi'] !== null ? (string) $row['turi'] : null,
                 'title' => $row['ttitle'] !== null ? (string) $row['ttitle'] : null,
+                'vpub'  => (bool) $row['vpub'],
             ];
         }
         return $out;

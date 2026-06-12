@@ -99,8 +99,10 @@
 
   function titleMarkupOf(hit: IwacHit): string {
     const titleHl = hit.highlights.find((h) => h.field === 'title_txt');
-    if (titleHl?.snippet) {
-      return safeMarkup(titleHl.snippet);
+    // `value` is the full marked-up title; `snippet` windows long titles.
+    const markup = titleHl?.value ?? titleHl?.snippet;
+    if (markup) {
+      return safeMarkup(markup);
     }
     const tx = hit.document.title ?? '';
     return tx.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');

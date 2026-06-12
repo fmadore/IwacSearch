@@ -7,6 +7,7 @@
     typeLabel as typeLabelFor,
     useI18n,
   } from '../lib/i18n';
+  import Icon from './Icon.svelte';
 
   /**
    * One result rendered as a card.
@@ -133,6 +134,11 @@
       display: countryLabel(c, locale),
     })),
   );
+  // Entity category (dcterms:isPartOf) — organisation kind for
+  // organisations ("Organisation islamique"). Clickable is_part_of_ss filter.
+  const entityPartOfChips = $derived.by<FilterChip[]>(() =>
+    (doc.is_part_of_ss ?? []).map((v) => ({ field: 'is_part_of_ss', value: v, display: v })),
+  );
   // Compact source line: Newspaper · Country, each a clickable filter. Kept
   // inside the body so the eyebrow row above the title only carries the date
   // + type chip — too many tokens up there reads as visual noise.
@@ -151,13 +157,63 @@
     return out;
   });
 
-  // Prefer the OCR snippet (more contextual than the title snippet).
+  // Body snippet: the OCR match first (most contextual), else the abstract
+  // match. The title no longer doubles as a body snippet — it's highlighted
+  // in place (see titleMarkup below).
   const rawSnippet = $derived(
     hit.highlights?.find((h) => h.field === 'ocr_text')?.snippet ??
-      hit.highlights?.find((h) => h.field === 'title_txt')?.snippet ??
+      hit.highlights?.find((h) => h.field === 'abstract')?.snippet ??
       '',
   );
   const snippet = $derived(sanitizeSnippet(rawSnippet));
+
+  // Title with the query match marked. highlight_full_fields covers
+  // title_txt, so the highlight carries the COMPLETE title in `value`
+  // (the `snippet` is a window past ~30 tokens — long reference titles
+  // would render truncated). Empty (→ plain title) when no title match.
+  const titleMarkup = $derived.by(() => {
+    const h = hit.highlights?.find((x) => x.field === 'title_txt');
+    const s = h?.value ?? h?.snippet ?? '';
+    return s.includes('<mark>') ? sanitizeSnippet(s) : '';
+  });
+
+  // ── Match attribution: WHY is this hit shown? ───────────────────────
+  // Title and body matches are visible on the card itself; matches in the
+  // metadata channels (subject, spatial, author, journal, alternative
+  // title, entity alias…) used to be invisible — the card just appeared,
+  // unexplained. Surface them as a small "Matched in" line built from the
+  // per-field highlights.
+  const VISIBLE_MATCH_FIELDS = ['title_txt', 'ocr_text', 'abstract'];
+
+  type MatchedIn = { field: string; label: string; snippet: string };
+  const matchedIn = $derived.by<MatchedIn[]>(() => {
+    const out: MatchedIn[] = [];
+    for (const h of hit.highlights ?? []) {
+      if (VISIBLE_MATCH_FIELDS.includes(h.field)) continue;
+      if (out.some((m) => m.field === h.field)) continue;
+      // Scalar fields carry `snippet`; string[] fields carry `snippets`.
+      const raw = h.snippet ?? h.snippets?.[0] ?? '';
+      if (!raw.includes('<mark>')) continue;
+      out.push({
+        field: h.field,
+        label: facetLabel(h.field, locale),
+        snippet: sanitizeSnippet(raw),
+      });
+    }
+    return out.slice(0, 3);
+  });
+
+  // Source-line chip icons — same Bootstrap Icons set the IWAC theme uses.
+  const CHIP_ICONS: Record<string, 'newspaper' | 'globe'> = {
+    newspaper_ss: 'newspaper',
+    country_ss: 'globe',
+  };
+  // Citation icon: journal page for periodical pieces, book covers the rest.
+  const citationIcon = $derived(
+    referenceType === 'Article de revue' || referenceType === 'Compte rendu'
+      ? ('journal' as const)
+      : ('book' as const),
+  );
   // Card body: prefer the query-match snippet (shows WHY this hit matched);
   // fall back to the abstract/description so browse-mode cards (no query,
   // no highlight) still show a couple of lines of context. The abstract is
@@ -252,7 +308,10 @@
       class:is-active={isActive(chip.field, chip.value)}
       aria-pressed={isActive(chip.field, chip.value)}
       aria-label={chipAria(chip)}
-      onclick={() => toggle(chip.field, chip.value)}>{chip.display}</button
+      onclick={() => toggle(chip.field, chip.value)}
+      >{#if CHIP_ICONS[chip.field]}<span class="iwac-card__meta-icon" aria-hidden="true"
+          ><Icon name={CHIP_ICONS[chip.field]} /></span
+        >{/if}{chip.display}</button
     >
   </li>
 {/snippet}
@@ -287,14 +346,23 @@
       </header>
 
       <h3 class="iwac-card__title">
-        <a href={itemUrl}>{title}</a>
+        {#if titleMarkup}
+          <!-- sanitizeSnippet escaped everything but literal mark tags -->
+          <!-- eslint-disable-next-line svelte/no-at-html-tags -->
+          <a href={itemUrl}>{@html titleMarkup}</a>
+        {:else}
+          <a href={itemUrl}>{title}</a>
+        {/if}
       </h3>
 
-      {#if mentionsLabel || entityCountryChips.length > 0}
+      {#if mentionsLabel || entityPartOfChips.length > 0 || entityCountryChips.length > 0}
         <ul class="iwac-card__source" aria-label={t('source')}>
           {#if mentionsLabel}
             <li class="iwac-card__chip iwac-card__chip--count">{mentionsLabel}</li>
           {/if}
+          {#each entityPartOfChips as chip (chip.field + '|' + chip.value)}
+            {@render filterChip(chip)}
+          {/each}
           {#each entityCountryChips as chip (chip.field + '|' + chip.value)}
             {@render filterChip(chip)}
           {/each}
@@ -319,24 +387,34 @@
       </header>
 
       <h3 class="iwac-card__title">
-        <a href={itemUrl}>{title}</a>
+        {#if titleMarkup}
+          <!-- sanitizeSnippet escaped everything but literal mark tags -->
+          <!-- eslint-disable-next-line svelte/no-at-html-tags -->
+          <a href={itemUrl}>{@html titleMarkup}</a>
+        {:else}
+          <a href={itemUrl}>{title}</a>
+        {/if}
       </h3>
 
       {#if authors.length > 0}
         <p class="iwac-card__byline">
-          {#each authors as author, i (author)}<button
+          <span class="iwac-card__meta-icon" aria-hidden="true"><Icon name="person" /></span
+          >{#each authors as author, i (author)}<button
               type="button"
               class="iwac-card__author"
               class:is-active={isActive('creator_ss', author)}
               aria-pressed={isActive('creator_ss', author)}
               aria-label={chipAria({ field: 'creator_ss', value: author, display: author })}
               onclick={() => toggle('creator_ss', author)}>{author}</button
-            >{#if i < authors.length - 1}<span class="iwac-card__byline-sep">, </span>{/if}{/each}
+            >{#if i < authors.length - 1}<span class="iwac-card__byline-sep"></span>{/if}{/each}
         </p>
       {/if}
 
       {#if citation}
-        <p class="iwac-card__citation">{citation}</p>
+        <p class="iwac-card__citation">
+          <span class="iwac-card__meta-icon" aria-hidden="true"><Icon name={citationIcon} /></span
+          >{citation}
+        </p>
       {/if}
 
       {#if snippet}
@@ -345,6 +423,18 @@
         <p class="iwac-card__snippet">{@html snippet}</p>
       {:else if abstract}
         <p class="iwac-card__snippet iwac-card__snippet--abstract">{abstract}</p>
+      {/if}
+
+      {#if matchedIn.length > 0}
+        <p class="iwac-card__matched">
+          <span class="iwac-card__matched-label">{t('matched_in')}</span>
+          {#each matchedIn as m, i (m.field)}<span class="iwac-card__matched-item"
+              ><span class="iwac-card__matched-field">{m.label}</span
+              ><!-- eslint-disable-next-line svelte/no-at-html-tags --><span
+                class="iwac-card__matched-value">{@html m.snippet}</span
+              ></span
+            >{#if i < matchedIn.length - 1}<span class="iwac-card__matched-sep"></span>{/if}{/each}
+        </p>
       {/if}
 
       {#if sourceChips.length > 0}
@@ -590,8 +680,24 @@
     box-shadow: var(--ring-focus, 0 0 0 3px rgba(0, 0, 0, 0.1));
     border-radius: var(--radius-sm, 0.375rem);
   }
-  .iwac-card__byline-sep {
+  /* CSS-generated ", " — the Svelte compiler trims a literal trailing
+     space at the {#if} block boundary (the authors used to render as
+     "Madore,Anato"), and generated content is immune to that. */
+  .iwac-card__byline-sep::before {
+    content: ', ';
     color: var(--ink-light, var(--ink, #2c2f37));
+  }
+
+  /*
+   * Small leading icon on metadata lines and chips (author, citation,
+   * newspaper, country). Muted so the icon reads as a field marker, not a
+   * control; the inline SVG inherits this color via currentColor.
+   */
+  .iwac-card__meta-icon {
+    display: inline-block;
+    color: var(--muted, #767880);
+    margin-inline-end: 0.35em;
+    font-size: 0.875em;
   }
 
   /* Source line for references (journal · volume · pages, book · publisher).
@@ -629,7 +735,9 @@
     line-clamp: 2;
     color: var(--muted, #767880);
   }
-  .iwac-card__snippet :global(mark) {
+  .iwac-card__snippet :global(mark),
+  .iwac-card__matched :global(mark),
+  .iwac-card__title :global(mark) {
     background: color-mix(
       in oklab,
       var(--primary, #e64a19) var(--accent-mix-subtle, 25%),
@@ -638,6 +746,38 @@
     color: inherit;
     border-radius: var(--radius-sm, 0.375rem);
     padding-inline: 0.15em;
+  }
+
+  /*
+   * "Matched in" attribution — why this hit is in the list when the match
+   * isn't visible in title/body: subject, spatial coverage, author,
+   * journal, alternative title, entity alias. Quiet one-liner above the
+   * source line; the <mark> inside each value carries the evidence.
+   */
+  .iwac-card__matched {
+    margin: var(--space-xs, 0.25rem) 0 0;
+    font-size: var(--text-xs, 0.8125rem);
+    color: var(--muted, #767880);
+    line-height: 1.5;
+  }
+  .iwac-card__matched-label {
+    font-weight: 600;
+    letter-spacing: var(--tracking-wide, 0.04em);
+    text-transform: uppercase;
+    font-size: 0.85em;
+    margin-inline-end: 0.35em;
+  }
+  .iwac-card__matched-field {
+    font-weight: 600;
+    color: var(--ink-light, var(--ink, #2c2f37));
+  }
+  /* Generated separators (see .iwac-card__byline-sep for why). */
+  .iwac-card__matched-field::after {
+    content: ' : ';
+  }
+  .iwac-card__matched-sep::before {
+    content: ' · ';
+    font-weight: 700;
   }
 
   /*

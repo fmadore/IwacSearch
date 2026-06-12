@@ -16,8 +16,20 @@ namespace IwacSearch\Search;
  */
 final class SearchDefaults
 {
-    public const CONTENT_QUERY_BY        = 'title_txt,ocr_text,abstract,entity_aliases_txt,embedding';
-    public const CONTENT_HIGHLIGHT_FIELDS = 'title_txt,ocr_text';
+    /**
+     * Content keyword fields, ordered title-ish → body → metadata. Beyond
+     * recall, every keyword field here doubles as MATCH ATTRIBUTION: the
+     * client reads the per-field highlights to tell the user WHY a hit
+     * matched ("found in subject / author / alternative title / spatial").
+     * subjects_ss + places_ss make tag-only matches (no OCR mention) findable;
+     * creator_ss / publisher_s / book_title_s power the references surface
+     * (search by author, journal, book title, publisher). `embedding` last —
+     * hybrid semantic recall, ignored for highlights.
+     */
+    public const CONTENT_QUERY_BY        = 'title_txt,alt_title_txt,ocr_text,abstract,'
+        . 'creator_ss,subjects_ss,places_ss,publisher_s,book_title_s,entity_aliases_txt,embedding';
+    public const CONTENT_HIGHLIGHT_FIELDS = 'title_txt,alt_title_txt,ocr_text,abstract,'
+        . 'creator_ss,subjects_ss,places_ss,publisher_s,book_title_s,entity_aliases_txt';
 
     public const ENTITY_QUERY_BY         = 'title_txt,entity_aliases_txt';
     public const ENTITY_HIGHLIGHT_FIELDS = 'title_txt';

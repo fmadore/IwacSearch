@@ -260,17 +260,35 @@ works.
 The embedding model is `ts/multilingual-e5-small` (384d, in-process
 ONNX) — no external API calls at query time.
 
-### French stemming
+### Accent-insensitive search (v3)
 
-The French prose fields (`title_txt`, `ocr_text`, `abstract`) carry
-`stem: true`, so Typesense's Snowball French stemmer folds word-forms of
-the same root: a query for `musulman` also matches `musulmans` /
-`musulmane`, `islamique` matches `islamiques`, and so on. Stemming is
-applied to the keyword inverted index only — the embedding model still
-receives the raw field text, so semantic recall is unaffected.
-`entity_aliases_txt` is deliberately **not** stemmed (it holds proper
-nouns and acronyms a stemmer would mangle). Enabling stemming is an
-index-time change, hence the `iwac_v1` → `iwac_v2` collection bump.
+The searchable text fields carry **no `locale: fr`**. With `locale: fr`
+Typesense preserves diacritics (ICU tokenization) and an unaccented query
+only matches through typo tolerance — measured on the live v2 index,
+`Cote d'Ivoire` found 2 documents where `Côte d'Ivoire` found 397, and
+there is no folding option for non-`en` locales
+([typesense#2093](https://github.com/typesense/typesense/issues/2093),
+[typesense#2354](https://github.com/typesense/typesense/issues/2354)).
+The default pipeline folds European diacritics at both index and query
+time, so `cote` = `Côte` and `evenement` = `événement` — while highlights
+still display the original accented text. The `fr_default` stopword set is
+uploaded with `locale: en` for the same reason (its tokens must fold the
+same way). This is an index-time change, hence the `iwac_v2` → `iwac_v3`
+collection bump.
+
+### Stemming
+
+The prose fields (`title_txt`, `alt_title_txt`, `ocr_text`, `abstract`)
+carry `stem: true`, folding word-forms of the same root: a query for
+`musulman` also matches `musulmans` / `musulmane`, `islamique` matches
+`islamiques`, and so on. (Since v3 the stemmer is the default Snowball
+English one — locale-free fields are the price of accent folding — which
+still handles these plural/feminine endings; accent folding itself now
+unifies the `événement`/`évènement`-style variants the French stemmer
+never covered.) Stemming is applied to the keyword inverted index only —
+the embedding model still receives the raw field text, so semantic recall
+is unaffected. `entity_aliases_txt` is deliberately **not** stemmed (it
+holds proper nouns and acronyms a stemmer would mangle).
 
 ### Result diversification (Typesense 30.2 MMR)
 
@@ -298,12 +316,15 @@ locked filter (baked into the scoped key, so enforced server-side), the
 facet set, and the default sort. Compose discovery pages by dropping a
 block onto any Omeka page alongside your own text/HTML blocks.
 
-| Scope        | Collection           | Locked filter               |
-| ------------ | -------------------- | --------------------------- |
-| All content  | `iwac_current`       | — (`is_public:=true` only)  |
-| Bénin … Togo | `iwac_current`       | `` country_ss:=`Bénin` `` … |
-| References   | `iwac_current`       | `type_s:=reference`         |
-| Entity index | `iwac_index_current` | — (entity cards, frequency) |
+| Scope        | Collection           | Locked filter                                       |
+| ------------ | -------------------- | --------------------------------------------------- |
+| All content  | `iwac_current`       | — (`is_public:=true` only)                          |
+| Bénin … Togo | `iwac_current`       | `` country_ss:=`Bénin` && type_s:!=reference `` …   |
+| References   | `iwac_current`       | `type_s:=reference`                                 |
+| Entity index | `iwac_index_current` | — (entity cards, frequency)                         |
+
+Country scopes exclude references since v3.2: a country page surfaces the
+primary sources; the bibliography lives in its own References scope.
 
 The earlier `iwac_browse_config` table + admin CRUD UI were retired. Old
 `/browse/{slug}` links still work: `SearchController::browseAction`
@@ -318,7 +339,7 @@ The earlier `iwac_browse_config` table + admin CRUD UI were retired. Old
 docker compose exec php php /var/www/html/modules/IwacSearch/cli/reindex.php
 ```
 
-Builds a versioned collection (`iwac_v2_<UTC timestamp>`), reads content
+Builds a versioned collection (`iwac_v3_<UTC timestamp>`), reads content
 directly from the Omeka MySQL database, batch-imports into Typesense, then
 atomic-swaps the `iwac_current` alias. Live search keeps serving the previous
 collection uninterrupted until the swap completes — a failed reindex

@@ -39,6 +39,17 @@ final class FacetCatalog
         'type_s'             => 'Type',
         'entity_type_s'      => 'Entity type',
         'reference_type_ss'  => 'Reference type',
+        // Boolean: full text (bibo:content) exists AND is publicly visible.
+        // Only the primary-source subsets carry it (references never do).
+        'has_fulltext'       => 'Full text available',
+        // Journal title (journal articles) or publisher (books/chapters/…).
+        'publisher_s'        => 'Journal / Publisher',
+        // MERGED dcterms:subject facet (persons + organisations + topics in
+        // one list) — used on the references scope.
+        'subjects_ss'        => 'Subjects (combined)',
+        // dcterms:isPartOf on entity items — organisation category on the
+        // entity index.
+        'is_part_of_ss'      => 'Part of (entity category)',
         // Authorship — mapped from the HF `author` field to creator_ss by
         // AbstractMapper; facet:true in schema.yaml and populated in the live
         // index, but it was never in this catalog, so it couldn't be picked in

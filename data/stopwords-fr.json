@@ -1,7 +1,8 @@
 {
   "_comment": "Curated French stopword set for IwacSearch. Loaded via PUT /stopwords/fr_default at module activation (or via the discovery:reindex CLI). Public scoped keys reference it as `stopwords: fr_default` so the public client cannot omit it.",
   "_source": "Standard French stopwords + IWAC-specific noise terms (e.g. 'apr\u00e8s', 'avant'). Trimmed to high-impact tokens; over-aggressive lists harm recall.",
-  "locale": "fr",
+  "_locale_note": "Deliberately 'en', NOT 'fr': the v3 collections index with the default (en) pipeline so diacritics fold to ASCII (see the ACCENTS note in data/schema.yaml). The stopword set must tokenize the same way, or accented stopwords ('été', 'très', 'à') would no longer match the folded query stream.",
+  "locale": "en",
   "stopwords": [
     "le", "la", "les", "l", "un", "une", "des", "de", "du", "d",
     "et", "ou", "mais", "donc", "or", "ni", "car",

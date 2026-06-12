@@ -7,25 +7,40 @@
 # Conventions:
 #   - Names ending in `_ss` are multi-valued strings (facets).
 #   - Names ending in `_s`  are single-valued strings (sort keys).
-#   - Names ending in `_txt` are full-text indexed with the French analyser.
-#   - The French PROSE fields (title_txt, ocr_text, abstract) carry
-#     `stem: true` — Typesense's Snowball French stemmer folds word-forms
-#     of the same root (musulman/musulmans/musulmane, islamique/islamiques)
-#     so a query for one matches the others. Stemming is applied to the
-#     keyword inverted index only; the embedding model still receives the
-#     raw field text, so semantic recall is unaffected. entity_aliases_txt
-#     is deliberately NOT stemmed — it holds proper nouns and acronyms
-#     (AOF, RCI, names) that a stemmer would mangle.
+#   - Names ending in `_txt` are full-text indexed.
+#   - ACCENTS (v3): the searchable text fields deliberately carry NO
+#     `locale: fr`. With `locale: fr` Typesense preserves diacritics (ICU
+#     tokenization) and an unaccented query only matches via typo
+#     tolerance — measured live on v2: "Cote d'Ivoire" found 2 docs where
+#     "Côte d'Ivoire" found 397. There is no folding option for non-en
+#     locales (typesense#2093, typesense#2354). The default (en) pipeline
+#     folds European diacritics at BOTH index and query time, so
+#     cote=Côte, evenement=événement, while highlights still show the
+#     original accented text.
+#   - The PROSE fields (title_txt, ocr_text, abstract) carry `stem: true`.
+#     Without a locale the stemmer is English Snowball, not French — it
+#     still folds the plural/feminine endings that motivated stemming in
+#     v2 (musulman/musulmans/musulmane, islamique/islamiques), and the
+#     accent folding above now also unifies spelling variants
+#     (événement/évènement) the French stemmer never handled.
+#     entity_aliases_txt is deliberately NOT stemmed — it holds proper
+#     nouns and acronyms (AOF, RCI, names) that a stemmer would mangle.
+#   - The stopword set fr_default must be PUT with locale "en" (see
+#     data/stopwords-fr.json) so its tokens are folded the same way as
+#     query tokens; a locale-fr set would keep "été"/"même" accented and
+#     stop matching the folded query stream.
 #   - `embedding` uses Typesense's in-process ts/multilingual-e5-small ONNX
 #     model (384d). Re-embedded at index AND query time, so no external API
 #     dependency at search time.
 #
 # Versioning:
-#   - The actual collection is named `iwac_v2` and aliased as `iwac_current`.
-#     (v1 → v2 bump: added French stemming on the prose fields + linked the
-#     `iwac_diversity` curation set — both are index-time changes that need
-#     a fresh collection.)
-#   - Schema changes ⇒ bump the name (`iwac_v2` → `iwac_v3`), atomic-swap
+#   - The actual collection is named `iwac_v3` and aliased as `iwac_current`.
+#     (v1 → v2: French stemming + the `iwac_diversity` curation set.
+#      v2 → v3: accent-insensitive indexing (locale dropped), alt_title_txt,
+#      subjects_ss, searchable/facetable publisher_s + book_title_s, and the
+#      has_fulltext flag — all index-time changes that need a fresh
+#      collection.)
+#   - Schema changes ⇒ bump the name (`iwac_v3` → `iwac_v4`), atomic-swap
 #     the alias. The browser only ever queries the alias, so swaps are
 #     zero-downtime.
 #
@@ -35,7 +50,7 @@
 # both the bulk reindex and the M4 incremental path. No HuggingFace.
 # country_ss is derived (newspaper→country / item-set). See docs/data-sources.md.
 
-name: iwac_v2
+name: iwac_v3
 
 # Global curation set linked to this collection. The set itself is created
 # (idempotently) by src/Indexer/CurationSync.php during the bulk reindex.
@@ -69,8 +84,9 @@ token_separators:
   - "'"
   - "-"
 
-# Symbols treated as part of tokens (not separators). Keep accented chars
-# intact and let the French locale handle accent folding at query time.
+# Symbols treated as part of tokens (not separators). Accented characters
+# are folded to ASCII by the default-locale pipeline (see the ACCENTS note
+# above) — display text keeps its accents, only the index is folded.
 symbols_to_index: []
 
 fields:
@@ -82,7 +98,11 @@ fields:
 
   # ── Display + sort ────────────────────────────────────────────────────
   - { name: title,       type: string, sort: true }            # display + sort
-  - { name: title_txt,   type: string, locale: fr, stem: true } # FTS, French analyser + stemmer
+  - { name: title_txt,   type: string, stem: true }            # FTS, accent-folded + stemmed
+  # Alternative titles (dcterms:alternative on the item itself) — second
+  # FTS title channel so a search for the variant finds the item. Also in
+  # the suggest query_by so the autocomplete reconciles variant titles.
+  - { name: alt_title_txt, type: "string[]", stem: true, optional: true }
   - { name: thumbnail_url, type: string, index: false, optional: true }
   - { name: iiif_manifest, type: string, index: false, optional: true }
 
@@ -106,14 +126,19 @@ fields:
   - { name: places_ss,         type: "string[]", facet: true, optional: true }
   - { name: organisations_ss,  type: "string[]", facet: true, optional: true }
   - { name: events_ss,         type: "string[]", facet: true, optional: true }
+  # MERGED subject facet: every dcterms:subject linked title regardless of
+  # entity class — persons, organisations and topics in ONE list. Used on
+  # the references scope, where splitting the few subject tags across three
+  # facet groups read as noise. dcterms:spatial deliberately NOT included.
+  - { name: subjects_ss,       type: "string[]", facet: true, optional: true }
   - { name: entity_ids,        type: "int32[]",  facet: false, optional: true }  # for outbound links
 
   # Alternative spellings of every resolved entity, indexed for FTS only.
   # Examples: typing "RCI" finds docs about "Radio Côte d'Ivoire";
   # typing "AOF" finds docs about "Afrique-Occidentale française".
-  # Sourced from the `Titre alternatif` field on the HF `index` subset.
+  # Sourced from dcterms:alternative on the resolved entity items.
   # NOT a facet — querying via this field expands recall transparently.
-  - { name: entity_aliases_txt, type: "string[]", locale: fr, facet: false, optional: true }
+  - { name: entity_aliases_txt, type: "string[]", facet: false, optional: true }
 
   # ── Time ──────────────────────────────────────────────────────────────
   - { name: date,           type: int64, facet: false, sort: true, optional: true }   # epoch seconds
@@ -124,8 +149,16 @@ fields:
   # ocr_text is INDEXED (so matches work) but EXCLUDED from public results
   # via the scoped key (exclude_fields: ocr_text). Highlights still ship.
   # Loosening this requires licensing sign-off — see roadmap "Security model".
-  - { name: ocr_text,    type: string, locale: fr, stem: true, optional: true }
+  - { name: ocr_text,    type: string, stem: true, optional: true }
   - { name: nb_words,    type: int32,  facet: false, optional: true }
+  # Whether the item's full text (bibo:content) is PUBLICLY READABLE on the
+  # item page — i.e. the value exists AND its Omeka value-level visibility
+  # is public. Distinct from "ocr_text is indexed": licensing-restricted
+  # OCR is still searchable (snippet highlights only), it just isn't
+  # readable in full. Set true/false on the four primary-source subsets;
+  # ABSENT on references (they have no OCR), so the "Full text available"
+  # facet never shows on the references / index scopes.
+  - { name: has_fulltext, type: bool, facet: true, optional: true }
 
   # ── Abstract / description (display body, public-safe) ─────────────────
   # Two sources feed this one field, by design:
@@ -138,7 +171,7 @@ fields:
   # Visible in public results (NOT in the scoped key's exclude_fields) so
   # the result card can show a couple of lines for every type. Also in
   # query_by, so the summary lightly improves recall.
-  - { name: abstract,    type: string, locale: fr, stem: true, optional: true }
+  - { name: abstract,    type: string, stem: true, optional: true }
   # The 9 RDF classes that appear in the references subset:
   #   Article de revue · Chapitre · Thèse · Livre · Rapport ·
   #   Communication · Compte rendu · Ouvrage collectif · Article de blog.
@@ -149,15 +182,20 @@ fields:
   # by typo or partial string isn't a useful workflow).
   - { name: doi, type: string, index: false, optional: true }
 
-  # Reference bibliographic detail — stored display-only (index:false) and
-  # rendered as the source/citation line on reference result cards. Populated
-  # by ReferenceMapper from the HF references columns; absent on other subsets.
-  # `publisher` holds the JOURNAL title for journal articles and the publisher
-  # for books/chapters/theses/reports; `book_title` is the containing book for
-  # chapters. The client formats these into a citation per reference type, so
-  # tweaking the format is a rebuild, not a reindex.
-  - { name: publisher_s,  type: string,     index: false, optional: true }
-  - { name: book_title_s, type: string,     index: false, optional: true }
+  # Reference bibliographic detail, rendered as the source/citation line on
+  # reference result cards. Populated by ReferenceMapper; absent on other
+  # subsets. `publisher` holds the JOURNAL title for journal articles and
+  # the publisher for books/chapters/theses/reports; `book_title` is the
+  # containing book for chapters. The client formats these into a citation
+  # per reference type, so tweaking the format is a rebuild, not a reindex.
+  #
+  # v3: publisher_s and book_title_s are INDEXED + FACETED (they were
+  # display-only) so the references scope can filter by journal/publisher
+  # and the autocomplete can suggest journals, publishers and book titles
+  # (facet_query + query_by). volume/issue/pages/editor/edition stay
+  # display-only.
+  - { name: publisher_s,  type: string,     facet: true, optional: true }
+  - { name: book_title_s, type: string,     facet: true, optional: true }
   - { name: volume_s,     type: string,     index: false, optional: true }
   - { name: issue_s,      type: string,     index: false, optional: true }
   - { name: pages_s,      type: string,     index: false, optional: true }

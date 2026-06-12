@@ -31,6 +31,15 @@ live Omeka API (the Phase 0 parity spike):
 | `nb_words` | ⚙️ recomputed | word count of OCR |
 | **`lda_topic_label`** | ❌ HF-only | **dropped** — gensim LDA, not worth a parallel pipeline |
 
+Added in v3 (schema `iwac_v3` / `iwac_index_v2`):
+
+| Search field | Source |
+|---|---|
+| `alt_title_txt` (content FTS + autocomplete) | `dcterms:alternative` on the item |
+| `subjects_ss` (merged subject facet, references scope) | `dcterms:subject` display values, all entity classes in one list |
+| `has_fulltext` (bool facet: full text publicly readable) | `bibo:content` present **and** `value.is_public = 1` (value-level visibility) |
+| `is_part_of_ss` (entity index facet — org category) | `dcterms:isPartOf` on the authority item (linked title or literal) |
+
 So HF bought exactly one facet (`lda_topic_label`) at the cost of a monthly
 refresh lag, a two-source reconciliation (HF content + Omeka ACL overlay), and
 an external dependency at index time. Reading MySQL directly:

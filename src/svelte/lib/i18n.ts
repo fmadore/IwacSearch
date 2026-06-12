@@ -103,6 +103,7 @@ const STRINGS: Record<Locale, Record<string, string>> = {
     tab_content: 'Contenu',
     tab_entities: 'Entités',
     result_types: 'Types de résultats',
+    matched_in: 'Trouvé via',
   },
   en: {
     search_placeholder: 'Search the IWAC…',
@@ -168,6 +169,7 @@ const STRINGS: Record<Locale, Record<string, string>> = {
     tab_content: 'Content',
     tab_entities: 'Entities',
     result_types: 'Result types',
+    matched_in: 'Matched in',
   },
 };
 
@@ -198,12 +200,19 @@ const FACET_LABELS: Record<Locale, Record<string, string>> = {
     places_ss: 'Lieu',
     organisations_ss: 'Organisation',
     events_ss: 'Événement',
+    subjects_ss: 'Sujet',
     date_decade_ss: 'Décennie',
     pub_year: 'Année',
     type_s: 'Type',
     entity_type_s: 'Type',
     reference_type_ss: 'Type de référence',
     creator_ss: 'Auteur',
+    publisher_s: 'Revue / Éditeur',
+    book_title_s: 'Titre du livre',
+    has_fulltext: 'Texte intégral',
+    is_part_of_ss: 'Catégorie',
+    alt_title_txt: 'Titre alternatif',
+    entity_aliases_txt: 'Autre dénomination',
     gemini_polarite_ss: 'Polarité',
     gemini_centralite_ss: 'Centralité',
     gemini_subjectivite: 'Subjectivité',
@@ -221,12 +230,19 @@ const FACET_LABELS: Record<Locale, Record<string, string>> = {
     places_ss: 'Place',
     organisations_ss: 'Organisation',
     events_ss: 'Event',
+    subjects_ss: 'Subject',
     date_decade_ss: 'Decade',
     pub_year: 'Year',
     type_s: 'Type',
     entity_type_s: 'Type',
     reference_type_ss: 'Reference type',
     creator_ss: 'Author',
+    publisher_s: 'Journal / Publisher',
+    book_title_s: 'Book title',
+    has_fulltext: 'Full text',
+    is_part_of_ss: 'Category',
+    alt_title_txt: 'Alternative title',
+    entity_aliases_txt: 'Also known as',
     gemini_polarite_ss: 'Polarity',
     gemini_centralite_ss: 'Centrality',
     gemini_subjectivite: 'Subjectivity',
@@ -266,6 +282,19 @@ export const NUMERIC_FACET_FIELDS: ReadonlySet<string> = new Set([
   'pub_year',
 ]);
 
+/**
+ * Boolean facet fields. Like numerics, their filter_by values must be bare
+ * (`has_fulltext:=[true]`, never backticked) or Typesense rejects the
+ * filter. Facet counts come back with the string values "true"/"false",
+ * which facetValueLabel maps to readable labels.
+ */
+export const BOOLEAN_FACET_FIELDS: ReadonlySet<string> = new Set(['has_fulltext']);
+
+const BOOLEAN_VALUE_LABELS: Record<Locale, Record<string, string>> = {
+  fr: { true: 'Disponible', false: 'Non disponible' },
+  en: { true: 'Available', false: 'Not available' },
+};
+
 // ── type_s value labels ────────────────────────────────────────────────
 // The type_s enum is an internal discriminator (article|publication|…),
 // not source data, so we fully control its display labels per locale.
@@ -275,14 +304,14 @@ export const NUMERIC_FACET_FIELDS: ReadonlySet<string> = new Set([
 const TYPE_LABELS: Record<Locale, Record<string, string>> = {
   fr: {
     article: 'Article de presse',
-    publication: 'Périodique islamique',
+    publication: 'Publication islamique',
     document: 'Document',
     audiovisual: 'Audiovisuel',
     reference: 'Référence',
   },
   en: {
     article: 'News article',
-    publication: 'Islamic periodical',
+    publication: 'Islamic publication',
     document: 'Document',
     audiovisual: 'Audiovisual',
     reference: 'Reference',
@@ -366,12 +395,24 @@ const SUBJECTIVITY_LABELS: Record<Locale, Record<string, string>> = {
 
 /**
  * Display label for a facet *value* (as opposed to facetLabel, which
- * labels the field). Only the subjectivity scale needs remapping (1–5 →
- * words); every other facet shows its raw value. Falls back to the raw
- * value for unknown fields / out-of-range or non-numeric values, so the
- * underlying filter value the caller toggles on is never altered.
+ * labels the field). Remapped fields: the type_s discriminator and the
+ * entity_type_s data values get their locale labels (the filter list must
+ * read "Publication islamique", not the raw "publication"), booleans get
+ * Available/Not available, the subjectivity scale gets its 1–5 words, and
+ * country spellings are normalised. Falls back to the raw value for
+ * unknown fields/values, so the underlying filter value the caller
+ * toggles on is never altered.
  */
 export function facetValueLabel(field: string, value: string, locale: Locale): string {
+  if (field === 'type_s') {
+    return typeLabel(value, locale) || value;
+  }
+  if (field === 'entity_type_s') {
+    return entityTypeLabel(value, locale);
+  }
+  if (BOOLEAN_FACET_FIELDS.has(field)) {
+    return BOOLEAN_VALUE_LABELS[locale]?.[value] ?? BOOLEAN_VALUE_LABELS.fr[value] ?? value;
+  }
   if (field === 'country_ss') {
     return countryLabel(value, locale);
   }

@@ -24,7 +24,8 @@ final class IndexEntityMapper
     /**
      * @param array{
      *   id:int, type:string, title:string, aliases:list<string>, description:string,
-     *   coordinates:string, identifier:string, thumbnail:?string, is_public:bool
+     *   coordinates:string, identifier:string, is_part_of:list<string>,
+     *   thumbnail:?string, is_public:bool
      * } $entity
      * @param array{frequency:int, countries:list<string>, first_year:?int, last_year:?int} $aggregate
      * @return array<string, mixed>|null  null = skip (no title / type)
@@ -54,6 +55,12 @@ final class IndexEntityMapper
 
         if ($entity['aliases'] !== []) {
             $doc['entity_aliases_txt'] = $entity['aliases'];
+        }
+
+        // dcterms:isPartOf — the organisation category for organisations
+        // ("Organisation islamique"), broader-entity links elsewhere.
+        if (($entity['is_part_of'] ?? []) !== []) {
+            $doc['is_part_of_ss'] = $entity['is_part_of'];
         }
 
         $countries = $aggregate['countries'] ?? [];

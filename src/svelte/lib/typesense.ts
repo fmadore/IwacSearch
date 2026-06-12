@@ -8,14 +8,59 @@ import type {
   SuggestResult,
   YearRange,
 } from './types';
-import { NUMERIC_FACET_FIELDS } from './i18n';
+import { BOOLEAN_FACET_FIELDS, NUMERIC_FACET_FIELDS } from './i18n';
 
 /**
- * Authority facet fields the typeahead prefix-matches via `facet_query`,
- * so a user typing "cotonou" sees the place entity, not just articles
- * whose title contains the word.
+ * Facet fields the typeahead may prefix-match via `facet_query`. The list a
+ * surface actually queries is its prominent_facets ∩ this set, so the
+ * suggestions follow the scope: a country block suggests places / topics /
+ * persons / organisations, while the references scope suggests authors,
+ * journals/publishers and merged subjects — without any extra config.
  */
-const ENTITY_FACET_FIELDS = ['places_ss', 'topics_ss', 'persons_ss', 'organisations_ss'] as const;
+const SUGGESTABLE_FACET_FIELDS: ReadonlySet<string> = new Set([
+  'places_ss',
+  'topics_ss',
+  'persons_ss',
+  'organisations_ss',
+  'events_ss',
+  'subjects_ss',
+  'creator_ss',
+  'publisher_s',
+  'book_title_s',
+  'newspaper_ss',
+]);
+
+/** Fallback for surfaces without prominent facets (e.g. the header box). */
+const DEFAULT_SUGGEST_FACET_FIELDS = [
+  'places_ss',
+  'topics_ss',
+  'persons_ss',
+  'organisations_ss',
+] as const;
+
+/** Cap on facet_query sub-searches per keystroke. */
+const MAX_SUGGEST_FACET_FIELDS = 5;
+
+/**
+ * Entity-index `entity_type_s` → the content facet field a suggestion
+ * picked from the index collection should toggle. "Notices d'autorité"
+ * are deliberately absent (they never feed content facets).
+ */
+const ENTITY_TYPE_FACET: Record<string, string> = {
+  Personnes: 'persons_ss',
+  Lieux: 'places_ss',
+  Organisations: 'organisations_ss',
+  Événements: 'events_ss',
+  Sujets: 'topics_ss',
+};
+
+/** Default content query_by — mirrors SearchDefaults::CONTENT_QUERY_BY. */
+const CONTENT_QUERY_BY_FALLBACK =
+  'title_txt,alt_title_txt,ocr_text,abstract,' +
+  'creator_ss,subjects_ss,places_ss,publisher_s,book_title_s,entity_aliases_txt,embedding';
+const CONTENT_HIGHLIGHT_FALLBACK =
+  'title_txt,alt_title_txt,ocr_text,abstract,' +
+  'creator_ss,subjects_ss,places_ss,publisher_s,book_title_s,entity_aliases_txt';
 
 /**
  * Thin wrapper over the Typesense REST API for the public client.
@@ -86,9 +131,8 @@ export class TypesenseClient {
     // Per-surface field sets. The entity collection lacks ocr_text/abstract/
     // embedding, so the index browse page passes its own query_by /
     // highlight_fields; content surfaces fall back to the full set.
-    const queryBy =
-      this.bootstrap.query_by ?? 'title_txt,ocr_text,abstract,entity_aliases_txt,embedding';
-    const highlightFields = this.bootstrap.highlight_fields ?? 'title_txt,ocr_text';
+    const queryBy = this.bootstrap.query_by ?? CONTENT_QUERY_BY_FALLBACK;
+    const highlightFields = this.bootstrap.highlight_fields ?? CONTENT_HIGHLIGHT_FALLBACK;
     const sortBy =
       args.sortBy && args.sortBy !== '_text_match:desc'
         ? args.sortBy
@@ -251,8 +295,7 @@ export class TypesenseClient {
     );
     const isBrowse = !args.q.trim();
     const q = isBrowse ? '*' : args.q;
-    const queryBy =
-      this.bootstrap.query_by ?? 'title_txt,ocr_text,abstract,entity_aliases_txt,embedding';
+    const queryBy = this.bootstrap.query_by ?? CONTENT_QUERY_BY_FALLBACK;
 
     const body = {
       searches: [
@@ -330,20 +373,44 @@ export class TypesenseClient {
     const key = await this.getKey();
     const collection = this.bootstrap.collection_alias ?? key.collection;
     const filterBy = this.bootstrap.locked_filters?.trim() || undefined;
+    const isEntitySurface = this.bootstrap.card === 'entity';
+
+    // Facet fields this surface suggests from: its prominent facets, kept to
+    // the suggestable string facets. A country block gets places / topics /
+    // persons / organisations; the references scope gets authors, journals/
+    // publishers and merged subjects. Surfaces without prominent facets
+    // (header box) fall back to the entity quartet. Entity-index surfaces
+    // skip facet suggestions entirely — their facets (entity_type_s,
+    // is_part_of_ss) make poor typeahead rows.
+    const prominent = (this.bootstrap.prominent_facets ?? []).filter((f) =>
+      SUGGESTABLE_FACET_FIELDS.has(f),
+    );
+    const facetFields = isEntitySurface
+      ? []
+      : (prominent.length > 0 ? prominent : [...DEFAULT_SUGGEST_FACET_FIELDS]).slice(
+          0,
+          MAX_SUGGEST_FACET_FIELDS,
+        );
 
     // One multi_search request bundles:
-    //   [0]  article title hits (full-text prefix on title + aliases)
-    //   [1…] one facet_query per entity field, surfacing matching
-    //        authority values (places / topics / persons / organisations).
-    // The same locked_filters apply to every sub-search, so suggestions on
-    // /browse/benin stay Bénin-scoped.
+    //   [0]    article title hits (title + alternative titles + aliases)
+    //   [1…n]  one facet_query per suggestable facet field
+    //   [last] the entity INDEX collection, queried by name + alias — this is
+    //          what reconciles alternative spellings: typing "RCI" surfaces
+    //          "Radio Côte d'Ivoire" even though no facet VALUE contains
+    //          "RCI". Mapped back to a content facet via entity_type_s.
+    // locked_filters apply to the content sub-searches so suggestions on a
+    // country block stay scoped; the index sub-search runs unfiltered (its
+    // schema lacks the content fields a locked filter may reference).
     const titleSearch = {
       collection,
       q: trimmed,
       // Narrower than the main search query_by — dropdown should surface
       // clear title hits, not fuzzy OCR matches that wouldn't make sense
-      // out of context.
-      query_by: 'title_txt,entity_aliases_txt',
+      // out of context. alt_title_txt reconciles variant titles.
+      query_by: isEntitySurface
+        ? 'title_txt,entity_aliases_txt'
+        : 'title_txt,alt_title_txt,entity_aliases_txt',
       prefix: true,
       filter_by: filterBy,
       // Newest first feels right for a typeahead (recent docs surface
@@ -358,7 +425,7 @@ export class TypesenseClient {
       limit_hits: 50,
     };
 
-    const entitySearches = ENTITY_FACET_FIELDS.map((field) => ({
+    const entitySearches = facetFields.map((field) => ({
       collection,
       q: '*',
       query_by: 'title_txt',
@@ -370,13 +437,30 @@ export class TypesenseClient {
       per_page: 0,
     }));
 
+    const indexAlias = !isEntitySurface ? this.bootstrap.index_collection_alias : undefined;
+    const indexSearch = indexAlias
+      ? [
+          {
+            collection: indexAlias,
+            q: trimmed,
+            query_by: 'title_txt,entity_aliases_txt',
+            prefix: true,
+            sort_by: '_text_match:desc,frequency:desc',
+            page: 1,
+            per_page: 4,
+            include_fields: 'title,entity_type_s,frequency',
+            highlight_fields: 'title_txt',
+          },
+        ]
+      : [];
+
     const res = await fetch(this.bootstrap.endpoints.search, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'X-TYPESENSE-API-KEY': key.key,
       },
-      body: JSON.stringify({ searches: [titleSearch, ...entitySearches] }),
+      body: JSON.stringify({ searches: [titleSearch, ...entitySearches, ...indexSearch] }),
     });
     if (!res.ok) {
       throw new Error(await formatHttpError('Suggest', res));
@@ -387,9 +471,9 @@ export class TypesenseClient {
 
     const articles = validateSearchResult('Suggest', json.results?.[0]).hits;
 
-    // Collect matching entity values across the four facet searches.
+    // Collect matching facet values across the facet sub-searches.
     const entities: EntitySuggestion[] = [];
-    ENTITY_FACET_FIELDS.forEach((field, i) => {
+    facetFields.forEach((field, i) => {
       const r = json.results?.[i + 1];
       if (!r || 'error' in r) return;
       const fc = (r as IwacSearchResponse).facet_counts?.find((f) => f.field_name === field);
@@ -397,8 +481,26 @@ export class TypesenseClient {
         if (c.value) entities.push({ field, value: c.value, count: c.count });
       }
     });
-    // Highest-coverage entities first; cap so the dropdown stays compact.
+    // Highest-coverage entities first.
     entities.sort((a, b) => b.count - a.count);
+
+    // Index-collection hits — alias-reconciled entities the facet_query
+    // pass can't see. Appended after the scope-accurate facet matches,
+    // deduped on (field, value).
+    if (indexAlias) {
+      const r = json.results?.[1 + facetFields.length];
+      if (r && !('error' in r)) {
+        const seen = new Set(entities.map((e) => `${e.field}|${e.value}`));
+        for (const hit of (r as IwacSearchResponse).hits ?? []) {
+          const doc = hit.document;
+          const field = doc.entity_type_s ? ENTITY_TYPE_FACET[doc.entity_type_s] : undefined;
+          const value = (doc.title ?? '').trim();
+          if (!field || !value || seen.has(`${field}|${value}`)) continue;
+          seen.add(`${field}|${value}`);
+          entities.push({ field, value, count: doc.frequency ?? 0 });
+        }
+      }
+    }
 
     return { articles, entities: entities.slice(0, 6) };
   }
@@ -513,6 +615,12 @@ function buildFilterBy(filters: ActiveFilters): string {
       const nums = values.filter((v) => v.trim() !== '' && Number.isFinite(Number(v)));
       if (nums.length === 0) continue;
       parts.push(`${field}:=[${nums.join(',')}]`);
+    } else if (BOOLEAN_FACET_FIELDS.has(field)) {
+      // Booleans are bare like numerics: has_fulltext:=[true] — never
+      // backticked. Anything other than true/false is dropped.
+      const bools = values.filter((v) => v === 'true' || v === 'false');
+      if (bools.length === 0) continue;
+      parts.push(`${field}:=[${bools.join(',')}]`);
     } else {
       const escaped = values.map((v) => v.replaceAll('`', '')).map((v) => `\`${v}\``);
       parts.push(`${field}:=[${escaped.join(',')}]`);

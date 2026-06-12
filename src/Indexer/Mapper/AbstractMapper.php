@@ -29,6 +29,7 @@ abstract class AbstractMapper implements MapperInterface
     /** Terms every content subset reads (identity, facets, entities, date, link). */
     protected const COMMON_TERMS = [
         'dcterms:identifier',
+        'dcterms:alternative',
         'dcterms:creator',
         'dcterms:language',
         'dcterms:publisher',
@@ -107,6 +108,10 @@ abstract class AbstractMapper implements MapperInterface
         ];
 
         $this->maybeAdd($doc, 'identifier', $this->firstScalar($values, 'dcterms:identifier'));
+        // Alternative titles (dcterms:alternative) — a second FTS channel so
+        // searching a variant title finds the item (and the autocomplete can
+        // reconcile it). Display keeps the main title.
+        $this->maybeAddList($doc, 'alt_title_txt', $this->disp($values, 'dcterms:alternative'));
 
         // A thumbnailed media is our proxy for "has primary media", which is
         // the precondition the HF pipeline used to emit the IIIF manifest.
@@ -162,6 +167,11 @@ abstract class AbstractMapper implements MapperInterface
                 ? array_values(array_unique(array_merge($doc[$field], $vals)))
                 : $vals;
         }
+
+        // MERGED subject facet: every dcterms:subject display value in one
+        // list, regardless of which entity class it resolves to (persons,
+        // organisations and topics together). dcterms:spatial stays out.
+        $this->maybeAddList($doc, 'subjects_ss', $this->disp($values, 'dcterms:subject'));
     }
 
     /**
@@ -189,15 +199,37 @@ abstract class AbstractMapper implements MapperInterface
     }
 
     /**
-     * OCR body + word count from bibo:content. (lda_topic_label is dropped in
-     * the MySQL model — it was an HF-only LDA computation.)
+     * OCR body + word count from bibo:content, plus the has_fulltext flag:
+     * true only when a bibo:content value exists AND its Omeka value-level
+     * visibility is public (vpub). Restricted OCR stays INDEXED (snippet
+     * highlights keep working) but is flagged as not publicly readable, so
+     * the "Full text available" filter reflects what a visitor can actually
+     * open on the item page. Always sets the flag — primary-source subsets
+     * without OCR get an honest `false`; references never call this, so
+     * the field stays absent there (and the facet hidden).
+     *
+     * (lda_topic_label is dropped in the MySQL model — HF-only LDA.)
      *
      * @param array<string, mixed> $doc
-     * @param array<string, list<array{vrid:?int,value:?string,uri:?string,title:?string}>> $values
+     * @param array<string, list<array{vrid:?int,value:?string,uri:?string,title:?string,vpub:bool}>> $values
      */
     protected function addBodyFields(array &$doc, array $values): void
     {
-        $ocr = $this->firstLiteral($values, 'bibo:content');
+        $hasPublic = false;
+        $ocr = '';
+        foreach ($values['bibo:content'] ?? [] as $v) {
+            $s = trim((string) ($v['value'] ?? ''));
+            if ($s === '') {
+                continue;
+            }
+            if ($ocr === '') {
+                $ocr = $s;
+            }
+            if ($v['vpub'] ?? true) {
+                $hasPublic = true;
+            }
+        }
+        $doc['has_fulltext'] = $hasPublic;
         if ($ocr === '') {
             return;
         }

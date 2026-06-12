@@ -46,6 +46,10 @@ final class AudiovisualMapper extends AbstractMapper
         $this->addAuthorityEntities($doc, $values);
         $this->addDateFields($doc, $values);
         $this->addDescription($doc, $values);
+        // Recordings carry no bibo:content, so this resolves to an honest
+        // has_fulltext=false — keeping the "Full text available" facet
+        // counts complete across the primary-source subsets.
+        $this->addBodyFields($doc, $values);
 
         return $doc;
     }

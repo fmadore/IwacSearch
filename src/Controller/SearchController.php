@@ -41,6 +41,7 @@ class SearchController extends AbstractActionController
      */
     private const CONTENT_PROMINENT_FACETS = [
         'type_s',                // article | publication | document | audiovisual
+        'has_fulltext',          // full text publicly readable (primary sources only)
         'country_ss',            // country
         'newspaper_ss',          // publisher
         'places_ss',             // locations
@@ -293,7 +294,9 @@ class SearchController extends AbstractActionController
         // unknown slugs land on the bare /search shell.
         $query = [];
         if ($preset !== null) {
-            if (preg_match('/^country_ss:=`(.+)`$/', $preset->lockedFilters, $m)) {
+            // Country locks now carry a trailing `&& type_s:!=reference`
+            // clause, so match the country term only — not the whole string.
+            if (preg_match('/^country_ss:=`([^`]+)`/', $preset->lockedFilters, $m)) {
                 $query = ['f.country_ss' => $m[1]];
             } elseif ($preset->lockedFilters === 'type_s:=reference') {
                 $query = ['f.type_s' => 'reference'];
