@@ -45,6 +45,12 @@
   .iwac-sort__select {
     height: var(--size-control-md, 2.5rem);
     padding: 0 var(--space-lg, 1.5rem) 0 var(--space-sm, 0.5rem);
+    /* The IWAC theme's global field rule puts `width: 100%` and
+       `margin-bottom: var(--space-sm)` on every <select>; the margin made
+       the flex row centre the select's margin-box, floating the control
+       ~4px above the Export/Filters buttons. Reset both explicitly. */
+    width: auto;
+    margin: 0;
     background: var(--surface, #fdfdfd);
     color: var(--ink, #2c2f37);
     border: 1px solid var(--border, #d4d6da);

@@ -730,10 +730,9 @@
     /*
      * Toolbar stacks on narrow viewports: the result count takes the
      * first line on its own (so "· 34 ms" never gets squeezed off it),
-     * and the actions drop to a second line — Filters pinned left, Sort
-     * pushed right. Without this the count-block (flex: 1; min-width: 0)
-     * shrinks to share the line with the buttons and its text wraps
-     * behind them.
+     * and the actions drop below — Filters left, Export right. Without
+     * this the count-block (flex: 1; min-width: 0) shrinks to share the
+     * line with the buttons and its text wraps behind them.
      */
     .iwac-search__count-block {
       flex-basis: 100%;
@@ -741,6 +740,19 @@
     .iwac-search__toolbar-actions {
       width: 100%;
       justify-content: space-between;
+      /* Three controls (Filters · Export · Sort) no longer fit one row on
+         a phone — without wrapping the sort select was clipped at the
+         viewport edge. Filters + Export share the first row; the sort
+         group drops to its own full-width row below. */
+      flex-wrap: wrap;
+      row-gap: var(--space-sm, 0.5rem);
+    }
+    .iwac-search__toolbar-actions :global(.iwac-sort) {
+      flex: 1 1 100%;
+    }
+    .iwac-search__toolbar-actions :global(.iwac-sort__select) {
+      flex: 1 1 auto;
+      min-width: 0;
     }
   }
 

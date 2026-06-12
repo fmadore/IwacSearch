@@ -370,6 +370,8 @@
   }
   .iwac-facet__search-input {
     width: 100%;
+    /* Theme global field rule adds margin-bottom — the wrapper owns rhythm. */
+    margin: 0;
     height: var(--size-control-md, 2.5rem);
     padding-inline: var(--space-sm, 0.5rem);
     padding-inline-end: var(--space-xl, 2rem);

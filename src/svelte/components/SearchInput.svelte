@@ -120,6 +120,8 @@
   }
   .iwac-input__field {
     width: 100%;
+    /* Theme global field rule adds margin-bottom — the shell owns rhythm. */
+    margin: 0;
     height: var(--size-control-lg, 2.75rem);
     padding-inline: var(--space-md, 1rem);
     padding-inline-end: var(--space-2xl, 3rem);
