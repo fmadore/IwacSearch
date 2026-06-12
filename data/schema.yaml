@@ -116,7 +116,7 @@ fields:
   - { name: country_ss,   type: "string[]", facet: true, optional: true }
   - { name: newspaper_ss, type: "string[]", facet: true, optional: true }
   - { name: language_ss,  type: "string[]", facet: true, optional: true }
-  - { name: type_s,       type: string,   facet: true, optional: true }   # article|publication|document|audiovisual
+  - { name: type_s,       type: string,   facet: true, optional: true }   # article|publication|document|audiovisual|photograph|reference
 
   # Pre-resolved entity references (joined against the `index` HF subset at
   # index time). Strings are entity Titre; o:ids are also kept for stable

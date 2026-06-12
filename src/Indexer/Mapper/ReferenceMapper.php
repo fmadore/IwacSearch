@@ -82,9 +82,21 @@ final class ReferenceMapper extends AbstractMapper
             $doc['reference_type_ss'] = [$label];
         }
 
-        // ── Bibliographic detail (display-only citation line) ───────────────
+        // ── Bibliographic detail (citation line + journal/publisher facet) ──
         $this->maybeAdd($doc, 'publisher_s',  $this->firstDisp($values, 'dcterms:publisher'));
-        $this->maybeAdd($doc, 'book_title_s', $this->firstDisp($values, 'dcterms:isPartOf'));
+        // IWAC catalogues a chapter's containing-book title in
+        // dcterms:ALTERNATIVE (verified live; dcterms:isPartOf is empty on
+        // chapters — same convention the IWAC-SEO CitationMeta relies on).
+        // isPartOf stays as a fallback for records catalogued the other way.
+        if ($item['class'] === 43) {
+            $book = $this->firstDisp($values, 'dcterms:alternative');
+            if ($book === '') {
+                $book = $this->firstDisp($values, 'dcterms:isPartOf');
+            }
+            $this->maybeAdd($doc, 'book_title_s', $book);
+        } else {
+            $this->maybeAdd($doc, 'book_title_s', $this->firstDisp($values, 'dcterms:isPartOf'));
+        }
         $this->maybeAdd($doc, 'edition_s',    $this->firstLiteral($values, 'bibo:edition'));
         $this->maybeAddList($doc, 'editor_ss', $this->disp($values, 'bibo:editorList'));
         $this->maybeAdd($doc, 'volume_s', $this->firstLiteral($values, 'bibo:volume'));

@@ -115,6 +115,7 @@ mistral), resolved to a 1–5 score: `Très objectif`→1 … `Très subjectif`�
 | publications | 60 | `publication` | OCR | `Mapper\PublicationMapper` |
 | documents | 49 | `document` | OCR | `Mapper\DocumentMapper` |
 | audiovisual | 38 | `audiovisual` | — | `Mapper\AudiovisualMapper` |
+| photographs | 58 (≙ resource template 15) | `photograph` | — | `Mapper\PhotographMapper` |
 | references | 35, 43, 88, 40, 82, 178, 77, 52, 305 | `reference` | abstract | `Mapper\ReferenceMapper` |
 | entity collection | 94, 9, 96, 54, 244 | (separate `iwac_index`) | — | `Mapper\IndexEntityMapper` |
 

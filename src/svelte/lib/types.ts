@@ -84,8 +84,10 @@ export interface ScopedKeyResponse {
  */
 export interface IwacDoc {
   id: string;
+  /** Citation key (dcterms:identifier), e.g. "iwac-0001234". */
+  identifier?: string;
   title: string;
-  type_s?: 'article' | 'publication' | 'document' | 'audiovisual' | 'reference';
+  type_s?: 'article' | 'publication' | 'document' | 'audiovisual' | 'photograph' | 'reference';
   date?: number; // unix epoch seconds
   pub_year?: number;
   /**
@@ -114,6 +116,7 @@ export interface IwacDoc {
   pages_s?: string;
   editor_ss?: string[];
   edition_s?: string;
+  doi?: string;
   country_ss?: string[];
   newspaper_ss?: string[];
   language_ss?: string[];

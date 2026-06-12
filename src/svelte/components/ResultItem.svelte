@@ -569,6 +569,9 @@
   .iwac-card__type[data-type='document'] {
     --iwac-type-dot: var(--warning, #e89c4a);
   }
+  .iwac-card__type[data-type='photograph'] {
+    --iwac-type-dot: var(--success, #6cc18b);
+  }
   .iwac-card__type[data-type='reference'] {
     --iwac-type-dot: var(--muted, #767880);
   }

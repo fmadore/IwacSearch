@@ -23,9 +23,10 @@ final class CountryResolver
 {
     /**
      * Per-country item set → country (accented), for subsets that carry no
-     * newspaper: the "Références" sets (references subset) and the "Documents
-     * divers" sets (documents subset). The two families don't overlap, so one
-     * lookup serves both.
+     * newspaper: the "Références" sets (references subset), the "Documents
+     * divers" sets (documents subset), and the "Photographies" sets
+     * (photographs subset). The families don't overlap, so one lookup
+     * serves them all.
      */
     private const COUNTRY_ITEM_SETS = [
         // Références
@@ -40,6 +41,12 @@ final class CountryResolver
         23453 => 'Burkina Faso',
         76366 => "Côte d'Ivoire",
         26327 => 'Togo',
+        // Photographies
+        2192 => 'Bénin',
+        2211 => 'Burkina Faso',
+        2216 => "Côte d'Ivoire",
+        2220 => 'Niger',
+        2227 => 'Togo',
     ];
 
     /** @var array<string, string> normalised newspaper name → country */

@@ -15,6 +15,7 @@
   import ResultsList from './components/ResultsList.svelte';
   import FacetPanel from './components/FacetPanel.svelte';
   import SortSelect from './components/SortSelect.svelte';
+  import ExportMenu from './components/ExportMenu.svelte';
   import Drawer from '../svelte-shared/components/Drawer.svelte';
 
   /**
@@ -53,7 +54,7 @@
   // once at init from the server-detected bootstrap locale (defaults to
   // French). svelte-ignore: bootstrap is a prop, not reactive state.
   // svelte-ignore state_referenced_locally
-  const { t } = provideI18n(normalizeLocale(bootstrap.locale), normalizeCard(bootstrap.card));
+  const { t, card } = provideI18n(normalizeLocale(bootstrap.locale), normalizeCard(bootstrap.card));
 
   const isStandalone = $derived(String(bootstrap.block_id) === 'standalone');
 
@@ -374,6 +375,20 @@
     });
   }
 
+  /**
+   * Export fetch: the CURRENT result set (query + filters + year range +
+   * sort + locked scope), capped inside fetchForExport. Passed to the
+   * ExportMenu, which serializes and downloads client-side.
+   */
+  function handleExportFetch(): ReturnType<TypesenseClient['fetchForExport']> {
+    return client.fetchForExport({
+      q: query,
+      sortBy: sort,
+      activeFilters: filters,
+      yearRange,
+    });
+  }
+
   function handleClearField(field: string): void {
     const next = { ...filters };
     delete next[field];
@@ -564,6 +579,9 @@
                   <span class="iwac-search__filters-trigger-badge">{activeFilterCount}</span>
                 {/if}
               </button>
+              {#if card === 'content' && response.found > 0}
+                <ExportMenu fetchDocs={handleExportFetch} {query} found={response.found} />
+              {/if}
               <SortSelect value={sort} onChange={handleSortChange} />
             </div>
           </header>

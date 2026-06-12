@@ -11,6 +11,7 @@ use IwacSearch\Indexer\Mapper\ArticleMapper;
 use IwacSearch\Indexer\Mapper\AudiovisualMapper;
 use IwacSearch\Indexer\Mapper\DocumentMapper;
 use IwacSearch\Indexer\Mapper\MapperRegistry;
+use IwacSearch\Indexer\Mapper\PhotographMapper;
 use IwacSearch\Indexer\Mapper\PublicationMapper;
 use IwacSearch\Indexer\Mapper\ReferenceMapper;
 use IwacSearch\Indexer\OmekaSourceReader;
@@ -52,6 +53,7 @@ final class IncrementalIndexerFactory implements FactoryInterface
             new PublicationMapper($authority, $countries),
             new DocumentMapper($authority, $countries),
             new AudiovisualMapper($authority, $countries),
+            new PhotographMapper($authority, $countries),
             new ReferenceMapper($authority, $countries),
         ]);
 

@@ -104,6 +104,15 @@ const STRINGS: Record<Locale, Record<string, string>> = {
     tab_entities: 'Entités',
     result_types: 'Types de résultats',
     matched_in: 'Trouvé via',
+    export: 'Exporter',
+    exporting: 'Export…',
+    export_results: 'Exporter les résultats',
+    export_txt: 'Texte (.txt)',
+    export_json: 'JSON (.json)',
+    export_ris: 'RIS — Zotero / EndNote (.ris)',
+    export_bibtex: 'BibTeX (.bib)',
+    export_limit: 'Limité aux {n} premiers résultats',
+    export_failed: "L'export a échoué : {message}",
   },
   en: {
     search_placeholder: 'Search the IWAC…',
@@ -170,6 +179,15 @@ const STRINGS: Record<Locale, Record<string, string>> = {
     tab_entities: 'Entities',
     result_types: 'Result types',
     matched_in: 'Matched in',
+    export: 'Export',
+    exporting: 'Exporting…',
+    export_results: 'Export the results',
+    export_txt: 'Text (.txt)',
+    export_json: 'JSON (.json)',
+    export_ris: 'RIS — Zotero / EndNote (.ris)',
+    export_bibtex: 'BibTeX (.bib)',
+    export_limit: 'Limited to the first {n} results',
+    export_failed: 'Export failed: {message}',
   },
 };
 
@@ -307,6 +325,7 @@ const TYPE_LABELS: Record<Locale, Record<string, string>> = {
     publication: 'Publication islamique',
     document: 'Document',
     audiovisual: 'Audiovisuel',
+    photograph: 'Photographie',
     reference: 'Référence',
   },
   en: {
@@ -314,6 +333,7 @@ const TYPE_LABELS: Record<Locale, Record<string, string>> = {
     publication: 'Islamic publication',
     document: 'Document',
     audiovisual: 'Audiovisual',
+    photograph: 'Photograph',
     reference: 'Reference',
   },
 };

@@ -2,6 +2,7 @@ import type {
   ActiveFilters,
   EntitySuggestion,
   IwacBootstrap,
+  IwacDoc,
   IwacFacetCount,
   IwacSearchResponse,
   ScopedKeyResponse,
@@ -53,6 +54,46 @@ const ENTITY_TYPE_FACET: Record<string, string> = {
   Événements: 'events_ss',
   Sujets: 'topics_ss',
 };
+
+/**
+ * Hard cap on exported hits (Typesense pages at 250/request, so 4 pages).
+ * Exports follow the CURRENT sort, so a truncated export keeps the most
+ * relevant / newest results.
+ */
+export const EXPORT_MAX_HITS = 1000;
+
+/**
+ * Citation metadata only — no OCR, no embedding, no sentiment. Field
+ * conventions follow the IWAC-SEO CitationMeta service: the container
+ * (journal / newspaper / publisher) lives in publisher_s / newspaper_ss;
+ * a chapter's containing book in book_title_s.
+ */
+const EXPORT_INCLUDE_FIELDS = [
+  'id',
+  'identifier',
+  'title',
+  'type_s',
+  'reference_type_ss',
+  'creator_ss',
+  'editor_ss',
+  'date',
+  'pub_year',
+  'publisher_s',
+  'book_title_s',
+  'volume_s',
+  'issue_s',
+  'pages_s',
+  'edition_s',
+  'doi',
+  'newspaper_ss',
+  'country_ss',
+  'language_ss',
+  'subjects_ss',
+  'places_ss',
+  'abstract',
+  'omeka_url',
+  'source_url',
+].join(',');
 
 /** Default content query_by — mirrors SearchDefaults::CONTENT_QUERY_BY. */
 const CONTENT_QUERY_BY_FALLBACK =
@@ -503,6 +544,97 @@ export class TypesenseClient {
     }
 
     return { articles, entities: entities.slice(0, 6) };
+  }
+
+  /**
+   * Fetch the documents of the CURRENT result set (same query, filters,
+   * year range, sort and scope as the visible results) for a client-side
+   * export — capped at {@link EXPORT_MAX_HITS}, paging at Typesense's
+   * 250/request maximum. Only the citation metadata fields ship
+   * (include_fields), no highlights, no facets.
+   */
+  async fetchForExport(args: {
+    q: string;
+    sortBy?: string;
+    activeFilters?: ActiveFilters;
+    yearRange?: YearRange | null;
+  }): Promise<{ docs: IwacDoc[]; found: number }> {
+    const key = await this.getKey();
+    const collection = this.bootstrap.collection_alias ?? key.collection;
+    const filterBy = combineFilters(
+      this.bootstrap.locked_filters,
+      buildFilterBy(args.activeFilters ?? {}),
+      buildYearRangeFilter(args.yearRange ?? null),
+    );
+    const isBrowse = !args.q.trim();
+    const q = isBrowse ? '*' : args.q;
+    const queryBy = this.bootstrap.query_by ?? CONTENT_QUERY_BY_FALLBACK;
+    const sortBy =
+      args.sortBy && args.sortBy !== '_text_match:desc'
+        ? args.sortBy
+        : isBrowse
+          ? 'date:desc'
+          : (this.bootstrap.default_sort ?? '_text_match:desc');
+    const sortByParam = sortBy.startsWith('creator_sort:')
+      ? sortBy.replace('creator_sort:', 'creator_sort(missing_values:last):')
+      : sortBy;
+
+    const docs: IwacDoc[] = [];
+    let found = 0;
+    // Stopwords mirror the live search so the export matches what the user
+    // sees; dropped after the first stopword-set-missing error (same
+    // degradation path as search()).
+    let useStopwords = true;
+    const pages = Math.ceil(EXPORT_MAX_HITS / 250);
+
+    for (let page = 1; page <= pages; page++) {
+      const body = {
+        searches: [
+          {
+            collection,
+            q,
+            query_by: queryBy,
+            ...(useStopwords ? { stopwords: 'fr_default' } : {}),
+            filter_by: filterBy || undefined,
+            sort_by: sortByParam,
+            page,
+            per_page: 250,
+            include_fields: EXPORT_INCLUDE_FIELDS,
+            highlight_fields: 'none',
+          },
+        ],
+      };
+      const res = await fetch(this.bootstrap.endpoints.search, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-TYPESENSE-API-KEY': key.key,
+        },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) {
+        throw new Error(await formatHttpError('Export', res));
+      }
+      const json = (await res.json()) as {
+        results: Array<IwacSearchResponse | TypesensePerSearchError>;
+      };
+      const first = json.results?.[0];
+      if (first && 'error' in first && typeof first.error === 'string') {
+        if (useStopwords && /stopword set/i.test(first.error)) {
+          useStopwords = false;
+          page--; // retry this page without stopwords
+          continue;
+        }
+      }
+      const result = validateSearchResult('Export', first);
+      found = result.found;
+      docs.push(...result.hits.map((h) => h.document));
+      if (docs.length >= found || docs.length >= EXPORT_MAX_HITS) {
+        break;
+      }
+    }
+
+    return { docs: docs.slice(0, EXPORT_MAX_HITS), found };
   }
 
   /**
