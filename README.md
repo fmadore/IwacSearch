@@ -316,12 +316,12 @@ locked filter (baked into the scoped key, so enforced server-side), the
 facet set, and the default sort. Compose discovery pages by dropping a
 block onto any Omeka page alongside your own text/HTML blocks.
 
-| Scope        | Collection           | Locked filter                                       |
-| ------------ | -------------------- | --------------------------------------------------- |
-| All content  | `iwac_current`       | — (`is_public:=true` only)                          |
-| Bénin … Togo | `iwac_current`       | `` country_ss:=`Bénin` && type_s:!=reference `` …   |
-| References   | `iwac_current`       | `type_s:=reference`                                 |
-| Entity index | `iwac_index_current` | — (entity cards, frequency)                         |
+| Scope        | Collection           | Locked filter                                   |
+| ------------ | -------------------- | ----------------------------------------------- |
+| All content  | `iwac_current`       | — (`is_public:=true` only)                      |
+| Bénin … Togo | `iwac_current`       | ``country_ss:=`Bénin` && type_s:!=reference`` … |
+| References   | `iwac_current`       | `type_s:=reference`                             |
+| Entity index | `iwac_index_current` | — (entity cards, frequency)                     |
 
 Country scopes exclude references since v3.2: a country page surfaces the
 primary sources; the bibliography lives in its own References scope.
