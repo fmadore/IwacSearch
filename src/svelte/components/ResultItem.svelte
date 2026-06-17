@@ -54,9 +54,15 @@
     activeFilters: ActiveFilters;
     /** Toggle a facet from a card badge. Same signature FacetPanel uses. */
     onFacetToggle: (field: string, value: string, nextChecked: boolean) => void;
+    /**
+     * Suppress the country chip. Set on single-country scopes where the
+     * country is implied by the page (e.g. a Burkina Faso block), so it's
+     * not repeated on every card. Country stays a working facet elsewhere.
+     */
+    hideCountry?: boolean;
   }
 
-  const { hit, activeFilters, onFacetToggle }: Props = $props();
+  const { hit, activeFilters, onFacetToggle, hideCountry = false }: Props = $props();
 
   const { locale, card, t } = useI18n();
 
@@ -128,11 +134,13 @@
     return a ? String(a) : b ? String(b) : '';
   });
   const entityCountryChips = $derived.by<FilterChip[]>(() =>
-    (doc.country_ss ?? []).map((c) => ({
-      field: 'country_ss',
-      value: c,
-      display: countryLabel(c, locale),
-    })),
+    hideCountry
+      ? []
+      : (doc.country_ss ?? []).map((c) => ({
+          field: 'country_ss',
+          value: c,
+          display: countryLabel(c, locale),
+        })),
   );
   // Entity category (dcterms:isPartOf) — organisation kind for
   // organisations ("Organisation islamique"). Clickable is_part_of_ss filter.
@@ -147,7 +155,7 @@
     if (doc.newspaper_ss?.[0]) {
       out.push({ field: 'newspaper_ss', value: doc.newspaper_ss[0], display: doc.newspaper_ss[0] });
     }
-    if (doc.country_ss?.[0]) {
+    if (!hideCountry && doc.country_ss?.[0]) {
       out.push({
         field: 'country_ss',
         value: doc.country_ss[0],

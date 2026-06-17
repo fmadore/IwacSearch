@@ -155,6 +155,8 @@ final class PresetCatalog
                 facets:        self::CONTENT_COUNTRY_FACETS,
                 defaultSort:   'date:desc',
                 legacySlug:    $country['slug'],
+                // The scope IS this country — don't repeat it on every card.
+                hideCountry:   true,
             );
         }
 

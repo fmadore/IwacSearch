@@ -21,6 +21,14 @@ export interface IwacBootstrap {
   initial_query?: string;
   locked_filters: string; // raw Typesense filter_by
   prominent_facets: string[]; // schema field names
+  /**
+   * Suppress the country chip on result cards. Set for single-country
+   * scopes (the per-country presets), where repeating the country on every
+   * row is noise — the whole page is already that country. The whole-corpus,
+   * references and entity-index scopes leave it on. Display only; country
+   * stays a working facet wherever the scope advertises it. Defaults to false.
+   */
+  hide_country?: boolean;
   default_sort: string; // e.g. "_text_match:desc"
   results_per_page: number;
   collection_alias?: string; // defaults to "iwac_current"
@@ -228,6 +236,17 @@ export type ActiveFilters = Record<string, string[]>;
 export interface YearRange {
   from?: number;
   to?: number;
+}
+
+/**
+ * One bar of the year-distribution histogram drawn under the date slider:
+ * how many documents carry that `pub_year`. Sourced from a counts-only
+ * Typesense facet query that deliberately omits the year-range filter, so
+ * the bars show the full span (see TypesenseClient.yearDistribution).
+ */
+export interface YearBucket {
+  year: number;
+  count: number;
 }
 
 /**

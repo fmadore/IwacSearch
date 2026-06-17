@@ -5,6 +5,7 @@
     IwacFacetCount,
     IwacSearchResponse,
     SearchState,
+    YearBucket,
     YearRange,
   } from './lib/types';
   import { TypesenseClient } from './lib/typesense';
@@ -110,6 +111,12 @@
   let response = $state<IwacSearchResponse | null>(initialResponse);
   let isLoading = $state(false);
   let error = $state<string | null>(null);
+
+  // Year-distribution histogram data for the date slider. Fetched separately
+  // from the results (see the effect below) because it must ignore the year
+  // range to show the full span; empty until the first fetch resolves, and on
+  // any surface without a facet panel.
+  let yearDistribution = $state<YearBucket[]>([]);
 
   // First $effect run skips its fetch when the live state matches the
   // state the server used for SSR (empty q, page 1, default sort, no
@@ -218,6 +225,27 @@
       })
       .finally(() => {
         isLoading = false;
+      });
+  });
+
+  // Year-distribution histogram. Tracks ONLY the query + categorical filters
+  // — not page, sort, or the year range — because the bars show the full span
+  // regardless of the selected window (dragging the slider just repaints which
+  // bars are highlighted, no refetch). One cheap counts-only request; only the
+  // 'full' mode renders the slider, so other modes skip it. Failures degrade
+  // to no bars (the slider still works).
+  $effect(() => {
+    if (bootstrap.mode !== 'full') return;
+    const q = query;
+    const f = filters;
+    client
+      .yearDistribution({ q, activeFilters: f })
+      .then((d) => {
+        yearDistribution = d;
+      })
+      .catch((e: Error) => {
+        console.warn('[iwac-search] year distribution failed', e);
+        yearDistribution = [];
       });
   });
 
@@ -432,6 +460,8 @@
   const facets = $derived(response?.facet_counts ?? []);
   const perPage = $derived(response?.request_params?.per_page ?? bootstrap.results_per_page ?? 20);
   const searchTimeMs = $derived(response?.search_time_ms ?? 0);
+  // Single-country scopes hide the (redundant) country chip on result cards.
+  const hideCountry = $derived(bootstrap.hide_country ?? false);
 
   /**
    * SSR'd `initial_response` is only safe to hydrate when its shape is
@@ -520,6 +550,7 @@
               {facets}
               selected={filters}
               {yearRange}
+              distribution={yearDistribution}
               onToggle={handleFacetToggle}
               onClearAll={handleClearAll}
               onClearField={handleClearField}
@@ -535,6 +566,7 @@
             {facets}
             selected={filters}
             {yearRange}
+            distribution={yearDistribution}
             onToggle={handleFacetToggle}
             onClearAll={handleClearAll}
             onClearField={handleClearField}
@@ -610,6 +642,7 @@
             onPageChange={handlePageChange}
             activeFilters={filters}
             onFacetToggle={handleFacetToggle}
+            {hideCountry}
           />
         {/if}
       </div>
@@ -623,6 +656,7 @@
       onPageChange={handlePageChange}
       activeFilters={filters}
       onFacetToggle={handleFacetToggle}
+      {hideCountry}
     />
   {/if}
 </div>

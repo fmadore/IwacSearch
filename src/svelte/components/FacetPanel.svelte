@@ -8,7 +8,13 @@
 </script>
 
 <script lang="ts">
-  import type { ActiveFilters, IwacFacet, IwacFacetCount, YearRange } from '../lib/types';
+  import type {
+    ActiveFilters,
+    IwacFacet,
+    IwacFacetCount,
+    YearBucket,
+    YearRange,
+  } from '../lib/types';
   import {
     facetLabel,
     facetValueLabel,
@@ -56,6 +62,8 @@
     /** Year slider bounds. Defaults are sane for the IWAC corpus. */
     yearMin?: number;
     yearMax?: number;
+    /** Per-year document counts, drawn as a mini histogram on the slider. */
+    distribution?: YearBucket[];
     /** Schema field name → display label override (rare). */
     labels?: Record<string, string>;
     onToggle: (field: string, value: string, nextChecked: boolean) => void;
@@ -76,6 +84,7 @@
     yearRange,
     yearMin = 1960,
     yearMax = 2025,
+    distribution = [],
     labels,
     onToggle,
     onClearAll,
@@ -191,7 +200,13 @@
   {/if}
 
   <section class="iwac-facets__section" aria-label={t('year')}>
-    <DateRangeSlider value={yearRange} min={yearMin} max={yearMax} onChange={onYearRangeChange} />
+    <DateRangeSlider
+      value={yearRange}
+      min={yearMin}
+      max={yearMax}
+      {distribution}
+      onChange={onYearRangeChange}
+    />
   </section>
 
   {#if facets.length === 0}

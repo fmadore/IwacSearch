@@ -22,6 +22,13 @@ namespace IwacSearch\Search;
  * `legacySlug` is the old `/browse/{slug}` path segment this preset replaces,
  * kept so the Phase-C redirect shim can map a stale bookmark to the
  * equivalent `/search?f.…` (or the federated page for the entity index).
+ *
+ * `hideCountry` suppresses the country chip on result cards: on a scope
+ * already pinned to one country (the per-country presets), repeating
+ * "Burkina Faso" on every row is noise. The whole-corpus, references and
+ * entity-index scopes leave it on — there the country tells the user
+ * something. It only affects display; country is still a working facet
+ * wherever the scope advertises it.
  */
 final class Preset
 {
@@ -37,6 +44,7 @@ final class Preset
         public readonly array $facets,
         public readonly string $defaultSort,
         public readonly ?string $legacySlug = null,
+        public readonly bool $hideCountry = false,
     ) {
     }
 

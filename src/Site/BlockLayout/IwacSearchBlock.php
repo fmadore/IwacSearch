@@ -312,11 +312,14 @@ class IwacSearchBlock extends AbstractBlockLayout
             $lockedFilters    = $preset->lockedFilters;
             $prominentFacets  = $preset->facets;
             $scopeDefaultSort = $preset->defaultSort;
+            $hideCountry      = $preset->hideCountry;
         } else {
             $card             = PresetCatalog::CARD_CONTENT;
             $lockedFilters    = (string) ($data['locked_filters'] ?? '');
             $prominentFacets  = (array) ($data['prominent_facets'] ?? []);
             $scopeDefaultSort = '_text_match:desc';
+            // Custom blocks expose country however the editor configured it.
+            $hideCountry      = false;
         }
 
         // The admin's Default-sort choice (any scope) wins when it's a valid
@@ -343,6 +346,8 @@ class IwacSearchBlock extends AbstractBlockLayout
             'card'             => $card,
             'locked_filters'   => $lockedFilters,
             'prominent_facets' => $prominentFacets,
+            // Single-country scopes hide the (redundant) country chip on cards.
+            'hide_country'     => $hideCountry,
             'default_sort'     => $defaultSort,
             'results_per_page' => (int) ($data['results_per_page'] ?? 10),
             'collection_alias' => $collectionAlias,

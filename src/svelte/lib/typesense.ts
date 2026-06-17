@@ -7,6 +7,7 @@ import type {
   IwacSearchResponse,
   ScopedKeyResponse,
   SuggestResult,
+  YearBucket,
   YearRange,
 } from './types';
 import { BOOLEAN_FACET_FIELDS, NUMERIC_FACET_FIELDS } from './i18n';
@@ -189,6 +190,19 @@ export class TypesenseClient {
       ? sortBy.replace('creator_sort:', 'creator_sort(missing_values:last):')
       : sortBy;
 
+    // Exact mode — the user typed a "quoted phrase" or a -excluded term, so
+    // they mean it literally. Switch off the relevance fuzz that's helpful
+    // for loose queries but defeats an exact match:
+    //   - drop `embedding` from query_by so no semantically-similar (but
+    //     non-matching) documents get blended in by hybrid rank-fusion;
+    //   - num_typos / typo_tokens_threshold 0 → no fuzzy token matching;
+    //   - drop_tokens_threshold 0 → every token must be present, so a phrase
+    //     can't match with words missing;
+    //   - stopwords skipped (below) so "en"/"de" inside a phrase survive.
+    // Browse mode (q=*) is never exact. See isExactQuery().
+    const exact = !isBrowse && isExactQuery(q);
+    const queryByEffective = exact ? withoutField(queryBy, 'embedding') : queryBy;
+
     // The body is built as a function so we can re-issue the request
     // without the `stopwords` field if Typesense 404s with "stopword set
     // missing" (recovery path further down).
@@ -200,11 +214,16 @@ export class TypesenseClient {
           // query_by is surface-specific (see queryBy above): content uses
           // title + ocr + abstract + aliases + embedding; the entity
           // collection uses only title + aliases. Typesense ignores
-          // query_by when q=* so browse mode drops straight through.
-          query_by: queryBy,
+          // query_by when q=* so browse mode drops straight through. Exact
+          // queries drop `embedding` (queryByEffective) for literal matching.
+          query_by: queryByEffective,
           // Stopwords keep "le", "la", "des" etc. from polluting matches.
-          // Conditionally included so the recovery retry can drop it.
-          ...(includeStopwords ? { stopwords: 'fr_default' } : {}),
+          // Conditionally included so the recovery retry can drop it — and
+          // never applied to an exact query, so a quoted phrase keeps its
+          // stopwords ("radicalisation en Côte d'Ivoire" stays intact).
+          ...(includeStopwords && !exact ? { stopwords: 'fr_default' } : {}),
+          // Strict matching for an exact query (see `exact` above).
+          ...(exact ? { num_typos: 0, typo_tokens_threshold: 0, drop_tokens_threshold: 0 } : {}),
           filter_by: filterBy || undefined,
           sort_by: sortByParam,
           page: args.page ?? 1,
@@ -301,6 +320,89 @@ export class TypesenseClient {
       throw new Error(result.message);
     }
     return validateSearchResult('Search', result.payload.results?.[0]);
+  }
+
+  /**
+   * Document count per `pub_year` for the year-distribution histogram drawn
+   * under the date slider.
+   *
+   * Scoped to the CURRENT query + categorical filters, but deliberately NOT
+   * the year range itself — so the bars show the full span and reveal where
+   * results cluster, instead of collapsing to the selected window. Dragging
+   * the slider therefore needs no refetch (the caller re-runs this only when
+   * the query or a non-year filter changes); the bars just repaint which
+   * years fall inside the handles.
+   *
+   * Mirrors search()'s exact-mode handling so the distribution matches the
+   * set a quoted / -excluded query would return. Stopwords are omitted (like
+   * countAcross) so a missing `fr_default` set can't 404 the histogram — it's
+   * an approximate visual, not a tallied count. Counts only (per_page:0).
+   *
+   * Returns ascending-by-year buckets, clamped to finite years; [] on any
+   * error — the histogram is a progressive enhancement and must never break
+   * the page.
+   */
+  async yearDistribution(args: {
+    q: string;
+    activeFilters?: ActiveFilters;
+  }): Promise<YearBucket[]> {
+    const key = await this.getKey();
+    const collection = this.bootstrap.collection_alias ?? key.collection;
+    // No buildYearRangeFilter here — that's the whole point (see above).
+    const filterBy = combineFilters(
+      this.bootstrap.locked_filters,
+      buildFilterBy(args.activeFilters ?? {}),
+    );
+    const isBrowse = !args.q.trim();
+    const q = isBrowse ? '*' : args.q;
+    const exact = !isBrowse && isExactQuery(q);
+    const baseQueryBy = this.bootstrap.query_by ?? CONTENT_QUERY_BY_FALLBACK;
+    const queryBy = exact ? withoutField(baseQueryBy, 'embedding') : baseQueryBy;
+
+    const body = {
+      searches: [
+        {
+          collection,
+          q,
+          query_by: queryBy,
+          ...(exact ? { num_typos: 0, typo_tokens_threshold: 0, drop_tokens_threshold: 0 } : {}),
+          filter_by: filterBy || undefined,
+          facet_by: 'pub_year',
+          // pub_year spans the whole corpus; 200 buckets is comfortably above
+          // the distinct-year count, so no year is dropped from the histogram.
+          max_facet_values: 200,
+          per_page: 0,
+        },
+      ],
+    };
+
+    const res = await fetch(this.bootstrap.endpoints.search, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-TYPESENSE-API-KEY': key.key,
+      },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) {
+      throw new Error(await formatHttpError('Year histogram', res));
+    }
+    const json = (await res.json()) as {
+      results: Array<IwacSearchResponse | TypesensePerSearchError>;
+    };
+    const first = json.results?.[0];
+    if (!first) {
+      throw new Error('Year histogram response missing results[0]');
+    }
+    if ('error' in first && typeof first.error === 'string') {
+      const code = 'code' in first ? first.code : '';
+      throw new Error(`Year histogram HTTP ${code}: ${first.error}`);
+    }
+    const fc = (first as IwacSearchResponse).facet_counts?.find((f) => f.field_name === 'pub_year');
+    return (fc?.counts ?? [])
+      .map((c) => ({ year: Number(c.value), count: c.count }))
+      .filter((b) => Number.isFinite(b.year) && b.count > 0)
+      .sort((a, b) => a.year - b.year);
   }
 
   /**
@@ -784,6 +886,36 @@ function combineFilters(...parts: Array<string | undefined | null>): string {
     .map((p) => p?.trim())
     .filter((p): p is string => !!p)
     .join(' && ');
+}
+
+/**
+ * Does the query carry an exact-match operator — a "quoted phrase" or a
+ * -excluded term? Such queries switch to strict keyword matching (see the
+ * exact-mode handling in search()), so Typesense's operators behave literally
+ * instead of being softened by hybrid/semantic ranking and typo tolerance.
+ *
+ * Typesense `q` syntax supports phrases (`"…"`) and exclusion (`-term`) only;
+ * it has no free-text AND/OR — set logic lives in the facet filters
+ * (filter_by). So this intentionally detects just those two operators.
+ */
+function isExactQuery(q: string): boolean {
+  if (q.includes('"')) return true;
+  // A '-' that starts a term (string start or after whitespace) is an
+  // exclusion operator; a hyphen inside a word (e.g. "Faso-Dan") is not.
+  return /(^|\s)-\S/.test(q);
+}
+
+/**
+ * Drop one comma-separated entry from a query_by / field list, trimming
+ * whitespace. Used to strip `embedding` from query_by for exact queries so
+ * the search runs pure-keyword (no semantic vector blending).
+ */
+function withoutField(list: string, field: string): string {
+  return list
+    .split(',')
+    .map((s) => s.trim())
+    .filter((s) => s !== '' && s !== field)
+    .join(',');
 }
 
 /**

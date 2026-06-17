@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { YearRange } from '../lib/types';
+  import type { YearBucket, YearRange } from '../lib/types';
   import { useI18n } from '../lib/i18n';
 
   /**
@@ -36,10 +36,16 @@
     value: YearRange | null;
     min?: number;
     max?: number;
+    /**
+     * Per-year document counts, drawn as a mini histogram above the track so
+     * the user can see where results cluster before picking a range. Optional:
+     * an empty list renders the slider exactly as before.
+     */
+    distribution?: YearBucket[];
     onChange: (next: YearRange | null) => void;
   }
 
-  const { value, min = 1960, max = 2025, onChange }: Props = $props();
+  const { value, min = 1960, max = 2025, distribution = [], onChange }: Props = $props();
 
   const { t } = useI18n();
 
@@ -183,6 +189,45 @@
   const fillStart = $derived(((fromHandle - min) / (max - min)) * 100);
   const fillEnd = $derived(((toHandle - min) / (max - min)) * 100);
   const isDirty = $derived(fromHandle !== min || toHandle !== max);
+
+  /**
+   * Histogram bars — one column per year in [min, max], height ∝ document
+   * count. The data comes from a counts-only query that ignores the year
+   * range (see App.yearDistribution), so the full span is always shown and
+   * dragging the handles only repaints which bars fall inside them.
+   *
+   * Heights use a sqrt scale: archive years are heavily skewed (a few peak
+   * years dwarf the rest), and a linear scale would flatten everything else
+   * to a flat line. sqrt lifts the quieter years enough to read as a shape,
+   * with an 8% floor so a single-document year still shows a sliver. Years
+   * with no documents stay at 0 — the container's baseline carries the axis.
+   */
+  const histBars = $derived.by(() => {
+    const empty: Array<{ year: number; count: number; h: number }> = [];
+    if (!distribution || distribution.length === 0) return empty;
+    // Plain array indexed by (year - min); a Map here would trip
+    // svelte/prefer-svelte-reactivity for no benefit (it's a throwaway local).
+    const span = max - min + 1;
+    if (span < 1) return empty;
+    const counts = new Array<number>(span).fill(0);
+    let maxCount = 0;
+    for (const b of distribution) {
+      if (b.year < min || b.year > max) continue;
+      counts[b.year - min] = b.count;
+      if (b.count > maxCount) maxCount = b.count;
+    }
+    if (maxCount === 0) return empty;
+    const bars: Array<{ year: number; count: number; h: number }> = [];
+    for (let i = 0; i < span; i++) {
+      const c = counts[i];
+      bars.push({
+        year: min + i,
+        count: c,
+        h: c === 0 ? 0 : Math.max(8, Math.sqrt(c / maxCount) * 100),
+      });
+    }
+    return bars;
+  });
 </script>
 
 <section class="iwac-daterange" aria-label={t('year_range')}>
@@ -199,6 +244,22 @@
       <button type="button" class="iwac-daterange__reset" onclick={reset}>{t('reset')}</button>
     {/if}
   </header>
+
+  <!-- Year-distribution histogram. Decorative (the slider conveys the values
+       to assistive tech), so aria-hidden; the per-bar title gives sighted
+       users the exact count on hover. Rendered only once counts have loaded. -->
+  {#if histBars.length > 0}
+    <div class="iwac-daterange__hist" aria-hidden="true">
+      {#each histBars as bar (bar.year)}
+        <span
+          class="iwac-daterange__bar"
+          class:iwac-daterange__bar--in={bar.year >= fromHandle && bar.year <= toHandle}
+          style="height: {bar.h}%;"
+          title="{bar.year} · {bar.count}"
+        ></span>
+      {/each}
+    </div>
+  {/if}
 
   <!-- One track. Two thumbs. No <input type="range"> in sight. -->
   <div
@@ -294,6 +355,42 @@
     outline: none;
     box-shadow: var(--ring-focus, 0 0 0 3px rgba(0, 0, 0, 0.1));
     border-radius: var(--radius-sm, 0.375rem);
+  }
+
+  /*
+   * Year-distribution histogram, sitting just above the track. The inline
+   * margin matches the track so the bars share the thumbs' 0–100% span;
+   * the bottom border is the axis line, so empty years (0-height bars) still
+   * read as a continuous timeline. align-items:flex-end grows bars upward.
+   */
+  .iwac-daterange__hist {
+    display: flex;
+    align-items: flex-end;
+    gap: 1px;
+    height: 2rem;
+    margin-inline: 0.625rem;
+    border-bottom: 1px solid var(--border-light, #e6e7eb);
+  }
+  .iwac-daterange__bar {
+    flex: 1 1 0;
+    min-width: 0;
+    /* A year with documents the user hasn't selected — quiet, present. */
+    background: color-mix(in oklab, var(--muted, #767880) 28%, transparent);
+    /* Bars are only a few px wide, so the radius tokens (≥6px) would round
+       them into blobs; a 1px cap just softens the top edge. */
+    border-radius: 1px 1px 0 0;
+    transition:
+      height var(--transition-base, 200ms ease),
+      background-color var(--transition-fast, 150ms ease);
+  }
+  /* Years inside the selected range take the brand, echoing the fill bar. */
+  .iwac-daterange__bar--in {
+    background: color-mix(in oklab, var(--primary, #e64a19) 70%, transparent);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .iwac-daterange__bar {
+      transition: none;
+    }
   }
 
   /*

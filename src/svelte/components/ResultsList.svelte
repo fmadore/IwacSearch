@@ -33,9 +33,18 @@
     activeFilters: ActiveFilters;
     /** Toggle a facet from a result-card badge (author, newspaper, type…). */
     onFacetToggle: (field: string, value: string, nextChecked: boolean) => void;
+    /** Hide the country chip on cards (single-country scopes). */
+    hideCountry?: boolean;
   }
 
-  const { response, perPage, onPageChange, activeFilters, onFacetToggle }: Props = $props();
+  const {
+    response,
+    perPage,
+    onPageChange,
+    activeFilters,
+    onFacetToggle,
+    hideCountry = false,
+  }: Props = $props();
 
   const { t } = useI18n();
 
@@ -49,7 +58,7 @@
     <ol class="iwac-results__list">
       {#each response.hits as hit (hit.document.id)}
         <li class="iwac-results__item">
-          <ResultItem {hit} {activeFilters} {onFacetToggle} />
+          <ResultItem {hit} {activeFilters} {onFacetToggle} {hideCountry} />
         </li>
       {/each}
     </ol>
