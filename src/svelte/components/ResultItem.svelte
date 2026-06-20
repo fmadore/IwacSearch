@@ -571,33 +571,36 @@
     background: var(--iwac-type-dot);
     flex-shrink: 0;
   }
-  /* Categorical dot colours — semantic theme tokens, no new hexes. */
+  /* Categorical dot colours come from the theme's single-source --type-* map
+     (IWAC-theme docs/DESIGN-SYSTEM.md §3); the hex is the degraded-mode
+     fallback when the theme isn't loaded. The type→colour mapping lives in
+     the theme, so it can't drift between this module and IwacVisualizations. */
   .iwac-card__type[data-type='article'] {
-    --iwac-type-dot: var(--primary, #e64a19);
+    --iwac-type-dot: var(--type-article, #e64a19);
   }
   .iwac-card__type[data-type='audiovisual'] {
-    --iwac-type-dot: var(--info, #4a90c8);
+    --iwac-type-dot: var(--type-audiovisual, #4a90c8);
   }
   .iwac-card__type[data-type='publication'] {
-    --iwac-type-dot: var(--secondary, #394f68);
+    --iwac-type-dot: var(--type-publication, #394f68);
   }
   .iwac-card__type[data-type='document'] {
-    --iwac-type-dot: var(--warning, #e89c4a);
+    --iwac-type-dot: var(--type-document, #e89c4a);
   }
   .iwac-card__type[data-type='photograph'] {
-    --iwac-type-dot: var(--success, #6cc18b);
+    --iwac-type-dot: var(--type-photograph, #6cc18b);
   }
   .iwac-card__type[data-type='reference'] {
-    --iwac-type-dot: var(--muted, #767880);
+    --iwac-type-dot: var(--type-reference, #767880);
   }
   .iwac-card__type[data-entity-type='Personnes'] {
-    --iwac-type-dot: var(--info, #4a90c8);
+    --iwac-type-dot: var(--type-entity-personnes, #4a90c8);
   }
   .iwac-card__type[data-entity-type='Lieux'] {
-    --iwac-type-dot: var(--success, #6cc18b);
+    --iwac-type-dot: var(--type-entity-lieux, #6cc18b);
   }
   .iwac-card__type[data-entity-type='Organisations'] {
-    --iwac-type-dot: var(--warning, #e89c4a);
+    --iwac-type-dot: var(--type-entity-organisations, #e89c4a);
   }
 
   /*
