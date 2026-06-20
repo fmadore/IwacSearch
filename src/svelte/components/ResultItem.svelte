@@ -24,12 +24,13 @@
    *     primary click target is the <h3> link to keep screen-readers
    *     happy. We don't wrap the entire card in an <a> because the
    *     thumbnail is decorative and shouldn't double-announce.
-   *   - Type badge sits in the top-right corner so users can scan a
-   *     long result list and pick out audiovisual / publication rows
-   *     without reading every title.
-   *   - Date is an "eyebrow" above the title (small, uppercase,
-   *     letter-spaced) — that's where editors expect publication date
-   *     in the IWAC theme, so the cards match the surrounding chrome.
+   *   - Type LEADS the dateline (left edge) as a dotted uppercase token,
+   *     so the eye scans category straight down the left margin of a long
+   *     result list — picking out audiovisual / publication rows without
+   *     reading every title (design-review 3.1).
+   *   - The date follows the type on the same eyebrow line (small,
+   *     uppercase, letter-spaced) — the dateline device the IWAC theme
+   *     uses everywhere, so the cards match the surrounding chrome.
    *
    * Clickable metadata: the type badge, author byline, newspaper and
    * country are rendered as toggle buttons. Clicking one applies (or
@@ -336,9 +337,6 @@
       <!-- Index/authority entity card: year-span eyebrow, type badge,
            occurrence count + countries. No body text. -->
       <header class="iwac-card__head">
-        {#if yearRange}
-          <time class="iwac-card__eyebrow">{yearRange}</time>
-        {/if}
         {#if entityTypeChip}
           <button
             type="button"
@@ -350,6 +348,9 @@
             onclick={() => toggle(entityTypeChip.field, entityTypeChip.value)}
             >{entityTypeChip.display}</button
           >
+        {/if}
+        {#if yearRange}
+          <time class="iwac-card__eyebrow">{yearRange}</time>
         {/if}
       </header>
 
@@ -378,9 +379,6 @@
       {/if}
     {:else}
       <header class="iwac-card__head">
-        {#if dateLabel}
-          <time class="iwac-card__eyebrow">{dateLabel}</time>
-        {/if}
         {#if typeChip}
           <button
             type="button"
@@ -391,6 +389,9 @@
             aria-label={chipAria(typeChip)}
             onclick={() => toggle(typeChip.field, typeChip.value)}>{typeChip.display}</button
           >
+        {/if}
+        {#if dateLabel}
+          <time class="iwac-card__eyebrow">{dateLabel}</time>
         {/if}
       </header>
 
@@ -520,9 +521,9 @@
   }
   .iwac-card__head {
     display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--space-sm, 0.5rem);
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 0;
     min-height: 1.25rem;
   }
   .iwac-card__eyebrow {
@@ -545,16 +546,22 @@
     display: inline-flex;
     align-items: center;
     gap: 0.4em;
-    padding: 0.125rem 0.5rem;
+    padding: 0;
     background: transparent;
     color: var(--ink-light, var(--ink, #2c2f37));
-    border: 1px solid var(--border, #d4d6da);
-    border-radius: var(--radius-full, 9999px);
+    border: none;
     font-size: var(--text-xs, 0.8125rem);
-    font-weight: 600;
+    font-weight: 700;
     letter-spacing: var(--tracking-wide, 0.04em);
     text-transform: uppercase;
     white-space: nowrap;
+  }
+  /* Primary interpunct between the leading type token and the date. */
+  .iwac-card__type + .iwac-card__eyebrow::before {
+    content: '·';
+    color: var(--primary, #e64a19);
+    font-weight: 700;
+    padding-inline: 0.45em 0.5em;
   }
   .iwac-card__type::before {
     content: '';
@@ -602,27 +609,24 @@
     cursor: pointer;
     font-family: inherit;
     box-shadow: none;
-    transition:
-      background var(--transition-fast, 150ms ease),
-      border-color var(--transition-fast, 150ms ease),
-      color var(--transition-fast, 150ms ease),
-      box-shadow var(--transition-fast, 150ms ease);
+    transition: color var(--transition-fast, 150ms ease);
   }
   .iwac-card__type--filter:hover {
     background: transparent;
-    border-color: var(--ink-strong, var(--ink, #2c2f37));
     color: var(--ink-strong, var(--ink, #2c2f37));
     box-shadow: none;
     transform: none;
   }
+  /* Active type filter: the label goes primary (the brand = current state);
+     the categorical dot keeps its own colour. No pill fill on every row. */
   .iwac-card__type--filter.is-active {
-    background: color-mix(in oklab, var(--primary, #e64a19) 12%, transparent);
-    border-color: var(--primary, #e64a19);
-    color: var(--ink-strong, var(--ink, #2c2f37));
+    background: transparent;
+    color: var(--primary, #e64a19);
   }
   .iwac-card__type--filter:focus-visible {
     outline: none;
     box-shadow: var(--ring-focus, 0 0 0 3px rgba(0, 0, 0, 0.1));
+    border-radius: var(--radius-sm, 0.375rem);
   }
 
   .iwac-card__title {
