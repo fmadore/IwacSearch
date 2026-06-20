@@ -272,7 +272,10 @@
   function formatDate(epoch?: number, year?: number, yearOnly = false): string {
     if (!yearOnly && epoch && epoch > 0) {
       try {
-        return new Date(epoch * 1000).toLocaleDateString(undefined, {
+        // Format in the UI locale, not `undefined` (the browser default) —
+        // that gave EN visitors French month names ("10 janvier 2000") on the
+        // English site whenever their browser locale was French.
+        return new Date(epoch * 1000).toLocaleDateString(locale, {
           year: 'numeric',
           month: 'long',
           day: 'numeric',
