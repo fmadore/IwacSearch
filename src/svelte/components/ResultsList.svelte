@@ -81,16 +81,16 @@
     display: flex;
     flex-direction: column;
     gap: 0;
-    border-block-end: 1px solid var(--border-light, #e6e7eb);
+    border-block-end: 1px solid var(--border-light, #e2e5e8);
   }
   .iwac-results__item {
     margin: 0;
-    border-block-start: 1px solid var(--border-light, #e6e7eb);
+    border-block-start: 1px solid var(--border-light, #e2e5e8);
   }
   .iwac-results__empty {
-    color: var(--muted, #767880);
+    color: var(--muted, #66696e);
     padding: var(--space-md, 1rem);
-    background: var(--surface-sunken, #f3f3f1);
+    background: var(--surface-sunken, #f4f1ef);
     border-radius: var(--radius-md, 0.5rem);
     margin: 0;
   }

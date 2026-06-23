@@ -227,7 +227,7 @@
     display: flex;
     flex-direction: column;
     gap: var(--space-md, 1rem);
-    color: var(--ink, #2c2f37);
+    color: var(--ink, #13161c);
   }
 
   /* Shared query box. */
@@ -244,14 +244,14 @@
     margin: 0;
     font: inherit;
     font-size: var(--text-base, 1.0625rem);
-    color: var(--ink, #2c2f37);
-    background: var(--surface, #fdfdfd);
-    border: 1px solid var(--border, #d4d6da);
+    color: var(--ink, #13161c);
+    background: var(--surface, #fdfcfb);
+    border: 1px solid var(--border, #ced1d6);
     border-radius: var(--radius-md, 0.5rem);
   }
   .iwac-fed__input:focus-visible {
     outline: none;
-    border-color: var(--primary, #e64a19);
+    border-color: var(--primary, #ce4115);
     box-shadow: var(--ring-focus, 0 0 0 3px rgba(0, 0, 0, 0.1));
   }
   .iwac-fed__input::-webkit-search-cancel-button {
@@ -275,7 +275,7 @@
     border: 0;
     background: transparent;
     box-shadow: none;
-    color: var(--muted, #767880);
+    color: var(--muted, #66696e);
     font-size: 1.25rem;
     line-height: 1;
     cursor: pointer;
@@ -283,7 +283,7 @@
   }
   .iwac-fed__clear:hover {
     background: color-mix(in oklab, currentColor 14%, transparent);
-    color: var(--ink, #2c2f37);
+    color: var(--ink, #13161c);
   }
 
   /* Type tabs. */
@@ -292,7 +292,7 @@
     flex-wrap: wrap;
     gap: var(--space-xs, 0.25rem);
     padding-block-end: var(--space-sm, 0.5rem);
-    border-bottom: 1px solid var(--border-light, #e6e7eb);
+    border-bottom: 1px solid var(--border-light, #e2e5e8);
   }
   /*
    * The IWAC theme styles every <button> as a primary pill; guard the
@@ -305,10 +305,10 @@
     gap: 0.4rem;
     padding: 0.4rem 0.85rem;
     margin: 0;
-    border: 1px solid var(--border, #d4d6da) !important;
+    border: 1px solid var(--border, #ced1d6) !important;
     border-radius: var(--radius-full, 9999px);
-    background: var(--surface, #fdfdfd) !important;
-    color: var(--ink, #2c2f37) !important;
+    background: var(--surface, #fdfcfb) !important;
+    color: var(--ink, #13161c) !important;
     font: inherit;
     font-size: var(--text-sm, 0.9375rem);
     line-height: 1.2;
@@ -317,14 +317,14 @@
     transform: none !important;
   }
   .iwac-fed__tab:hover {
-    border-color: var(--primary, #e64a19) !important;
-    color: var(--primary, #e64a19) !important;
-    background: var(--surface, #fdfdfd) !important;
+    border-color: var(--primary, #ce4115) !important;
+    color: var(--primary, #ce4115) !important;
+    background: var(--surface, #fdfcfb) !important;
   }
   .iwac-fed__tab--active,
   .iwac-fed__tab--active:hover {
-    background: var(--primary, #e64a19) !important;
-    border-color: var(--primary, #e64a19) !important;
+    background: var(--primary, #ce4115) !important;
+    border-color: var(--primary, #ce4115) !important;
     color: var(--white, #fff) !important;
     font-weight: 600;
   }

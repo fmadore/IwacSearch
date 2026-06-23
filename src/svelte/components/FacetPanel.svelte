@@ -279,7 +279,7 @@
     justify-content: space-between;
     gap: var(--space-sm, 0.5rem);
     padding-block: var(--space-xs, 0.25rem) var(--space-sm, 0.5rem);
-    border-bottom: 1px solid var(--border, #d4d6da);
+    border-bottom: 1px solid var(--border, #ced1d6);
   }
   .iwac-facets__heading {
     margin: 0;
@@ -287,13 +287,13 @@
     font-weight: 700;
     letter-spacing: var(--tracking-wider, 0.08em);
     text-transform: uppercase;
-    color: var(--ink-strong, var(--ink, #2c2f37));
+    color: var(--ink-strong, var(--ink, #13161c));
   }
   .iwac-facets__clear-all {
     background: none;
     border: none;
     box-shadow: none;
-    color: var(--primary, #e64a19);
+    color: var(--primary, #ce4115);
     cursor: pointer;
     font-size: var(--text-xs, 0.8125rem);
     font-weight: 500;
@@ -314,7 +314,7 @@
 
   .iwac-facets__section {
     padding-block: var(--space-md, 1rem);
-    border-bottom: 1px solid var(--border-light, #e6e7eb);
+    border-bottom: 1px solid var(--border-light, #e2e5e8);
   }
   .iwac-facets__section:last-of-type {
     border-bottom: none;
@@ -339,13 +339,13 @@
     gap: var(--space-xs, 0.25rem);
     padding: 0.25rem 0.625rem;
     background: transparent;
-    border: 1px solid var(--primary, #e64a19);
+    border: 1px solid var(--primary, #ce4115);
     border-radius: var(--radius-full, 9999px);
     box-shadow: none;
     cursor: pointer;
     font: inherit;
     font-size: var(--text-xs, 0.8125rem);
-    color: var(--ink, #2c2f37);
+    color: var(--ink, #13161c);
     line-height: 1.4;
     transition:
       background var(--transition-fast, 150ms ease),
@@ -353,9 +353,9 @@
       color var(--transition-fast, 150ms ease);
   }
   .iwac-facets__chip:hover {
-    background: color-mix(in oklab, var(--primary, #e64a19) 10%, transparent);
-    border-color: var(--primary, #e64a19);
-    color: var(--ink-strong, var(--ink, #2c2f37));
+    background: color-mix(in oklab, var(--primary, #ce4115) 10%, transparent);
+    border-color: var(--primary, #ce4115);
+    color: var(--ink-strong, var(--ink, #13161c));
     box-shadow: none;
     transform: none;
   }
@@ -369,14 +369,14 @@
     box-shadow: var(--ring-focus, 0 0 0 3px rgba(0, 0, 0, 0.1));
   }
   .iwac-facets__chip-field {
-    color: var(--muted, #767880);
+    color: var(--muted, #66696e);
     font-weight: 500;
   }
   .iwac-facets__chip-value {
     font-weight: 600;
   }
   .iwac-facets__chip-x {
-    color: var(--muted, #767880);
+    color: var(--muted, #66696e);
     font-size: var(--text-sm, 0.9375rem);
     line-height: 1;
   }
@@ -394,7 +394,7 @@
    */
   .iwac-facets__group {
     padding-block: var(--space-md, 1rem);
-    border-bottom: 1px solid var(--border-light, #e6e7eb);
+    border-bottom: 1px solid var(--border-light, #e2e5e8);
   }
   .iwac-facets__group:last-child {
     border-bottom: none;
@@ -410,7 +410,7 @@
     box-shadow: none;
     cursor: pointer;
     font: inherit;
-    color: var(--ink-strong, var(--ink, #2c2f37));
+    color: var(--ink-strong, var(--ink, #13161c));
     font-size: var(--text-xs, 0.8125rem);
     font-weight: 700;
     letter-spacing: var(--tracking-wider, 0.08em);
@@ -419,7 +419,7 @@
     transition: color var(--transition-fast, 150ms ease);
   }
   .iwac-facets__group-heading:hover {
-    color: var(--primary, #e64a19);
+    color: var(--primary, #ce4115);
     background: none;
     box-shadow: none;
     transform: none;
@@ -433,7 +433,7 @@
     flex: 1;
   }
   .iwac-facets__group-count {
-    color: var(--primary, #e64a19);
+    color: var(--primary, #ce4115);
     font-size: var(--text-xs, 0.8125rem);
     font-weight: 700;
     font-variant-numeric: tabular-nums;
@@ -441,7 +441,7 @@
     text-transform: none;
   }
   .iwac-facets__group-chevron {
-    color: var(--muted, #767880);
+    color: var(--muted, #66696e);
     font-size: var(--text-xs, 0.8125rem);
     letter-spacing: 0;
   }
@@ -460,7 +460,7 @@
 
   .iwac-facets__empty {
     padding-block: var(--space-md, 1rem);
-    color: var(--muted, #767880);
+    color: var(--muted, #66696e);
     font-size: var(--text-sm, 0.9375rem);
     margin: 0;
   }

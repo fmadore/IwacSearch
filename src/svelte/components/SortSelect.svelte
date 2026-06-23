@@ -36,7 +36,7 @@
     display: inline-flex;
     align-items: center;
     gap: var(--space-xs, 0.25rem);
-    color: var(--muted, #767880);
+    color: var(--muted, #66696e);
     font-size: var(--text-sm, 0.9375rem);
   }
   .iwac-sort__label {
@@ -51,9 +51,9 @@
        ~4px above the Export/Filters buttons. Reset both explicitly. */
     width: auto;
     margin: 0;
-    background: var(--surface, #fdfdfd);
-    color: var(--ink, #2c2f37);
-    border: 1px solid var(--border, #d4d6da);
+    background: var(--surface, #fdfcfb);
+    color: var(--ink, #13161c);
+    border: 1px solid var(--border, #ced1d6);
     border-radius: var(--radius-md, 0.5rem);
     font: inherit;
     font-size: var(--text-sm, 0.9375rem);
@@ -63,11 +63,11 @@
       box-shadow var(--transition-fast, 150ms ease);
   }
   .iwac-sort__select:hover {
-    border-color: var(--border-strong, var(--border, #d4d6da));
+    border-color: var(--border-strong, var(--border, #ced1d6));
   }
   .iwac-sort__select:focus-visible {
     outline: none;
-    border-color: var(--primary, #e64a19);
+    border-color: var(--primary, #ce4115);
     box-shadow: var(--ring-focus, 0 0 0 3px rgba(0, 0, 0, 0.1));
   }
 </style>

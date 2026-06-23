@@ -1,0 +1,126 @@
+#!/usr/bin/env node
+/**
+ * Theme-token contract guard (IwacSearch).
+ *
+ * IwacSearch consumes the IWAC theme's design tokens (see
+ * IWAC-theme/docs/DESIGN-SYSTEM.md) and must never redefine them or drift
+ * from their canonical values. This linter fails the build when a source
+ * file's `var(--token, #fallback)` drifts from the theme's resolved token,
+ * keeping the discipline automatic as new components land.
+ *
+ * Scans hand-written sources under src/ (*.svelte, *.css, *.ts). The
+ * canonical values come from `tokens.json`, synced from the theme by
+ * IWAC-theme/scripts/build-tokens.js — the SINGLE SOURCE OF TRUTH.
+ *
+ * Rules:
+ *   1. No removed tokens — `--primary-hue` / `--primary-sat` (theme v2.0.0).
+ *   2. No `color-mix(in srgb …)` — the contract is `in oklab`.
+ *   3. Every `var(--token, #hex)` fallback must EQUAL the token's canonical
+ *      light value (tokens.json). A stale fallback is a competing variable
+ *      even if it only paints when the theme is absent.
+ *   4. (*.css only) No bare hex outside a var() fallback slot.
+ * Lines marked `/​* allow-hex *​/` are exempt from 3 and 4.
+ *
+ * Usage: node scripts/check-theme-tokens.js   (npm run lint:theme)
+ * Exit 1 on any violation, else 0. If tokens.json is missing, value checks
+ * are skipped (with a warning) so a fresh checkout still builds.
+ */
+import { readdirSync, readFileSync, statSync, existsSync } from 'node:fs';
+import { join, relative, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
+const SRC_DIR = join(ROOT, 'src');
+const TOKENS_PATH = join(ROOT, 'tokens.json');
+const EXTS = ['.svelte', '.css', '.ts'];
+
+function walk(dir, out = []) {
+    for (const entry of readdirSync(dir)) {
+        const p = join(dir, entry);
+        if (statSync(p).isDirectory()) walk(p, out);
+        else if (EXTS.some((e) => p.endsWith(e)) && !p.endsWith('.d.ts')) out.push(p);
+    }
+    return out;
+}
+
+function normHex(hex) {
+    let h = hex.replace('#', '').toLowerCase();
+    if (h.length === 3 || h.length === 4) h = h.slice(0, 3).split('').map((c) => c + c).join('');
+    return '#' + h.slice(0, 6);
+}
+
+let TOKENS = null;
+if (existsSync(TOKENS_PATH)) {
+    try {
+        TOKENS = JSON.parse(readFileSync(TOKENS_PATH, 'utf8'));
+    } catch {
+        console.warn('  ! tokens.json present but unparseable — value checks skipped\n');
+    }
+} else {
+    console.warn('  ! tokens.json not found — value checks skipped (run `npm run build:tokens` in IWAC-theme)\n');
+}
+
+const REMOVED_TOKEN = /--primary-(hue|sat)\b/;
+const SRGB_MIX = /color-mix\(\s*in\s+srgb\b/i;
+const HEX = /#[0-9a-fA-F]{3}(?:[0-9a-fA-F]{3}(?:[0-9a-fA-F]{2})?)?\b/g;
+const VAR_FALLBACK = /var\(\s*(--[\w-]+)\s*,\s*(#[0-9a-fA-F]{3,8})\b/g;
+
+const violations = [];
+function flag(file, line, msg, snippet) {
+    violations.push({ file: relative(ROOT, file), line, msg, snippet: snippet.trim() });
+}
+
+function scan(file) {
+    const isCss = file.endsWith('.css');
+    readFileSync(file, 'utf8').split('\n').forEach((raw, i) => {
+        const n = i + 1;
+        if (REMOVED_TOKEN.test(raw)) {
+            flag(file, n, 'removed token --primary-hue/--primary-sat (derive via color-mix from --primary)', raw);
+        }
+        if (SRGB_MIX.test(raw)) {
+            flag(file, n, 'color-mix(in srgb …) — use `in oklab`', raw);
+        }
+        if (!/allow-hex/.test(raw)) {
+            // Rule 3 — fallback value must equal canonical light token.
+            if (TOKENS) {
+                let m;
+                VAR_FALLBACK.lastIndex = 0;
+                while ((m = VAR_FALLBACK.exec(raw)) !== null) {
+                    const canon = TOKENS.light[m[1]];
+                    if (canon && normHex(m[2]) !== canon.toLowerCase()) {
+                        flag(file, n, `fallback ${m[2]} for ${m[1]} ≠ canonical light ${canon} (tokens.json)`, raw);
+                    }
+                }
+            }
+            // Rule 4 — bare hex (CSS files only; Svelte markup / TS legitimately carry hex).
+            if (isCss) {
+                let m;
+                HEX.lastIndex = 0;
+                while ((m = HEX.exec(raw)) !== null) {
+                    const before = raw.slice(0, m.index);
+                    const isFallback = /,\s*$/.test(before)
+                        && (before.match(/var\(/g) || []).length > (before.match(/\)/g) || []).length;
+                    if (!isFallback) {
+                        flag(file, n, 'bare hex outside a var() fallback (use a theme token, or mark /* allow-hex */)', raw);
+                        break;
+                    }
+                }
+            }
+        }
+    });
+}
+
+walk(SRC_DIR).forEach(scan);
+
+if (violations.length) {
+    console.error(`\n✗ theme-token guard: ${violations.length} violation(s)\n`);
+    for (const v of violations) {
+        console.error(`  ${v.file}:${v.line}  ${v.msg}`);
+        console.error(`      ${v.snippet}`);
+    }
+    console.error('\nSee IWAC-theme/docs/DESIGN-SYSTEM.md. Canonical values: tokens.json');
+    console.error('(regenerate with `npm run build:tokens` in IWAC-theme).\n');
+    process.exit(1);
+}
+
+console.log('✓ theme-token guard: no violations');

@@ -309,8 +309,8 @@
     inset-inline: 0;
     inset-block-start: calc(100% + var(--space-2xs, 0.25rem));
     z-index: 30;
-    background: var(--surface, #fdfdfd);
-    border: 1px solid var(--border, #d4d6da);
+    background: var(--surface, #fdfcfb);
+    border: 1px solid var(--border, #ced1d6);
     border-radius: var(--radius-md, 0.5rem);
     box-shadow:
       0 4px 12px rgba(0, 0, 0, 0.08),
@@ -348,10 +348,10 @@
     -webkit-appearance: none;
     text-decoration: none;
     text-align: start;
-    color: var(--ink, #2c2f37);
+    color: var(--ink, #13161c);
     background: transparent;
     border: 0;
-    border-bottom: 1px solid var(--border-light, #e6e7eb);
+    border-bottom: 1px solid var(--border-light, #e2e5e8);
     box-shadow: none;
     font: inherit;
     transition: background 80ms ease;
@@ -363,7 +363,7 @@
   .iwac-suggest__item--active,
   .iwac-suggest__item:hover,
   .iwac-suggest__item:focus-visible {
-    background: color-mix(in oklab, var(--primary, #e64a19) 8%, var(--surface, #fdfdfd));
+    background: color-mix(in oklab, var(--primary, #ce4115) 8%, var(--surface, #fdfcfb));
     box-shadow: none;
     transform: none;
     outline: none;
@@ -371,13 +371,13 @@
   /* The "Search for …" action reads as the primary affordance. */
   .iwac-suggest__item--search {
     font-weight: 500;
-    color: var(--ink-strong, var(--ink, #2c2f37));
+    color: var(--ink-strong, var(--ink, #13161c));
   }
   .iwac-suggest__icon {
     display: inline-flex;
     align-items: center;
     flex-shrink: 0;
-    color: var(--primary, #e64a19);
+    color: var(--primary, #ce4115);
     font-size: var(--text-base, 1.0625rem);
     line-height: 1;
   }
@@ -393,8 +393,8 @@
   }
   /* Inherited <mark> from the highlight snippet. */
   .iwac-suggest__title :global(mark) {
-    background: color-mix(in oklab, var(--primary, #e64a19) 22%, transparent);
-    color: var(--ink-strong, var(--ink, #2c2f37));
+    background: color-mix(in oklab, var(--primary, #ce4115) 22%, transparent);
+    color: var(--ink-strong, var(--ink, #13161c));
     border-radius: 0.125em;
     padding: 0 0.125em;
     font-weight: 500;
@@ -403,8 +403,8 @@
   .iwac-suggest__tag {
     flex-shrink: 0;
     font-size: var(--text-xs, 0.8125rem);
-    color: var(--muted, #767880);
-    background: var(--surface-sunken, #f3f3f1);
+    color: var(--muted, #66696e);
+    background: var(--surface-sunken, #f4f1ef);
     padding: 0.125rem 0.5rem;
     border-radius: var(--radius-full, 9999px);
   }
@@ -412,7 +412,7 @@
   .iwac-suggest__error {
     padding: var(--space-sm, 0.5rem) var(--space-md, 1rem);
     font-size: var(--text-xs, 0.8125rem);
-    color: var(--muted, #767880);
-    border-top: 1px solid var(--border-light, #e6e7eb);
+    color: var(--muted, #66696e);
+    border-top: 1px solid var(--border-light, #e2e5e8);
   }
 </style>

@@ -150,7 +150,7 @@
     position: fixed;
     inset-block: 0;
     width: var(--iwac-drawer-width, min(42rem, 100vw));
-    background: var(--surface, #fdfdfd);
+    background: var(--surface, #fdfcfb);
     z-index: 401;
     display: flex;
     flex-direction: column;
@@ -196,17 +196,17 @@
     align-items: center;
     justify-content: space-between;
     padding: var(--space-md, 1rem) var(--space-lg, 1.5rem);
-    border-bottom: 1px solid var(--border, #d4d6da);
+    border-bottom: 1px solid var(--border, #ced1d6);
     /* Sticky so long bodies still show the title + close affordance. */
     position: sticky;
     inset-block-start: 0;
-    background: var(--surface, #fdfdfd);
+    background: var(--surface, #fdfcfb);
     z-index: 1;
   }
   .iwac-drawer__title {
     margin: 0;
     font-size: var(--text-xl, 1.5rem);
-    color: var(--ink, #2c2f37);
+    color: var(--ink, #13161c);
     /* Truncate gracefully — the title's job is to identify, not narrate. */
     overflow: hidden;
     text-overflow: ellipsis;
@@ -217,7 +217,7 @@
     border: none;
     background: none;
     font-size: var(--text-2xl, 1.875rem);
-    color: var(--muted, #767880);
+    color: var(--muted, #66696e);
     cursor: pointer;
     width: 2rem;
     height: 2rem;
@@ -229,8 +229,8 @@
     margin-inline-start: var(--space-md, 1rem);
   }
   .iwac-drawer__close:hover {
-    background: var(--surface-sunken, #f3f3f1);
-    color: var(--ink, #2c2f37);
+    background: var(--surface-sunken, #f4f1ef);
+    color: var(--ink, #13161c);
   }
   .iwac-drawer__body {
     flex: 1;

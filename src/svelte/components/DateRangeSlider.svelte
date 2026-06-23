@@ -318,7 +318,7 @@
     align-items: center;
     justify-content: space-between;
     gap: var(--space-sm, 0.5rem);
-    color: var(--ink-strong, var(--ink, #2c2f37));
+    color: var(--ink-strong, var(--ink, #13161c));
   }
   .iwac-daterange__label {
     font-size: var(--text-xs, 0.8125rem);
@@ -331,16 +331,16 @@
     font-size: var(--text-sm, 0.9375rem);
     font-weight: 600;
     font-variant-numeric: tabular-nums;
-    color: var(--muted, #767880);
+    color: var(--muted, #66696e);
     text-align: end;
   }
   .iwac-daterange__range--dirty {
-    color: var(--primary, #e64a19);
+    color: var(--primary, #ce4115);
   }
   .iwac-daterange__reset {
     background: none;
     border: none;
-    color: var(--primary, #e64a19);
+    color: var(--primary, #ce4115);
     font-size: var(--text-xs, 0.8125rem);
     font-weight: 500;
     cursor: pointer;
@@ -369,13 +369,13 @@
     gap: 1px;
     height: 2rem;
     margin-inline: 0.625rem;
-    border-bottom: 1px solid var(--border-light, #e6e7eb);
+    border-bottom: 1px solid var(--border-light, #e2e5e8);
   }
   .iwac-daterange__bar {
     flex: 1 1 0;
     min-width: 0;
     /* A year with documents the user hasn't selected — quiet, present. */
-    background: color-mix(in oklab, var(--muted, #767880) 28%, transparent);
+    background: color-mix(in oklab, var(--muted, #66696e) 28%, transparent);
     /* Bars are only a few px wide, so the radius tokens (≥6px) would round
        them into blobs; a 1px cap just softens the top edge. */
     border-radius: 1px 1px 0 0;
@@ -385,7 +385,7 @@
   }
   /* Years inside the selected range take the brand, echoing the fill bar. */
   .iwac-daterange__bar--in {
-    background: color-mix(in oklab, var(--primary, #e64a19) 70%, transparent);
+    background: color-mix(in oklab, var(--primary, #ce4115) 70%, transparent);
   }
   @media (prefers-reduced-motion: reduce) {
     .iwac-daterange__bar {
@@ -420,7 +420,7 @@
     inset-block: calc(50% - 3px);
     inset-inline: 0.625rem;
     height: 6px;
-    background: var(--surface-sunken, #f3f3f1);
+    background: var(--surface-sunken, #f4f1ef);
     border-radius: var(--radius-full, 9999px);
     pointer-events: none;
   }
@@ -431,7 +431,7 @@
     inset-inline-start: calc(0.625rem + var(--iwac-fill-start));
     width: calc(var(--iwac-fill-end) - var(--iwac-fill-start));
     height: 6px;
-    background: var(--primary, #e64a19);
+    background: var(--primary, #ce4115);
     border-radius: var(--radius-full, 9999px);
     pointer-events: none;
     transform: translateX(calc(-1 * var(--iwac-fill-start) * 0));
@@ -446,8 +446,8 @@
     transform: translateX(-50%);
     width: 1.25rem;
     height: 1.25rem;
-    background: var(--surface, #fdfdfd);
-    border: 2px solid var(--primary, #e64a19);
+    background: var(--surface, #fdfcfb);
+    border: 2px solid var(--primary, #ce4115);
     border-radius: var(--radius-full, 9999px);
     box-shadow: var(--shadow-sm, 0 1px 3px rgba(0, 0, 0, 0.12));
     cursor: grab;
@@ -465,7 +465,7 @@
     outline: none;
     box-shadow:
       var(--shadow-sm, 0 1px 3px rgba(0, 0, 0, 0.12)),
-      var(--ring-focus, 0 0 0 3px color-mix(in oklab, var(--primary, #e64a19) 30%, transparent));
+      var(--ring-focus, 0 0 0 3px color-mix(in oklab, var(--primary, #ce4115) 30%, transparent));
   }
   .iwac-daterange__thumb--dragging {
     cursor: grabbing;

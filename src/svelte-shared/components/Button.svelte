@@ -119,9 +119,9 @@
 
   /* Variants */
   :global(.iwac-btn--primary) {
-    background: var(--primary, #e64a19);
-    color: var(--surface, #fdfdfd);
-    border-color: var(--primary, #e64a19);
+    background: var(--primary, #ce4115);
+    color: var(--surface, #fdfcfb);
+    border-color: var(--primary, #ce4115);
   }
   :global(.iwac-btn--primary:hover:not(:disabled):not(.iwac-btn--disabled)) {
     filter: brightness(1.08);
@@ -129,21 +129,21 @@
 
   :global(.iwac-btn--ghost) {
     background: transparent;
-    color: var(--ink, #2c2f37);
-    border-color: var(--border, #d4d6da);
+    color: var(--ink, #13161c);
+    border-color: var(--border, #ced1d6);
   }
   :global(.iwac-btn--ghost:hover:not(:disabled):not(.iwac-btn--disabled)) {
-    background: var(--surface-sunken, #f3f3f1);
+    background: var(--surface-sunken, #f4f1ef);
   }
 
   :global(.iwac-btn--danger) {
     background: transparent;
-    color: var(--primary, #e64a19);
-    border-color: var(--primary, #e64a19);
+    color: var(--primary, #ce4115);
+    border-color: var(--primary, #ce4115);
   }
   :global(.iwac-btn--danger:hover:not(:disabled):not(.iwac-btn--disabled)) {
-    background: var(--primary, #e64a19);
-    color: var(--surface, #fdfdfd);
+    background: var(--primary, #ce4115);
+    color: var(--surface, #fdfcfb);
   }
 
   /* Sizes */
@@ -156,7 +156,7 @@
     outline: none;
     box-shadow: var(
       --ring-focus,
-      0 0 0 3px color-mix(in oklab, var(--primary, #e64a19) 30%, transparent)
+      0 0 0 3px color-mix(in oklab, var(--primary, #ce4115) 30%, transparent)
     );
   }
 </style>

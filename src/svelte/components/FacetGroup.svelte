@@ -305,7 +305,7 @@
 <style>
   .iwac-facet {
     padding-block: var(--space-md, 1rem);
-    border-bottom: 1px solid var(--border-light, #e6e7eb);
+    border-bottom: 1px solid var(--border-light, #e2e5e8);
   }
   .iwac-facet:last-child {
     border-bottom: none;
@@ -327,7 +327,7 @@
     box-shadow: none;
     cursor: pointer;
     font: inherit;
-    color: var(--ink-strong, var(--ink, #2c2f37));
+    color: var(--ink-strong, var(--ink, #13161c));
     font-size: var(--text-xs, 0.8125rem);
     font-weight: 700;
     letter-spacing: var(--tracking-wider, 0.08em);
@@ -336,7 +336,7 @@
     transition: color var(--transition-fast, 150ms ease);
   }
   .iwac-facet__heading:hover {
-    color: var(--primary, #e64a19);
+    color: var(--primary, #ce4115);
     background: none;
     box-shadow: none;
     transform: none;
@@ -350,7 +350,7 @@
     flex: 1;
   }
   .iwac-facet__active-count {
-    color: var(--primary, #e64a19);
+    color: var(--primary, #ce4115);
     font-size: var(--text-xs, 0.8125rem);
     font-weight: 700;
     font-variant-numeric: tabular-nums;
@@ -360,7 +360,7 @@
   .iwac-facet__chevron {
     display: inline-flex;
     align-items: center;
-    color: var(--muted, #767880);
+    color: var(--muted, #66696e);
     font-size: var(--text-xs, 0.8125rem);
   }
 
@@ -375,9 +375,9 @@
     height: var(--size-control-md, 2.5rem);
     padding-inline: var(--space-sm, 0.5rem);
     padding-inline-end: var(--space-xl, 2rem);
-    background: var(--surface, #fdfdfd);
-    color: var(--ink, #2c2f37);
-    border: 1px solid var(--border, #d4d6da);
+    background: var(--surface, #fdfcfb);
+    color: var(--ink, #13161c);
+    border: 1px solid var(--border, #ced1d6);
     border-radius: var(--radius-md, 0.5rem);
     font: inherit;
     font-size: var(--text-sm, 0.9375rem);
@@ -387,7 +387,7 @@
       box-shadow var(--transition-fast, 150ms ease);
   }
   .iwac-facet__search-input::placeholder {
-    color: var(--muted, #767880);
+    color: var(--muted, #66696e);
   }
   /* Hide the browser's native type=search clear glyph — we render our
      own .iwac-facet__search-clear button, so the native one is a
@@ -399,7 +399,7 @@
   }
   .iwac-facet__search-input:focus {
     outline: none;
-    border-color: var(--primary, #e64a19);
+    border-color: var(--primary, #ce4115);
     box-shadow: var(--ring-focus, 0 0 0 3px rgba(0, 0, 0, 0.1));
   }
   .iwac-facet__search-clear {
@@ -414,7 +414,7 @@
     justify-content: center;
     padding: 0;
     background: transparent;
-    color: var(--muted, #767880);
+    color: var(--muted, #66696e);
     border: none;
     border-radius: var(--radius-full, 9999px);
     box-shadow: none;
@@ -426,8 +426,8 @@
       background var(--transition-fast, 150ms ease);
   }
   .iwac-facet__search-clear:hover {
-    background: var(--surface-sunken, #f3f3f1);
-    color: var(--ink, #2c2f37);
+    background: var(--surface-sunken, #f4f1ef);
+    color: var(--ink, #13161c);
     transform: translateY(-50%);
     box-shadow: none;
   }
@@ -476,16 +476,16 @@
     padding: 0.375rem var(--space-xs, 0.25rem);
     border-radius: var(--radius-sm, 0.375rem);
     cursor: pointer;
-    color: var(--ink, #2c2f37);
+    color: var(--ink, #13161c);
     font-size: var(--text-sm, 0.9375rem);
     line-height: 1.4;
     transition: background var(--transition-fast, 150ms ease);
   }
   .iwac-facet__option:hover {
-    background: var(--surface-sunken, #f3f3f1);
+    background: var(--surface-sunken, #f4f1ef);
   }
   .iwac-facet__option.is-selected {
-    color: var(--ink-strong, var(--ink, #2c2f37));
+    color: var(--ink-strong, var(--ink, #13161c));
     font-weight: 500;
   }
   .iwac-facet__option:has(input:focus-visible) {
@@ -494,7 +494,7 @@
   .iwac-facet__checkbox {
     /* Use the theme primary as the checkbox tick colour so checked
        boxes pick up brand without a custom SVG control. */
-    accent-color: var(--primary, #e64a19);
+    accent-color: var(--primary, #ce4115);
     width: 1rem;
     height: 1rem;
     margin: 0;
@@ -504,12 +504,12 @@
     overflow-wrap: anywhere;
   }
   .iwac-facet__count {
-    color: var(--muted, #767880);
+    color: var(--muted, #66696e);
     font-variant-numeric: tabular-nums;
     font-size: var(--text-xs, 0.8125rem);
   }
   .iwac-facet__option.is-selected .iwac-facet__count {
-    color: var(--ink-light, var(--muted, #767880));
+    color: var(--ink-light, var(--muted, #66696e));
   }
 
   .iwac-facet__more {
@@ -517,7 +517,7 @@
     background: none;
     border: none;
     box-shadow: none;
-    color: var(--primary, #e64a19);
+    color: var(--primary, #ce4115);
     font-size: var(--text-xs, 0.8125rem);
     font-weight: 500;
     cursor: pointer;
@@ -539,13 +539,13 @@
 
   .iwac-facet__hint {
     margin: var(--space-xs, 0.25rem) 0 0;
-    color: var(--muted, #767880);
+    color: var(--muted, #66696e);
     font-size: var(--text-xs, 0.8125rem);
     font-variant-numeric: tabular-nums;
   }
 
   .iwac-facet__empty {
-    color: var(--muted, #767880);
+    color: var(--muted, #66696e);
     font-size: var(--text-sm, 0.9375rem);
     margin: var(--space-xs, 0.25rem) 0 0;
     padding: var(--space-xs, 0.25rem);

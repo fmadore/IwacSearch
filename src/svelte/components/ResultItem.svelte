@@ -479,7 +479,7 @@
     transition: background-color var(--transition-fast, 150ms ease);
   }
   .iwac-card:hover {
-    background: color-mix(in oklab, var(--primary, #e64a19) 4%, transparent);
+    background: color-mix(in oklab, var(--primary, #ce4115) 4%, transparent);
   }
   .iwac-card:has(:focus-visible) {
     box-shadow: var(--ring-focus, 0 0 0 3px rgba(0, 0, 0, 0.1));
@@ -495,8 +495,8 @@
     height: 5rem;
     border-radius: var(--radius-sm, 0.375rem);
     overflow: hidden;
-    background: var(--surface-sunken, #f3f3f1);
-    border: 1px solid var(--border-light, #e6e7eb);
+    background: var(--surface-sunken, #f4f1ef);
+    border: 1px solid var(--border-light, #e2e5e8);
   }
   .iwac-card__thumb img {
     width: 100%;
@@ -530,7 +530,7 @@
     min-height: 1.25rem;
   }
   .iwac-card__eyebrow {
-    color: var(--muted, #767880);
+    color: var(--muted, #66696e);
     font-size: var(--text-xs, 0.8125rem);
     font-weight: 600;
     letter-spacing: var(--tracking-wider, 0.08em);
@@ -545,13 +545,13 @@
    * on every card of a filtered list; active is now border + ink + wash.
    */
   .iwac-card__type {
-    --iwac-type-dot: var(--muted, #767880);
+    --iwac-type-dot: var(--muted, #66696e);
     display: inline-flex;
     align-items: center;
     gap: 0.4em;
     padding: 0;
     background: transparent;
-    color: var(--ink-light, var(--ink, #2c2f37));
+    color: var(--ink-light, var(--ink, #13161c));
     border: none;
     font-size: var(--text-xs, 0.8125rem);
     font-weight: 700;
@@ -562,7 +562,7 @@
   /* Primary interpunct between the leading type token and the date. */
   .iwac-card__type + .iwac-card__eyebrow::before {
     content: '·';
-    color: var(--primary, #e64a19);
+    color: var(--primary, #ce4115);
     font-weight: 700;
     padding-inline: 0.45em 0.5em;
   }
@@ -579,31 +579,31 @@
      fallback when the theme isn't loaded. The type→colour mapping lives in
      the theme, so it can't drift between this module and IwacVisualizations. */
   .iwac-card__type[data-type='article'] {
-    --iwac-type-dot: var(--type-article, #e64a19);
+    --iwac-type-dot: var(--type-article, #ce4115);
   }
   .iwac-card__type[data-type='audiovisual'] {
-    --iwac-type-dot: var(--type-audiovisual, #4a90c8);
+    --iwac-type-dot: var(--type-audiovisual, #037ac0);
   }
   .iwac-card__type[data-type='publication'] {
     --iwac-type-dot: var(--type-publication, #394f68);
   }
   .iwac-card__type[data-type='document'] {
-    --iwac-type-dot: var(--type-document, #e89c4a);
+    --iwac-type-dot: var(--type-document, #de7000);
   }
   .iwac-card__type[data-type='photograph'] {
-    --iwac-type-dot: var(--type-photograph, #6cc18b);
+    --iwac-type-dot: var(--type-photograph, #2e9052);
   }
   .iwac-card__type[data-type='reference'] {
-    --iwac-type-dot: var(--type-reference, #767880);
+    --iwac-type-dot: var(--type-reference, #66696e);
   }
   .iwac-card__type[data-entity-type='Personnes'] {
-    --iwac-type-dot: var(--type-entity-personnes, #4a90c8);
+    --iwac-type-dot: var(--type-entity-personnes, #037ac0);
   }
   .iwac-card__type[data-entity-type='Lieux'] {
-    --iwac-type-dot: var(--type-entity-lieux, #6cc18b);
+    --iwac-type-dot: var(--type-entity-lieux, #2e9052);
   }
   .iwac-card__type[data-entity-type='Organisations'] {
-    --iwac-type-dot: var(--type-entity-organisations, #e89c4a);
+    --iwac-type-dot: var(--type-entity-organisations, #de7000);
   }
 
   /*
@@ -619,7 +619,7 @@
   }
   .iwac-card__type--filter:hover {
     background: transparent;
-    color: var(--ink-strong, var(--ink, #2c2f37));
+    color: var(--ink-strong, var(--ink, #13161c));
     box-shadow: none;
     transform: none;
   }
@@ -627,7 +627,7 @@
      the categorical dot keeps its own colour. No pill fill on every row. */
   .iwac-card__type--filter.is-active {
     background: transparent;
-    color: var(--primary, #e64a19);
+    color: var(--primary, #ce4115);
   }
   .iwac-card__type--filter:focus-visible {
     outline: none;
@@ -639,7 +639,7 @@
     margin: 0;
     font-size: var(--text-lg, 1.1875rem);
     line-height: 1.3;
-    color: var(--ink-strong, var(--ink, #2c2f37));
+    color: var(--ink-strong, var(--ink, #13161c));
     /* Clarendon slabs clog at tighter tracking. */
     letter-spacing: -0.01em;
   }
@@ -648,7 +648,7 @@
     text-decoration: none;
   }
   .iwac-card__title a:hover {
-    color: var(--primary, #e64a19);
+    color: var(--primary, #ce4115);
     text-decoration: underline;
     text-underline-offset: 2px;
   }
@@ -656,7 +656,7 @@
   .iwac-card__byline {
     margin: 0;
     font-size: var(--text-sm, 0.9375rem);
-    color: var(--ink-light, var(--ink, #2c2f37));
+    color: var(--ink-light, var(--ink, #13161c));
     line-height: 1.4;
     /* Clamp long author lists to two lines so cards stay even. */
     display: -webkit-box;
@@ -683,7 +683,7 @@
     transition: color var(--transition-fast, 150ms ease);
   }
   .iwac-card__author:hover {
-    color: var(--primary, #e64a19);
+    color: var(--primary, #ce4115);
     background: none;
     box-shadow: none;
     transform: none;
@@ -691,7 +691,7 @@
     text-underline-offset: 2px;
   }
   .iwac-card__author.is-active {
-    color: var(--primary, #e64a19);
+    color: var(--primary, #ce4115);
     font-weight: 600;
     text-decoration: underline;
     text-underline-offset: 2px;
@@ -706,7 +706,7 @@
      "Madore,Anato"), and generated content is immune to that. */
   .iwac-card__byline-sep::before {
     content: ', ';
-    color: var(--ink-light, var(--ink, #2c2f37));
+    color: var(--ink-light, var(--ink, #13161c));
   }
 
   /*
@@ -716,7 +716,7 @@
    */
   .iwac-card__meta-icon {
     display: inline-block;
-    color: var(--muted, #767880);
+    color: var(--muted, #66696e);
     margin-inline-end: 0.35em;
     font-size: 0.875em;
   }
@@ -728,7 +728,7 @@
     margin: 0;
     font-size: var(--text-sm, 0.9375rem);
     font-style: italic;
-    color: var(--muted, #767880);
+    color: var(--muted, #66696e);
     line-height: 1.4;
     display: -webkit-box;
     -webkit-line-clamp: 2;
@@ -740,7 +740,7 @@
   .iwac-card__snippet {
     margin: var(--space-xs, 0.25rem) 0 0;
     font-size: var(--text-sm, 0.9375rem);
-    color: var(--ink-light, var(--ink, #2c2f37));
+    color: var(--ink-light, var(--ink, #13161c));
     line-height: var(--line-height-normal, 1.5);
     /* Clamp to ~3 lines to keep cards visually consistent in a long list. */
     display: -webkit-box;
@@ -754,14 +754,14 @@
   .iwac-card__snippet--abstract {
     -webkit-line-clamp: 2;
     line-clamp: 2;
-    color: var(--muted, #767880);
+    color: var(--muted, #66696e);
   }
   .iwac-card__snippet :global(mark),
   .iwac-card__matched :global(mark),
   .iwac-card__title :global(mark) {
     background: color-mix(
       in oklab,
-      var(--primary, #e64a19) var(--accent-mix-subtle, 25%),
+      var(--primary, #ce4115) var(--accent-mix-subtle, 25%),
       transparent
     );
     color: inherit;
@@ -778,7 +778,7 @@
   .iwac-card__matched {
     margin: var(--space-xs, 0.25rem) 0 0;
     font-size: var(--text-xs, 0.8125rem);
-    color: var(--muted, #767880);
+    color: var(--muted, #66696e);
     line-height: 1.5;
   }
   .iwac-card__matched-label {
@@ -790,7 +790,7 @@
   }
   .iwac-card__matched-field {
     font-weight: 600;
-    color: var(--ink-light, var(--ink, #2c2f37));
+    color: var(--ink-light, var(--ink, #13161c));
   }
   /* Generated separators (see .iwac-card__byline-sep for why). */
   .iwac-card__matched-field::after {
@@ -819,7 +819,7 @@
   }
   .iwac-card__source li + li::before {
     content: '·';
-    color: var(--muted, #767880);
+    color: var(--muted, #66696e);
     padding-inline: 0.35em 0.5em;
     font-weight: 700;
   }
@@ -828,7 +828,7 @@
     margin: 0;
     padding: 0;
     background: transparent;
-    color: var(--muted, #767880);
+    color: var(--muted, #66696e);
     border: none;
     border-radius: 0;
     font: inherit;
@@ -843,7 +843,7 @@
   }
   .iwac-card__chip--filter:hover {
     background: transparent;
-    color: var(--primary, #e64a19);
+    color: var(--primary, #ce4115);
     text-decoration: underline;
     text-underline-offset: 2px;
     box-shadow: none;
@@ -851,7 +851,7 @@
   }
   .iwac-card__chip--filter.is-active {
     background: transparent;
-    color: var(--primary, #e64a19);
+    color: var(--primary, #ce4115);
     font-weight: 600;
     text-decoration: underline;
     text-underline-offset: 2px;
@@ -863,7 +863,7 @@
   }
   /* Occurrence count on entity cards — the headline metric. */
   .iwac-card__chip--count {
-    color: var(--ink-strong, var(--ink, #2c2f37));
+    color: var(--ink-strong, var(--ink, #13161c));
     font-weight: 700;
     font-variant-numeric: tabular-nums;
   }

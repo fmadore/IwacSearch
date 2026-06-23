@@ -144,10 +144,10 @@
     gap: var(--space-xs, 0.25rem);
     height: var(--size-control-md, 2.5rem);
     padding-inline: var(--space-md, 1rem);
-    border: 1px solid var(--border, #d4d6da);
+    border: 1px solid var(--border, #ced1d6);
     border-radius: var(--radius-md, 0.5rem);
-    background: var(--surface, #fdfdfd);
-    color: var(--ink, #2c2f37);
+    background: var(--surface, #fdfcfb);
+    color: var(--ink, #13161c);
     box-shadow: none;
     font: inherit;
     font-size: var(--text-sm, 0.9375rem);
@@ -158,9 +158,9 @@
       color var(--transition-fast, 150ms ease);
   }
   .iwac-export__trigger:hover {
-    background: var(--surface, #fdfdfd);
-    border-color: var(--primary, #e64a19);
-    color: var(--primary, #e64a19);
+    background: var(--surface, #fdfcfb);
+    border-color: var(--primary, #ce4115);
+    color: var(--primary, #ce4115);
     box-shadow: none;
     transform: none;
   }
@@ -185,8 +185,8 @@
     inset-block-start: calc(100% + var(--space-2xs, 0.25rem));
     z-index: 30;
     min-width: 14rem;
-    background: var(--surface, #fdfdfd);
-    border: 1px solid var(--border, #d4d6da);
+    background: var(--surface, #fdfcfb);
+    border: 1px solid var(--border, #ced1d6);
     border-radius: var(--radius-md, 0.5rem);
     box-shadow:
       0 4px 12px rgba(0, 0, 0, 0.08),
@@ -201,9 +201,9 @@
     appearance: none;
     background: transparent;
     border: 0;
-    border-bottom: 1px solid var(--border-light, #e6e7eb);
+    border-bottom: 1px solid var(--border-light, #e2e5e8);
     box-shadow: none;
-    color: var(--ink, #2c2f37);
+    color: var(--ink, #13161c);
     font: inherit;
     font-size: var(--text-sm, 0.9375rem);
     text-align: start;
@@ -215,7 +215,7 @@
   }
   .iwac-export__item:hover,
   .iwac-export__item:focus-visible {
-    background: color-mix(in oklab, var(--primary, #e64a19) 8%, var(--surface, #fdfdfd));
+    background: color-mix(in oklab, var(--primary, #ce4115) 8%, var(--surface, #fdfcfb));
     box-shadow: none;
     transform: none;
     outline: none;
@@ -225,10 +225,10 @@
     margin: 0;
     padding: var(--space-xs, 0.25rem) var(--space-md, 1rem) var(--space-sm, 0.5rem);
     font-size: var(--text-xs, 0.8125rem);
-    color: var(--muted, #767880);
-    border-top: 1px solid var(--border-light, #e6e7eb);
+    color: var(--muted, #66696e);
+    border-top: 1px solid var(--border-light, #e2e5e8);
   }
   .iwac-export__error {
-    color: var(--error, #c0392b);
+    color: var(--error, #c9222b);
   }
 </style>

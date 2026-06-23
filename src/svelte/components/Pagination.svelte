@@ -142,9 +142,9 @@
     min-width: var(--size-control-md, 2.5rem);
     height: var(--size-control-md, 2.5rem);
     padding-inline: var(--space-sm, 0.5rem);
-    background: var(--surface, #fdfdfd);
-    color: var(--ink, #2c2f37);
-    border: 1px solid var(--border, #d4d6da);
+    background: var(--surface, #fdfcfb);
+    color: var(--ink, #13161c);
+    border: 1px solid var(--border, #ced1d6);
     border-radius: var(--radius-md, 0.5rem);
     box-shadow: none;
     font: inherit;
@@ -158,9 +158,9 @@
   }
   .iwac-pager__page:hover:not(.is-current),
   .iwac-pager__nav:hover:not(:disabled) {
-    background: var(--surface, #fdfdfd);
-    border-color: var(--primary, #e64a19);
-    color: var(--primary, #e64a19);
+    background: var(--surface, #fdfcfb);
+    border-color: var(--primary, #ce4115);
+    color: var(--primary, #ce4115);
     box-shadow: none;
     transform: none;
   }
@@ -170,8 +170,8 @@
     box-shadow: var(--ring-focus, 0 0 0 3px rgba(0, 0, 0, 0.1));
   }
   .iwac-pager__page.is-current {
-    background: var(--primary, #e64a19);
-    border-color: var(--primary, #e64a19);
+    background: var(--primary, #ce4115);
+    border-color: var(--primary, #ce4115);
     color: var(--white, #fff);
     box-shadow: none;
     transform: none;
@@ -193,7 +193,7 @@
     align-items: center;
     justify-content: center;
     min-width: 1.5rem;
-    color: var(--muted, #767880);
+    color: var(--muted, #66696e);
     font-size: var(--text-sm, 0.9375rem);
   }
 
