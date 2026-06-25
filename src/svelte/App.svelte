@@ -861,11 +861,17 @@
      * the select).
      */
     .iwac-search__controls-actions {
+      /* Span the row so the full-width sort group below resolves against the
+         viewport, not the shrink-wrapped actions width — without this the sort
+         <select> (flex-basis 100%) overflowed off the right edge on a phone. */
+      width: 100%;
+      min-width: 0;
       flex-wrap: wrap;
       row-gap: var(--space-sm, 0.5rem);
     }
     .iwac-search__controls-actions :global(.iwac-sort) {
       flex: 1 1 100%;
+      min-width: 0;
     }
     .iwac-search__controls-actions :global(.iwac-sort__select) {
       flex: 1 1 auto;
