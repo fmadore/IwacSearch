@@ -18,7 +18,11 @@
  *   3. Every `var(--token, #hex)` fallback must EQUAL the token's canonical
  *      light value (tokens.json). A stale fallback is a competing variable
  *      even if it only paints when the theme is absent.
- *   4. (*.css only) No bare hex outside a var() fallback slot.
+ *   4. No bare hex outside a var() fallback slot, in any CSS context — `.css`
+ *      files AND the `<style>` block of a `.svelte` SFC (the module's CSS).
+ *      Svelte TEMPLATE markup (SVG fills, inline attrs) is exempt — only the
+ *      `<style>` region is scanned. So is any line touching a sanctioned
+ *      `--iwac-vis-*` data colour.
  * Lines marked `/​* allow-hex *​/` are exempt from 3 and 4.
  *
  * Usage: node scripts/check-theme-tokens.js   (npm run lint:theme)
@@ -72,8 +76,15 @@ function flag(file, line, msg, snippet) {
 
 function scan(file) {
     const isCss = file.endsWith('.css');
+    const isSvelte = file.endsWith('.svelte');
+    // Track the <style> region of a Svelte SFC so the bare-hex rule scans the
+    // module's CSS but not its template markup (SVG fills, inline attrs).
+    let inStyle = false;
     readFileSync(file, 'utf8').split('\n').forEach((raw, i) => {
         const n = i + 1;
+        if (isSvelte && /<style\b/.test(raw)) inStyle = true;
+        const cssContext = isCss || (isSvelte && inStyle);
+
         if (REMOVED_TOKEN.test(raw)) {
             flag(file, n, 'removed token --primary-hue/--primary-sat (derive via color-mix from --primary)', raw);
         }
@@ -92,8 +103,10 @@ function scan(file) {
                     }
                 }
             }
-            // Rule 4 — bare hex (CSS files only; Svelte markup / TS legitimately carry hex).
-            if (isCss) {
+            // Rule 4 — bare hex in any CSS context (a .css file, or a Svelte
+            // <style> block). A var() fallback slot is fine (Rule 3 vets it);
+            // a sanctioned --iwac-vis-* data colour is exempt.
+            if (cssContext && !/--iwac-vis-/.test(raw)) {
                 let m;
                 HEX.lastIndex = 0;
                 while ((m = HEX.exec(raw)) !== null) {
@@ -107,6 +120,8 @@ function scan(file) {
                 }
             }
         }
+
+        if (isSvelte && /<\/style>/.test(raw)) inStyle = false;
     });
 }
 

@@ -1,4 +1,4 @@
-import type { ActiveFilters, SearchState, YearRange } from './types';
+import type { ActiveFilters, SearchState, ViewMode, YearRange } from './types';
 
 /**
  * URL state codec for search surfaces.
@@ -51,7 +51,22 @@ export function readUrlState(href: string = window.location.href, prefix = ''): 
     sort: params.get(`${prefix}sort`) ?? '_text_match:desc',
     filters,
     yearRange: parseYearRange(params, prefix),
+    view: parseView(params.get(`${prefix}view`)),
   };
+}
+
+/** Only `gallery` is encoded; anything else (incl. absent) is the `list` default. */
+function parseView(raw: string | null): ViewMode {
+  return raw === 'gallery' ? 'gallery' : 'list';
+}
+
+/**
+ * Whether the URL explicitly carries a `view` param under this prefix. Lets the
+ * App tell "user/shared-link chose a view" from "defaulted to list", so it only
+ * falls back to localStorage / auto-suggest when no explicit choice was made.
+ */
+export function urlHasView(href: string = window.location.href, prefix = ''): boolean {
+  return new URL(href).searchParams.has(`${prefix}view`);
 }
 
 function parseYearRange(params: URLSearchParams, prefix: string): YearRange | null {
@@ -85,6 +100,7 @@ function clearPrefixedKeys(params: URLSearchParams, prefix: string): void {
     `${prefix}sort`,
     `${prefix}date.from`,
     `${prefix}date.to`,
+    `${prefix}view`,
   ]);
   // Collect first, then delete — mutating while iterating keys() is unsafe.
   const toDelete: string[] = [];
@@ -120,6 +136,10 @@ function applyState(params: URLSearchParams, state: SearchState, prefix: string)
     if (typeof state.yearRange.to === 'number') {
       params.set(`${prefix}date.to`, String(state.yearRange.to));
     }
+  }
+  // `list` is the default, so it's omitted to keep a fresh URL clean.
+  if (state.view === 'gallery') {
+    params.set(`${prefix}view`, state.view);
   }
 }
 

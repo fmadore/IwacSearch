@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { ActiveFilters, IwacHit } from '../lib/types';
+  import type { ActiveFilters, IwacHit, ViewMode } from '../lib/types';
   import {
     countryLabel,
     entityTypeLabel,
@@ -7,46 +7,46 @@
     typeLabel as typeLabelFor,
     useI18n,
   } from '../lib/i18n';
+  import { sizedThumbnail } from '../lib/thumbnail';
+  import { parseMentionsByYear, densifyByYear } from '../lib/sparkline';
   import Icon from './Icon.svelte';
+  import Sparkline from './Sparkline.svelte';
 
   /**
-   * One result rendered as a card.
+   * One result, rendered in one of two layouts:
    *
-   *   ┌──────────────────────────────────────────────────────────┐
-   *   │ ┌────┐  4 NOVEMBRE 1989                       ARTICLE    │
-   *   │ │img │  Title of the article goes here                   │
-   *   │ │    │  …matching <mark>snippet</mark> of body text…     │
-   *   │ └────┘  Sidwaya · Burkina Faso                            │
-   *   └──────────────────────────────────────────────────────────┘
+   *   list (default)                      gallery
+   *   ┌────┐ 4 NOV 1989    ARTICLE        ┌──────────────┐
+   *   │img │ Title goes here              │   4:3 plate  │
+   *   │    │ …matching <mark>snippet</mark>│              │
+   *   └────┘ Sidwaya · Burkina Faso       └──────────────┘
+   *                                       ● ARTICLE · 1989
+   *                                       Title goes here
+   *                                       Sidwaya
+   *
+   * `list` is the dense ledger row (density first); `gallery` is the
+   * image-forward tile for browsing the corpus's photographs, plates and
+   * scans (design review §01). Both share the dateline + categorical-dot
+   * grammar — only the geometry and the amount of body text differ, so the
+   * field derivations are computed once and rendered through shared snippets.
    *
    * Layout decisions:
-   *   - Whole card is hover-affordant (lift + tinted border) but the
-   *     primary click target is the <h3> link to keep screen-readers
-   *     happy. We don't wrap the entire card in an <a> because the
-   *     thumbnail is decorative and shouldn't double-announce.
-   *   - Type LEADS the dateline (left edge) as a dotted uppercase token,
-   *     so the eye scans category straight down the left margin of a long
-   *     result list — picking out audiovisual / publication rows without
-   *     reading every title (design-review 3.1).
-   *   - The date follows the type on the same eyebrow line (small,
-   *     uppercase, letter-spaced) — the dateline device the IWAC theme
-   *     uses everywhere, so the cards match the surrounding chrome.
+   *   - The thumbnail is decorative (the title link is the primary target), so
+   *     it's aria-hidden and not wrapped around the whole card.
+   *   - Type LEADS the dateline as a dotted uppercase token, so the eye scans
+   *     category down the left margin without reading every title.
+   *   - Thumbnails request the Omeka derivative tier that fits the slot (list →
+   *     `medium`, gallery → `large`) instead of upscaling one stored thumb
+   *     (design review punch-list item 5; see lib/thumbnail.ts).
    *
-   * Clickable metadata: the type badge, author byline, newspaper and
-   * country are rendered as toggle buttons. Clicking one applies (or
-   * removes) the matching facet on the parent search via onFacetToggle —
-   * the same handler the FacetPanel uses — so a card doubles as a filter
-   * affordance. Active filters render brand-filled (aria-pressed reflects
-   * it). For references the badge shows the publication type (Chapitre,
-   * Article de revue…) and filters reference_type_ss, not the generic
-   * "Référence" type_s pill.
+   * Clickable metadata: the type badge, author byline, newspaper and country
+   * are facet-toggle buttons calling onFacetToggle — the same handler the
+   * FacetPanel uses — so a card doubles as a filter affordance. Active filters
+   * render brand-coloured (aria-pressed reflects it).
    *
-   * Snippet sanitisation: Typesense returns highlighted HTML containing
-   * <mark>...</mark> tags around matched tokens. We do NOT trust this
-   * verbatim — the snippet is HTML-escaped client-side and only literal
-   * <mark>/</mark> tags are reinstated. If a document somehow contained
-   * embedded HTML, this rendering would treat it as text. See
-   * sanitizeSnippet() below.
+   * Snippet sanitisation: Typesense returns highlighted HTML with <mark> tags.
+   * We HTML-escape the snippet client-side and only reinstate literal
+   * <mark>/</mark> — see sanitizeSnippet().
    */
 
   interface Props {
@@ -61,9 +61,17 @@
      * not repeated on every card. Country stays a working facet elsewhere.
      */
     hideCountry?: boolean;
+    /** Presentation layout — `list` (default) or `gallery` tile. */
+    layout?: ViewMode;
   }
 
-  const { hit, activeFilters, onFacetToggle, hideCountry = false }: Props = $props();
+  const {
+    hit,
+    activeFilters,
+    onFacetToggle,
+    hideCountry = false,
+    layout = 'list',
+  }: Props = $props();
 
   const { locale, card, t } = useI18n();
 
@@ -86,19 +94,22 @@
 
   const doc = $derived(hit.document);
   const title = $derived(doc.title || t('untitled', { id: doc.id }));
-  // References are bibliographic citations — cited by year. Their pub_date
-  // is commonly year-only, which the indexer stores as a Jan-1 epoch (see
-  // AbstractMapper::dateToEpoch); formatting that as a full date invented a
-  // misleading "1 janvier 2016". Show the publication year for references;
-  // every other subset keeps its precise date.
+  // References are cited by year; their pub_date is commonly a Jan-1 epoch, so
+  // show the year (not a misleading "1 janvier 2016"). Everything else keeps its
+  // precise date.
   const dateLabel = $derived(formatDate(doc.date, doc.pub_year, doc.type_s === 'reference'));
   const typeKey = $derived(doc.type_s ?? '');
   const typeLabel = $derived(typeKey ? typeLabelFor(typeKey, locale) : '');
 
+  // Thumbnail derivative per layout: list rows take `medium`, gallery tiles take
+  // `large` (the 200px `medium` would upscale at tile size). Falls back to the
+  // stored URL unchanged when it isn't a recognised Omeka derivative path.
+  const listThumb = $derived(sizedThumbnail(doc.thumbnail_url, 'medium'));
+  const galleryThumb = $derived(sizedThumbnail(doc.thumbnail_url, 'large'));
+
   // Type badge → a clickable facet. References surface their publication type
-  // (reference_type_ss) so the badge reads "Chapitre" / "Article de revue…"
-  // and filters academic literature by kind; every other subset shows its
-  // type_s label and filters on that. null when neither is known.
+  // (reference_type_ss) so the badge reads "Chapitre" / "Article de revue…";
+  // every other subset shows its type_s label. null when neither is known.
   const isReference = $derived(typeKey === 'reference');
   const referenceType = $derived(doc.reference_type_ss?.[0] ?? '');
   const typeChip = $derived.by<FilterChip | null>(() => {
@@ -128,6 +139,16 @@
       ? t(frequency === 1 ? 'mention_one' : 'mention_other', { n: frequency.toLocaleString() })
       : '',
   );
+  // The bare "mention(s)" word for the split number + label metric (the number
+  // is rendered separately as a display numeral). t() with an empty n yields
+  // " mentions" → trimmed.
+  const mentionsWord = $derived(
+    frequency != null ? t(frequency === 1 ? 'mention_one' : 'mention_other', { n: '' }).trim() : '',
+  );
+  // Per-year mentions series for the sparkline (design review §03B). Empty until
+  // the entity collection is rebuilt with mentions_by_year_s, so the card simply
+  // omits the sparkline when the data isn't there.
+  const mentionsSeries = $derived(densifyByYear(parseMentionsByYear(doc.mentions_by_year_s)));
   const yearRange = $derived.by(() => {
     const a = doc.first_year;
     const b = doc.last_year;
@@ -143,14 +164,11 @@
           display: countryLabel(c, locale),
         })),
   );
-  // Entity category (dcterms:isPartOf) — organisation kind for
-  // organisations ("Organisation islamique"). Clickable is_part_of_ss filter.
+  // Entity category (dcterms:isPartOf) — organisation kind for organisations.
   const entityPartOfChips = $derived.by<FilterChip[]>(() =>
     (doc.is_part_of_ss ?? []).map((v) => ({ field: 'is_part_of_ss', value: v, display: v })),
   );
-  // Compact source line: Newspaper · Country, each a clickable filter. Kept
-  // inside the body so the eyebrow row above the title only carries the date
-  // + type chip — too many tokens up there reads as visual noise.
+  // Compact source line: Newspaper · Country, each a clickable filter.
   const sourceChips = $derived.by<FilterChip[]>(() => {
     const out: FilterChip[] = [];
     if (doc.newspaper_ss?.[0]) {
@@ -167,8 +185,7 @@
   });
 
   // Body snippet: the OCR match first (most contextual), else the abstract
-  // match. The title no longer doubles as a body snippet — it's highlighted
-  // in place (see titleMarkup below).
+  // match. The title is highlighted in place (titleMarkup below).
   const rawSnippet = $derived(
     hit.highlights?.find((h) => h.field === 'ocr_text')?.snippet ??
       hit.highlights?.find((h) => h.field === 'abstract')?.snippet ??
@@ -176,10 +193,8 @@
   );
   const snippet = $derived(sanitizeSnippet(rawSnippet));
 
-  // Title with the query match marked. highlight_full_fields covers
-  // title_txt, so the highlight carries the COMPLETE title in `value`
-  // (the `snippet` is a window past ~30 tokens — long reference titles
-  // would render truncated). Empty (→ plain title) when no title match.
+  // Title with the query match marked. highlight_full_fields covers title_txt,
+  // so `value` carries the COMPLETE title. Empty (→ plain title) when no match.
   const titleMarkup = $derived.by(() => {
     const h = hit.highlights?.find((x) => x.field === 'title_txt');
     const s = h?.value ?? h?.snippet ?? '';
@@ -187,11 +202,8 @@
   });
 
   // ── Match attribution: WHY is this hit shown? ───────────────────────
-  // Title and body matches are visible on the card itself; matches in the
-  // metadata channels (subject, spatial, author, journal, alternative
-  // title, entity alias…) used to be invisible — the card just appeared,
-  // unexplained. Surface them as a small "Matched in" line built from the
-  // per-field highlights.
+  // Surface metadata-channel matches (subject, spatial, author, journal, alias…)
+  // that aren't visible in the title/body as a small "Matched in" line.
   const VISIBLE_MATCH_FIELDS = ['title_txt', 'ocr_text', 'abstract'];
 
   type MatchedIn = { field: string; label: string; snippet: string };
@@ -200,7 +212,6 @@
     for (const h of hit.highlights ?? []) {
       if (VISIBLE_MATCH_FIELDS.includes(h.field)) continue;
       if (out.some((m) => m.field === h.field)) continue;
-      // Scalar fields carry `snippet`; string[] fields carry `snippets`.
       const raw = h.snippet ?? h.snippets?.[0] ?? '';
       if (!raw.includes('<mark>')) continue;
       out.push({
@@ -223,21 +234,11 @@
       ? ('journal' as const)
       : ('book' as const),
   );
-  // Card body: prefer the query-match snippet (shows WHY this hit matched);
-  // fall back to the abstract/description so browse-mode cards (no query,
-  // no highlight) still show a couple of lines of context. The abstract is
-  // plain text — Svelte escapes it — whereas the snippet carries <mark>.
   const abstract = $derived((doc.abstract ?? '').trim());
-  // Author byline — essential for references (a citation without its author
-  // is useless), informative for signed articles; simply absent when a doc
-  // carries no creator_ss (e.g. unsigned press). Each author is an individual
-  // creator_ss filter toggle.
+  // Author byline — essential for references, informative for signed articles.
   const authors = $derived(doc.creator_ss ?? []);
 
-  // Bibliographic source line for references — "journal vol(issue), pages",
-  // "Book title (eds. …), pages — Publisher", etc. Built per reference type
-  // from the structured fields (see schema.yaml / ReferenceMapper). Other
-  // subsets don't carry these fields, so this stays empty for them.
+  // Bibliographic source line for references — built per reference type.
   const citation = $derived.by(() => buildCitation(doc));
   const itemUrl = $derived(doc.omeka_url || `/s/afrique_ouest/item/${doc.id}`);
 
@@ -265,16 +266,12 @@
       if (pages) s += `${s ? ', ' : ''}${pages}`;
       return s.trim();
     }
-    // Books, theses, reports, edited volumes, encyclopaedia entries, fallback.
     return [book, pub, edition].filter(Boolean).join(' — ');
   }
 
   function formatDate(epoch?: number, year?: number, yearOnly = false): string {
     if (!yearOnly && epoch && epoch > 0) {
       try {
-        // Format in the UI locale, not `undefined` (the browser default) —
-        // that gave EN visitors French month names ("10 janvier 2000") on the
-        // English site whenever their browser locale was French.
         return new Date(epoch * 1000).toLocaleDateString(locale, {
           year: 'numeric',
           month: 'long',
@@ -288,11 +285,8 @@
   }
 
   /**
-   * Escape every HTML-significant character, then re-introduce only the
-   * literal <mark>/</mark> tags Typesense uses to surround matches.
-   * Anything else in the snippet — including any user content that
-   * somehow contained tags — renders as text. Defense in depth: even
-   * if Typesense's own escaping had a bug, this layer would catch it.
+   * Escape every HTML-significant character, then re-introduce only the literal
+   * <mark>/</mark> tags Typesense uses to surround matches. Defense in depth.
    */
   function sanitizeSnippet(html: string): string {
     if (!html) return '';
@@ -328,144 +322,192 @@
   </li>
 {/snippet}
 
-<article class="iwac-card" class:iwac-card--no-thumb={!doc.thumbnail_url}>
-  {#if doc.thumbnail_url}
-    <a class="iwac-card__thumb" href={itemUrl} aria-hidden="true" tabindex="-1">
-      <img src={doc.thumbnail_url} alt="" loading="lazy" />
-    </a>
+<!-- Leading type badge (content type chip, or entity-type chip on the index). -->
+{#snippet typeBadge()}
+  {#if isEntity}
+    {#if entityTypeChip}
+      <button
+        type="button"
+        class="iwac-card__type iwac-card__type--filter"
+        class:is-active={isActive(entityTypeChip.field, entityTypeChip.value)}
+        data-entity-type={doc.entity_type_s}
+        aria-pressed={isActive(entityTypeChip.field, entityTypeChip.value)}
+        aria-label={chipAria(entityTypeChip)}
+        onclick={() => toggle(entityTypeChip.field, entityTypeChip.value)}
+        >{entityTypeChip.display}</button
+      >
+    {/if}
+  {:else if typeChip}
+    <button
+      type="button"
+      class="iwac-card__type iwac-card__type--filter"
+      class:is-active={isActive(typeChip.field, typeChip.value)}
+      data-type={typeTint}
+      aria-pressed={isActive(typeChip.field, typeChip.value)}
+      aria-label={chipAria(typeChip)}
+      onclick={() => toggle(typeChip.field, typeChip.value)}>{typeChip.display}</button
+    >
   {/if}
+{/snippet}
 
-  <div class="iwac-card__body">
-    {#if isEntity}
-      <!-- Index/authority entity card: year-span eyebrow, type badge,
-           occurrence count + countries. No body text. -->
-      <header class="iwac-card__head">
-        {#if entityTypeChip}
-          <button
-            type="button"
-            class="iwac-card__type iwac-card__type--filter"
-            class:is-active={isActive(entityTypeChip.field, entityTypeChip.value)}
-            data-entity-type={doc.entity_type_s}
-            aria-pressed={isActive(entityTypeChip.field, entityTypeChip.value)}
-            aria-label={chipAria(entityTypeChip)}
-            onclick={() => toggle(entityTypeChip.field, entityTypeChip.value)}
-            >{entityTypeChip.display}</button
-          >
-        {/if}
-        {#if yearRange}
-          <time class="iwac-card__eyebrow">{yearRange}</time>
-        {/if}
-      </header>
+<!-- Dateline eyebrow date (content: precise date; entity: mention year span). -->
+{#snippet eyebrowDate()}
+  {#if isEntity}
+    {#if yearRange}<time class="iwac-card__eyebrow">{yearRange}</time>{/if}
+  {:else if dateLabel}<time class="iwac-card__eyebrow">{dateLabel}</time>{/if}
+{/snippet}
 
-      <h3 class="iwac-card__title">
-        {#if titleMarkup}
-          <!-- sanitizeSnippet escaped everything but literal mark tags -->
-          <!-- eslint-disable-next-line svelte/no-at-html-tags -->
-          <a href={itemUrl}>{@html titleMarkup}</a>
-        {:else}
-          <a href={itemUrl}>{title}</a>
-        {/if}
-      </h3>
+<!-- Title link, with the query match highlighted in place when present. -->
+{#snippet titleLink()}
+  {#if titleMarkup}
+    <!-- sanitizeSnippet escaped everything but literal mark tags -->
+    <!-- eslint-disable-next-line svelte/no-at-html-tags -->
+    <a href={itemUrl}>{@html titleMarkup}</a>
+  {:else}
+    <a href={itemUrl}>{title}</a>
+  {/if}
+{/snippet}
 
-      {#if mentionsLabel || entityPartOfChips.length > 0 || entityCountryChips.length > 0}
-        <ul class="iwac-card__source" aria-label={t('source')}>
-          {#if mentionsLabel}
-            <li class="iwac-card__chip iwac-card__chip--count">{mentionsLabel}</li>
-          {/if}
-          {#each entityPartOfChips as chip (chip.field + '|' + chip.value)}
-            {@render filterChip(chip)}
-          {/each}
-          {#each entityCountryChips as chip (chip.field + '|' + chip.value)}
-            {@render filterChip(chip)}
-          {/each}
-        </ul>
+<article
+  class="iwac-card iwac-card--{layout}"
+  class:iwac-card--no-thumb={layout === 'list' && !listThumb}
+>
+  {#if layout === 'gallery'}
+    <!-- ── Gallery tile: image-forward, compact metadata below ── -->
+    <a
+      class="iwac-card__thumb iwac-card__thumb--gallery"
+      href={itemUrl}
+      aria-hidden="true"
+      tabindex="-1"
+    >
+      {#if galleryThumb}
+        <img src={galleryThumb} alt="" loading="lazy" />
+      {:else}
+        <span class="iwac-card__thumb-ph" aria-hidden="true"><Icon name="image" /></span>
       {/if}
-    {:else}
-      <header class="iwac-card__head">
-        {#if typeChip}
-          <button
-            type="button"
-            class="iwac-card__type iwac-card__type--filter"
-            class:is-active={isActive(typeChip.field, typeChip.value)}
-            data-type={typeTint}
-            aria-pressed={isActive(typeChip.field, typeChip.value)}
-            aria-label={chipAria(typeChip)}
-            onclick={() => toggle(typeChip.field, typeChip.value)}>{typeChip.display}</button
-          >
-        {/if}
-        {#if dateLabel}
-          <time class="iwac-card__eyebrow">{dateLabel}</time>
-        {/if}
-      </header>
-
-      <h3 class="iwac-card__title">
-        {#if titleMarkup}
-          <!-- sanitizeSnippet escaped everything but literal mark tags -->
-          <!-- eslint-disable-next-line svelte/no-at-html-tags -->
-          <a href={itemUrl}>{@html titleMarkup}</a>
-        {:else}
-          <a href={itemUrl}>{title}</a>
-        {/if}
-      </h3>
-
-      {#if authors.length > 0}
-        <p class="iwac-card__byline">
-          <span class="iwac-card__meta-icon" aria-hidden="true"><Icon name="person" /></span
-          >{#each authors as author, i (author)}<button
-              type="button"
-              class="iwac-card__author"
-              class:is-active={isActive('creator_ss', author)}
-              aria-pressed={isActive('creator_ss', author)}
-              aria-label={chipAria({ field: 'creator_ss', value: author, display: author })}
-              onclick={() => toggle('creator_ss', author)}>{author}</button
-            >{#if i < authors.length - 1}<span class="iwac-card__byline-sep"></span>{/if}{/each}
-        </p>
-      {/if}
-
-      {#if citation}
-        <p class="iwac-card__citation">
-          <span class="iwac-card__meta-icon" aria-hidden="true"><Icon name={citationIcon} /></span
-          >{citation}
-        </p>
-      {/if}
-
-      {#if snippet}
-        <!-- snippet was HTML-escaped client-side; only literal mark tags survive (see sanitizeSnippet) -->
-        <!-- eslint-disable-next-line svelte/no-at-html-tags -->
-        <p class="iwac-card__snippet">{@html snippet}</p>
-      {:else if abstract}
-        <p class="iwac-card__snippet iwac-card__snippet--abstract">{abstract}</p>
-      {/if}
-
-      {#if matchedIn.length > 0}
-        <p class="iwac-card__matched">
-          <span class="iwac-card__matched-label">{t('matched_in')}</span>
-          {#each matchedIn as m, i (m.field)}<span class="iwac-card__matched-item"
-              ><span class="iwac-card__matched-field">{m.label}</span
-              ><!-- eslint-disable-next-line svelte/no-at-html-tags --><span
-                class="iwac-card__matched-value">{@html m.snippet}</span
-              ></span
-            >{#if i < matchedIn.length - 1}<span class="iwac-card__matched-sep"></span>{/if}{/each}
-        </p>
-      {/if}
-
-      {#if sourceChips.length > 0}
+    </a>
+    <div class="iwac-card__body iwac-card__body--gallery">
+      <header class="iwac-card__head">{@render typeBadge()}{@render eyebrowDate()}</header>
+      <h3 class="iwac-card__title iwac-card__title--gallery">{@render titleLink()}</h3>
+      {#if isEntity}
+        {#if mentionsLabel}<p class="iwac-card__gallery-meta">{mentionsLabel}</p>{/if}
+      {:else if sourceChips.length > 0}
         <ul class="iwac-card__source" aria-label={t('source')}>
           {#each sourceChips as chip (chip.field + '|' + chip.value)}
             {@render filterChip(chip)}
           {/each}
         </ul>
       {/if}
+    </div>
+  {:else}
+    <!-- ── List ledger row ── -->
+    {#if listThumb}
+      <a class="iwac-card__thumb" href={itemUrl} aria-hidden="true" tabindex="-1">
+        <img src={listThumb} alt="" loading="lazy" />
+      </a>
     {/if}
-  </div>
+
+    <div class="iwac-card__body">
+      {#if isEntity}
+        <!-- Index/authority entity card: year-span eyebrow, type badge,
+             occurrence metric + sparkline + countries. No body text. -->
+        <header class="iwac-card__head">{@render typeBadge()}{@render eyebrowDate()}</header>
+
+        <h3 class="iwac-card__title">{@render titleLink()}</h3>
+
+        {#if frequency != null || mentionsSeries.length >= 2}
+          <div class="iwac-card__metrics">
+            {#if frequency != null}
+              <span class="iwac-card__mentions">
+                <span class="iwac-card__mentions-n">{frequency.toLocaleString()}</span>
+                <span class="iwac-card__mentions-label">{mentionsWord}</span>
+              </span>
+            {/if}
+            {#if mentionsSeries.length >= 2}
+              <span
+                class="iwac-card__spark"
+                data-entity-type={doc.entity_type_s}
+                title={t('mentions_trend')}
+              >
+                <Sparkline values={mentionsSeries} />
+              </span>
+            {/if}
+          </div>
+        {/if}
+
+        {#if entityPartOfChips.length > 0 || entityCountryChips.length > 0}
+          <ul class="iwac-card__source" aria-label={t('source')}>
+            {#each entityPartOfChips as chip (chip.field + '|' + chip.value)}
+              {@render filterChip(chip)}
+            {/each}
+            {#each entityCountryChips as chip (chip.field + '|' + chip.value)}
+              {@render filterChip(chip)}
+            {/each}
+          </ul>
+        {/if}
+      {:else}
+        <header class="iwac-card__head">{@render typeBadge()}{@render eyebrowDate()}</header>
+
+        <h3 class="iwac-card__title">{@render titleLink()}</h3>
+
+        {#if authors.length > 0}
+          <p class="iwac-card__byline">
+            <span class="iwac-card__meta-icon" aria-hidden="true"><Icon name="person" /></span
+            >{#each authors as author, i (author)}<button
+                type="button"
+                class="iwac-card__author"
+                class:is-active={isActive('creator_ss', author)}
+                aria-pressed={isActive('creator_ss', author)}
+                aria-label={chipAria({ field: 'creator_ss', value: author, display: author })}
+                onclick={() => toggle('creator_ss', author)}>{author}</button
+              >{#if i < authors.length - 1}<span class="iwac-card__byline-sep"></span>{/if}{/each}
+          </p>
+        {/if}
+
+        {#if citation}
+          <p class="iwac-card__citation">
+            <span class="iwac-card__meta-icon" aria-hidden="true"><Icon name={citationIcon} /></span
+            >{citation}
+          </p>
+        {/if}
+
+        {#if snippet}
+          <!-- snippet was HTML-escaped client-side; only literal mark tags survive -->
+          <!-- eslint-disable-next-line svelte/no-at-html-tags -->
+          <p class="iwac-card__snippet">{@html snippet}</p>
+        {:else if abstract}
+          <p class="iwac-card__snippet iwac-card__snippet--abstract">{abstract}</p>
+        {/if}
+
+        {#if matchedIn.length > 0}
+          <p class="iwac-card__matched">
+            <span class="iwac-card__matched-label">{t('matched_in')}</span>
+            {#each matchedIn as m, i (m.field)}<span class="iwac-card__matched-item"
+                ><span class="iwac-card__matched-field">{m.label}</span
+                ><!-- eslint-disable-next-line svelte/no-at-html-tags --><span
+                  class="iwac-card__matched-value">{@html m.snippet}</span
+                ></span
+              >{#if i < matchedIn.length - 1}<span class="iwac-card__matched-sep"
+                ></span>{/if}{/each}
+          </p>
+        {/if}
+
+        {#if sourceChips.length > 0}
+          <ul class="iwac-card__source" aria-label={t('source')}>
+            {#each sourceChips as chip (chip.field + '|' + chip.value)}
+              {@render filterChip(chip)}
+            {/each}
+          </ul>
+        {/if}
+      {/if}
+    </div>
+  {/if}
 </article>
 
 <style>
   /*
    * Ledger row, not a card. Rows are separated by hairlines owned by
-   * ResultsList; the row itself is a flat grid with a hover wash. This
-   * roughly doubles results-per-screen versus the boxed cards and reads
-   * like the press archive it serves.
+   * ResultsList; the row itself is a flat grid with a hover wash.
    */
   .iwac-card {
     display: grid;
@@ -484,15 +526,32 @@
   .iwac-card:has(:focus-visible) {
     box-shadow: var(--ring-focus, 0 0 0 3px rgba(0, 0, 0, 0.1));
   }
-  /* Drop the thumb column when there's no image. */
+  /* Drop the thumb column when there's no image (list only). */
   .iwac-card--no-thumb {
     grid-template-columns: 1fr;
   }
 
+  /*
+   * Gallery tile: image on top, compact metadata below. No boxy drop-shadow
+   * card — the image is the block, a hairline border contains it. The hover
+   * wash is dropped (the un-desaturating plate is the affordance instead).
+   */
+  .iwac-card--gallery {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-sm, 0.5rem);
+    padding: 0;
+  }
+  .iwac-card--gallery:hover {
+    background: transparent;
+  }
+
   .iwac-card__thumb {
     display: block;
-    width: 5rem;
-    height: 5rem;
+    /* 80px → 112px: big enough to read a portrait or colour plate while
+       scanning (design review §01). */
+    width: 7rem;
+    height: 7rem;
     border-radius: var(--radius-sm, 0.375rem);
     overflow: hidden;
     background: var(--surface-sunken, #f4f1ef);
@@ -503,11 +562,13 @@
     height: 100%;
     object-fit: cover;
     display: block;
-    /* Newsprint at rest, full plate on engagement. */
-    filter: saturate(0.4) contrast(1.02);
+    /* Newsprint at rest, full plate on engagement. Eased from saturate(0.4) so
+       portraits and colour plates stay legible while scanning (punch item 5). */
+    filter: saturate(0.6) contrast(1.02);
     transition: filter var(--transition-base, 200ms ease);
   }
-  .iwac-card:hover .iwac-card__thumb img {
+  .iwac-card:hover .iwac-card__thumb img,
+  .iwac-card__thumb:hover img {
     filter: none;
   }
   @media (prefers-reduced-motion: reduce) {
@@ -516,11 +577,59 @@
     }
   }
 
+  /*
+   * Dark "lamplit reading room" surfaces (punch item 6): ease the rest-state
+   * desaturation further and give plates a stronger 1px --border so they
+   * separate from the warm dark ground instead of muddying into it. The hex
+   * fallbacks are the LIGHT canonical values (degraded-mode only — the tokens
+   * themselves resolve to the right per-theme value when the theme is present).
+   * Both the manual (data-theme="dark") and system (prefers-color-scheme)
+   * registers, but never when light is forced.
+   */
+  :global(body[data-theme='dark']) .iwac-card__thumb {
+    border-color: var(--border, #ced1d6);
+  }
+  :global(body[data-theme='dark']) .iwac-card__thumb img {
+    filter: saturate(0.78) contrast(1.02);
+  }
+  @media (prefers-color-scheme: dark) {
+    :global(body:not([data-theme='light'])) .iwac-card__thumb {
+      border-color: var(--border, #ced1d6);
+    }
+    :global(body:not([data-theme='light'])) .iwac-card__thumb img {
+      filter: saturate(0.78) contrast(1.02);
+    }
+  }
+
+  /*
+   * Gallery plate: a 4:3 frame so tall newspaper plates aren't decapitated by a
+   * square crop (design review crop-awareness). object-fit:cover still trims to
+   * the frame, but 4:3 keeps far more of a portrait page than 1:1.
+   */
+  .iwac-card__thumb--gallery {
+    width: 100%;
+    height: auto;
+    aspect-ratio: 4 / 3;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  /* Placeholder for image-less items: a quiet muted mark, never empty. */
+  .iwac-card__thumb-ph {
+    color: var(--muted, #66696e);
+    opacity: 0.5;
+    font-size: 2rem;
+    display: inline-flex;
+  }
+
   .iwac-card__body {
     min-width: 0;
     display: flex;
     flex-direction: column;
     gap: var(--space-xs, 0.25rem);
+  }
+  .iwac-card__body--gallery {
+    gap: 0.2rem;
   }
   .iwac-card__head {
     display: flex;
@@ -538,11 +647,9 @@
     font-variant-numeric: tabular-nums;
   }
   /*
-   * Type badge: outlined chip with a categorical dot. The dot carries the
-   * type colour (semantic theme tokens only — see the per-type rules), so a
-   * scan down the list reads category from the dots without a pastel fill
-   * shouting on every row. The old filled-orange active state put the brand
-   * on every card of a filtered list; active is now border + ink + wash.
+   * Type badge: outlined chip with a categorical dot. The dot carries the type
+   * colour (semantic theme tokens only); a scan down the list reads category
+   * from the dots without a pastel fill on every row.
    */
   .iwac-card__type {
     --iwac-type-dot: var(--muted, #66696e);
@@ -576,8 +683,7 @@
   }
   /* Categorical dot colours come from the theme's single-source --type-* map
      (IWAC-theme docs/DESIGN-SYSTEM.md §3); the hex is the degraded-mode
-     fallback when the theme isn't loaded. The type→colour mapping lives in
-     the theme, so it can't drift between this module and IwacVisualizations. */
+     fallback when the theme isn't loaded. */
   .iwac-card__type[data-type='article'] {
     --iwac-type-dot: var(--type-article, #ce4115);
   }
@@ -607,9 +713,8 @@
   }
 
   /*
-   * Clickable type badge. The IWAC theme paints every <button> primary +
-   * glow + hover-translate; class-level overrides win on specificity, but we
-   * also zero box-shadow/transform explicitly so the theme can't leak through.
+   * Clickable type badge. The IWAC theme paints every <button> primary + glow +
+   * hover-translate; we zero box-shadow/transform explicitly so it can't leak.
    */
   .iwac-card__type--filter {
     cursor: pointer;
@@ -623,8 +728,8 @@
     box-shadow: none;
     transform: none;
   }
-  /* Active type filter: the label goes primary (the brand = current state);
-     the categorical dot keeps its own colour. No pill fill on every row. */
+  /* Active type filter: the label goes primary; the categorical dot keeps its
+     own colour. No pill fill on every row. */
   .iwac-card__type--filter.is-active {
     background: transparent;
     color: var(--primary, #ce4115);
@@ -640,8 +745,18 @@
     font-size: var(--text-lg, 1.1875rem);
     line-height: 1.3;
     color: var(--ink-strong, var(--ink, #13161c));
-    /* Clarendon slabs clog at tighter tracking. */
-    letter-spacing: -0.01em;
+    /* Clarendon slabs clog at tighter tracking — shared display token. */
+    letter-spacing: var(--tracking-display, -0.01em);
+  }
+  /* Gallery titles are smaller and clamp to two lines so tiles stay even. */
+  .iwac-card__title--gallery {
+    font-size: var(--text-base, 1.0625rem);
+    line-height: 1.25;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
   }
   .iwac-card__title a {
     color: inherit;
@@ -658,17 +773,12 @@
     font-size: var(--text-sm, 0.9375rem);
     color: var(--ink-light, var(--ink, #13161c));
     line-height: 1.4;
-    /* Clamp long author lists to two lines so cards stay even. */
     display: -webkit-box;
     -webkit-line-clamp: 2;
     line-clamp: 2;
     -webkit-box-orient: vertical;
     overflow: hidden;
   }
-  /*
-   * Each author is an inline creator_ss filter toggle. Reset the theme's
-   * button paint so the byline still reads as text; brand the active author.
-   */
   .iwac-card__author {
     display: inline;
     margin: 0;
@@ -701,19 +811,11 @@
     box-shadow: var(--ring-focus, 0 0 0 3px rgba(0, 0, 0, 0.1));
     border-radius: var(--radius-sm, 0.375rem);
   }
-  /* CSS-generated ", " — the Svelte compiler trims a literal trailing
-     space at the {#if} block boundary (the authors used to render as
-     "Madore,Anato"), and generated content is immune to that. */
   .iwac-card__byline-sep::before {
     content: ', ';
     color: var(--ink-light, var(--ink, #13161c));
   }
 
-  /*
-   * Small leading icon on metadata lines and chips (author, citation,
-   * newspaper, country). Muted so the icon reads as a field marker, not a
-   * control; the inline SVG inherits this color via currentColor.
-   */
   .iwac-card__meta-icon {
     display: inline-block;
     color: var(--muted, #66696e);
@@ -721,9 +823,6 @@
     font-size: 0.875em;
   }
 
-  /* Source line for references (journal · volume · pages, book · publisher).
-     Italic + muted so it reads as bibliographic metadata under the byline,
-     distinct from the abstract below it. */
   .iwac-card__citation {
     margin: 0;
     font-size: var(--text-sm, 0.9375rem);
@@ -742,15 +841,12 @@
     font-size: var(--text-sm, 0.9375rem);
     color: var(--ink-light, var(--ink, #13161c));
     line-height: var(--line-height-normal, 1.5);
-    /* Clamp to ~3 lines to keep cards visually consistent in a long list. */
     display: -webkit-box;
     -webkit-line-clamp: 3;
     line-clamp: 3;
     -webkit-box-orient: vertical;
     overflow: hidden;
   }
-  /* The abstract/description fallback reads as supporting context, so
-     clamp it tighter ("a couple of lines") than a query-match snippet. */
   .iwac-card__snippet--abstract {
     -webkit-line-clamp: 2;
     line-clamp: 2;
@@ -769,12 +865,6 @@
     padding-inline: 0.15em;
   }
 
-  /*
-   * "Matched in" attribution — why this hit is in the list when the match
-   * isn't visible in title/body: subject, spatial coverage, author,
-   * journal, alternative title, entity alias. Quiet one-liner above the
-   * source line; the <mark> inside each value carries the evidence.
-   */
   .iwac-card__matched {
     margin: var(--space-xs, 0.25rem) 0 0;
     font-size: var(--text-xs, 0.8125rem);
@@ -792,7 +882,6 @@
     font-weight: 600;
     color: var(--ink-light, var(--ink, #13161c));
   }
-  /* Generated separators (see .iwac-card__byline-sep for why). */
   .iwac-card__matched-field::after {
     content: ' : ';
   }
@@ -802,10 +891,55 @@
   }
 
   /*
-   * Source line: quiet text tokens separated by interpuncts — a byline,
-   * not a chip tray. Plain INLINE flow (not flex) so every token and
-   * separator shares one text baseline; flex items drifted vertically.
-   * Each token is still a working facet toggle.
+   * Entity metric row: the occurrence count as a display numeral beside the
+   * mentions-over-time sparkline (design review §03B). The sparkline inherits
+   * the entity's categorical colour via currentColor on the wrapper — same
+   * token the dot uses, read at runtime, never hardcoded.
+   */
+  .iwac-card__metrics {
+    display: flex;
+    align-items: flex-end;
+    gap: var(--space-md, 1rem);
+    margin-block-start: var(--space-xs, 0.25rem);
+  }
+  .iwac-card__mentions {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 0.35em;
+  }
+  .iwac-card__mentions-n {
+    font-family: var(--font-headings, Georgia, serif);
+    font-size: var(--text-xl, 1.5rem);
+    font-weight: 700;
+    line-height: 1;
+    color: var(--ink-strong, var(--ink, #13161c));
+    font-variant-numeric: tabular-nums;
+    letter-spacing: var(--tracking-display, -0.01em);
+  }
+  .iwac-card__mentions-label {
+    font-size: var(--text-xs, 0.8125rem);
+    color: var(--muted, #66696e);
+  }
+  .iwac-card__spark {
+    display: inline-flex;
+    align-items: flex-end;
+    /* Default to the muted ink; per-type rules below override with the entity
+       colour. The inline SVG inherits this via stroke/fill:currentColor. */
+    color: var(--muted, #66696e);
+  }
+  .iwac-card__spark[data-entity-type='Personnes'] {
+    color: var(--type-entity-personnes, #037ac0);
+  }
+  .iwac-card__spark[data-entity-type='Lieux'] {
+    color: var(--type-entity-lieux, #2e9052);
+  }
+  .iwac-card__spark[data-entity-type='Organisations'] {
+    color: var(--type-entity-organisations, #de7000);
+  }
+
+  /*
+   * Source line: quiet text tokens separated by interpuncts — a byline, not a
+   * chip tray. Plain INLINE flow so every token shares one baseline.
    */
   .iwac-card__source {
     list-style: none;
@@ -861,20 +995,22 @@
     box-shadow: var(--ring-focus, 0 0 0 3px rgba(0, 0, 0, 0.1));
     border-radius: var(--radius-sm, 0.375rem);
   }
-  /* Occurrence count on entity cards — the headline metric. */
-  .iwac-card__chip--count {
-    color: var(--ink-strong, var(--ink, #13161c));
-    font-weight: 700;
+
+  /* Compact entity meta in a gallery tile (e.g. "312 mentions"). */
+  .iwac-card__gallery-meta {
+    margin: 0;
+    font-size: var(--text-xs, 0.8125rem);
+    color: var(--muted, #66696e);
     font-variant-numeric: tabular-nums;
   }
 
-  /* Narrow viewport: stack the thumb on top so titles get full width. */
+  /* Narrow viewport: stack the list thumb on top so titles get full width. */
   @media (max-width: 32rem) {
-    .iwac-card {
+    .iwac-card--list {
       grid-template-columns: 1fr;
       gap: var(--space-sm, 0.5rem);
     }
-    .iwac-card__thumb {
+    .iwac-card--list .iwac-card__thumb {
       width: 100%;
       height: 9rem;
     }

@@ -53,20 +53,33 @@ final class EntityOccurrences
     }
 
     /**
-     * @return array{frequency:int, countries:list<string>, first_year:?int, last_year:?int}
+     * @return array{
+     *   frequency:int, countries:list<string>, first_year:?int, last_year:?int,
+     *   mentions_by_year:array<int,int>
+     * }
      */
     public function aggregate(int $entityId): array
     {
         $e = $this->byEntity[$entityId] ?? null;
         if ($e === null) {
-            return ['frequency' => 0, 'countries' => [], 'first_year' => null, 'last_year' => null];
+            return [
+                'frequency' => 0, 'countries' => [], 'first_year' => null,
+                'last_year' => null, 'mentions_by_year' => [],
+            ];
         }
         $years = $e['years'];
+        // Per-year occurrence counts (ascending), for the entity-card sparkline.
+        $byYear = [];
+        foreach ($years as $y) {
+            $byYear[$y] = ($byYear[$y] ?? 0) + 1;
+        }
+        ksort($byYear);
         return [
             'frequency'  => $e['count'],
             'countries'  => array_keys($e['countries']),
             'first_year' => $years !== [] ? min($years) : null,
             'last_year'  => $years !== [] ? max($years) : null,
+            'mentions_by_year' => $byYear,
         ];
     }
 }

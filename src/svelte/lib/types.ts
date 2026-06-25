@@ -149,6 +149,15 @@ export interface IwacDoc {
   last_year?: number;
   /** Entity category via dcterms:isPartOf (org kind for organisations). */
   is_part_of_ss?: string[];
+  /**
+   * Per-year mention histogram for an index entity, encoded as a compact
+   * `"year:count"` list joined by `;` (e.g. "1983:4;1984:7;1990:2"). Powers
+   * the entity-card mentions sparkline. index:false in the entity schema —
+   * stored for display only, parsed client-side by parseMentionsByYear().
+   * Absent until the collection is rebuilt by a reindex that emits it, so the
+   * sparkline degrades gracefully (no field → no sparkline).
+   */
+  mentions_by_year_s?: string;
 }
 
 /**
@@ -250,6 +259,14 @@ export interface YearBucket {
 }
 
 /**
+ * Result presentation mode. `list` is the dense ledger (default — density
+ * first); `gallery` is the image-forward tile grid for browsing the corpus's
+ * photographs, plates and scans. Synced to the URL (`&view=gallery`) and
+ * localStorage so it's shareable and sticky.
+ */
+export type ViewMode = 'list' | 'gallery';
+
+/**
  * The full URL-syncable state for one mount instance. Standalone /search
  * persists this to window.location; page blocks keep it in memory only.
  */
@@ -259,6 +276,8 @@ export interface SearchState {
   sort: string; // e.g. "_text_match:desc", "date:desc"
   filters: ActiveFilters;
   yearRange: YearRange | null;
+  /** Presentation mode (does not affect the query). Defaults to 'list'. */
+  view: ViewMode;
 }
 
 /**

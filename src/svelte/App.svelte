@@ -5,15 +5,21 @@
     IwacFacetCount,
     IwacSearchResponse,
     SearchState,
+    ViewMode,
     YearBucket,
     YearRange,
   } from './lib/types';
   import { TypesenseClient } from './lib/typesense';
-  import { onUrlPop, readUrlState, syncToUrl } from './lib/urlState';
+  import { onUrlPop, readUrlState, syncToUrl, urlHasView } from './lib/urlState';
   import { normalizeCard, normalizeLocale, provideI18n } from './lib/i18n';
+  import type { ActiveFilterChip } from './lib/filterChips';
   import SearchInput from './components/SearchInput.svelte';
   import SuggestDropdown from './components/SuggestDropdown.svelte';
   import ResultsList from './components/ResultsList.svelte';
+  import ResultSummary from './components/ResultSummary.svelte';
+  import ResultSkeleton from './components/ResultSkeleton.svelte';
+  import ResultsEmpty from './components/ResultsEmpty.svelte';
+  import ViewToggle from './components/ViewToggle.svelte';
   import FacetPanel from './components/FacetPanel.svelte';
   import SortSelect from './components/SortSelect.svelte';
   import ExportMenu from './components/ExportMenu.svelte';
@@ -90,6 +96,7 @@
         sort: bootstrap.default_sort || '_text_match:desc',
         filters: {},
         yearRange: null,
+        view: 'list',
       };
 
   let query = $state(initial.q);
@@ -97,6 +104,62 @@
   let sort = $state(initial.sort);
   let filters = $state<ActiveFilters>(initial.filters);
   let yearRange = $state<YearRange | null>(initial.yearRange);
+
+  // ── Result presentation (List ↔ Gallery, design review §01) ─────────
+  // Gallery is offered on content surfaces only; the entity index is list-only.
+  const supportsGallery = card === 'content';
+  const VIEW_STORAGE_KEY = 'iwac-view-mode';
+
+  // Initial view: an explicit URL `view` param (shared link) wins, then the
+  // sticky localStorage preference, else `list` (density first) — possibly
+  // upgraded to gallery later by the image-heavy auto-suggest below.
+  const initialView = resolveInitialView();
+  let viewMode = $state<ViewMode>(initialView.view);
+  // Whether the view was deliberately chosen (URL / localStorage / user toggle).
+  // Only explicit choices sync to the URL + localStorage; an auto-suggested
+  // gallery stays a per-session presentation hint.
+  let viewExplicit = $state(initialView.explicit);
+  let viewAutoApplied = $state(false);
+
+  function resolveInitialView(): { view: ViewMode; explicit: boolean } {
+    if (!supportsGallery) return { view: 'list', explicit: true };
+    if (syncUrl && urlHasView(window.location.href, urlPrefix)) {
+      return { view: initial.view, explicit: true };
+    }
+    const stored = readStoredView();
+    if (stored) return { view: stored, explicit: true };
+    return { view: 'list', explicit: false };
+  }
+
+  function readStoredView(): ViewMode | null {
+    try {
+      const v = window.localStorage.getItem(VIEW_STORAGE_KEY);
+      return v === 'gallery' || v === 'list' ? v : null;
+    } catch {
+      return null;
+    }
+  }
+
+  function handleViewChange(next: ViewMode): void {
+    if (next === viewMode) return;
+    viewMode = next;
+    viewExplicit = true;
+    try {
+      window.localStorage.setItem(VIEW_STORAGE_KEY, next);
+    } catch {
+      /* private mode / storage disabled — the toggle still works in-session */
+    }
+  }
+
+  // Image-bearing types — when a result set is mostly these, a gallery serves
+  // the researcher better than a ledger of text rows.
+  const IMAGE_BEARING_TYPES = new Set(['photograph', 'document', 'audiovisual']);
+  function isImageHeavy(r: IwacSearchResponse): boolean {
+    const hits = r.hits ?? [];
+    if (hits.length < 4) return false; // too few to judge confidently
+    const n = hits.filter((h) => IMAGE_BEARING_TYPES.has(h.document.type_s ?? '')).length;
+    return n / hits.length > 0.6;
+  }
 
   // Hydrate from the SSR'd first page when present. The server inlines
   // a `initial_response` in the bootstrap JSON for curated browse pages,
@@ -140,7 +203,9 @@
   // the toolbar header below.
   let resultsAnchor: HTMLElement | null = $state(null);
 
-  // Push state → URL whenever anything observable changes.
+  // Push state → URL whenever anything observable changes. `view` only goes to
+  // the URL when explicitly chosen — an auto-suggested gallery stays a session
+  // hint and never mutates a shared link.
   $effect(() => {
     if (!syncUrl) return;
     const next: SearchState = {
@@ -149,6 +214,7 @@
       sort,
       filters,
       yearRange,
+      view: viewExplicit ? viewMode : 'list',
     };
     syncToUrl(next, prevState, urlPrefix);
     // Snapshot for the next diff. NOT structuredClone(next): `filters` and
@@ -161,6 +227,7 @@
       sort: next.sort,
       filters: Object.fromEntries(Object.entries(next.filters).map(([k, v]) => [k, [...v]])),
       yearRange: next.yearRange ? { ...next.yearRange } : null,
+      view: next.view,
     };
   });
 
@@ -173,7 +240,23 @@
       sort = s.sort;
       filters = s.filters;
       yearRange = s.yearRange;
+      if (supportsGallery) {
+        viewMode = s.view;
+        // A `view` in the popped URL is an explicit choice to honour; its
+        // absence reverts to the implicit default.
+        viewExplicit = urlHasView(window.location.href, urlPrefix);
+      }
     }, urlPrefix);
+  });
+
+  // Auto-suggest Gallery once, on the first response, when the set is
+  // image-heavy and the user hasn't explicitly chosen a view (design review
+  // §01). Never overrides an explicit choice; doesn't persist (session hint).
+  $effect(() => {
+    const r = response;
+    if (!r || !supportsGallery || viewExplicit || viewAutoApplied) return;
+    viewAutoApplied = true;
+    if (isImageHeavy(r)) viewMode = 'gallery';
   });
 
   // Query → search. Tracks every reactive state field by reading it.
@@ -430,6 +513,18 @@
     page = 1;
   }
 
+  /**
+   * Remove one active-filter chip from the summary strip / empty state. The
+   * year chip clears the range; every other chip toggles its facet value off.
+   */
+  function handleRemoveChip(chip: ActiveFilterChip): void {
+    if (chip.kind === 'year') {
+      handleYearRangeChange(null);
+    } else {
+      handleFacetToggle(chip.field, chip.value, false);
+    }
+  }
+
   function handleYearRangeChange(next: YearRange | null): void {
     yearRange = next;
     page = 1;
@@ -577,29 +672,16 @@
       {/if}
 
       <div class="iwac-search__results" aria-busy={isLoading}>
-        <!-- Toolbar: result count + Filters trigger (mobile-only) + sort -->
         {#if response}
-          <header class="iwac-search__toolbar" bind:this={resultsAnchor} aria-live="polite">
-            <div class="iwac-search__count-block">
-              {#if response.found > 0}
-                <span class="iwac-search__count-number">
-                  {response.found.toLocaleString()}
-                </span>
-                <span class="iwac-search__count-label">
-                  {response.found === 1 ? t('result_one') : t('result_other')}
-                </span>
-                {#if searchTimeMs > 0}
-                  <span class="iwac-search__count-timing">
-                    · {searchTimeMs} ms
-                  </span>
-                {/if}
-              {:else}
-                <span class="iwac-search__count-label iwac-search__count-label--empty">
-                  {t('no_results_short')}
-                </span>
-              {/if}
-            </div>
-            <div class="iwac-search__toolbar-actions">
+          <!-- Result controls: one row owning the view toggle (left) and the
+               sort / export / mobile-filters actions (right), so spacing + wrap
+               are defined once (punch-list item 4). The result count moves to
+               the summary strip below. -->
+          <div class="iwac-search__controls" bind:this={resultsAnchor}>
+            {#if supportsGallery}
+              <ViewToggle value={viewMode} onChange={handleViewChange} />
+            {/if}
+            <div class="iwac-search__controls-actions">
               <button
                 type="button"
                 class="iwac-search__filters-trigger"
@@ -616,25 +698,35 @@
               {/if}
               <SortSelect value={sort} onChange={handleSortChange} />
             </div>
-          </header>
+          </div>
+
+          <!-- Persistent count + scope + sort summary, visible on every
+               viewport (the mobile filter readout). Closed by a 2px ink rule. -->
+          {#if response.found > 0}
+            <ResultSummary
+              found={response.found}
+              {searchTimeMs}
+              {filters}
+              {yearRange}
+              {sort}
+              onRemoveChip={handleRemoveChip}
+              onClearAll={handleClearAll}
+            />
+          {/if}
         {/if}
 
-        {#if isLoading && !response}
-          <p class="iwac-search__status" aria-live="polite">{t('searching')}</p>
+        {#if isLoading}
+          <!-- Galley-proof skeleton in the active view (replaces the opacity
+               dim) — holds geometry so the page doesn't jump (§03A). -->
+          <ResultSkeleton view={viewMode} count={Math.min(Math.max(perPage, 4), 8)} />
         {:else if response && response.found === 0}
-          <div class="iwac-search__empty" role="status">
-            <strong>{t('no_results_title')}</strong>
-            {#if activeFilterCount > 0}
-              <p>{t('try_removing_filter')}</p>
-              <button type="button" class="iwac-search__clear-link" onclick={handleClearAll}>
-                {t('clear_all_filters')}
-              </button>
-            {:else if query.trim() !== ''}
-              <p>{t('try_broader_query')}</p>
-            {:else}
-              <p>{t('corpus_empty')}</p>
-            {/if}
-          </div>
+          <ResultsEmpty
+            {filters}
+            {yearRange}
+            {query}
+            onRemoveChip={handleRemoveChip}
+            onClearAll={handleClearAll}
+          />
         {:else if response}
           <ResultsList
             {response}
@@ -643,6 +735,7 @@
             activeFilters={filters}
             onFacetToggle={handleFacetToggle}
             {hideCountry}
+            view={viewMode}
           />
         {/if}
       </div>
@@ -762,29 +855,19 @@
       font-variant-numeric: tabular-nums;
     }
     /*
-     * Toolbar stacks on narrow viewports: the result count takes the
-     * first line on its own (so "· 34 ms" never gets squeezed off it),
-     * and the actions drop below — Filters left, Export right. Without
-     * this the count-block (flex: 1; min-width: 0) shrinks to share the
-     * line with the buttons and its text wraps behind them.
+     * Controls wrap on a phone: the view toggle keeps the first line, the
+     * actions wrap below it, and the sort select drops to its own full-width
+     * row (Filters · Export · Sort don't fit one phone row without clipping
+     * the select).
      */
-    .iwac-search__count-block {
-      flex-basis: 100%;
-    }
-    .iwac-search__toolbar-actions {
-      width: 100%;
-      justify-content: space-between;
-      /* Three controls (Filters · Export · Sort) no longer fit one row on
-         a phone — without wrapping the sort select was clipped at the
-         viewport edge. Filters + Export share the first row; the sort
-         group drops to its own full-width row below. */
+    .iwac-search__controls-actions {
       flex-wrap: wrap;
       row-gap: var(--space-sm, 0.5rem);
     }
-    .iwac-search__toolbar-actions :global(.iwac-sort) {
+    .iwac-search__controls-actions :global(.iwac-sort) {
       flex: 1 1 100%;
     }
-    .iwac-search__toolbar-actions :global(.iwac-sort__select) {
+    .iwac-search__controls-actions :global(.iwac-sort__select) {
       flex: 1 1 auto;
       min-width: 0;
     }
@@ -795,106 +878,30 @@
     flex-direction: column;
     gap: var(--space-md, 1rem);
     min-width: 0; /* allow snippet wrap */
-    /* When a paged search is in flight, dim the list slightly so the
-       user gets feedback without losing scroll position. The bar itself
-       is provided by ResultsList — this is just a passive cue. */
-    transition: opacity var(--transition-base, 200ms ease);
+    /* No opacity dim while paging — the ResultSkeleton provides the loading
+       feedback now, keeping row geometry stable (punch-list item 2). aria-busy
+       stays on the container for assistive tech. */
   }
-  .iwac-search__results[aria-busy='true'] {
-    opacity: 0.65;
-  }
-  .iwac-search__toolbar {
+  /*
+   * Result controls row: the view toggle (left) + the sort/export/filters
+   * actions (right, pushed to the end by the auto margin so they sit at the
+   * end whether or not the toggle is present). Hairline under; anchors the
+   * pagination scroll-back.
+   */
+  .iwac-search__controls {
     display: flex;
     align-items: center;
-    justify-content: space-between;
     gap: var(--space-md, 1rem);
     flex-wrap: wrap;
-    /* Anchor under the search box — gives pagination something to
-       scroll back to. */
     padding-block-end: var(--space-sm, 0.5rem);
     border-bottom: 1px solid var(--border-light, #e2e5e8);
   }
-  .iwac-search__count-block {
-    display: inline-flex;
-    align-items: baseline;
-    gap: 0.375rem;
-    color: var(--muted, #66696e);
-    font-size: var(--text-sm, 0.9375rem);
-    font-variant-numeric: tabular-nums;
-    flex: 1;
-    min-width: 0;
-  }
-  .iwac-search__count-number {
-    color: var(--ink-strong, var(--ink, #13161c));
-    /* Ledger numeral: display serif, tabular figures. */
-    font-family: var(--font-headings, Georgia, serif);
-    font-size: var(--text-xl, 1.5rem);
-    font-weight: 700;
-    line-height: 1;
-  }
-  .iwac-search__count-label {
-    font-weight: 500;
-  }
-  .iwac-search__count-label--empty {
-    color: var(--ink-strong, var(--ink, #13161c));
-    font-weight: 600;
-  }
-  .iwac-search__count-timing {
-    color: var(--muted, #66696e);
-    font-size: var(--text-xs, 0.8125rem);
-    /* Keep "· 34 ms" as one unit — never let it break to its own line. */
-    white-space: nowrap;
-  }
-  .iwac-search__toolbar-actions {
+  .iwac-search__controls-actions {
     display: inline-flex;
     align-items: center;
     gap: var(--space-sm, 0.5rem);
-    /* Don't let the actions get squeezed; they wrap to their own line
-       below the count on narrow viewports (see the media query). */
+    margin-inline-start: auto;
     flex-shrink: 0;
-  }
-
-  .iwac-search__empty {
-    /* Quiet text on the page surface — an empty ledger, not a dashed bin. */
-    padding: var(--space-2xl, 3rem) var(--space-lg, 1.5rem);
-    border-block-end: 1px solid var(--border-light, #e2e5e8);
-    text-align: center;
-    color: var(--muted, #66696e);
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: var(--space-sm, 0.5rem);
-  }
-  .iwac-search__empty strong {
-    color: var(--ink-strong, var(--ink, #13161c));
-    font-size: var(--text-lg, 1.1875rem);
-  }
-  .iwac-search__empty p {
-    margin: 0;
-  }
-  .iwac-search__clear-link {
-    background: none;
-    border: 1px solid var(--primary, #ce4115);
-    color: var(--primary, #ce4115);
-    border-radius: var(--radius-md, 0.5rem);
-    padding: 0.4rem 0.75rem;
-    box-shadow: none;
-    font-size: var(--text-sm, 0.9375rem);
-    cursor: pointer;
-    margin-top: var(--space-xs, 0.25rem);
-    transition:
-      background var(--transition-fast, 150ms ease),
-      color var(--transition-fast, 150ms ease);
-  }
-  .iwac-search__clear-link:hover {
-    background: var(--primary, #ce4115);
-    color: var(--white, #fff);
-    box-shadow: none;
-    transform: none;
-  }
-  .iwac-search__clear-link:focus-visible {
-    outline: none;
-    box-shadow: var(--ring-focus, 0 0 0 3px rgba(0, 0, 0, 0.1));
   }
   .iwac-search__error {
     background: color-mix(in oklab, var(--error, #c9222b) 12%, var(--surface, #fdfcfb));

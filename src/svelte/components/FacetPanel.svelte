@@ -15,13 +15,8 @@
     YearBucket,
     YearRange,
   } from '../lib/types';
-  import {
-    facetLabel,
-    facetValueLabel,
-    SENTIMENT_FIELDS,
-    NUMERIC_FACET_FIELDS,
-    useI18n,
-  } from '../lib/i18n';
+  import { SENTIMENT_FIELDS, NUMERIC_FACET_FIELDS, useI18n } from '../lib/i18n';
+  import { deriveActiveChips } from '../lib/filterChips';
   import FacetGroup from './FacetGroup.svelte';
   import DateRangeSlider from './DateRangeSlider.svelte';
 
@@ -95,41 +90,11 @@
 
   const { locale, t } = useI18n();
 
-  const activeChips = $derived.by(() => {
-    const chips: Array<{
-      field: string;
-      /** Raw value — the one toggled off when the chip is clicked. */
-      value: string;
-      /** Human-facing value (e.g. subjectivity 1–5 → words). */
-      displayValue: string;
-      label: string;
-      kind: 'facet' | 'year';
-    }> = [];
-    for (const [field, values] of Object.entries(selected)) {
-      for (const v of values) {
-        chips.push({
-          field,
-          value: v,
-          displayValue: facetValueLabel(field, v, locale),
-          label: labels?.[field] ?? facetLabel(field, locale),
-          kind: 'facet',
-        });
-      }
-    }
-    if (yearRange) {
-      const lo = yearRange.from ?? yearMin;
-      const hi = yearRange.to ?? yearMax;
-      const range = `${lo} – ${hi}`;
-      chips.push({
-        field: 'pub_year',
-        value: range,
-        displayValue: range,
-        label: t('year'),
-        kind: 'year',
-      });
-    }
-    return chips;
-  });
+  // Active-filter chips come from the shared deriveActiveChips() so the sidebar,
+  // the result-summary strip and the empty state can never disagree about scope.
+  const activeChips = $derived(
+    deriveActiveChips({ selected, yearRange, locale, t, yearMin, yearMax, labels }),
+  );
 
   const hasActive = $derived(activeChips.length > 0);
 

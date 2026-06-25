@@ -68,6 +68,10 @@ fields:
   # client's date handling unchanged.
   - { name: date,     type: int64, facet: false, sort: true, optional: true }
   - { name: pub_year, type: int32, facet: true,  sort: true, optional: true }
+  # Compact "year:count;…" mention histogram — display-only, powers the
+  # entity-card sparkline (design review §03B). index:false (never searched
+  # or faceted) and optional, so older snapshots without it just omit it.
+  - { name: mentions_by_year_s, type: string, index: false, optional: true }
 
   # ── Geo (stored for a future map; not indexed) ────────────────────────
   - { name: coordinates, type: string, index: false, optional: true }

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { ActiveFilters, IwacSearchResponse } from '../lib/types';
+  import type { ActiveFilters, IwacSearchResponse, ViewMode } from '../lib/types';
   import { useI18n } from '../lib/i18n';
   import ResultItem from './ResultItem.svelte';
   import Pagination from './Pagination.svelte';
@@ -35,6 +35,8 @@
     onFacetToggle: (field: string, value: string, nextChecked: boolean) => void;
     /** Hide the country chip on cards (single-country scopes). */
     hideCountry?: boolean;
+    /** List ledger (default) or image-forward gallery grid. */
+    view?: ViewMode;
   }
 
   const {
@@ -44,6 +46,7 @@
     activeFilters,
     onFacetToggle,
     hideCountry = false,
+    view = 'list',
   }: Props = $props();
 
   const { t } = useI18n();
@@ -54,11 +57,19 @@
 <div class="iwac-results">
   {#if response.hits.length === 0}
     <p class="iwac-results__empty">{t('results_empty_list')}</p>
+  {:else if view === 'gallery'}
+    <div class="iwac-results__gallery">
+      {#each response.hits as hit (hit.document.id)}
+        <ResultItem {hit} {activeFilters} {onFacetToggle} {hideCountry} layout="gallery" />
+      {/each}
+    </div>
+
+    <Pagination currentPage={response.page} {totalPages} {onPageChange} />
   {:else}
     <ol class="iwac-results__list">
       {#each response.hits as hit (hit.document.id)}
         <li class="iwac-results__item">
-          <ResultItem {hit} {activeFilters} {onFacetToggle} {hideCountry} />
+          <ResultItem {hit} {activeFilters} {onFacetToggle} {hideCountry} layout="list" />
         </li>
       {/each}
     </ol>
@@ -86,6 +97,22 @@
   .iwac-results__item {
     margin: 0;
     border-block-start: 1px solid var(--border-light, #e2e5e8);
+  }
+  /*
+   * Gallery grid: image-forward tiles, no boxy cards. auto-fill keeps tiles a
+   * comfortable browsing size and reflows to the column count that fits — wide
+   * on desktop, two-up on a phone. Matches ResultSkeleton's gallery geometry.
+   */
+  .iwac-results__gallery {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
+    gap: var(--space-lg, 1.5rem);
+  }
+  @media (max-width: 30rem) {
+    .iwac-results__gallery {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: var(--space-md, 1rem);
+    }
   }
   .iwac-results__empty {
     color: var(--muted, #66696e);

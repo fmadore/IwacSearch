@@ -27,7 +27,10 @@ final class IndexEntityMapper
      *   coordinates:string, identifier:string, is_part_of:list<string>,
      *   thumbnail:?string, is_public:bool
      * } $entity
-     * @param array{frequency:int, countries:list<string>, first_year:?int, last_year:?int} $aggregate
+     * @param array{
+     *   frequency:int, countries:list<string>, first_year:?int, last_year:?int,
+     *   mentions_by_year?:array<int,int>
+     * } $aggregate
      * @return array<string, mixed>|null  null = skip (no title / type)
      */
     public function map(array $entity, array $aggregate): ?array
@@ -79,6 +82,18 @@ final class IndexEntityMapper
             // year slider; date (epoch of last mention) drives date:desc.
             $doc['pub_year'] = $lastYear;
             $doc['date'] = (int) gmmktime(0, 0, 0, 1, 1, $lastYear);
+        }
+
+        // Compact "year:count;…" mention histogram for the entity-card sparkline
+        // (display-only; index:false in the schema). Omitted when there are no
+        // dated occurrences, so the client simply renders no sparkline.
+        $byYear = $aggregate['mentions_by_year'] ?? [];
+        if ($byYear !== []) {
+            $parts = [];
+            foreach ($byYear as $year => $count) {
+                $parts[] = $year . ':' . $count;
+            }
+            $doc['mentions_by_year_s'] = implode(';', $parts);
         }
 
         return $doc;
