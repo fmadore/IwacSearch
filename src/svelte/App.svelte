@@ -23,6 +23,7 @@
   import FacetPanel from './components/FacetPanel.svelte';
   import SortSelect from './components/SortSelect.svelte';
   import ExportMenu from './components/ExportMenu.svelte';
+  import Icon from './components/Icon.svelte';
   import Drawer from '../svelte-shared/components/Drawer.svelte';
 
   /**
@@ -673,31 +674,36 @@
 
       <div class="iwac-search__results" aria-busy={isLoading}>
         {#if response}
-          <!-- Result controls: one row owning the view toggle (left) and the
-               sort / export / mobile-filters actions (right), so spacing + wrap
-               are defined once (punch-list item 4). The result count moves to
-               the summary strip below. -->
+          <!-- Result controls. On desktop one row: view toggle (left), then
+               export + sort (right). On a phone two rows: [view · filters ·
+               export] then a full-width sort, so the bar reads as a tidy unit
+               instead of three cramped stacked rows (punch-list item 4). -->
           <div class="iwac-search__controls" bind:this={resultsAnchor}>
-            {#if supportsGallery}
-              <ViewToggle value={viewMode} onChange={handleViewChange} />
-            {/if}
-            <div class="iwac-search__controls-actions">
-              <button
-                type="button"
-                class="iwac-search__filters-trigger"
-                onclick={openFilterDrawer}
-                aria-label={t('open_filters')}
-              >
-                {t('filters')}
-                {#if activeFilterCount > 0}
-                  <span class="iwac-search__filters-trigger-badge">{activeFilterCount}</span>
-                {/if}
-              </button>
-              {#if card === 'content' && response.found > 0}
-                <ExportMenu fetchDocs={handleExportFetch} {query} found={response.found} />
+            <div class="iwac-search__controls-bar">
+              {#if supportsGallery}
+                <ViewToggle value={viewMode} onChange={handleViewChange} />
               {/if}
-              <SortSelect value={sort} onChange={handleSortChange} />
+              <div class="iwac-search__controls-actions">
+                <button
+                  type="button"
+                  class="iwac-search__filters-trigger"
+                  onclick={openFilterDrawer}
+                  aria-label={t('open_filters')}
+                >
+                  <span class="iwac-search__filters-trigger-icon" aria-hidden="true">
+                    <Icon name="filter" />
+                  </span>
+                  <span class="iwac-search__filters-trigger-label">{t('filters')}</span>
+                  {#if activeFilterCount > 0}
+                    <span class="iwac-search__filters-trigger-badge">{activeFilterCount}</span>
+                  {/if}
+                </button>
+                {#if card === 'content' && response.found > 0}
+                  <ExportMenu fetchDocs={handleExportFetch} {query} found={response.found} />
+                {/if}
+              </div>
             </div>
+            <SortSelect value={sort} onChange={handleSortChange} />
           </div>
 
           <!-- Persistent count + scope + sort summary, visible on every
@@ -811,11 +817,47 @@
       grid-template-columns: 1fr;
       gap: var(--space-md, 1rem);
     }
+
+    /*
+     * Two tidy rows on a phone: [view · filters · export] on top, then a
+     * full-width sort row. Stacking the controls (column) bounds the sort row
+     * to the viewport so its <select> can't overflow.
+     */
+    .iwac-search__controls {
+      flex-direction: column;
+      align-items: stretch;
+      gap: var(--space-sm, 0.5rem);
+    }
+    .iwac-search__controls-bar {
+      width: 100%;
+    }
+    .iwac-search__controls :global(.iwac-sort) {
+      display: flex;
+      width: 100%;
+    }
+    .iwac-search__controls :global(.iwac-sort__select) {
+      flex: 1 1 auto;
+      min-width: 0;
+    }
+
+    /* Comfortable 44px touch targets across the whole bar. */
+    .iwac-search__filters-trigger,
+    .iwac-search__controls :global(.iwac-view__btn),
+    .iwac-search__controls :global(.iwac-export__trigger),
+    .iwac-search__controls :global(.iwac-sort__select) {
+      height: var(--size-control-lg, 2.75rem);
+    }
+
+    /*
+     * Filters trigger — outlined, icon-forward (funnel + label + count). Hidden
+     * on desktop, where filters live in the sticky sidebar; here it opens the
+     * drawer, so it's the most important control on the row and keeps its label
+     * longest (collapses to the funnel only on the narrowest phones below).
+     */
     .iwac-search__filters-trigger {
       display: inline-flex;
       align-items: center;
       gap: var(--space-xs, 0.25rem);
-      height: var(--size-control-md, 2.5rem);
       padding-inline: var(--space-md, 1rem);
       border: 1px solid var(--border, #ced1d6);
       border-radius: var(--radius-md, 0.5rem);
@@ -840,6 +882,15 @@
       outline: none;
       box-shadow: var(--ring-focus, 0 0 0 3px rgba(0, 0, 0, 0.1));
     }
+    .iwac-search__filters-trigger-icon {
+      display: inline-flex;
+      align-items: center;
+      font-size: 0.9em;
+      color: var(--muted, #66696e);
+    }
+    .iwac-search__filters-trigger:hover .iwac-search__filters-trigger-icon {
+      color: var(--primary, #ce4115);
+    }
     .iwac-search__filters-trigger-badge {
       display: inline-flex;
       align-items: center;
@@ -854,28 +905,27 @@
       font-weight: 600;
       font-variant-numeric: tabular-nums;
     }
-    /*
-     * Controls wrap on a phone: the view toggle keeps the first line, the
-     * actions wrap below it, and the sort select drops to its own full-width
-     * row (Filters · Export · Sort don't fit one phone row without clipping
-     * the select).
-     */
-    .iwac-search__controls-actions {
-      /* Span the row so the full-width sort group below resolves against the
-         viewport, not the shrink-wrapped actions width — without this the sort
-         <select> (flex-basis 100%) overflowed off the right edge on a phone. */
-      width: 100%;
-      min-width: 0;
-      flex-wrap: wrap;
-      row-gap: var(--space-sm, 0.5rem);
+  }
+
+  /*
+   * Smallest phones: the bar goes fully icon-forward — the view toggle and the
+   * Export trigger already drop their labels at this breakpoint, so the Filters
+   * label follows (the funnel + count stay; the button keeps its aria-label).
+   */
+  @media (max-width: 26rem) {
+    .iwac-search__filters-trigger {
+      padding-inline: var(--space-sm, 0.5rem);
     }
-    .iwac-search__controls-actions :global(.iwac-sort) {
-      flex: 1 1 100%;
-      min-width: 0;
-    }
-    .iwac-search__controls-actions :global(.iwac-sort__select) {
-      flex: 1 1 auto;
-      min-width: 0;
+    .iwac-search__filters-trigger-label {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0 0 0 0);
+      white-space: nowrap;
+      border: 0;
     }
   }
 
@@ -889,18 +939,26 @@
        stays on the container for assistive tech. */
   }
   /*
-   * Result controls row: the view toggle (left) + the sort/export/filters
-   * actions (right, pushed to the end by the auto margin so they sit at the
-   * end whether or not the toggle is present). Hairline under; anchors the
-   * pagination scroll-back.
+   * Result controls. Desktop: one row — the view toggle sits at the left of a
+   * growing bar that pushes export + sort to the right. Mobile: the bar and the
+   * sort stack into two tidy rows (see the media query). Hairline under; anchors
+   * the pagination scroll-back.
    */
   .iwac-search__controls {
     display: flex;
     align-items: center;
-    gap: var(--space-md, 1rem);
+    gap: var(--space-sm, 0.5rem) var(--space-md, 1rem);
     flex-wrap: wrap;
     padding-block-end: var(--space-sm, 0.5rem);
     border-bottom: 1px solid var(--border-light, #e2e5e8);
+  }
+  /* View toggle + (mobile) filters + export. Grows so sort sits at the far end. */
+  .iwac-search__controls-bar {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm, 0.5rem);
+    flex: 1 1 auto;
+    min-width: 0;
   }
   .iwac-search__controls-actions {
     display: inline-flex;

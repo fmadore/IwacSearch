@@ -98,7 +98,7 @@
     onclick={() => (open = !open)}
   >
     <span class="iwac-export__icon" aria-hidden="true"><Icon name="download" /></span>
-    {busy ? t('exporting') : t('export')}
+    <span class="iwac-export__label">{busy ? t('exporting') : t('export')}</span>
   </button>
 
   {#if open}
@@ -176,6 +176,28 @@
     display: inline-flex;
     align-items: center;
     font-size: 0.9em;
+  }
+  /*
+   * On the narrowest phones the result-controls bar goes icon-forward (the view
+   * toggle and Filters trigger do the same at this breakpoint), so the Export
+   * label collapses to its download glyph — the button keeps its aria-label.
+   */
+  @media (max-width: 26rem) {
+    .iwac-export__trigger {
+      padding-inline: var(--space-sm, 0.5rem);
+    }
+    .iwac-export__label {
+      /* Visually hidden but kept for assistive tech. */
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0 0 0 0);
+      white-space: nowrap;
+      border: 0;
+    }
   }
 
   /* Floating format menu — same chrome as the suggest dropdown. */
