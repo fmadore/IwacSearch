@@ -91,8 +91,8 @@ final class ItemEventListener
      * Index a newly-created item (full re-map). Now possible because the
      * indexer reads the same Omeka database the create just wrote to — a new
      * item gets a complete document, not the half-baked placeholder the old
-     * HF-only pipeline would have produced (which is why create was not wired
-     * before). Non-content items (photographs, authority records) are skipped
+     * HF-only indexing path would have produced (which is why create was not
+     * wired before). Non-content items (photographs, authority records) are skipped
      * inside the indexer.
      */
     public function onItemCreate(Event $event): void

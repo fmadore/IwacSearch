@@ -50,7 +50,7 @@ final class FacetCatalog
         // dcterms:isPartOf on entity items — organisation category on the
         // entity index.
         'is_part_of_ss'      => 'Part of (entity category)',
-        // Authorship — mapped from the HF `author` field to creator_ss by
+        // Authorship — mapped from Omeka dcterms:creator to creator_ss by
         // AbstractMapper; facet:true in schema.yaml and populated in the live
         // index, but it was never in this catalog, so it couldn't be picked in
         // the admin or survive a save (normaliseFacets dropped it). Used on the

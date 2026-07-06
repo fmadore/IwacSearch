@@ -9,7 +9,7 @@ use Omeka\Entity\Item;
 
 /**
  * Reads content + authority records straight from the Omeka S MySQL database
- * via Doctrine DBAL — the replacement for the HuggingFace ingestion path.
+ * via Doctrine DBAL — the replacement for the Hugging Face ingestion path.
  *
  * This is the ONLY class that touches SQL. Everything above it (mappers,
  * reindexers) works on the plain arrays it yields, so the rest of the indexer

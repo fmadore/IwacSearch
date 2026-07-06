@@ -17,7 +17,7 @@ provides the Typesense container, nginx `/search-api/` proxy, and backups.
 
 - **Single source: the Omeka S MySQL database.** The indexer reads content,
   entities, sentiment, OCR (`bibo:content`), and `is_public` directly from
-  Omeka via Doctrine DBAL (`OmekaSourceReader`). The HuggingFace dataset is no
+  Omeka via Doctrine DBAL (`OmekaSourceReader`). The Hugging Face dataset is no
   longer a search source — it remains a separately-published research artifact.
   `country_ss` is derived (newspaper→country / item-set), and `lda_topic_label`
   was dropped (HF-only). See `docs/data-sources.md` for the full rationale and

@@ -6,7 +6,7 @@ namespace IwacSearch\Indexer\Mapper;
 use RuntimeException;
 
 /**
- * Resolves an HF subset name to its mapper.
+ * Resolves an Omeka-derived content subset name to its mapper.
  *
  * Why a registry instead of a match block in Reindexer:
  *   - Adding a new subset = drop a new MapperInterface in this dir, no

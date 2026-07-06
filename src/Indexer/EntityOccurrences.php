@@ -5,14 +5,14 @@ namespace IwacSearch\Indexer;
 
 /**
  * Accumulates, during the content reindex pass, how each authority entity is
- * referenced — so the entity collection can carry the occurrence metrics the
- * HF `index` subset used to precompute (frequency / first–last year / the set
- * of countries it appears in).
+ * referenced — so the entity collection can carry the occurrence metrics that
+ * the former HF `index` subset used to precompute (frequency / first–last year
+ * / the set of countries it appears in).
  *
  * The content Reindexer calls record() with every content document it builds;
  * IndexReindexer then asks aggregate() per entity. Only PUBLIC content counts
- * toward an entity's frequency — matching the HF figure, which was computed
- * over the public-only content subsets.
+ * toward an entity's frequency — matching the historical HF figure, which was
+ * computed over the public-only content subsets.
  */
 final class EntityOccurrences
 {

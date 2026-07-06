@@ -8,7 +8,7 @@ use RuntimeException;
 /**
  * Derives the `country_ss` facet, which is NOT a stored Omeka property.
  *
- * Two derivation paths, matching the HF pipeline:
+ * Two derivation paths, matching the historical HF pipeline's country logic:
  *   - Articles / publications / audiovisual: from the newspaper/publisher
  *     name (`dcterms:publisher`, a literal) via the ported country_mapper
  *     table in data/newspaper-countries.json.

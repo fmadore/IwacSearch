@@ -11,7 +11,7 @@ namespace IwacSearch\Indexer\Mapper;
  * Note: most AV is Nigerian, and Nigerian outlets aren't in the
  * newspaper→country map (Nigeria is barely present in the press subsets
  * upstream), so country_ss is often empty here — matching the sparse country
- * coverage of the HF audiovisual subset.
+ * coverage of the published audiovisual dataset.
  */
 final class AudiovisualMapper extends AbstractMapper
 {

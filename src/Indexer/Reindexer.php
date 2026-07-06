@@ -11,7 +11,7 @@ use Typesense\Client as TypesenseClient;
 
 /**
  * Orchestrates a full bulk reindex of the CONTENT collection, reading straight
- * from the Omeka S MySQL database (the HuggingFace ingestion path is gone).
+ * from the Omeka S MySQL database (the Hugging Face ingestion path is gone).
  *
  * Pure orchestration. All real work is delegated:
  *   - SchemaLoader      → schema versioning

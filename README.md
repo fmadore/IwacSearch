@@ -16,7 +16,7 @@ Admin CRUD mutations are optimistic (row appears / updates / disappears immediat
 
 | Milestone  |   Status   | Highlights                                                                         |
 | ---------- | :--------: | ---------------------------------------------------------------------------------- |
-| M0         |  ✅ done   | Schema, indexer pipeline (4 mappers + ACL overlay + stopwords), atomic alias swap  |
+| M0         |  ✅ done   | Schema, Omeka-MySQL indexer pipeline, stopwords, atomic alias swap                 |
 | M1         |  ✅ done   | `/search`, `/discovery/token`, page block, Svelte 5 client, alias-spelling search  |
 | M2         |  ✅ done   | Facet panel, year range slider, URL state, sort, hybrid keyword+vector search      |
 | M3         |  ✅ done   | `iwac_browse_config` table + 6 auto-seeded country pages + `/browse` landing       |

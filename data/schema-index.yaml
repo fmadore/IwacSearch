@@ -1,10 +1,10 @@
 # IwacSearch — INDEX (authority) collection schema
 #
 # A SECOND Typesense collection, separate from the content collection
-# (data/schema.yaml). It holds the IWAC `index` subset — the 4,697
-# authority records (persons, places, organisations, events, subjects,
-# authority notices) — so they can be browsed on their own faceted page
-# without polluting the article/document search.
+# (data/schema.yaml). It holds the Omeka authority records that correspond to
+# the historical IWAC `index` subset — persons, places, organisations, events,
+# subjects, and authority notices — so they can be browsed on their own faceted
+# page without polluting the article/document search.
 #
 # Built by IndexReindexer from the Omeka authority records, on the same
 # discovery:reindex run that rebuilds the content collection. Versioned +

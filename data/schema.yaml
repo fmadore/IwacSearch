@@ -47,7 +47,7 @@
 # Source-of-truth: the Omeka S MySQL database. The indexer (OmekaSourceReader)
 # reads every field — title, ocr_text (bibo:content), sentiment (iwac:*),
 # entities, is_public, IIIF/thumbnail URLs — directly via Doctrine DBAL, on
-# both the bulk reindex and the M4 incremental path. No HuggingFace.
+# both the bulk reindex and the M4 incremental path. No Hugging Face.
 # country_ss is derived (newspaper→country / item-set). See docs/data-sources.md.
 
 name: iwac_v3
@@ -128,9 +128,9 @@ fields:
   - { name: language_ss,  type: "string[]", facet: true, optional: true }
   - { name: type_s,       type: string,   facet: true, optional: true }   # article|publication|document|audiovisual|photograph|reference
 
-  # Pre-resolved entity references (joined against the `index` HF subset at
-  # index time). Strings are entity Titre; o:ids are also kept for stable
-  # links into Omeka.
+  # Pre-resolved entity references, resolved through EntityAuthority built from
+  # the Omeka authority classes at index time. Strings are entity Titre; o:ids
+  # are also kept for stable links into Omeka.
   - { name: topics_ss,         type: "string[]", facet: true, optional: true }   # subjects
   - { name: persons_ss,        type: "string[]", facet: true, optional: true }
   - { name: places_ss,         type: "string[]", facet: true, optional: true }
