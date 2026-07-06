@@ -126,7 +126,11 @@
   const typeTint = $derived(typeChip?.field === 'reference_type_ss' ? 'reference' : typeKey);
 
   // ── Entity (index) card variant ──────────────────────────────────────
-  const isEntity = $derived(card === 'entity');
+  // Context-driven on the entity index surface; shape-driven as a fallback
+  // so MIXED hit lists (the federated "All" union tab) render entity docs
+  // as entity cards — entity docs always carry entity_type_s, content docs
+  // never do.
+  const isEntity = $derived(card === 'entity' || doc.entity_type_s != null);
   const entityType = $derived(doc.entity_type_s ? entityTypeLabel(doc.entity_type_s, locale) : '');
   const entityTypeChip = $derived.by<FilterChip | null>(() =>
     doc.entity_type_s

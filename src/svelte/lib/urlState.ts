@@ -55,9 +55,9 @@ export function readUrlState(href: string = window.location.href, prefix = ''): 
   };
 }
 
-/** Only `gallery` is encoded; anything else (incl. absent) is the `list` default. */
+/** Non-default views (`gallery` / `map`) are encoded; anything else is `list`. */
 function parseView(raw: string | null): ViewMode {
-  return raw === 'gallery' ? 'gallery' : 'list';
+  return raw === 'gallery' || raw === 'map' ? raw : 'list';
 }
 
 /**
@@ -138,7 +138,7 @@ function applyState(params: URLSearchParams, state: SearchState, prefix: string)
     }
   }
   // `list` is the default, so it's omitted to keep a fresh URL clean.
-  if (state.view === 'gallery') {
+  if (state.view !== 'list') {
     params.set(`${prefix}view`, state.view);
   }
 }

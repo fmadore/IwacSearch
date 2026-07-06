@@ -1,11 +1,12 @@
 <script lang="ts">
   /**
-   * Quiet segmented control toggling the result presentation between the dense
-   * List ledger (default) and the image-forward Gallery (design review §01).
-   * Mirrors the toolbar's control vocabulary (outlined, surface ground, primary
-   * on engagement); the active segment carries a primary wash + primary label,
-   * the inactive one stays muted. The IWAC theme paints every <button> primary +
-   * glow + hover-translate, so the resets below are deliberate.
+   * Quiet segmented control toggling the result presentation — List ledger
+   * (default) plus whatever the surface offers: Gallery on content surfaces
+   * (design review §01), Map on the entity index. Mirrors the toolbar's
+   * control vocabulary (outlined, surface ground, primary on engagement);
+   * the active segment carries a primary wash + primary label, the inactive
+   * one stays muted. The IWAC theme paints every <button> primary + glow +
+   * hover-translate, so the resets below are deliberate.
    */
   import type { ViewMode } from '../lib/types';
   import { useI18n } from '../lib/i18n';
@@ -13,34 +14,34 @@
 
   interface Props {
     value: ViewMode;
+    /** Modes this surface offers, in display order. */
+    modes?: readonly ViewMode[];
     onChange: (next: ViewMode) => void;
   }
 
-  const { value, onChange }: Props = $props();
+  const { value, modes = ['list', 'gallery'], onChange }: Props = $props();
   const { t } = useI18n();
+
+  const SEGMENTS: Record<ViewMode, { icon: 'list' | 'grid' | 'map'; label: string }> = {
+    list: { icon: 'list', label: 'view_list' },
+    gallery: { icon: 'grid', label: 'view_gallery' },
+    map: { icon: 'map', label: 'view_map' },
+  };
 </script>
 
 <div class="iwac-view" role="group" aria-label={t('view')}>
-  <button
-    type="button"
-    class="iwac-view__btn"
-    class:is-active={value === 'list'}
-    aria-pressed={value === 'list'}
-    onclick={() => onChange('list')}
-  >
-    <span class="iwac-view__icon" aria-hidden="true"><Icon name="list" /></span>
-    <span class="iwac-view__label">{t('view_list')}</span>
-  </button>
-  <button
-    type="button"
-    class="iwac-view__btn"
-    class:is-active={value === 'gallery'}
-    aria-pressed={value === 'gallery'}
-    onclick={() => onChange('gallery')}
-  >
-    <span class="iwac-view__icon" aria-hidden="true"><Icon name="grid" /></span>
-    <span class="iwac-view__label">{t('view_gallery')}</span>
-  </button>
+  {#each modes as mode (mode)}
+    <button
+      type="button"
+      class="iwac-view__btn"
+      class:is-active={value === mode}
+      aria-pressed={value === mode}
+      onclick={() => onChange(mode)}
+    >
+      <span class="iwac-view__icon" aria-hidden="true"><Icon name={SEGMENTS[mode].icon} /></span>
+      <span class="iwac-view__label">{t(SEGMENTS[mode].label)}</span>
+    </button>
+  {/each}
 </div>
 
 <style>

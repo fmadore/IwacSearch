@@ -50,6 +50,16 @@ provides the Typesense container, nginx `/search-api/` proxy, and backups.
   module to the `omeka_files` volume.
 - French stopwords live in `data/stopwords-fr.json` and are PUT into
   Typesense as the `fr_default` set during the bulk reindex CLI.
+- Synonyms (Arabic-transliteration variants) live in `data/synonyms-fr.json`
+  and are PUT as the global `iwac_synonyms` set (linked via `synonym_sets`
+  in `data/schema.yaml`). Search-time expansion — edits go live via
+  `cli/synonyms-sync.php` or the admin button, no reindex.
+- All bulk-reindex wiring lives in `src/Indexer/ReindexOrchestrator.php` —
+  `cli/reindex.php` and `Job\BulkReindex` are thin entry points around it.
+  Add new sync steps / mappers THERE, never in the entry points.
+- `npm run lint` includes `scripts/check-schema-drift.js`, which fails CI
+  when `FacetCatalog::FACETABLE_FIELDS`, the schema YAMLs, and the i18n
+  `FACET_LABELS` disagree. If you add a facet, all four must move together.
 
 ## Adding a new field
 

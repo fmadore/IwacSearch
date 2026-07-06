@@ -5,15 +5,15 @@ namespace IwacSearch\Service\Indexer;
 
 use IwacSearch\Indexer\IncrementalIndexer;
 use IwacSearch\Indexer\ItemEventListener;
+use IwacSearch\Log\LoggerResolver;
 use Laminas\ServiceManager\Factory\FactoryInterface;
 use Psr\Container\ContainerInterface;
 
 /**
- * Trivial factory — the listener has one dependency. Kept as a
- * dedicated class for symmetry with the rest of IwacSearch's service
- * layer; reviewers expect to find a ProvidedFooFactory next to every
- * Foo, and adding new container-bound state later is one place
- * to edit.
+ * The listener needs the incremental indexer (all re-map/delete paths),
+ * the DBAL connection (to capture an item set's members BEFORE the delete
+ * commits — the join rows are gone by api.delete.post), and a logger for
+ * the cascade-cap warning.
  */
 final class ItemEventListenerFactory implements FactoryInterface
 {
@@ -23,7 +23,9 @@ final class ItemEventListenerFactory implements FactoryInterface
         ?array $options = null
     ): ItemEventListener {
         return new ItemEventListener(
-            indexer: $container->get(IncrementalIndexer::class)
+            indexer: $container->get(IncrementalIndexer::class),
+            connection: $container->get('Omeka\Connection'),
+            logger: LoggerResolver::fromContainer($container)
         );
     }
 }

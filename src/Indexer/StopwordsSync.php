@@ -25,6 +25,13 @@ use Typesense\Client as TypesenseClient;
  */
 final class StopwordsSync
 {
+    /**
+     * Stopword set name. Public scoped keys and every search request
+     * reference this set by name (`stopwords: fr_default`), so keep it in
+     * sync with typesense.ts + InitialResponseRenderer.
+     */
+    public const SET_NAME = 'fr_default';
+
     public function __construct(
         private readonly TypesenseClient $typesense,
         private readonly string $stopwordsJsonPath,
@@ -48,7 +55,7 @@ final class StopwordsSync
             );
         }
 
-        $setName = 'fr_default';
+        $setName = self::SET_NAME;
         $locale  = $payload['locale'] ?? 'fr';
 
         $this->logger->info('Syncing stopwords set', [
@@ -57,13 +64,10 @@ final class StopwordsSync
             'count'  => count($payload['stopwords']),
         ]);
 
-        // typesense-php v5.x: $client->stopwords->put($stopwordSet) is the
-        // single create-or-update method. The set name is part of the
-        // payload (`name` key), not a separate first argument. Earlier
-        // versions exposed `upsert($name, $body)` and a `getApiCall()`
-        // raw-HTTP escape hatch — both were removed in v5; we pin
-        // typesense/typesense-php ^5.0 in composer.json so the v5 API is
-        // the only one we need to support.
+        // typesense-php v5+ (we pin ^6): $client->stopwords->put($stopwordSet)
+        // is the single create-or-update method. The set name is part of the
+        // payload (`name` key), not a separate first argument — the older
+        // `upsert($name, $body)` / `getApiCall()` escape hatches were removed.
         // @phpstan-ignore-next-line  property access on Typesense\Client
         $this->typesense->stopwords->put([
             'name'      => $setName,

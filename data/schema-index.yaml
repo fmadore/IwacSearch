@@ -9,16 +9,18 @@
 # Built by IndexReindexer from the Omeka authority records, on the same
 # discovery:reindex run that rebuilds the content collection. Versioned +
 # alias-swapped exactly like the content collection:
-#   real collection `iwac_index_v2`, aliased `iwac_index_current`.
+#   real collection `iwac_index_v3`, aliased `iwac_index_current`.
 #   (v1 → v2: accent-insensitive indexing — locale dropped, see the ACCENTS
-#    note in schema.yaml — plus the is_part_of_ss facet.)
+#    note in schema.yaml — plus the is_part_of_ss facet.
+#    v2 → v3: `geo` geopoint + `has_coords` flag for the map view — the old
+#    display-only `coordinates` string stays for popups/back-compat.)
 #
 # The public scoped key (collections: ['*']) covers this collection too,
 # and still carries filter_by:is_public:=true — entities default to
 # is_public=false in the mapper and are flipped true via the Omeka ACL
 # overlay, same safe-closed model as content.
 
-name: iwac_index_v2
+name: iwac_index_v3
 
 # frequency (occurrence count) is present on every row, so it's a valid
 # default sort — "most mentioned first" is the natural browse order.
@@ -73,7 +75,20 @@ fields:
   # or faceted) and optional, so older snapshots without it just omit it.
   - { name: mentions_by_year_s, type: string, index: false, optional: true }
 
-  # ── Geo (stored for a future map; not indexed) ────────────────────────
+  # ── Geo ───────────────────────────────────────────────────────────────
+  # geo is a real Typesense geopoint ([lat, lng] float pair — NOT the
+  # GeoJSON [lng, lat] order) parsed by IndexEntityMapper from the
+  # curation:coordinates literal. Powers the map view: radius/polygon
+  # filter_by and distance sort_by both work on it.
+  #
+  # has_coords exists because Typesense cannot filter "field is present"
+  # on an optional field (typesense#798) — the map fetch filters
+  # `has_coords:=true` instead. Present (true) only when geo is set.
+  #
+  # The original "lat, lng" string stays display-only for popups and as
+  # the raw curated value.
+  - { name: geo,         type: geopoint, optional: true }
+  - { name: has_coords,  type: bool, facet: false, optional: true }
   - { name: coordinates, type: string, index: false, optional: true }
 
   # ── ACL (same model as content) ──────────────────────────────────────

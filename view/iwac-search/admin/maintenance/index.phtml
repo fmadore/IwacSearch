@@ -2,18 +2,23 @@
 /**
  * Admin maintenance page for IwacSearch.
  *
- * Two POST forms — "Run reindex" and "Sync stopwords" — each carrying
- * a fresh CSRF token. Plain server-rendered HTML; no Svelte bundle
- * needed since this is just two buttons and a flash messenger.
+ * POST forms (reindex / stopwords / synonyms / analytics), each carrying
+ * a fresh CSRF token, plus the live index status and the search-analytics
+ * digest. Plain server-rendered HTML; no Svelte bundle needed.
  *
  * @var \Laminas\View\Renderer\PhpRenderer $this
  * @var \IwacSearch\Form\MaintenanceForm $reindexForm
  * @var \IwacSearch\Form\MaintenanceForm $stopwordsForm
+ * @var \IwacSearch\Form\MaintenanceForm $synonymsForm
+ * @var \IwacSearch\Form\MaintenanceForm $analyticsForm
  * @var string $collectionBaseName  Base collection name from
  *   data/schema.yaml — interpolated into the description so the
  *   prose tracks schema bumps automatically.
  * @var list<array{alias: string, label: string, reachable: bool, documents: ?int, error: ?string}> $statuses
  *   Live Typesense status, one row per collection.
+ * @var array{available: bool, reason: ?string, popular: list<array{q: string, count: int}>, nohits: list<array{q: string, count: int}>} $analytics
+ *   Aggregated search analytics (top queries / no-hit queries), or a
+ *   not-yet-provisioned marker.
  */
 
 $translate = $this->plugin('translate');
@@ -30,6 +35,16 @@ $reindexForm->prepare();
 $stopwordsForm->setAttribute('action', $this->url('admin/iwac-search/maintenance-sync-stopwords'));
 $stopwordsForm->setAttribute('method', 'POST');
 $stopwordsForm->prepare();
+
+$synonymsForm->setAttribute('action', $this->url('admin/iwac-search/maintenance-sync-synonyms'));
+$synonymsForm->setAttribute('method', 'POST');
+$synonymsForm->prepare();
+
+$analyticsForm->setAttribute('action', $this->url('admin/iwac-search/maintenance-provision-analytics'));
+$analyticsForm->setAttribute('method', 'POST');
+$analyticsForm->prepare();
+
+$analytics = $analytics ?? ['available' => false, 'reason' => null, 'popular' => [], 'nohits' => []];
 ?>
 <?php echo $this->pageTitle($translate('IWAC Search: maintenance'), 1); ?>
 
@@ -76,6 +91,58 @@ $stopwordsForm->prepare();
     </p>
 </section>
 
+<section class="iwac-maintenance-analytics" style="margin-top:1.5rem;border:1px solid #ddd;border-radius:6px;padding:1rem 1.5rem;background:#fff;">
+    <h3 style="margin-top:0;"><?php echo $translate('Search analytics'); ?></h3>
+    <?php if (!$analytics['available']): ?>
+        <?php if (!empty($analytics['reason'])): ?>
+            <p class="description" style="margin-bottom:0;color:#c62828;">
+                <?php echo $escape($translate('Analytics could not be read:')); ?>
+                <?php echo $escape($analytics['reason']); ?>
+            </p>
+        <?php else: ?>
+            <p class="description" style="margin-bottom:0;">
+                <?php echo sprintf(
+                    $escape($translate('Not provisioned yet. Start the Typesense server with %1$s and %2$s (an IWAC-docker change), then use the "Provision analytics" button below. Once live, this panel shows what visitors search — and, more usefully, what they search WITHOUT finding: raw material for %3$s.')),
+                    '<code>--enable-search-analytics=true</code>',
+                    '<code>--analytics-dir=…</code>',
+                    '<code>data/synonyms-fr.json</code>'
+                ); ?>
+            </p>
+        <?php endif; ?>
+    <?php else: ?>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1.5rem;">
+            <?php
+            $panels = [
+                ['title' => $translate('Top queries'),                 'rows' => $analytics['popular'], 'empty' => $translate('Nothing aggregated yet.')],
+                ['title' => $translate('Queries with no results'),     'rows' => $analytics['nohits'],  'empty' => $translate('No zero-result queries recorded — good sign.')],
+            ];
+            ?>
+            <?php foreach ($panels as $panel): ?>
+                <div>
+                    <h4 style="margin:0 0 0.5rem;"><?php echo $escape($panel['title']); ?></h4>
+                    <?php if ($panel['rows'] === []): ?>
+                        <p class="description" style="margin:0;"><?php echo $escape($panel['empty']); ?></p>
+                    <?php else: ?>
+                        <table style="width:100%;border-collapse:collapse;">
+                            <tbody>
+                                <?php foreach ($panel['rows'] as $row): ?>
+                                    <tr style="border-bottom:1px solid #f0f0f0;">
+                                        <td style="padding:0.3rem 0.5rem;"><code><?php echo $escape($row['q']); ?></code></td>
+                                        <td style="padding:0.3rem 0.5rem;text-align:right;font-variant-numeric:tabular-nums;"><?php echo (int) $row['count']; ?></td>
+                                    </tr>
+                                <?php endforeach; ?>
+                            </tbody>
+                        </table>
+                    <?php endif; ?>
+                </div>
+            <?php endforeach; ?>
+        </div>
+        <p class="description" style="margin-top:0.75rem;margin-bottom:0;">
+            <?php echo $translate('Aggregated by Typesense from live public searches (a query counts once the visitor pauses typing for 4 seconds). No-result queries are the curator worklist: recurring spellings belong in the synonym set; recurring topics reveal cataloguing gaps.'); ?>
+        </p>
+    <?php endif; ?>
+</section>
+
 <div class="iwac-maintenance-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:1.5rem;margin-top:1.5rem;">
 
     <section class="iwac-maintenance-card" style="border:1px solid #ddd;border-radius:6px;padding:1.5rem;background:#fff;">
@@ -87,10 +154,11 @@ $stopwordsForm->prepare();
                 // up as &lt; &gt; in the output. The %s placeholders are
                 // substituted afterwards with already-marked-up <code>
                 // elements — those tags survive into the final HTML.
-                $escape($translate('Reads fresh data directly from the Omeka database, builds a fresh %1$s_<timestamp> collection alongside the live one, and atomic-swaps the %2$s alias to it once verification passes. Also re-syncs the %3$s stopword set and the diversification curation set as its first step.')),
+                $escape($translate('Reads fresh data directly from the Omeka database, builds a fresh %1$s_<timestamp> collection alongside the live one, and atomic-swaps the %2$s alias to it once verification passes. Also re-syncs the %3$s stopword set, the %4$s synonym set, and the diversification curation set as its first step.')),
                 '<code>' . $escape($baseName) . '</code>',
                 '<code>iwac_current</code>',
-                '<code>fr_default</code>'
+                '<code>fr_default</code>',
+                '<code>iwac_synonyms</code>'
             ); ?>
         </p>
         <p>
@@ -122,6 +190,48 @@ $stopwordsForm->prepare();
             <?php echo $this->formCollection($stopwordsForm); ?>
             <button type="submit" class="button" style="margin-top:0.5rem;">
                 <?php echo $translate('Sync stopwords'); ?>
+            </button>
+        <?php echo $this->form()->closeTag(); ?>
+    </section>
+
+    <section class="iwac-maintenance-card" style="border:1px solid #ddd;border-radius:6px;padding:1.5rem;background:#fff;">
+        <h3 style="margin-top:0;"><?php echo $translate('Sync synonyms only'); ?></h3>
+        <p>
+            <?php echo sprintf(
+                $escape($translate('Refreshes the %1$s synonym set in Typesense from %2$s — transliteration variants like cheikh/sheikh/shaykh or Tidjaniyya/Tijaniyya. Idempotent — safe to run repeatedly.')),
+                '<code>iwac_synonyms</code>',
+                '<code>data/synonyms-fr.json</code>'
+            ); ?>
+        </p>
+        <p>
+            <strong><?php echo $translate('When to use:'); ?></strong>
+            <?php echo $translate('After editing the synonym list. Expansion happens at search time, so the change is live immediately — no reindex needed.'); ?>
+        </p>
+        <?php echo $this->form()->openTag($synonymsForm); ?>
+            <?php echo $this->formCollection($synonymsForm); ?>
+            <button type="submit" class="button" style="margin-top:0.5rem;">
+                <?php echo $translate('Sync synonyms'); ?>
+            </button>
+        <?php echo $this->form()->closeTag(); ?>
+    </section>
+
+    <section class="iwac-maintenance-card" style="border:1px solid #ddd;border-radius:6px;padding:1.5rem;background:#fff;">
+        <h3 style="margin-top:0;"><?php echo $translate('Provision search analytics'); ?></h3>
+        <p>
+            <?php echo $translate('Creates the popular-queries and no-hit-queries analytics rules plus their destination collections. Run once after enabling analytics on the Typesense server; the bulk reindex also (re)applies them non-fatally.'); ?>
+        </p>
+        <p>
+            <strong><?php echo $translate('Prerequisite:'); ?></strong>
+            <?php echo sprintf(
+                $escape($translate('Typesense started with %1$s and %2$s — see ROADMAP.md for the IWAC-docker change.')),
+                '<code>--enable-search-analytics=true</code>',
+                '<code>--analytics-dir=…</code>'
+            ); ?>
+        </p>
+        <?php echo $this->form()->openTag($analyticsForm); ?>
+            <?php echo $this->formCollection($analyticsForm); ?>
+            <button type="submit" class="button" style="margin-top:0.5rem;">
+                <?php echo $translate('Provision analytics'); ?>
             </button>
         <?php echo $this->form()->closeTag(); ?>
     </section>

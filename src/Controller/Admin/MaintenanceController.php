@@ -5,8 +5,11 @@ namespace IwacSearch\Controller\Admin;
 
 use Closure;
 use IwacSearch\Form\MaintenanceForm;
+use IwacSearch\Indexer\AnalyticsSync;
 use IwacSearch\Job\BulkReindex;
+use IwacSearch\Job\ProvisionAnalytics;
 use IwacSearch\Job\SyncStopwords;
+use IwacSearch\Job\SyncSynonyms;
 use Laminas\Http\Response;
 use Laminas\Mvc\Controller\AbstractActionController;
 use Laminas\View\Model\ViewModel;
@@ -17,19 +20,27 @@ use Typesense\Client as TypesenseClient;
 /**
  * Admin maintenance page for the IwacSearch module.
  *
- * Two actions, both backed by Omeka jobs so neither blocks the request
- * and both leave an audit trail at /admin/job/{id}/log:
+ * All POST actions dispatch Omeka jobs so none blocks the request and
+ * each leaves an audit trail at /admin/job/{id}/log:
  *
  *   indexAction          GET   /admin/iwac-search/maintenance
- *     Renders the page with two POST forms.
+ *     Renders the page: index status, search-analytics digest (top /
+ *     no-hit queries), and the action forms.
  *
- *   reindexAction        POST  /admin/iwac-search/maintenance/reindex
+ *   reindexAction        POST  …/maintenance/reindex
  *     Dispatches IwacSearch\Job\BulkReindex (~5–15 min).
  *     Equivalent to running cli/reindex.php inside the php container.
  *
- *   syncStopwordsAction  POST  /admin/iwac-search/maintenance/sync-stopwords
+ *   syncStopwordsAction  POST  …/maintenance/sync-stopwords
  *     Dispatches IwacSearch\Job\SyncStopwords (~1 s).
- *     Equivalent to running cli/stopwords-sync.php.
+ *
+ *   syncSynonymsAction   POST  …/maintenance/sync-synonyms
+ *     Dispatches IwacSearch\Job\SyncSynonyms (~1 s). Synonym expansion is
+ *     search-time, so edits to data/synonyms-fr.json go live immediately.
+ *
+ *   provisionAnalyticsAction POST …/maintenance/provision-analytics
+ *     Dispatches IwacSearch\Job\ProvisionAnalytics — creates the
+ *     popular/no-hit analytics rules once the server flags are enabled.
  *
  * ACL: editor + site-admin + global-admin (granted in Module::onBootstrap).
  * The /admin/ parent route already enforces authentication, so the ACL
@@ -89,15 +100,74 @@ class MaintenanceController extends AbstractActionController
      */
     public function indexAction(): ViewModel
     {
-        $reindexForm = $this->getForm(MaintenanceForm::class);
-        $stopwordsForm = $this->getForm(MaintenanceForm::class);
-
         return new ViewModel([
-            'reindexForm'         => $reindexForm,
-            'stopwordsForm'       => $stopwordsForm,
+            'reindexForm'         => $this->getForm(MaintenanceForm::class),
+            'stopwordsForm'       => $this->getForm(MaintenanceForm::class),
+            'synonymsForm'        => $this->getForm(MaintenanceForm::class),
+            'analyticsForm'       => $this->getForm(MaintenanceForm::class),
             'collectionBaseName'  => $this->collectionBaseName,
             'statuses'            => $this->collectStatuses(),
+            'analytics'           => $this->collectAnalytics(),
         ]);
+    }
+
+    /**
+     * Read back the aggregated search analytics for the dashboard: top
+     * queries with results + top queries WITHOUT results (the curator
+     * worklist — missing transliterations become synonym candidates).
+     *
+     * available:false with a null reason means "not provisioned yet" —
+     * rendered as setup guidance, not an error.
+     *
+     * @return array{
+     *   available: bool, reason: ?string,
+     *   popular: list<array{q: string, count: int}>,
+     *   nohits: list<array{q: string, count: int}>
+     * }
+     */
+    private function collectAnalytics(): array
+    {
+        $out = ['available' => false, 'reason' => null, 'popular' => [], 'nohits' => []];
+        $client = $this->client();
+        if ($client === null) {
+            return $out;
+        }
+
+        try {
+            $out['popular']   = $this->topQueries($client, AnalyticsSync::POPULAR_COLLECTION);
+            $out['nohits']    = $this->topQueries($client, AnalyticsSync::NOHITS_COLLECTION);
+            $out['available'] = true;
+        } catch (Throwable $e) {
+            // Missing destination collection = analytics never provisioned
+            // (or server flags absent). Keep reason null in that common
+            // case so the view shows setup guidance instead of an error.
+            $msg = $e->getMessage();
+            $isAbsent = stripos($msg, 'not found') !== false || str_contains($msg, '404');
+            $out['reason'] = $isAbsent ? null : $msg;
+        }
+        return $out;
+    }
+
+    /**
+     * @return list<array{q: string, count: int}>
+     */
+    private function topQueries(TypesenseClient $client, string $collection): array
+    {
+        $response = $client->collections[$collection]->documents->search([
+            'q'        => '*',
+            'query_by' => 'q',
+            'sort_by'  => 'count:desc',
+            'per_page' => 15,
+        ]);
+
+        $rows = [];
+        foreach ($response['hits'] ?? [] as $hit) {
+            $doc = $hit['document'] ?? null;
+            if (is_array($doc) && isset($doc['q'])) {
+                $rows[] = ['q' => (string) $doc['q'], 'count' => (int) ($doc['count'] ?? 0)];
+            }
+        }
+        return $rows;
     }
 
     /**
@@ -174,6 +244,31 @@ class MaintenanceController extends AbstractActionController
         return $this->dispatchJob(
             SyncStopwords::class,
             'Stopwords sync queued — refreshes the fr_default set from data/stopwords-fr.json.'
+        );
+    }
+
+    /**
+     * POST: dispatch a SyncSynonyms job. Synonym expansion is search-time,
+     * so the refreshed set is live the moment the job finishes.
+     */
+    public function syncSynonymsAction(): Response
+    {
+        return $this->dispatchJob(
+            SyncSynonyms::class,
+            'Synonyms sync queued — refreshes the iwac_synonyms set from data/synonyms-fr.json.'
+        );
+    }
+
+    /**
+     * POST: dispatch a ProvisionAnalytics job — creates the popular / no-hit
+     * query analytics rules + destination collections. Fails loudly in the
+     * job log if the server lacks the analytics flags.
+     */
+    public function provisionAnalyticsAction(): Response
+    {
+        return $this->dispatchJob(
+            ProvisionAnalytics::class,
+            'Analytics provisioning queued — creates the popular-queries and no-hit-queries rules.'
         );
     }
 

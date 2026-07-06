@@ -21,9 +21,10 @@ use Typesense\Client as TypesenseClient;
  *   - EntityOccurrences → accumulate per-entity metrics for the entity pass
  *   - StopwordsSync     → ensure fr_default stopword set exists
  *   - CurationSync      → ensure iwac_diversity curation set exists
+ *   - SynonymsSync      → ensure iwac_synonyms synonym set exists
  *
  * Flow:
- *   1. Sync stopwords + the diversification curation set (idempotent)
+ *   1. Sync stopwords + the curation and synonym sets (idempotent)
  *   2. Build the EntityAuthority cache from the Omeka entity classes
  *   3. Create the new versioned collection (e.g. iwac_v2_<UTC>)
  *   4. Stream → map → import each content subset; record entity occurrences
@@ -42,6 +43,9 @@ final class Reindexer
 {
     private const BATCH_SIZE = 200;
 
+    /** Shared import/alias/drop plumbing (also used by IndexReindexer). */
+    private readonly CollectionOps $ops;
+
     public function __construct(
         private readonly TypesenseClient $typesense,
         private readonly SchemaLoader $schemaLoader,
@@ -55,8 +59,10 @@ final class Reindexer
         private readonly EntityOccurrences $occurrences,
         private readonly StopwordsSync $stopwordsSync,
         private readonly CurationSync $curationSync,
+        private readonly SynonymsSync $synonymsSync,
         private readonly LoggerInterface $logger = new NullLogger()
     ) {
+        $this->ops = new CollectionOps($typesense, $this->logger, 'content');
     }
 
     /**
@@ -67,6 +73,7 @@ final class Reindexer
      *     subsets: array<string, array{indexed: int, errors: int}>,
      *     stopwords: array{set: string, locale: string, count: int},
      *     curation: array{set: string, tag: string, metric: string},
+     *     synonyms: array{set: string, groups: int},
      *     duration_seconds: float
      * }
      */
@@ -77,6 +84,7 @@ final class Reindexer
         // ── 1. Global resources (created before the collection links them) ──
         $stopwordsResult = $this->stopwordsSync->sync();
         $curationResult  = $this->curationSync->sync();
+        $synonymsResult  = $this->synonymsSync->sync();
 
         // ── 2. Authority cache from the Omeka entity classes ────────────────
         $this->logger->info('Building entity authority from Omeka classes', [
@@ -89,7 +97,7 @@ final class Reindexer
         $schema   = $this->schemaLoader->loadForReindex();
         $newName  = $schema['name'];
         $alias    = $schema['_alias_target'];
-        $previous = $this->resolveAliasTarget($alias);
+        $previous = $this->ops->resolveAliasTarget($alias);
 
         $this->logger->info('Creating new collection', ['name' => $newName, 'alias' => $alias]);
         $createPayload = $schema;
@@ -113,7 +121,7 @@ final class Reindexer
                 'collection' => $newName,
                 'error'      => $e->getMessage(),
             ]);
-            $this->safelyDropCollection($newName);
+            $this->ops->safelyDropCollection($newName);
             throw $e;
         }
 
@@ -124,7 +132,7 @@ final class Reindexer
         // ── 6. Drop the previous collection ─────────────────────────────────
         if ($previous !== null && $previous !== $newName) {
             $this->logger->info('Dropping previous collection', ['name' => $previous]);
-            $this->safelyDropCollection($previous);
+            $this->ops->safelyDropCollection($previous);
         }
 
         return [
@@ -136,6 +144,7 @@ final class Reindexer
             'subsets'          => $perSubset,
             'stopwords'        => $stopwordsResult,
             'curation'         => $curationResult,
+            'synonyms'         => $synonymsResult,
             'duration_seconds' => round(microtime(true) - $start, 2),
         ];
     }
@@ -165,14 +174,14 @@ final class Reindexer
 
             $batch[] = $doc;
             if (count($batch) >= self::BATCH_SIZE) {
-                [$ok, $err] = $this->flushBatch($collection, $batch);
+                [$ok, $err] = $this->ops->flushBatch($collection, $batch);
                 $indexed += $ok;
                 $errors  += $err;
                 $batch = [];
             }
         }
         if ($batch !== []) {
-            [$ok, $err] = $this->flushBatch($collection, $batch);
+            [$ok, $err] = $this->ops->flushBatch($collection, $batch);
             $indexed += $ok;
             $errors  += $err;
         }
@@ -181,61 +190,4 @@ final class Reindexer
         return [$indexed, $errors];
     }
 
-    /**
-     * Bulk-import a batch via the JSONL endpoint.
-     *
-     * @param  list<array<string,mixed>> $batch
-     * @return array{0: int, 1: int}
-     */
-    private function flushBatch(string $collection, array $batch): array
-    {
-        $jsonl = '';
-        foreach ($batch as $doc) {
-            $jsonl .= json_encode($doc, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . "\n";
-        }
-
-        $response = $this->typesense->collections[$collection]->documents->import(
-            $jsonl,
-            ['action' => 'upsert', 'batch_size' => 100]
-        );
-
-        $ok = $err = 0;
-        foreach (preg_split("/\r?\n/", trim((string) $response)) as $line) {
-            if ($line === '') {
-                continue;
-            }
-            $row = json_decode($line, true);
-            if (is_array($row) && ($row['success'] ?? false)) {
-                $ok++;
-            } else {
-                $err++;
-                if ($err <= 3) {
-                    $this->logger->warning('Document import failed', ['response' => $row]);
-                }
-            }
-        }
-        return [$ok, $err];
-    }
-
-    private function resolveAliasTarget(string $alias): ?string
-    {
-        try {
-            $info = $this->typesense->aliases[$alias]->retrieve();
-            return $info['collection_name'] ?? null;
-        } catch (Throwable) {
-            return null;
-        }
-    }
-
-    private function safelyDropCollection(string $name): void
-    {
-        try {
-            $this->typesense->collections[$name]->delete();
-        } catch (Throwable $e) {
-            $this->logger->warning('Failed to drop collection', [
-                'name'  => $name,
-                'error' => $e->getMessage(),
-            ]);
-        }
-    }
 }

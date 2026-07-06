@@ -18,9 +18,6 @@ namespace IwacSearch\Indexer\Mapper;
  */
 final class IndexEntityMapper
 {
-    private const SITE_BASE = 'https://islam.zmo.de';
-    private const SITE_SLUG = 'afrique_ouest';
-
     /**
      * @param array{
      *   id:int, type:string, title:string, aliases:list<string>, description:string,
@@ -48,13 +45,24 @@ final class IndexEntityMapper
             'entity_type_s' => $entity['type'],
             'frequency'     => $aggregate['frequency'] ?? 0,
             'is_public'     => $entity['is_public'],
-            'omeka_url'     => sprintf('%s/s/%s/item/%d', self::SITE_BASE, self::SITE_SLUG, $oid),
+            'omeka_url'     => SiteUrls::itemUrl($oid),
         ];
 
         $this->maybeAdd($doc, 'identifier',    $entity['identifier']);
         $this->maybeAdd($doc, 'thumbnail_url', $entity['thumbnail'] ?? '');
         $this->maybeAdd($doc, 'description',   $entity['description']);
         $this->maybeAdd($doc, 'coordinates',   $entity['coordinates']);
+
+        // Geopoint from the curated "lat, lng" literal. has_coords is the
+        // filterable presence flag (Typesense can't filter on an optional
+        // field being set — typesense#798), so the map view fetches with
+        // `has_coords:=true`. Malformed / out-of-range values are skipped
+        // silently: the string stays visible in `coordinates` for cleanup.
+        $geo = $this->parseCoordinates($entity['coordinates']);
+        if ($geo !== null) {
+            $doc['geo']        = $geo;
+            $doc['has_coords'] = true;
+        }
 
         if ($entity['aliases'] !== []) {
             $doc['entity_aliases_txt'] = $entity['aliases'];
@@ -105,5 +113,30 @@ final class IndexEntityMapper
         if ($value !== '') {
             $doc[$key] = $value;
         }
+    }
+
+    /**
+     * Parse the curated "lat, lng" literal (curation:coordinates) into a
+     * Typesense geopoint pair. Typesense expects [lat, lng] — the same
+     * order the IWAC records use, and the OPPOSITE of GeoJSON/MapLibre.
+     *
+     * @return array{0: float, 1: float}|null null = absent or malformed
+     */
+    private function parseCoordinates(string $raw): ?array
+    {
+        $raw = trim($raw);
+        if ($raw === '') {
+            return null;
+        }
+        $parts = array_map('trim', explode(',', $raw));
+        if (count($parts) !== 2 || !is_numeric($parts[0]) || !is_numeric($parts[1])) {
+            return null;
+        }
+        $lat = (float) $parts[0];
+        $lng = (float) $parts[1];
+        if ($lat < -90.0 || $lat > 90.0 || $lng < -180.0 || $lng > 180.0) {
+            return null;
+        }
+        return [$lat, $lng];
     }
 }

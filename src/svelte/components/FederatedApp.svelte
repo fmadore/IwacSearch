@@ -1,21 +1,39 @@
 <script lang="ts">
-  import type { IwacBootstrap, IwacFederatedBootstrap } from '../lib/types';
+  import type {
+    ActiveFilters,
+    IwacBootstrap,
+    IwacFederatedBootstrap,
+    IwacSearchResponse,
+  } from '../lib/types';
   import { TypesenseClient } from '../lib/typesense';
-  import { normalizeLocale, translate, type Locale } from '../lib/i18n';
+  import { isAbortError } from '../lib/transport';
+  import { provideI18n, normalizeLocale, type Locale } from '../lib/i18n';
   import App from '../App.svelte';
+  import ResultItem from './ResultItem.svelte';
+  import Pagination from './Pagination.svelte';
 
   /**
    * The federated "search everything" page. One instance per page.
    *
-   * Owns a shared query + the active tab (Content | Entities). On every
-   * committed query it runs one counts-only multi_search across both
-   * collections (TypesenseClient.countAcross) to label the tabs, then mounts
-   * the existing per-collection {@link App} for the active tab — its own
-   * search box suppressed — so facets, sort and paging keep working unchanged.
+   * Owns a shared query + the active tab (All | Content | Entities). On
+   * every committed query it runs one counts-only multi_search across both
+   * collections (TypesenseClient.countAcross) to label the tabs.
+   *
+   *   - The "All" tab is a Typesense v30 UNION search: ONE merged,
+   *     relevance-ranked list across the content + entity collections
+   *     (deduped server-side), rendered right here — union responses carry
+   *     no facet_counts, so this tab is a lean ranked list; the
+   *     per-collection tabs keep the full faceted experience. Clicking a
+   *     card chip on the All tab hands the filter off to the right
+   *     per-collection tab via bootstrap.initial_filters.
+   *   - Content / Entities mount the existing per-collection {@link App}
+   *     (its own search box suppressed) so facets, sort and paging keep
+   *     working unchanged.
+   *
    * `?q=` + `?tab=` are kept in the URL so a federated search is shareable.
    */
 
-  type TabId = 'content' | 'entities';
+  type TabId = 'all' | 'content' | 'entities';
 
   interface Props {
     bootstrap: IwacFederatedBootstrap;
@@ -25,16 +43,26 @@
 
   // svelte-ignore state_referenced_locally
   const locale: Locale = normalizeLocale(bootstrap.locale);
-  const t = (key: string, vars?: Record<string, string | number>): string =>
-    translate(locale, key, vars);
+  // Context for the union tab's ResultItems (they detect entity docs by
+  // shape); the per-tab Apps provide their own context on top.
+  const { t } = provideI18n(locale, 'content');
 
   // svelte-ignore state_referenced_locally
   const tabs = bootstrap.tabs;
 
   function readTabFromUrl(): TabId {
-    if (typeof window === 'undefined') return bootstrap.default_tab;
+    if (typeof window === 'undefined') return defaultTab();
     const param = new URLSearchParams(window.location.search).get('tab');
-    return param === 'entities' || param === 'content' ? param : bootstrap.default_tab;
+    return param === 'all' || param === 'entities' || param === 'content' ? param : defaultTab();
+  }
+
+  /**
+   * Arriving WITH a query (header search box hand-off) lands on the merged
+   * "All" ranking — the closest thing to "search everything". A bare visit
+   * keeps the configured browse tab (content, date-sorted).
+   */
+  function defaultTab(): TabId {
+    return (bootstrap.initial_query ?? '').trim() !== '' ? 'all' : bootstrap.default_tab;
   }
 
   // svelte-ignore state_referenced_locally
@@ -45,6 +73,9 @@
   let counts = $state<Record<string, number | null>>({});
   let countsReady = $state(false);
   let inputTimer: number | null = null;
+
+  // Filter handed off from a union-tab chip to a per-collection tab.
+  let seed = $state<{ tab: TabId; filters: ActiveFilters } | null>(null);
 
   // One client just for the counts call; the active tab's App holds its own.
   // svelte-ignore state_referenced_locally
@@ -91,6 +122,62 @@
     void loadCounts(query);
   });
 
+  // ── Union "All" tab ─────────────────────────────────────────────────
+  const unionSearches = tabs.map((tab) => ({
+    collection: tab.bootstrap.collection_alias ?? 'iwac_current',
+    queryBy: tab.bootstrap.query_by ?? 'title_txt',
+    filterBy: tab.bootstrap.locked_filters || undefined,
+  }));
+  const unionPerPage = tabs[0]?.bootstrap.results_per_page || 20;
+
+  let unionResponse = $state<IwacSearchResponse | null>(null);
+  let unionPage = $state(1);
+  let unionLoading = $state(false);
+  let unionError = $state<string | null>(null);
+
+  // A new committed query restarts the merged list at page 1.
+  $effect(() => {
+    void query;
+    unionPage = 1;
+  });
+
+  $effect(() => {
+    if (activeTab !== 'all') return;
+    const q = query;
+    const p = unionPage;
+    unionLoading = true;
+    unionError = null;
+    countClient
+      .unionSearch({ q, page: p, perPage: unionPerPage, searches: unionSearches })
+      .then((r) => {
+        unionResponse = r;
+        unionLoading = false;
+      })
+      .catch((e: unknown) => {
+        if (isAbortError(e)) return; // superseded — a newer union call settles the state
+        unionError = e instanceof Error ? e.message : String(e);
+        unionResponse = null;
+        unionLoading = false;
+      });
+  });
+
+  const unionTotalPages = $derived(
+    unionResponse ? Math.max(1, Math.min(50, Math.ceil(unionResponse.found / unionPerPage))) : 1,
+  );
+
+  /**
+   * A chip clicked on a union card hands off to the right per-collection
+   * tab, pre-filtered via bootstrap.initial_filters — union responses have
+   * no facets, so filtering happens where the facet panel lives.
+   */
+  function handleUnionChip(field: string, value: string, nextChecked: boolean): void {
+    if (!nextChecked) return; // nothing is ever active on the union tab
+    const target: TabId =
+      field === 'entity_type_s' || field === 'is_part_of_ss' ? 'entities' : 'content';
+    seed = { tab: target, filters: { [field]: [value] } };
+    activeTab = target;
+  }
+
   // Mirror state into the URL so a federated search is shareable / bookmarkable.
   $effect(() => {
     if (typeof window === 'undefined') return;
@@ -123,6 +210,7 @@
     if (inputTimer !== null) clearTimeout(inputTimer);
     inputTimer = window.setTimeout(() => {
       inputTimer = null;
+      seed = null; // a fresh query clears any handed-off filter
       query = inputValue.trim();
     }, 250);
   }
@@ -133,6 +221,7 @@
       inputTimer = null;
     }
     inputValue = '';
+    seed = null;
     query = '';
   }
 
@@ -140,23 +229,36 @@
     activeTab = id;
   }
 
+  /** Tab order: the merged ranking first, then the per-collection views. */
+  const tabIds: TabId[] = ['all', ...tabs.map((tab) => tab.id)];
+
   function tabLabel(id: TabId): string {
+    if (id === 'all') return t('tab_all');
     return id === 'entities' ? t('tab_entities') : t('tab_content');
   }
 
   function countLabel(id: string): string {
+    if (id === 'all') {
+      // Sum of the per-collection counts (union dedups, so this is an upper
+      // bound — close enough for a badge).
+      const values = tabs.map((tab) => counts[tab.id]);
+      if (values.some((v) => typeof v !== 'number')) return '';
+      return values.reduce((a: number, b) => a + (b as number), 0).toLocaleString();
+    }
     const n = counts[id];
     return typeof n === 'number' ? n.toLocaleString() : '';
   }
 
   // The active tab's full per-collection bootstrap, seeded with the shared
-  // query. The {#key} below re-mounts App when the tab or query changes so it
-  // re-seeds cleanly (App reads initial_query once at init).
+  // query (+ any union-chip filter hand-off). The {#key} below re-mounts App
+  // when the tab or query changes so it re-seeds cleanly (App reads
+  // initial_query/initial_filters once at init).
   const activeBootstrap = $derived.by<IwacBootstrap>(() => {
     const base = tabs.find((tab) => tab.id === activeTab)?.bootstrap ?? tabs[0].bootstrap;
     return {
       ...base,
       initial_query: query,
+      initial_filters: seed?.tab === activeTab ? seed.filters : undefined,
       // The SSR'd first page is for the empty-query landing only; a typed
       // query must fetch fresh rather than flash the all-content snapshot.
       initial_response: query === '' ? base.initial_response : undefined,
@@ -189,22 +291,22 @@
   </div>
 
   <div class="iwac-fed__tabs" role="tablist" aria-label={t('result_types')}>
-    {#each tabs as tab (tab.id)}
+    {#each tabIds as id (id)}
       <button
         type="button"
         role="tab"
-        id="iwac-fed-tab-{tab.id}"
-        aria-selected={tab.id === activeTab}
+        id="iwac-fed-tab-{id}"
+        aria-selected={id === activeTab}
         aria-controls="iwac-fed-panel"
         class="iwac-fed__tab"
-        class:iwac-fed__tab--active={tab.id === activeTab}
-        class:iwac-fed__tab--empty={countsReady && (counts[tab.id] ?? 0) === 0}
-        tabindex={tab.id === activeTab ? 0 : -1}
-        onclick={() => selectTab(tab.id)}
+        class:iwac-fed__tab--active={id === activeTab}
+        class:iwac-fed__tab--empty={id !== 'all' && countsReady && (counts[id] ?? 0) === 0}
+        tabindex={id === activeTab ? 0 : -1}
+        onclick={() => selectTab(id)}
       >
-        <span class="iwac-fed__tab-label">{tabLabel(tab.id)}</span>
-        {#if countLabel(tab.id) !== ''}
-          <span class="iwac-fed__tab-count">{countLabel(tab.id)}</span>
+        <span class="iwac-fed__tab-label">{tabLabel(id)}</span>
+        {#if countLabel(id) !== ''}
+          <span class="iwac-fed__tab-count">{countLabel(id)}</span>
         {/if}
       </button>
     {/each}
@@ -216,9 +318,48 @@
     role="tabpanel"
     aria-labelledby="iwac-fed-tab-{activeTab}"
   >
-    {#key activeTab + '::' + query}
-      <App bootstrap={activeBootstrap} showSearchBox={false} />
-    {/key}
+    {#if activeTab === 'all'}
+      <!-- Union tab: one merged relevance ranking across both collections
+           (no facets — union responses carry none; the per-collection tabs
+           keep the full faceted experience). -->
+      <div class="iwac-fed__union" aria-busy={unionLoading}>
+        {#if unionError}
+          <div class="iwac-fed__union-error" role="alert">
+            <strong>{t('search_unavailable')}</strong>
+            <span>{unionError}</span>
+          </div>
+        {:else if unionLoading && !unionResponse}
+          <p class="iwac-fed__union-status" aria-live="polite">{t('searching')}</p>
+        {:else if unionResponse}
+          {#if unionResponse.found === 0}
+            <p class="iwac-fed__union-status">{t('results_empty_list')}</p>
+          {:else}
+            <p class="iwac-fed__union-count">
+              {unionResponse.found.toLocaleString()}
+              {t(unionResponse.found === 1 ? 'result_one' : 'result_other')}
+            </p>
+            <ol class="iwac-fed__union-list">
+              {#each unionResponse.hits as hit (hit.document.id)}
+                <li>
+                  <ResultItem {hit} activeFilters={{}} onFacetToggle={handleUnionChip} />
+                </li>
+              {/each}
+            </ol>
+            {#if unionTotalPages > 1}
+              <Pagination
+                currentPage={unionPage}
+                totalPages={unionTotalPages}
+                onPageChange={(next) => (unionPage = next)}
+              />
+            {/if}
+          {/if}
+        {/if}
+      </div>
+    {:else}
+      {#key activeTab + '::' + query}
+        <App bootstrap={activeBootstrap} showSearchBox={false} />
+      {/key}
+    {/if}
   </div>
 </div>
 
@@ -339,5 +480,35 @@
     font-variant-numeric: tabular-nums;
     font-size: var(--text-xs, 0.8125rem);
     opacity: 0.85;
+  }
+
+  /* Union "All" tab — a lean merged list (ResultItem rows + pagination). */
+  .iwac-fed__union {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-md, 1rem);
+    min-width: 0;
+  }
+  .iwac-fed__union-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+  }
+  .iwac-fed__union-count,
+  .iwac-fed__union-status {
+    margin: 0;
+    color: var(--muted, #66696e);
+    font-size: var(--text-sm, 0.9375rem);
+  }
+  .iwac-fed__union-error {
+    background: color-mix(in oklab, var(--error, #c9222b) 12%, var(--surface, #fdfcfb));
+    border: 1px solid color-mix(in oklab, var(--error, #c9222b) 35%, transparent);
+    border-radius: var(--radius-md, 0.5rem);
+    padding: var(--space-md, 1rem);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-xs, 0.25rem);
   }
 </style>

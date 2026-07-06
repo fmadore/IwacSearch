@@ -1,0 +1,30 @@
+{
+  "_comment": "Curated synonym set for IwacSearch — Arabic-loanword transliteration variants and West African francophone Islamic vocabulary. Uploaded via PUT /synonym_sets/iwac_synonyms (SynonymsSync) and linked to the content collection via `synonym_sets: [iwac_synonyms]` in data/schema.yaml, so every search expands them automatically. Entity spelling variants (RCI, AOF, person names) are NOT handled here — those live on the entity items as dcterms:alternative and flow into entity_aliases_txt.",
+  "_editing": "Each item is a MULTI-WAY group: searching any spelling finds documents containing any other. Keep groups strictly synonymous (same referent) — do not group related concepts (e.g. 'marabout' and 'cheikh' are different roles). After editing, run cli/synonyms-sync.php (or the admin Sync synonyms button); no reindex needed for search-time expansion.",
+  "_locale_note": "Items deliberately carry NO locale, matching the default (en) analyzer pipeline the v3 collections index with — accented spellings are folded to ASCII at index AND query time, so 'médersa' and 'medersa' below are the same token once parsed. Variants that differ only by diacritics are therefore omitted.",
+  "items": [
+    { "id": "cheikh", "synonyms": ["cheikh", "sheikh", "shaykh", "cheick", "sheik"] },
+    { "id": "el-hadj-title", "synonyms": ["el hadj", "elhadj", "el hadji", "alhaji", "alhadji", "al hadj"] },
+    { "id": "hajj-pilgrimage", "synonyms": ["hajj", "hadj", "haj"] },
+    { "id": "tidjaniyya", "synonyms": ["tidjaniyya", "tijaniyya", "tidjaniya", "tijaniya", "tidjania", "tijania"] },
+    { "id": "qadiriyya", "synonyms": ["qadiriyya", "kadiriyya", "qadiriya", "kadiriya", "qadriya"] },
+    { "id": "madrasa", "synonyms": ["madrasa", "madrassa", "medersa"] },
+    { "id": "coran", "synonyms": ["coran", "koran", "quran"] },
+    { "id": "coranique", "synonyms": ["coranique", "koranique"] },
+    { "id": "ramadan", "synonyms": ["ramadan", "ramadhan"] },
+    { "id": "aid-eid", "synonyms": ["aid", "eid"] },
+    { "id": "tabaski", "synonyms": ["tabaski", "aid el kebir", "aid al adha"] },
+    { "id": "korite", "synonyms": ["korite", "aid el fitr", "aid al fitr"] },
+    { "id": "mawlid", "synonyms": ["maouloud", "mawlid", "mouloud", "maoulid", "mawloud"] },
+    { "id": "oulema", "synonyms": ["oulema", "ulema", "ulama", "oulama"] },
+    { "id": "charia", "synonyms": ["charia", "sharia", "shariah"] },
+    { "id": "djihad", "synonyms": ["djihad", "jihad"] },
+    { "id": "djihadiste", "synonyms": ["djihadiste", "jihadiste"] },
+    { "id": "hijab", "synonyms": ["hijab", "hidjab"] },
+    { "id": "sunnite", "synonyms": ["sunnite", "sunni"] },
+    { "id": "chiite", "synonyms": ["chiite", "shiite"] },
+    { "id": "wahhabite", "synonyms": ["wahhabite", "wahabite"] },
+    { "id": "wahhabisme", "synonyms": ["wahhabisme", "wahabisme"] },
+    { "id": "zaouia", "synonyms": ["zaouia", "zawiya"] }
+  ]
+}

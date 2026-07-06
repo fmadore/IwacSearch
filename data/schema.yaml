@@ -63,6 +63,16 @@ name: iwac_v3
 curation_sets:
   - iwac_diversity
 
+# Global synonym set linked to this collection. Created (idempotently) by
+# src/Indexer/SynonymsSync.php from data/synonyms-fr.json during the bulk
+# reindex — or standalone via cli/synonyms-sync.php / the admin button.
+# Holds transliteration variants of Arabic loanwords (cheikh/sheikh/shaykh,
+# Tidjaniyya/Tijaniyya, El Hadj/Alhaji, charia/sharia…). Once linked,
+# expansion is automatic on every search against this collection — no
+# client parameter. Keep the name in sync with SynonymsSync::SET_NAME.
+synonym_sets:
+  - iwac_synonyms
+
 # No `default_sorting_field` is set on purpose. Typesense requires the
 # default sorting field to be a REQUIRED column, but the only natural
 # candidates (`date`, `pub_year`) are optional — not every doc has a

@@ -22,10 +22,6 @@ use IwacSearch\Indexer\EntityAuthority;
  */
 abstract class AbstractMapper implements MapperInterface
 {
-    /** Public IWAC site, used to construct omeka_url + the IIIF manifest URL. */
-    protected const SITE_BASE = 'https://islam.zmo.de';
-    protected const SITE_SLUG = 'afrique_ouest';
-
     /** Terms every content subset reads (identity, facets, entities, date, link). */
     protected const COMMON_TERMS = [
         'dcterms:identifier',
@@ -104,8 +100,16 @@ abstract class AbstractMapper implements MapperInterface
             'title'     => $title !== '' ? $title : sprintf('[Untitled #%d]', $oid),
             'title_txt' => $title,
             'is_public' => $item['is_public'],
-            'omeka_url' => sprintf('%s/s/%s/item/%d', self::SITE_BASE, self::SITE_SLUG, $oid),
+            'omeka_url' => SiteUrls::itemUrl($oid),
         ];
+
+        // Schema field item_set_ids (int32[], not faceted) — set memberships
+        // for future ACL/collection filtering. Was declared in schema.yaml
+        // from day one but never populated until 3.6.0 (caught by the
+        // check-schema-drift guard).
+        if ($item['item_sets'] !== []) {
+            $doc['item_set_ids'] = array_values($item['item_sets']);
+        }
 
         $this->maybeAdd($doc, 'identifier', $this->firstScalar($values, 'dcterms:identifier'));
         // Alternative titles (dcterms:alternative) — a second FTS channel so
@@ -117,7 +121,7 @@ abstract class AbstractMapper implements MapperInterface
         // the precondition the HF pipeline used to emit the IIIF manifest.
         if ($thumbnailUrl !== null) {
             $doc['thumbnail_url']  = $thumbnailUrl;
-            $doc['iiif_manifest']  = sprintf('%s/iiif/3/%d/manifest', self::SITE_BASE, $oid);
+            $doc['iiif_manifest']  = SiteUrls::iiifManifestUrl($oid);
         }
 
         return $doc;

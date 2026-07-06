@@ -27,23 +27,7 @@ declare(strict_types=1);
  */
 
 use Doctrine\DBAL\DriverManager;
-use IwacSearch\Indexer\CountryResolver;
-use IwacSearch\Indexer\CurationSync;
-use IwacSearch\Indexer\EntityAuthority;
-use IwacSearch\Indexer\EntityOccurrences;
-use IwacSearch\Indexer\IndexReindexer;
-use IwacSearch\Indexer\Mapper\ArticleMapper;
-use IwacSearch\Indexer\Mapper\AudiovisualMapper;
-use IwacSearch\Indexer\Mapper\DocumentMapper;
-use IwacSearch\Indexer\Mapper\IndexEntityMapper;
-use IwacSearch\Indexer\Mapper\MapperRegistry;
-use IwacSearch\Indexer\Mapper\PhotographMapper;
-use IwacSearch\Indexer\Mapper\PublicationMapper;
-use IwacSearch\Indexer\Mapper\ReferenceMapper;
-use IwacSearch\Indexer\OmekaSourceReader;
-use IwacSearch\Indexer\Reindexer;
-use IwacSearch\Indexer\SchemaLoader;
-use IwacSearch\Indexer\StopwordsSync;
+use IwacSearch\Indexer\ReindexOrchestrator;
 use IwacSearch\Service\TypesenseClientFactory;
 
 // ── Bootstrap autoloader ──────────────────────────────────────────────────
@@ -124,53 +108,13 @@ try {
     }
     $connection = DriverManager::getConnection($params);
 
-    // ── Indexer dependencies ───────────────────────────────────────────────
-    // The EntityAuthority is created empty and shared: Reindexer->run() builds
-    // it from MySQL, every mapper holds the same reference, and IndexReindexer
-    // reads it afterwards. EntityOccurrences is filled during the content pass.
-    $reader      = new OmekaSourceReader($connection);
-    $authority   = new EntityAuthority();
-    $countries   = new CountryResolver($moduleRoot . '/data/newspaper-countries.json');
-    $occurrences = new EntityOccurrences();
-
-    $registry = new MapperRegistry([
-        new ArticleMapper($authority, $countries),
-        new PublicationMapper($authority, $countries),
-        new DocumentMapper($authority, $countries),
-        new AudiovisualMapper($authority, $countries),
-        new PhotographMapper($authority, $countries),
-        new ReferenceMapper($authority, $countries),
-    ]);
-
-    $reindexer = new Reindexer(
-        typesense:     $typesense,
-        schemaLoader:  new SchemaLoader($moduleRoot . '/data/schema.yaml'),
-        reader:        $reader,
-        mappers:       $registry,
-        authority:     $authority,
-        occurrences:   $occurrences,
-        stopwordsSync: new StopwordsSync($typesense, $moduleRoot . '/data/stopwords-fr.json', $logger),
-        curationSync:  new CurationSync($typesense, $logger),
-        logger:        $logger
-    );
-
-    // Entity (index) collection — built on the same run from the shared,
-    // now-populated authority + occurrence aggregates. Independent alias swap.
-    $indexReindexer = new IndexReindexer(
-        typesense:    $typesense,
-        schemaLoader: new SchemaLoader($moduleRoot . '/data/schema-index.yaml'),
-        authority:    $authority,
-        occurrences:  $occurrences,
-        mapper:       new IndexEntityMapper(),
-        logger:       $logger
-    );
-
+    // ── Run — all indexer wiring lives in ReindexOrchestrator, shared with
+    // the admin Job\BulkReindex path so the two can't drift.
     $logger->info('Starting reindex', [
         'typesense_host' => $tsConfig['host'],
         'db'             => $params['dbname'],
     ]);
-    $stats = $reindexer->run();
-    $stats['index'] = $indexReindexer->run();
+    $stats = (new ReindexOrchestrator($typesense, $connection, $moduleRoot, $logger))->run();
     $logger->info('Reindex complete', $stats);
 
     fwrite(STDOUT, json_encode($stats, JSON_PRETTY_PRINT) . "\n");

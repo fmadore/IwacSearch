@@ -25,6 +25,9 @@ final class IndexReindexer
 {
     private const BATCH_SIZE = 200;
 
+    /** Shared import/alias/drop plumbing (same helper the content Reindexer uses). */
+    private readonly CollectionOps $ops;
+
     public function __construct(
         private readonly TypesenseClient $typesense,
         private readonly SchemaLoader $schemaLoader,
@@ -34,6 +37,7 @@ final class IndexReindexer
         private readonly LoggerInterface $logger = new NullLogger(),
         private readonly string $aliasTarget = 'iwac_index_current'
     ) {
+        $this->ops = new CollectionOps($typesense, $this->logger, 'index');
     }
 
     /**
@@ -50,7 +54,7 @@ final class IndexReindexer
         $schema   = $this->schemaLoader->loadForReindex($this->aliasTarget);
         $newName  = $schema['name'];
         $alias    = $schema['_alias_target'];
-        $previous = $this->resolveAliasTarget($alias);
+        $previous = $this->ops->resolveAliasTarget($alias);
 
         $this->logger->info('Creating new index collection', ['name' => $newName, 'alias' => $alias]);
         $createPayload = $schema;
@@ -69,14 +73,14 @@ final class IndexReindexer
                 }
                 $batch[] = $doc;
                 if (count($batch) >= self::BATCH_SIZE) {
-                    [$ok, $err] = $this->flushBatch($newName, $batch);
+                    [$ok, $err] = $this->ops->flushBatch($newName, $batch);
                     $indexed += $ok;
                     $errors  += $err;
                     $batch = [];
                 }
             }
             if ($batch !== []) {
-                [$ok, $err] = $this->flushBatch($newName, $batch);
+                [$ok, $err] = $this->ops->flushBatch($newName, $batch);
                 $indexed += $ok;
                 $errors  += $err;
             }
@@ -85,7 +89,7 @@ final class IndexReindexer
                 'collection' => $newName,
                 'error'      => $e->getMessage(),
             ]);
-            $this->safelyDropCollection($newName);
+            $this->ops->safelyDropCollection($newName);
             throw $e;
         }
 
@@ -94,7 +98,7 @@ final class IndexReindexer
 
         if ($previous !== null && $previous !== $newName) {
             $this->logger->info('Dropping previous index collection', ['name' => $previous]);
-            $this->safelyDropCollection($previous);
+            $this->ops->safelyDropCollection($previous);
         }
 
         return [
@@ -106,59 +110,4 @@ final class IndexReindexer
         ];
     }
 
-    /**
-     * @param  list<array<string,mixed>> $batch
-     * @return array{0: int, 1: int}
-     */
-    private function flushBatch(string $collection, array $batch): array
-    {
-        $jsonl = '';
-        foreach ($batch as $doc) {
-            $jsonl .= json_encode($doc, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . "\n";
-        }
-
-        $response = $this->typesense->collections[$collection]->documents->import(
-            $jsonl,
-            ['action' => 'upsert', 'batch_size' => 100]
-        );
-
-        $ok = $err = 0;
-        foreach (preg_split("/\r?\n/", trim((string) $response)) as $line) {
-            if ($line === '') {
-                continue;
-            }
-            $row = json_decode($line, true);
-            if (is_array($row) && ($row['success'] ?? false)) {
-                $ok++;
-            } else {
-                $err++;
-                if ($err <= 3) {
-                    $this->logger->warning('Index document import failed', ['response' => $row]);
-                }
-            }
-        }
-        return [$ok, $err];
-    }
-
-    private function resolveAliasTarget(string $alias): ?string
-    {
-        try {
-            $info = $this->typesense->aliases[$alias]->retrieve();
-            return $info['collection_name'] ?? null;
-        } catch (Throwable) {
-            return null;
-        }
-    }
-
-    private function safelyDropCollection(string $name): void
-    {
-        try {
-            $this->typesense->collections[$name]->delete();
-        } catch (Throwable $e) {
-            $this->logger->warning('Failed to drop index collection', [
-                'name'  => $name,
-                'error' => $e->getMessage(),
-            ]);
-        }
-    }
 }

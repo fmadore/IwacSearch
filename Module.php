@@ -88,7 +88,7 @@ class Module extends AbstractModule
                 Acl::ROLE_GLOBAL_ADMIN,
             ],
             [Controller\Admin\MaintenanceController::class],
-            ['index', 'reindex', 'syncStopwords']
+            ['index', 'reindex', 'syncStopwords', 'syncSynonyms', 'provisionAnalytics']
         );
     }
 
@@ -141,21 +141,35 @@ class Module extends AbstractModule
         // TypesenseClient on first use.
         $listener = $this->resolveItemEventListener();
         if ($listener !== null) {
-            $sharedEventManager->attach(
-                \Omeka\Api\Adapter\ItemAdapter::class,
-                'api.create.post',
-                [$listener, 'onItemCreate']
-            );
-            $sharedEventManager->attach(
-                \Omeka\Api\Adapter\ItemAdapter::class,
-                'api.update.post',
-                [$listener, 'onItemUpdate']
-            );
-            $sharedEventManager->attach(
-                \Omeka\Api\Adapter\ItemAdapter::class,
-                'api.delete.post',
-                [$listener, 'onItemDelete']
-            );
+            $itemAdapter = \Omeka\Api\Adapter\ItemAdapter::class;
+            $sharedEventManager->attach($itemAdapter, 'api.create.post', [$listener, 'onItemCreate']);
+            $sharedEventManager->attach($itemAdapter, 'api.update.post', [$listener, 'onItemUpdate']);
+            $sharedEventManager->attach($itemAdapter, 'api.delete.post', [$listener, 'onItemDelete']);
+
+            // Batch operations hydrate entities directly — the per-item
+            // events above never fire for them. Privacy-relevant: a batch
+            // visibility flip must reach Typesense promptly, because the
+            // public key filters on the INDEXED is_public value.
+            $sharedEventManager->attach($itemAdapter, 'api.batch_create.post', [$listener, 'onItemBatchCreate']);
+            $sharedEventManager->attach($itemAdapter, 'api.batch_update.post', [$listener, 'onItemBatchUpdate']);
+            $sharedEventManager->attach($itemAdapter, 'api.batch_delete.post', [$listener, 'onItemBatchDelete']);
+
+            // Direct media edits (upload to an existing item via the API,
+            // replace file, toggle visibility, delete) fire no item event,
+            // yet thumbnail_url / iiif_manifest derive from the item's
+            // primary media — re-map the parent.
+            $mediaAdapter = \Omeka\Api\Adapter\MediaAdapter::class;
+            $sharedEventManager->attach($mediaAdapter, 'api.create.post', [$listener, 'onMediaWrite']);
+            $sharedEventManager->attach($mediaAdapter, 'api.update.post', [$listener, 'onMediaWrite']);
+            $sharedEventManager->attach($mediaAdapter, 'api.delete.post', [$listener, 'onMediaDelete']);
+
+            // Item-set deletion silently unlinks every member, and
+            // country_ss (references / documents / photographs) derives
+            // from those memberships. Capture members at .pre (join rows
+            // are gone by .post), re-map them at .post.
+            $itemSetAdapter = \Omeka\Api\Adapter\ItemSetAdapter::class;
+            $sharedEventManager->attach($itemSetAdapter, 'api.delete.pre', [$listener, 'onItemSetDeletePre']);
+            $sharedEventManager->attach($itemSetAdapter, 'api.delete.post', [$listener, 'onItemSetDeletePost']);
         }
     }
 

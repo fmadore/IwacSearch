@@ -19,6 +19,12 @@ export interface IwacBootstrap {
    * query from the URL or start empty).
    */
   initial_query?: string;
+  /**
+   * Initial facet selections. Set by the federated page when a chip on the
+   * union "All" tab hands off to a per-collection tab (so the clicked
+   * filter survives the tab switch); absent everywhere else.
+   */
+  initial_filters?: ActiveFilters;
   locked_filters: string; // raw Typesense filter_by
   prominent_facets: string[]; // schema field names
   /**
@@ -158,6 +164,16 @@ export interface IwacDoc {
    * sparkline degrades gracefully (no field → no sparkline).
    */
   mentions_by_year_s?: string;
+  /**
+   * Geopoint of an index entity, [lat, lng] (Typesense order — MapLibre
+   * wants [lng, lat], swap before rendering). Set with has_coords=true when
+   * the curated coordinates parsed; absent otherwise. Present only after
+   * the iwac_index_v3 rebuild.
+   */
+  geo?: [number, number];
+  has_coords?: boolean;
+  /** Raw curated "lat, lng" literal (display-only). */
+  coordinates?: string;
 }
 
 /**
@@ -261,10 +277,12 @@ export interface YearBucket {
 /**
  * Result presentation mode. `list` is the dense ledger (default — density
  * first); `gallery` is the image-forward tile grid for browsing the corpus's
- * photographs, plates and scans. Synced to the URL (`&view=gallery`) and
- * localStorage so it's shareable and sticky.
+ * photographs, plates and scans; `map` plots geo-tagged index entities
+ * (entity surfaces only — offered when the surface's collection carries
+ * geopoints). Synced to the URL (`&view=…`) and localStorage so it's
+ * shareable and sticky.
  */
-export type ViewMode = 'list' | 'gallery';
+export type ViewMode = 'list' | 'gallery' | 'map';
 
 /**
  * The full URL-syncable state for one mount instance. Standalone /search

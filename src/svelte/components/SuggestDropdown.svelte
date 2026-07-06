@@ -1,6 +1,17 @@
 <script lang="ts">
   import type { EntitySuggestion, IwacHit, SuggestResult } from '../lib/types';
   import type { TypesenseClient } from '../lib/typesense';
+  import { isAbortError } from '../lib/transport';
+  import {
+    actionOf,
+    buildHistoryRows,
+    buildSuggestRows,
+    rowKey,
+    titleMarkupOf,
+    urlOf,
+    type SuggestRow,
+  } from '../lib/suggestions';
+  import { clearHistory, readHistory } from '../lib/searchHistory';
   import { facetLabel, useI18n } from '../lib/i18n';
   import Icon from './Icon.svelte';
 
@@ -74,42 +85,27 @@
   let debounceTimer: number | null = null;
   let inFlightToken = 0;
 
-  // Flat, ordered row list for keyboard nav + rendering. The search action
-  // is index 0 so Enter (default highlight) runs the search.
-  type Row =
-    | { kind: 'search' }
-    | { kind: 'article'; hit: IwacHit }
-    | { kind: 'entity'; entity: EntitySuggestion };
-
-  const rows = $derived.by<Row[]>(() => {
-    const out: Row[] = [{ kind: 'search' }];
-    for (const hit of articles) out.push({ kind: 'article', hit });
-    for (const entity of entities) out.push({ kind: 'entity', entity });
-    return out;
+  // Recent searches for the empty-focused state, refreshed each time the
+  // dropdown (re)opens so a search committed elsewhere shows up.
+  let history = $state<string[]>([]);
+  $effect(() => {
+    if (enabled) history = readHistory();
   });
+
+  // Two row modes share one flat, keyboard-navigable list (shared model in
+  // lib/suggestions.ts): a typed prefix builds search + article + entity
+  // rows (the search action first, so Enter runs the search); an EMPTY
+  // focused box shows recent searches instead.
+  const isPrefixMode = $derived(query.trim().length >= 2);
+  const rows = $derived.by<SuggestRow[]>(() =>
+    isPrefixMode ? buildSuggestRows(query, articles, entities) : buildHistoryRows(history),
+  );
 
   const hasSuggestions = $derived(articles.length > 0 || entities.length > 0);
 
-  // Strip the highlight markers Typesense embeds in the snippet so we can
-  // render them with our own <mark> styling. Allow only <mark>.
-  function safeMarkup(html: string | undefined): string {
-    if (!html) return '';
-    return html.replace(/<(?!\/?mark\b)[^>]*>/gi, '');
-  }
-
-  function titleMarkupOf(hit: IwacHit): string {
-    const titleHl = hit.highlights.find((h) => h.field === 'title_txt');
-    // `value` is the full marked-up title; `snippet` windows long titles.
-    const markup = titleHl?.value ?? titleHl?.snippet;
-    if (markup) {
-      return safeMarkup(markup);
-    }
-    const tx = hit.document.title ?? '';
-    return tx.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-  }
-
-  function urlOf(hit: IwacHit): string | null {
-    return hit.document.omeka_url ?? hit.document.source_url ?? null;
+  function handleClearHistory(): void {
+    clearHistory();
+    history = [];
   }
 
   // Re-fetch suggestions whenever the query (or enabled flag) changes.
@@ -140,11 +136,13 @@
           highlightedIndex = 0; // re-arm on the search action
           lastError = null;
         })
-        .catch((e: Error) => {
+        .catch((e: unknown) => {
           if (myToken !== inFlightToken) return;
-          // Typeahead failures shouldn't bother the user; the main search
-          // bar still works. Keep the search action available.
-          lastError = e.message;
+          // A superseded (aborted) request means a newer one is in flight —
+          // never an error state. Other typeahead failures shouldn't bother
+          // the user either; the main search bar still works.
+          if (isAbortError(e)) return;
+          lastError = e instanceof Error ? e.message : String(e);
           articles = [];
           entities = [];
         });
@@ -152,34 +150,27 @@
   });
 
   // Mirror the active option's id onto the parent so it can set the input's
-  // aria-activedescendant. The dropdown only renders when enabled && the query
-  // is ≥2 chars; report null otherwise so the input drops the stale reference.
+  // aria-activedescendant; null when closed/empty so the input drops the
+  // stale reference.
   $effect(() => {
-    const open = enabled && query.trim().length >= 2;
-    onActiveChange?.(open && rows.length > 0 ? optionId(highlightedIndex) : null);
+    onActiveChange?.(enabled && rows.length > 0 ? optionId(highlightedIndex) : null);
   });
 
-  function act(row: Row): void {
-    if (row.kind === 'search') {
-      onRunSearch(query);
-      onClose();
-      return;
-    }
-    if (row.kind === 'entity') {
-      onPickEntity(row.entity.field, row.entity.value);
-      onClose();
-      return;
-    }
-    // article
-    const url = urlOf(row.hit);
-    if (url) {
-      window.location.assign(url);
-      onClose();
-      return;
-    }
-    const titleText = (row.hit.document.title ?? '').trim();
-    if (titleText !== '') {
-      onPickQuery(titleText);
+  function act(row: SuggestRow): void {
+    const action = actionOf(row);
+    switch (action.type) {
+      case 'run-search':
+        if (action.query !== '') onRunSearch(action.query);
+        break;
+      case 'pick-entity':
+        onPickEntity(action.field, action.value);
+        break;
+      case 'navigate':
+        window.location.assign(action.url);
+        break;
+      case 'pick-query':
+        onPickQuery(action.query);
+        break;
     }
     onClose();
   }
@@ -217,7 +208,7 @@
     return false;
   }
 
-  function onRowClick(row: Row, i: number, e: MouseEvent): void {
+  function onRowClick(row: SuggestRow, i: number, e: MouseEvent): void {
     // Let middle-click / cmd-click on an article open in a new tab.
     if (row.kind === 'article' && urlOf(row.hit) && (e.metaKey || e.ctrlKey || e.button === 1)) {
       return;
@@ -227,7 +218,7 @@
     act(row);
   }
 
-  function hrefOf(row: Row): string {
+  function hrefOf(row: SuggestRow): string {
     return row.kind === 'article' ? (urlOf(row.hit) ?? '#') : '#';
   }
 
@@ -238,16 +229,26 @@
   }
 </script>
 
-{#if enabled && query.trim().length >= 2}
+{#if enabled && rows.length > 0}
   <div
     class="iwac-suggest"
     id={listboxId}
     role="listbox"
-    aria-label={t('suggestions')}
+    aria-label={isPrefixMode ? t('suggestions') : t('recent_searches')}
     tabindex="-1"
     onmousedown={preventBlur}
   >
-    {#each rows as row, i (row.kind + ':' + (row.kind === 'article' ? row.hit.document.id : row.kind === 'entity' ? row.entity.field + row.entity.value : 'search'))}
+    {#if !isPrefixMode}
+      <div class="iwac-suggest__heading" role="presentation">
+        <span>{t('recent_searches')}</span>
+        <!-- Mouse/touch affordance; focus stays on the input (combobox
+             pattern), so this is deliberately not arrow-navigable. -->
+        <button type="button" class="iwac-suggest__clear" onclick={handleClearHistory}>
+          {t('clear_history')}
+        </button>
+      </div>
+    {/if}
+    {#each rows as row, i (rowKey(row))}
       {#if row.kind === 'search'}
         <button
           type="button"
@@ -261,6 +262,22 @@
         >
           <span class="iwac-suggest__icon" aria-hidden="true"><Icon name="search" /></span>
           <span class="iwac-suggest__title">{t('search_for', { q: query.trim() })}</span>
+        </button>
+      {:else if row.kind === 'history'}
+        <button
+          type="button"
+          id={optionId(i)}
+          class="iwac-suggest__item iwac-suggest__item--history"
+          class:iwac-suggest__item--active={i === highlightedIndex}
+          onclick={(e) => onRowClick(row, i, e)}
+          onmouseenter={() => (highlightedIndex = i)}
+          role="option"
+          aria-selected={i === highlightedIndex}
+        >
+          <span class="iwac-suggest__icon iwac-suggest__icon--muted" aria-hidden="true">
+            <Icon name="clock" />
+          </span>
+          <span class="iwac-suggest__title">{row.query}</span>
         </button>
       {:else if row.kind === 'article'}
         <a
@@ -294,10 +311,10 @@
         </button>
       {/if}
     {/each}
-    {#if !hasSuggestions && lastError === null}
+    {#if isPrefixMode && !hasSuggestions && lastError === null}
       <div class="iwac-suggest__empty" role="status">{t('no_matches')}</div>
     {/if}
-    {#if lastError}
+    {#if isPrefixMode && lastError}
       <div class="iwac-suggest__error" role="status">{lastError}</div>
     {/if}
   </div>
@@ -380,6 +397,43 @@
     color: var(--primary, #ce4115);
     font-size: var(--text-base, 1.0625rem);
     line-height: 1;
+  }
+  .iwac-suggest__icon--muted {
+    color: var(--muted, #66696e);
+  }
+  /* Recent-searches header row: label left, quiet clear action right. */
+  .iwac-suggest__heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-sm, 0.5rem);
+    padding: var(--space-xs, 0.25rem) var(--space-md, 1rem);
+    font-size: var(--text-xs, 0.8125rem);
+    color: var(--muted, #66696e);
+    border-bottom: 1px solid var(--border-light, #e2e5e8);
+  }
+  .iwac-suggest__clear {
+    appearance: none;
+    -webkit-appearance: none;
+    margin: 0;
+    padding: 0.125rem 0.375rem;
+    background: transparent;
+    border: 0;
+    border-radius: var(--radius-sm, 0.25rem);
+    box-shadow: none;
+    font: inherit;
+    font-size: var(--text-xs, 0.8125rem);
+    color: var(--muted, #66696e);
+    cursor: pointer;
+  }
+  .iwac-suggest__clear:hover,
+  .iwac-suggest__clear:focus-visible {
+    color: var(--primary, #ce4115);
+    background: transparent;
+    box-shadow: none;
+    transform: none;
+    outline: none;
+    text-decoration: underline;
   }
   .iwac-suggest__title {
     flex: 1;

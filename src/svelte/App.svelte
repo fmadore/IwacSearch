@@ -1,17 +1,22 @@
 <script lang="ts">
   import type {
     ActiveFilters,
+    EntitySuggestion,
     IwacBootstrap,
+    IwacDoc,
     IwacFacetCount,
     IwacSearchResponse,
     SearchState,
-    ViewMode,
     YearBucket,
     YearRange,
   } from './lib/types';
   import { TypesenseClient } from './lib/typesense';
-  import { onUrlPop, readUrlState, syncToUrl, urlHasView } from './lib/urlState';
-  import { normalizeCard, normalizeLocale, provideI18n } from './lib/i18n';
+  import { isAbortError } from './lib/transport';
+  import { onUrlPop, readUrlState, syncToUrl } from './lib/urlState';
+  import { facetLabel, normalizeCard, normalizeLocale, provideI18n } from './lib/i18n';
+  import { createViewMode } from './lib/viewMode.svelte';
+  import { createFilterDrawer } from './lib/filterDrawer.svelte';
+  import { recordSearch } from './lib/searchHistory';
   import type { ActiveFilterChip } from './lib/filterChips';
   import SearchInput from './components/SearchInput.svelte';
   import SuggestDropdown from './components/SuggestDropdown.svelte';
@@ -20,6 +25,7 @@
   import ResultSkeleton from './components/ResultSkeleton.svelte';
   import ResultsEmpty from './components/ResultsEmpty.svelte';
   import ViewToggle from './components/ViewToggle.svelte';
+  import MapView from './components/MapView.svelte';
   import FacetPanel from './components/FacetPanel.svelte';
   import SortSelect from './components/SortSelect.svelte';
   import ExportMenu from './components/ExportMenu.svelte';
@@ -42,7 +48,9 @@
    * Modularity note: this component is the orchestrator. It owns state
    * and wires events. The actual UI is in small focused components
    * (SearchInput, FacetPanel, ResultsList, Pagination, ResultItem,
-   * SortSelect, …) so styling and behaviour stay scoped.
+   * SortSelect, …); cross-cutting state mechanics live in composables
+   * (viewMode.svelte.ts, filterDrawer.svelte.ts) so styling and
+   * behaviour stay scoped.
    */
 
   interface Props {
@@ -62,7 +70,10 @@
   // once at init from the server-detected bootstrap locale (defaults to
   // French). svelte-ignore: bootstrap is a prop, not reactive state.
   // svelte-ignore state_referenced_locally
-  const { t, card } = provideI18n(normalizeLocale(bootstrap.locale), normalizeCard(bootstrap.card));
+  const { t, card, locale } = provideI18n(
+    normalizeLocale(bootstrap.locale),
+    normalizeCard(bootstrap.card),
+  );
 
   const isStandalone = $derived(String(bootstrap.block_id) === 'standalone');
 
@@ -90,12 +101,13 @@
   const initial: SearchState = syncUrl
     ? readUrlState(window.location.href, urlPrefix)
     : {
-        // initial_query is set by the federated page so the tab seeds with
-        // the shared query; empty on page blocks.
+        // initial_query / initial_filters are set by the federated page so
+        // the tab seeds with the shared query (and any filter handed off
+        // from the union tab); empty on page blocks.
         q: bootstrap.initial_query ?? '',
         page: 1,
         sort: bootstrap.default_sort || '_text_match:desc',
-        filters: {},
+        filters: bootstrap.initial_filters ?? {},
         yearRange: null,
         view: 'list',
       };
@@ -106,61 +118,18 @@
   let filters = $state<ActiveFilters>(initial.filters);
   let yearRange = $state<YearRange | null>(initial.yearRange);
 
-  // ── Result presentation (List ↔ Gallery, design review §01) ─────────
-  // Gallery is offered on content surfaces only; the entity index is list-only.
-  const supportsGallery = card === 'content';
-  const VIEW_STORAGE_KEY = 'iwac-view-mode';
-
-  // Initial view: an explicit URL `view` param (shared link) wins, then the
-  // sticky localStorage preference, else `list` (density first) — possibly
-  // upgraded to gallery later by the image-heavy auto-suggest below.
-  const initialView = resolveInitialView();
-  let viewMode = $state<ViewMode>(initialView.view);
-  // Whether the view was deliberately chosen (URL / localStorage / user toggle).
-  // Only explicit choices sync to the URL + localStorage; an auto-suggested
-  // gallery stays a per-session presentation hint.
-  let viewExplicit = $state(initialView.explicit);
-  let viewAutoApplied = $state(false);
-
-  function resolveInitialView(): { view: ViewMode; explicit: boolean } {
-    if (!supportsGallery) return { view: 'list', explicit: true };
-    if (syncUrl && urlHasView(window.location.href, urlPrefix)) {
-      return { view: initial.view, explicit: true };
-    }
-    const stored = readStoredView();
-    if (stored) return { view: stored, explicit: true };
-    return { view: 'list', explicit: false };
-  }
-
-  function readStoredView(): ViewMode | null {
-    try {
-      const v = window.localStorage.getItem(VIEW_STORAGE_KEY);
-      return v === 'gallery' || v === 'list' ? v : null;
-    } catch {
-      return null;
-    }
-  }
-
-  function handleViewChange(next: ViewMode): void {
-    if (next === viewMode) return;
-    viewMode = next;
-    viewExplicit = true;
-    try {
-      window.localStorage.setItem(VIEW_STORAGE_KEY, next);
-    } catch {
-      /* private mode / storage disabled — the toggle still works in-session */
-    }
-  }
-
-  // Image-bearing types — when a result set is mostly these, a gallery serves
-  // the researcher better than a ledger of text rows.
-  const IMAGE_BEARING_TYPES = new Set(['photograph', 'document', 'audiovisual']);
-  function isImageHeavy(r: IwacSearchResponse): boolean {
-    const hits = r.hits ?? [];
-    if (hits.length < 4) return false; // too few to judge confidently
-    const n = hits.filter((h) => IMAGE_BEARING_TYPES.has(h.document.type_s ?? '')).length;
-    return n / hits.length > 0.6;
-  }
+  // ── Result presentation (List / Gallery / Map) ───────────────────────
+  // Content surfaces offer the image-forward Gallery (design review §01);
+  // the entity index offers the geo Map instead. Resolution rules (URL wins
+  // → sticky localStorage → default) + the one-shot gallery auto-suggest
+  // live in the composable.
+  // svelte-ignore state_referenced_locally
+  const view = createViewMode({
+    modes: card === 'entity' ? (['list', 'map'] as const) : (['list', 'gallery'] as const),
+    syncUrl,
+    urlPrefix,
+    initialView: initial.view,
+  });
 
   // Hydrate from the SSR'd first page when present. The server inlines
   // a `initial_response` in the bootstrap JSON for curated browse pages,
@@ -181,6 +150,17 @@
   // range to show the full span; empty until the first fetch resolves, and on
   // any surface without a facet panel.
   let yearDistribution = $state<YearBucket[]>([]);
+
+  // "Did you mean" candidates for a zero-result query: entity suggestions
+  // fetched through the typo-tolerant suggest path (facet_query + the alias
+  // index), so a near-miss spelling ("Tidjaniya") can offer the canonical
+  // entity. Rendered above the empty state; picking one applies the filter.
+  let didYouMean = $state<EntitySuggestion[]>([]);
+
+  // Geo-tagged docs for the Map view (entity surfaces). Fetched when the
+  // map is active and the query/filter state changes.
+  let mapDocs = $state<IwacDoc[]>([]);
+  let mapLoading = $state(false);
 
   // First $effect run skips its fetch when the live state matches the
   // state the server used for SSR (empty q, page 1, default sort, no
@@ -215,7 +195,7 @@
       sort,
       filters,
       yearRange,
-      view: viewExplicit ? viewMode : 'list',
+      view: view.explicit ? view.mode : 'list',
     };
     syncToUrl(next, prevState, urlPrefix);
     // Snapshot for the next diff. NOT structuredClone(next): `filters` and
@@ -241,12 +221,7 @@
       sort = s.sort;
       filters = s.filters;
       yearRange = s.yearRange;
-      if (supportsGallery) {
-        viewMode = s.view;
-        // A `view` in the popped URL is an explicit choice to honour; its
-        // absence reverts to the implicit default.
-        viewExplicit = urlHasView(window.location.href, urlPrefix);
-      }
+      view.applyPop(s.view);
     }, urlPrefix);
   });
 
@@ -255,9 +230,7 @@
   // §01). Never overrides an explicit choice; doesn't persist (session hint).
   $effect(() => {
     const r = response;
-    if (!r || !supportsGallery || viewExplicit || viewAutoApplied) return;
-    viewAutoApplied = true;
-    if (isImageHeavy(r)) viewMode = 'gallery';
+    if (r) view.autoSuggest(r);
   });
 
   // Query → search. Tracks every reactive state field by reading it.
@@ -288,6 +261,7 @@
 
     isLoading = true;
     error = null;
+    didYouMean = [];
     client
       .search({
         q,
@@ -299,18 +273,46 @@
       })
       .then((r) => {
         response = r;
+        if (q.trim() !== '') {
+          if (r.found > 0) {
+            // Only fruitful queries enter the recent-searches history, so
+            // typo dead-ends don't pollute the dropdown.
+            recordSearch(q);
+          } else if (q.trim().length >= 3) {
+            fetchDidYouMean(q);
+          }
+        }
+        isLoading = false;
       })
-      .catch((e: Error) => {
+      .catch((e: unknown) => {
+        // A superseded (aborted) request means a newer one is already in
+        // flight — its .then/.catch will settle the UI state; touching
+        // isLoading here would blank the spinner under the live request.
+        if (isAbortError(e)) return;
         console.error('[iwac-search] search failed', e);
-        error = e.message;
+        error = e instanceof Error ? e.message : String(e);
         // Keep stale response visible on error? No — show the error
         // explicitly so the user doesn't think filters succeeded.
         response = null;
-      })
-      .finally(() => {
         isLoading = false;
       });
   });
+
+  /**
+   * Zero-result recovery: ask the typo-tolerant suggest path (facet_query +
+   * the alias-reconciling entity index) for entities near the dead query.
+   * Best-effort — failures (including aborts) just mean no banner.
+   */
+  function fetchDidYouMean(q: string): void {
+    client
+      .suggest(q, 3)
+      .then((s) => {
+        didYouMean = s.entities.slice(0, 4);
+      })
+      .catch(() => {
+        didYouMean = [];
+      });
+  }
 
   // Year-distribution histogram. Tracks ONLY the query + categorical filters
   // — not page, sort, or the year range — because the bars show the full span
@@ -327,9 +329,33 @@
       .then((d) => {
         yearDistribution = d;
       })
-      .catch((e: Error) => {
+      .catch((e: unknown) => {
+        if (isAbortError(e)) return; // superseded — newer histogram in flight
         console.warn('[iwac-search] year distribution failed', e);
         yearDistribution = [];
+      });
+  });
+
+  // Map data: when the Map view is active, fetch every geo-tagged entity
+  // matching the current query + filters (year range included — unlike the
+  // histogram, the map should reflect the selected window).
+  $effect(() => {
+    if (view.mode !== 'map') return;
+    const q = query;
+    const f = filters;
+    const y = yearRange;
+    mapLoading = true;
+    client
+      .fetchForMap({ q, activeFilters: f, yearRange: y })
+      .then((docs) => {
+        mapDocs = docs;
+        mapLoading = false;
+      })
+      .catch((e: unknown) => {
+        if (isAbortError(e)) return;
+        console.warn('[iwac-search] map fetch failed', e);
+        mapDocs = [];
+        mapLoading = false;
       });
   });
 
@@ -343,9 +369,10 @@
   }
 
   // ── Typeahead state ─────────────────────────────────────────────────
-  // Open while the search box has focus AND the user has typed at least
-  // 2 chars. Closes on blur (after a tick to let dropdown clicks land),
-  // on Esc, after picking a suggestion, or on result navigation.
+  // Open while the search box has focus. With ≥2 chars typed it shows
+  // suggestions; empty it shows recent searches. Closes on blur (after a
+  // tick to let dropdown clicks land), on Esc, after picking a suggestion,
+  // or on result navigation.
   let suggestOpen = $state(false);
   let suggestRef: SuggestDropdown | undefined = $state();
 
@@ -353,10 +380,10 @@
   // the option ids derived from it) never collide when several search surfaces
   // share a page. suggestActiveId is mirrored up from the dropdown so the input
   // can set aria-activedescendant; suggestExpanded matches the dropdown's own
-  // render condition (open AND ≥2 chars typed).
+  // render condition.
   const suggestListboxId = $derived(`iwac-suggest-${bootstrap.block_id}`);
   let suggestActiveId = $state<string | null>(null);
-  const suggestExpanded = $derived(suggestOpen && query.trim().length >= 2);
+  const suggestExpanded = $derived(suggestOpen && suggestActiveId !== null);
 
   function handleSearchFocus(): void {
     suggestOpen = true;
@@ -402,41 +429,82 @@
     }
   }
 
-  // ── Mobile filter drawer ────────────────────────────────────────────
-  // On wide screens the FacetPanel sits in a sticky left column.
-  // On narrow screens it hides behind a "Filters" trigger and slides
-  // in from the right inside the shared <Drawer> component — same
-  // chrome (animation, backdrop, ESC, scroll lock) as the admin uses.
-  //
-  // matchMedia gives us a reactive boolean for "narrow viewport" so
-  // the conditional render below picks the right shell. FacetPanel
-  // re-mounts on a resize across the breakpoint; that's acceptable
-  // because the only state worth preserving is FacetGroup's expand
-  // memory, and resizing across breakpoints mid-session is rare.
-  let filterDrawerOpen = $state(false);
-  let isNarrow = $state(false);
+  // ── "/" keyboard shortcut ───────────────────────────────────────────
+  // Slash focuses the search box from anywhere on the page (the GitHub /
+  // Wikipedia convention), unless the user is already typing somewhere.
+  let searchFormEl: HTMLFormElement | null = $state(null);
 
   $effect(() => {
-    if (typeof window === 'undefined') return;
-    const mq = window.matchMedia('(max-width: 48rem)');
-    const update = (): void => {
-      isNarrow = mq.matches;
-      // Desktop should never have the drawer "open" — close it
-      // proactively on resize so the next narrow→wide→narrow cycle
-      // doesn't snap an already-open overlay back into view.
-      if (!mq.matches) filterDrawerOpen = false;
+    if (!showSearchBox) return;
+    const onKeydown = (e: KeyboardEvent): void => {
+      if (e.key !== '/' || e.defaultPrevented || e.ctrlKey || e.metaKey || e.altKey) return;
+      const target = e.target as HTMLElement | null;
+      if (
+        target &&
+        (target.isContentEditable ||
+          target.tagName === 'INPUT' ||
+          target.tagName === 'TEXTAREA' ||
+          target.tagName === 'SELECT')
+      ) {
+        return;
+      }
+      const input = searchFormEl?.querySelector('input');
+      if (input) {
+        e.preventDefault();
+        input.focus();
+        input.select();
+      }
     };
-    update();
-    mq.addEventListener('change', update);
-    return () => mq.removeEventListener('change', update);
+    window.addEventListener('keydown', onKeydown);
+    return () => window.removeEventListener('keydown', onKeydown);
   });
 
-  function openFilterDrawer(): void {
-    filterDrawerOpen = true;
+  // ── Copy link ───────────────────────────────────────────────────────
+  // The URL mirrors the full search state on syncing surfaces, so "copy
+  // link" is just the address — the button saves the trip to the URL bar
+  // and confirms the copy. Transient label swap instead of a toast.
+  let linkCopied = $state(false);
+  let linkCopiedTimer: number | null = null;
+
+  function handleCopyLink(): void {
+    const url = window.location.href;
+    const confirm = (): void => {
+      linkCopied = true;
+      if (linkCopiedTimer !== null) window.clearTimeout(linkCopiedTimer);
+      linkCopiedTimer = window.setTimeout(() => {
+        linkCopied = false;
+      }, 2000);
+    };
+    if (navigator.clipboard?.writeText) {
+      navigator.clipboard.writeText(url).then(confirm, () => fallbackCopy(url) && confirm());
+    } else if (fallbackCopy(url)) {
+      confirm();
+    }
   }
-  function closeFilterDrawer(): void {
-    filterDrawerOpen = false;
+
+  /** execCommand fallback for non-secure contexts / older WebViews. */
+  function fallbackCopy(text: string): boolean {
+    try {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.setAttribute('readonly', '');
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      const ok = document.execCommand('copy');
+      document.body.removeChild(ta);
+      return ok;
+    } catch {
+      return false;
+    }
   }
+
+  // ── Mobile filter drawer ────────────────────────────────────────────
+  // Composable owns the matchMedia listener + open/close state; the
+  // conditional render below picks the sticky column vs the Drawer.
+  const drawer = createFilterDrawer();
+  $effect(() => drawer.attach());
 
   // Number of currently-active filters (categorical chips + year range).
   // Drives the badge on the mobile Filters trigger.
@@ -594,6 +662,7 @@
     <form
       class="iwac-search__searchbox"
       role="search"
+      bind:this={searchFormEl}
       onfocusin={handleSearchFocus}
       onfocusout={handleSearchBlur}
       onkeydown={handleSearchKeydown}
@@ -631,12 +700,12 @@
 
   {#if bootstrap.mode === 'full'}
     <div class="iwac-search__layout">
-      {#if isNarrow}
+      {#if drawer.isNarrow}
         <!-- Narrow viewport: facets live behind the Filters trigger,
              rendered into the shared Drawer when opened. -->
         <Drawer
-          open={filterDrawerOpen}
-          onClose={closeFilterDrawer}
+          open={drawer.open}
+          onClose={() => drawer.close()}
           title={t('filters')}
           side="right"
           width="min(22rem, 92vw)"
@@ -675,19 +744,19 @@
       <div class="iwac-search__results" aria-busy={isLoading}>
         {#if response}
           <!-- Result controls. On desktop one row: view toggle (left), then
-               export + sort (right). On a phone two rows: [view · filters ·
-               export] then a full-width sort, so the bar reads as a tidy unit
-               instead of three cramped stacked rows (punch-list item 4). -->
+               copy-link + export + sort (right). On a phone two rows: [view ·
+               filters · actions] then a full-width sort, so the bar reads as a
+               tidy unit instead of three cramped stacked rows. -->
           <div class="iwac-search__controls" bind:this={resultsAnchor}>
             <div class="iwac-search__controls-bar">
-              {#if supportsGallery}
-                <ViewToggle value={viewMode} onChange={handleViewChange} />
+              {#if view.supportsToggle}
+                <ViewToggle value={view.mode} modes={view.modes} onChange={(m) => view.set(m)} />
               {/if}
               <div class="iwac-search__controls-actions">
                 <button
                   type="button"
                   class="iwac-search__filters-trigger"
-                  onclick={openFilterDrawer}
+                  onclick={() => drawer.show()}
                   aria-label={t('open_filters')}
                 >
                   <span class="iwac-search__filters-trigger-icon" aria-hidden="true">
@@ -698,6 +767,22 @@
                     <span class="iwac-search__filters-trigger-badge">{activeFilterCount}</span>
                   {/if}
                 </button>
+                {#if syncUrl}
+                  <button
+                    type="button"
+                    class="iwac-search__copylink"
+                    class:is-copied={linkCopied}
+                    onclick={handleCopyLink}
+                    aria-label={t('copy_link')}
+                  >
+                    <span class="iwac-search__copylink-icon" aria-hidden="true">
+                      <Icon name="link" />
+                    </span>
+                    <span class="iwac-search__copylink-label">
+                      {linkCopied ? t('link_copied') : t('copy_link')}
+                    </span>
+                  </button>
+                {/if}
                 {#if card === 'content' && response.found > 0}
                   <ExportMenu fetchDocs={handleExportFetch} {query} found={response.found} />
                 {/if}
@@ -721,11 +806,31 @@
           {/if}
         {/if}
 
-        {#if isLoading}
+        {#if view.mode === 'map'}
+          <!-- The map owns its own loading/empty states and reflects the
+               live query + filters; the summary strip above still shows
+               the textual result count. -->
+          <MapView docs={mapDocs} loading={mapLoading} />
+        {:else if isLoading}
           <!-- Galley-proof skeleton in the active view (replaces the opacity
                dim) — holds geometry so the page doesn't jump (§03A). -->
-          <ResultSkeleton view={viewMode} count={Math.min(Math.max(perPage, 4), 8)} />
+          <ResultSkeleton view={view.mode} count={Math.min(Math.max(perPage, 4), 8)} />
         {:else if response && response.found === 0}
+          {#if didYouMean.length > 0}
+            <div class="iwac-search__didyoumean" role="status">
+              <span class="iwac-search__didyoumean-label">{t('did_you_mean')}</span>
+              {#each didYouMean as s (s.field + s.value)}
+                <button
+                  type="button"
+                  class="iwac-search__didyoumean-chip"
+                  onclick={() => handleSuggestPickEntity(s.field, s.value)}
+                >
+                  {s.value}
+                  <span class="iwac-search__didyoumean-tag">{facetLabel(s.field, locale)}</span>
+                </button>
+              {/each}
+            </div>
+          {/if}
           <ResultsEmpty
             {filters}
             {yearRange}
@@ -741,7 +846,7 @@
             activeFilters={filters}
             onFacetToggle={handleFacetToggle}
             {hideCountry}
-            view={viewMode}
+            view={view.mode}
           />
         {/if}
       </div>
@@ -812,6 +917,104 @@
     display: none;
   }
 
+  /*
+   * Copy-link — quiet outlined control matching the toolbar vocabulary.
+   * Swaps its label to a confirmation for 2 s after a successful copy.
+   */
+  .iwac-search__copylink {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-xs, 0.25rem);
+    height: var(--size-control-md, 2.5rem);
+    padding-inline: var(--space-md, 1rem);
+    border: 1px solid var(--border, #ced1d6);
+    border-radius: var(--radius-md, 0.5rem);
+    background: var(--surface, #fdfcfb);
+    color: var(--ink, #13161c);
+    box-shadow: none;
+    font: inherit;
+    font-size: var(--text-sm, 0.9375rem);
+    font-weight: 500;
+    cursor: pointer;
+    transition:
+      border-color var(--transition-fast, 150ms ease),
+      color var(--transition-fast, 150ms ease);
+  }
+  .iwac-search__copylink:hover {
+    background: var(--surface, #fdfcfb);
+    border-color: var(--primary, #ce4115);
+    color: var(--primary, #ce4115);
+    box-shadow: none;
+    transform: none;
+  }
+  .iwac-search__copylink:focus-visible {
+    outline: none;
+    box-shadow: var(--ring-focus, 0 0 0 3px rgba(0, 0, 0, 0.1));
+  }
+  .iwac-search__copylink.is-copied {
+    border-color: var(--primary, #ce4115);
+    color: var(--primary, #ce4115);
+  }
+  .iwac-search__copylink-icon {
+    display: inline-flex;
+    align-items: center;
+    font-size: 0.9em;
+    color: var(--muted, #66696e);
+  }
+  .iwac-search__copylink:hover .iwac-search__copylink-icon,
+  .iwac-search__copylink.is-copied .iwac-search__copylink-icon {
+    color: var(--primary, #ce4115);
+  }
+
+  /*
+   * "Did you mean" banner on zero-result queries: entity chips from the
+   * typo-tolerant suggest path; picking one applies it as a filter.
+   */
+  .iwac-search__didyoumean {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--space-sm, 0.5rem);
+    padding: var(--space-sm, 0.5rem) 0;
+  }
+  .iwac-search__didyoumean-label {
+    color: var(--muted, #66696e);
+    font-size: var(--text-sm, 0.9375rem);
+  }
+  .iwac-search__didyoumean-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-xs, 0.25rem);
+    padding: 0.25rem var(--space-sm, 0.5rem);
+    border: 1px solid var(--border, #ced1d6);
+    border-radius: var(--radius-full, 9999px);
+    background: var(--surface, #fdfcfb);
+    color: var(--ink, #13161c);
+    box-shadow: none;
+    font: inherit;
+    font-size: var(--text-sm, 0.9375rem);
+    cursor: pointer;
+    transition:
+      border-color var(--transition-fast, 150ms ease),
+      color var(--transition-fast, 150ms ease);
+  }
+  .iwac-search__didyoumean-chip:hover,
+  .iwac-search__didyoumean-chip:focus-visible {
+    border-color: var(--primary, #ce4115);
+    color: var(--primary, #ce4115);
+    background: var(--surface, #fdfcfb);
+    box-shadow: none;
+    transform: none;
+    outline: none;
+  }
+  .iwac-search__didyoumean-tag {
+    font-size: var(--text-xs, 0.8125rem);
+    color: var(--muted, #66696e);
+    background: var(--surface-sunken, #f4f1ef);
+    padding: 0.0625rem 0.375rem;
+    border-radius: var(--radius-full, 9999px);
+  }
+
   @media (max-width: 48rem) {
     .iwac-search__layout {
       grid-template-columns: 1fr;
@@ -819,7 +1022,7 @@
     }
 
     /*
-     * Two tidy rows on a phone: [view · filters · export] on top, then a
+     * Two tidy rows on a phone: [view · filters · actions] on top, then a
      * full-width sort row. Stacking the controls (column) bounds the sort row
      * to the viewport so its <select> can't overflow.
      */
@@ -842,6 +1045,7 @@
 
     /* Comfortable 44px touch targets across the whole bar. */
     .iwac-search__filters-trigger,
+    .iwac-search__copylink,
     .iwac-search__controls :global(.iwac-view__btn),
     .iwac-search__controls :global(.iwac-export__trigger),
     .iwac-search__controls :global(.iwac-sort__select) {
@@ -910,13 +1114,15 @@
   /*
    * Smallest phones: the bar goes fully icon-forward — the view toggle and the
    * Export trigger already drop their labels at this breakpoint, so the Filters
-   * label follows (the funnel + count stay; the button keeps its aria-label).
+   * and copy-link labels follow (icons stay; the buttons keep their aria-labels).
    */
   @media (max-width: 26rem) {
-    .iwac-search__filters-trigger {
+    .iwac-search__filters-trigger,
+    .iwac-search__copylink {
       padding-inline: var(--space-sm, 0.5rem);
     }
-    .iwac-search__filters-trigger-label {
+    .iwac-search__filters-trigger-label,
+    .iwac-search__copylink-label {
       position: absolute;
       width: 1px;
       height: 1px;
@@ -952,7 +1158,7 @@
     padding-block-end: var(--space-sm, 0.5rem);
     border-bottom: 1px solid var(--border-light, #e2e5e8);
   }
-  /* View toggle + (mobile) filters + export. Grows so sort sits at the far end. */
+  /* View toggle + (mobile) filters + actions. Grows so sort sits at the far end. */
   .iwac-search__controls-bar {
     display: flex;
     align-items: center;

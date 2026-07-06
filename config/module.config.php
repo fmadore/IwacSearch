@@ -111,6 +111,28 @@ return [
                                     ],
                                 ],
                             ],
+                            // POST handler: /admin/iwac-search/maintenance/sync-synonyms
+                            'maintenance-sync-synonyms' => [
+                                'type'    => \Laminas\Router\Http\Literal::class,
+                                'options' => [
+                                    'route'    => '/maintenance/sync-synonyms',
+                                    'defaults' => [
+                                        'controller' => Controller\Admin\MaintenanceController::class,
+                                        'action'     => 'syncSynonyms',
+                                    ],
+                                ],
+                            ],
+                            // POST handler: /admin/iwac-search/maintenance/provision-analytics
+                            'maintenance-provision-analytics' => [
+                                'type'    => \Laminas\Router\Http\Literal::class,
+                                'options' => [
+                                    'route'    => '/maintenance/provision-analytics',
+                                    'defaults' => [
+                                        'controller' => Controller\Admin\MaintenanceController::class,
+                                        'action'     => 'provisionAnalytics',
+                                    ],
+                                ],
+                            ],
                         ],
                     ],
                 ],
@@ -321,8 +343,10 @@ return [
                 'pages' => [
                     // Hidden child routes — let Omeka highlight the parent
                     // entry when one of these sub-pages is active.
-                    ['route' => 'admin/iwac-search/maintenance-reindex',        'visible' => false],
-                    ['route' => 'admin/iwac-search/maintenance-sync-stopwords', 'visible' => false],
+                    ['route' => 'admin/iwac-search/maintenance-reindex',             'visible' => false],
+                    ['route' => 'admin/iwac-search/maintenance-sync-stopwords',      'visible' => false],
+                    ['route' => 'admin/iwac-search/maintenance-sync-synonyms',       'visible' => false],
+                    ['route' => 'admin/iwac-search/maintenance-provision-analytics', 'visible' => false],
                 ],
             ],
         ],

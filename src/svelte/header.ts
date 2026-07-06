@@ -31,7 +31,14 @@
 
 import { TypesenseClient } from './lib/typesense';
 import { facetLabel, normalizeLocale, translate, type Locale } from './lib/i18n';
-import type { EntitySuggestion, IwacBootstrap, IwacHit, SuggestResult } from './lib/types';
+import {
+  actionOf,
+  buildSuggestRows,
+  titleMarkupOf,
+  urlOf,
+  type SuggestRow,
+} from './lib/suggestions';
+import type { IwacBootstrap, SuggestResult } from './lib/types';
 
 import './header.css';
 
@@ -49,11 +56,6 @@ declare global {
     };
   }
 }
-
-type Row =
-  | { kind: 'search' }
-  | { kind: 'article'; hit: IwacHit }
-  | { kind: 'entity'; entity: EntitySuggestion };
 
 interface HeaderConfig {
   endpoints: { token: string; search: string };
@@ -89,30 +91,6 @@ function buildBootstrap(cfg: HeaderConfig): IwacBootstrap {
   };
 }
 
-/** Strip every tag except <mark> so Typesense highlight snippets render safely. */
-function safeMarkup(html: string | undefined): string {
-  if (!html) return '';
-  return html.replace(/<(?!\/?mark\b)[^>]*>/gi, '');
-}
-
-function escapeHtml(value: string): string {
-  return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-}
-
-function titleMarkupOf(hit: IwacHit): string {
-  const titleHl = hit.highlights.find((h) => h.field === 'title_txt');
-  // `value` is the full marked-up title; `snippet` windows long titles.
-  const markup = titleHl?.value ?? titleHl?.snippet;
-  if (markup) {
-    return safeMarkup(markup);
-  }
-  return escapeHtml(hit.document.title ?? '');
-}
-
-function urlOf(hit: IwacHit): string | null {
-  return hit.document.omeka_url ?? hit.document.source_url ?? null;
-}
-
 /** Append/override query params on a (possibly relative) base URL. */
 function withParams(base: string, params: Record<string, string>): string {
   const url = new URL(base, window.location.origin);
@@ -129,7 +107,7 @@ class HeaderSearch {
   private readonly listbox: HTMLDivElement;
   private readonly host: HTMLElement;
 
-  private rows: Row[] = [];
+  private rows: SuggestRow[] = [];
   private highlighted = 0;
   private isOpen = false;
   private debounceTimer: number | null = null;
@@ -240,10 +218,9 @@ class HeaderSearch {
   }
 
   private setRows(result: SuggestResult): void {
-    const rows: Row[] = [{ kind: 'search' }];
-    for (const hit of result.articles) rows.push({ kind: 'article', hit });
-    for (const entity of result.entities) rows.push({ kind: 'entity', entity });
-    this.rows = rows;
+    // Shared row model (lib/suggestions.ts) — same order as the in-app
+    // dropdown: the "Search for…" action first, then articles, then entities.
+    this.rows = buildSuggestRows(this.input.value.trim(), result.articles, result.entities);
     this.highlighted = 0; // re-arm on the "Search for…" action
     this.render();
   }
@@ -265,7 +242,7 @@ class HeaderSearch {
     if (this.isOpen) this.clampHorizontal();
   }
 
-  private renderRow(row: Row, index: number, q: string): HTMLElement {
+  private renderRow(row: SuggestRow, index: number, q: string): HTMLElement {
     const el: HTMLElement =
       row.kind === 'article' ? document.createElement('a') : document.createElement('button');
     el.className = 'iwac-header-suggest__item';
@@ -273,12 +250,14 @@ class HeaderSearch {
     el.dataset.index = String(index);
     if (el instanceof HTMLButtonElement) el.type = 'button';
 
-    if (row.kind === 'search') {
+    if (row.kind === 'search' || row.kind === 'history') {
       el.classList.add('iwac-header-suggest__item--search');
       // No leading magnifying-glass here: the header input already has its
       // own search-submit icon right above the panel, so a second ⌕ on this
       // row read as a duplicated search icon. The bold "Search for «q»" label
       // carries the affordance on its own (entity rows are text + tag too).
+      // ('history' rows never occur here — the header builds prefix rows
+      // only — but the shared SuggestRow union includes them.)
       const title = document.createElement('span');
       title.className = 'iwac-header-suggest__title';
       title.textContent = translate(this.locale, 'search_for', { q });
@@ -326,27 +305,29 @@ class HeaderSearch {
     });
   }
 
-  private activate(row: Row): void {
-    if (row.kind === 'search') {
-      const q = this.input.value.trim();
-      if (q.length > 0) window.location.assign(withParams(this.landing, { q }));
-      return;
+  private activate(row: SuggestRow): void {
+    // Shared activation semantics (lib/suggestions.ts), mapped onto the
+    // header's navigate-to-landing behaviour: unlike the in-app dropdown
+    // (which mutates live search state), every action here is a navigation.
+    const action = actionOf(row);
+    switch (action.type) {
+      case 'navigate':
+        window.location.assign(action.url);
+        return;
+      case 'pick-entity':
+        // The landing page is the federated "search everything" surface,
+        // which reads ?q (not the ?f.<field>= facet params standalone
+        // /search hydrates). Search the entity's name as text so the click
+        // lands on matching content plus the entity itself.
+        window.location.assign(withParams(this.landing, { q: action.value }));
+        return;
+      case 'run-search':
+      case 'pick-query': {
+        const q = action.query || this.input.value.trim();
+        if (q.length > 0) window.location.assign(withParams(this.landing, { q }));
+        return;
+      }
     }
-    if (row.kind === 'entity') {
-      // The landing page is the federated "search everything" surface, which
-      // reads ?q (not the ?f.<field>= facet params standalone /search
-      // hydrates). Search the entity's name as text so the click lands on
-      // matching content plus the entity itself in the Entities tab.
-      window.location.assign(withParams(this.landing, { q: row.entity.value }));
-      return;
-    }
-    const url = urlOf(row.hit);
-    if (url) {
-      window.location.assign(url);
-      return;
-    }
-    const title = (row.hit.document.title ?? '').trim();
-    window.location.assign(withParams(this.landing, { q: title || this.input.value.trim() }));
   }
 
   private onKeydown(e: KeyboardEvent): void {

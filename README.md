@@ -14,25 +14,38 @@ on Omeka.
 
 Admin CRUD mutations are optimistic (row appears / updates / disappears immediately) with rollback on server error. Editors + site-admins + global-admins have access via ACL rules in `Module::onBootstrap`.
 
-| Milestone  |   Status   | Highlights                                                                        |
-| ---------- | :--------: | --------------------------------------------------------------------------------- |
-| M0         |  ✅ done   | Schema, indexer pipeline (4 mappers + ACL overlay + stopwords), atomic alias swap |
-| M1         |  ✅ done   | `/search`, `/discovery/token`, page block, Svelte 5 client, alias-spelling search |
-| M2         |  ✅ done   | Facet panel, year range slider, URL state, sort, hybrid keyword+vector search     |
-| M3         |  ✅ done   | `iwac_browse_config` table + 6 auto-seeded country pages + `/browse` landing      |
-| M3.5       |  ✅ done   | Admin CRUD UI (Svelte, optimistic, SSR-inlined initial state, JSON API)           |
-| Public SSR |  ✅ done   | PHP-side Typesense call inlines first page + facets into every public surface     |
-| M4         | 🟡 partial | is_public sync + delete sync via `api.update/delete.post` on ItemAdapter          |
-| M5         |  ✅ done   | Typeahead dropdown — prefix search, keyboard nav, click-to-navigate               |
-| M6         | 🟡 partial | Mobile filter drawer + result count + empty-state polish; cutover still planned   |
+| Milestone  |   Status   | Highlights                                                                         |
+| ---------- | :--------: | ---------------------------------------------------------------------------------- |
+| M0         |  ✅ done   | Schema, indexer pipeline (4 mappers + ACL overlay + stopwords), atomic alias swap  |
+| M1         |  ✅ done   | `/search`, `/discovery/token`, page block, Svelte 5 client, alias-spelling search  |
+| M2         |  ✅ done   | Facet panel, year range slider, URL state, sort, hybrid keyword+vector search      |
+| M3         |  ✅ done   | `iwac_browse_config` table + 6 auto-seeded country pages + `/browse` landing       |
+| M3.5       |  ✅ done   | Admin CRUD UI (Svelte, optimistic, SSR-inlined initial state, JSON API)            |
+| Public SSR |  ✅ done   | PHP-side Typesense call inlines first page + facets into every public surface      |
+| M4         |  ✅ done   | Full incremental sync: item create/update/delete + batch ops + media + item sets   |
+| M5         |  ✅ done   | Typeahead dropdown — prefix search, keyboard nav, click-to-navigate                |
+| M6         | 🟡 partial | Mobile filter drawer + result count + empty-state polish; cutover still planned    |
+| 3.6.0      |  ✅ done   | Synonym set, search analytics, federated union "All" tab, entity Map view, UX wins |
 
-**M4 coverage (partial):** Toggling an item's visibility in the Omeka admin item editor syncs the `is_public` flag to Typesense within the same request — a just-made-private item stops appearing in public search immediately. Item deletes also remove the corresponding Typesense doc. Metadata edits (title / subject / date) and new items still require a bulk reindex to propagate — but since the reindex now reads the Omeka database directly (no HuggingFace pipeline), that's an on-demand rebuild against current data, not a wait for the monthly HF refresh. Promoting the event hooks to full single-item re-mapping (now that the same source is reachable live) is the next step.
+**M4 coverage (complete as of 3.6.0):** every Omeka write path that affects the index now re-maps in the same request. Item create / update / delete were already wired; 3.6.0 adds the paths that silently bypassed them: **batch operations** (Omeka's batchCreate/batchUpdate/batchDelete hydrate entities directly and never fire the per-item events — privacy-relevant, since a batch visibility flip must reach the `is_public` filter promptly), **direct media edits** (thumbnail / IIIF presence derive from the item's primary media), and **item-set deletion** (membership drives `country_ss` on references / documents / photographs; members are captured at `api.delete.pre` and re-mapped after, capped + logged for very large sets). Entity-collection occurrence aggregates still refresh on the bulk reindex by design.
+
+**3.6.0 highlights:** `iwac_synonyms` global synonym set (Arabic-transliteration variants — cheikh/sheikh/shaykh, Tidjaniyya/Tijaniyya, charia/sharia… — curated in `data/synonyms-fr.json`, search-time expansion, admin sync button); Typesense search-analytics provisioning + admin digest of top / zero-result queries (server flags pending — see [ROADMAP.md](ROADMAP.md)); a merged **All** tab on `/search/everything` (Typesense v30 union search, one relevance ranking across content + entities); a **Map view** on the entity index (geopoints from curated coordinates, MapLibre + CARTO basemap, clustered markers); plus recent-searches in the typeahead, a `/` focus shortcut, a copy-link button, request cancellation on fast typing, and a "did you mean" recovery on zero-result queries.
 
 ## Testing checklist (after each deploy)
 
 Changes below this line are **not yet verified on the live site**. Tick
 as you confirm; remove rows once they've been through a full cycle.
 
+- [ ] **3.6.0 REINDEX FIRST**: after deploying, run the bulk reindex before anything else — the entity schema bumped to `iwac_index_v3` (geopoints) and the content collection only links `iwac_synonyms` on rebuild. See [ROADMAP.md](ROADMAP.md) for the ordered checklist.
+- [ ] **3.6.0 synonyms**: after the reindex, search `sheikh` — results containing only `cheikh` must match (and vice versa). Then edit `data/synonyms-fr.json`, hit the admin **Sync synonyms** button, and confirm the change is live WITHOUT a reindex.
+- [ ] **3.6.0 union "All" tab**: open `/search/everything?q=ramadan`. The **Tout/All** tab is active by default and shows ONE merged list mixing articles and entities, relevance-ranked, with pagination. Clicking an entity card's type chip hands off to the Entities tab pre-filtered.
+- [ ] **3.6.0 map view**: on the entity index surface, the view toggle shows **Carte/Map**. Activating it lazy-loads MapLibre from jsDelivr (check the network tab — nothing MapLibre-ish loads before that), plots clustered markers over West Africa, popup links open the entity page. Requires the v3 index rebuild.
+- [ ] **3.6.0 batch-edit sync**: select 3 items in the Omeka admin, batch-edit visibility to private. All 3 disappear from public search within seconds (previously: stale until bulk reindex).
+- [ ] **3.6.0 media sync**: replace a media file on an item (media edit page, not the item form). The result card's thumbnail refreshes after the save.
+- [ ] **3.6.0 analytics (after IWAC-docker flags)**: enable the server flags, click **Provision analytics**, run a few public searches, wait ≥1 flush interval, and confirm the maintenance page shows them under "Top queries". Verify the alias-binding caveat in ROADMAP.md.
+- [ ] **3.6.0 typeahead history**: run two searches, clear the box, focus it — both appear under "Recent searches"; the clear action empties the list.
+- [ ] **3.6.0 "/" shortcut + copy link**: press `/` anywhere on `/search` → the box focuses. Copy-link button puts the exact current URL (filters included) on the clipboard and confirms.
+- [ ] **3.6.0 did-you-mean**: search a near-miss spelling of an entity (e.g. `Tidjaniya`). On zero results, entity chips appear above the empty state; clicking one applies the filter.
 - [ ] **Install / upgrade path**: visit `/admin/module/browse`, confirm IwacSearch is at `0.1.0`; click Configure → empty page renders (expected — no settings form yet). Green "installed" banner gone on refresh.
 - [ ] **Admin sidebar entry**: left sidebar shows **IWAC Search** under the Modules group. Click it, land on the browse-config table.
 - [ ] **Admin: instant paint**: 6 seeded country rows visible on first frame (no spinner). Network tab shows zero XHR on mount.
@@ -379,7 +392,9 @@ CI runs `lint`, `check`, and `build` on every PR — see `.github/workflows/ci.y
 
 ## Roadmap snapshot
 
-See the status table at the top. Full milestone text in the IWAC-docker roadmap link above.
+See the status table at the top for what shipped. Deferred work, deployment
+prerequisites, and infrastructure decisions live in [ROADMAP.md](ROADMAP.md);
+full milestone history in the IWAC-docker roadmap link above.
 
 ## License
 
