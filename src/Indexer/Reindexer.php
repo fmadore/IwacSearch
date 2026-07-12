@@ -37,7 +37,9 @@ use Typesense\Client as TypesenseClient;
  *
  * Safety property unchanged: a failed reindex never affects live search. The
  * alias still points at the previous good collection until step 5 succeeds;
- * the half-built collection is dropped on error.
+ * the half-built collection is dropped on error, and the swap itself is
+ * guarded — CollectionOps::promote() refuses to promote a collection whose
+ * import was empty or mostly errors.
  */
 final class Reindexer
 {
@@ -100,9 +102,7 @@ final class Reindexer
         $previous = $this->ops->resolveAliasTarget($alias);
 
         $this->logger->info('Creating new collection', ['name' => $newName, 'alias' => $alias]);
-        $createPayload = $schema;
-        unset($createPayload['_alias_target'], $createPayload['_base_name']);
-        $this->typesense->collections->create($createPayload);
+        $this->ops->createVersioned($schema);
 
         // ── 4. Stream + map + import ────────────────────────────────────────
         $totalIndexed = 0;
@@ -125,15 +125,11 @@ final class Reindexer
             throw $e;
         }
 
-        // ── 5. Atomic alias swap ────────────────────────────────────────────
-        $this->logger->info('Swapping alias', ['alias' => $alias, 'to' => $newName]);
-        $this->typesense->aliases->upsert($alias, ['collection_name' => $newName]);
-
-        // ── 6. Drop the previous collection ─────────────────────────────────
-        if ($previous !== null && $previous !== $newName) {
-            $this->logger->info('Dropping previous collection', ['name' => $previous]);
-            $this->ops->safelyDropCollection($previous);
-        }
+        // ── 5. Guarded alias swap + orphan cleanup ──────────────────────────
+        // Aborts (keeping the previous collection live) when the import was
+        // unhealthy; on success also sweeps stale iwac_vN_* collections left
+        // by crashed or overlapping runs.
+        $this->ops->promote($alias, $newName, $schema['_base_name'], $previous, $totalIndexed, $totalErrors);
 
         return [
             'collection'       => $newName,
@@ -159,35 +155,29 @@ final class Reindexer
         $mapper = $this->mappers->get($subset);
         $this->logger->info('Indexing subset', ['subset' => $subset, 'classes' => $mapper->classIds()]);
 
-        $batch   = [];
-        $indexed = 0;
-        $errors  = 0;
+        [$indexed, $errors] = $this->ops->importAll($collection, $this->mapSubset($subset), self::BATCH_SIZE);
 
+        $this->logger->info('Subset indexed', ['subset' => $subset, 'indexed' => $indexed, 'errors' => $errors]);
+        return [$indexed, $errors];
+    }
+
+    /**
+     * Stream one subset's rows through its mapper, feeding the entity
+     * occurrence pass along the way (cheap, in-memory).
+     *
+     * @return \Generator<array<string,mixed>>
+     */
+    private function mapSubset(string $subset): \Generator
+    {
+        $mapper = $this->mappers->get($subset);
         foreach ($this->reader->streamDocs($mapper->classIds(), $mapper->readTerms(), $mapper->itemSetIds()) as $row) {
             $doc = $mapper->map($row['item'], $row['values'], $row['thumbnail']);
             if ($doc === null) {
                 continue;
             }
-
-            // Feed the entity pass before batching (cheap, in-memory).
             $this->occurrences->record($doc);
-
-            $batch[] = $doc;
-            if (count($batch) >= self::BATCH_SIZE) {
-                [$ok, $err] = $this->ops->flushBatch($collection, $batch);
-                $indexed += $ok;
-                $errors  += $err;
-                $batch = [];
-            }
+            yield $doc;
         }
-        if ($batch !== []) {
-            [$ok, $err] = $this->ops->flushBatch($collection, $batch);
-            $indexed += $ok;
-            $errors  += $err;
-        }
-
-        $this->logger->info('Subset indexed', ['subset' => $subset, 'indexed' => $indexed, 'errors' => $errors]);
-        return [$indexed, $errors];
     }
 
 }

@@ -23,8 +23,8 @@ namespace IwacSearch\Browse;
  * adding a new facetable field or a new sort option is a one-line change
  * here rather than a sweep across the places that must stay in sync.
  *
- * Keep this class pure data — no services, no I/O. Tests rely on it
- * being instantiation-free.
+ * Keep this class pure data — no services, no I/O — so it stays trivially
+ * unit-testable and safe to reference from scripts/check-schema-drift.js.
  */
 final class FacetCatalog
 {
@@ -105,39 +105,11 @@ final class FacetCatalog
     ];
 
     /**
-     * Return the facetable fields shaped for the Svelte admin picker:
-     * a stable list of {name, label} pairs rather than an associative
-     * array. PHP associative arrays serialise to JSON objects, which
-     * lose their insertion order under some consumers — lists never do.
-     *
-     * @return list<array{name: string, label: string}>
-     */
-    public static function facetableFieldsList(): array
-    {
-        $out = [];
-        foreach (self::FACETABLE_FIELDS as $name => $label) {
-            $out[] = ['name' => $name, 'label' => $label];
-        }
-        return $out;
-    }
-
-    /**
-     * @return list<array{value: string, label: string}>
-     */
-    public static function sortOptionsList(): array
-    {
-        $out = [];
-        foreach (self::SORT_OPTIONS as $value => $label) {
-            $out[] = ['value' => $value, 'label' => $label];
-        }
-        return $out;
-    }
-
-    /**
      * Filter an arbitrary admin-submitted list of field names down to
      * the ones that actually exist in FACETABLE_FIELDS. Preserves the
      * submitted order so an admin can reorder via drag-and-drop in
-     * the picker and have the new order persist.
+     * the picker and have the new order persist. Applied on save by
+     * IwacSearchBlock::onHydrate().
      *
      * @param iterable<mixed> $submitted
      * @return list<string>
@@ -160,11 +132,6 @@ final class FacetCatalog
             $out[] = $field;
         }
         return $out;
-    }
-
-    public static function isValidSort(string $sort): bool
-    {
-        return isset(self::SORT_OPTIONS[$sort]);
     }
 
     /**

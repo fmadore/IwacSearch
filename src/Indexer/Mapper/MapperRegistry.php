@@ -3,20 +3,42 @@ declare(strict_types=1);
 
 namespace IwacSearch\Indexer\Mapper;
 
+use IwacSearch\Indexer\CountryResolver;
+use IwacSearch\Indexer\EntityAuthority;
 use RuntimeException;
 
 /**
  * Resolves an Omeka-derived content subset name to its mapper.
  *
  * Why a registry instead of a match block in Reindexer:
- *   - Adding a new subset = drop a new MapperInterface in this dir, no
- *     edit to Reindexer required
+ *   - Adding a new subset = drop a new MapperInterface in this dir, then
+ *     register it in default() — both the bulk and the incremental
+ *     pipelines pick it up from there
  *   - The registry knows which subsets are indexable; Reindexer asks
  *     "which subsets do I iterate?" via subsets() instead of a const
  *   - Tests can swap in fakes via the constructor
  */
 final class MapperRegistry
 {
+    /**
+     * The canonical content-mapper set, shared by the bulk pipeline
+     * (ReindexOrchestrator) and the incremental one (IncrementalIndexerFactory).
+     * ONE registration point — a mapper added here is guaranteed to behave
+     * identically in both; the two wiring sites used to hand-copy this list
+     * and could silently drift.
+     */
+    public static function default(EntityAuthority $authority, CountryResolver $countries): self
+    {
+        return new self([
+            new ArticleMapper($authority, $countries),
+            new PublicationMapper($authority, $countries),
+            new DocumentMapper($authority, $countries),
+            new AudiovisualMapper($authority, $countries),
+            new PhotographMapper($authority, $countries),
+            new ReferenceMapper($authority, $countries),
+        ]);
+    }
+
     /** @var array<string, MapperInterface> subset name → mapper */
     private readonly array $mappers;
 
@@ -47,11 +69,6 @@ final class MapperRegistry
         return $this->mappers[$subset];
     }
 
-    public function has(string $subset): bool
-    {
-        return isset($this->mappers[$subset]);
-    }
-
     /** @return list<string> */
     public function subsets(): array
     {
@@ -60,7 +77,7 @@ final class MapperRegistry
 
     /**
      * The mapper whose resource classes include $classId, or null if none
-     * handles it (e.g. a photograph or an authority item — not content).
+     * handles it (e.g. an authority item — not content).
      */
     public function forClass(int $classId): ?MapperInterface
     {

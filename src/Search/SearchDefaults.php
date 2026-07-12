@@ -33,4 +33,36 @@ final class SearchDefaults
 
     public const ENTITY_QUERY_BY         = 'title_txt,entity_aliases_txt';
     public const ENTITY_HIGHLIGHT_FIELDS = 'title_txt';
+
+    /**
+     * Above-the-fold facet stack for the full content corpus, ordered
+     * coarse → fine: type, then geography, publisher, the entity
+     * authorities, then the grouped sentiment trio.
+     *
+     * ONE list, three consumers: the standalone /search shell, the
+     * federated page's Content tab (both via
+     * SearchController::contentBootstrap) and the page-block form's default
+     * for new custom blocks (IwacSearchBlock::form) — the block default had
+     * silently drifted from the controller copy before it was shared.
+     *
+     * NOTE: PresetCatalog's per-scope stacks (CONTENT_ALL_FACETS etc.)
+     * differ deliberately — presets are curated scopes, not the corpus-wide
+     * default (e.g. the 'all' preset leads with Country and adds Language).
+     *
+     * @var list<string>
+     */
+    public const CONTENT_PROMINENT_FACETS = [
+        'type_s',                // article | publication | document | audiovisual
+        'has_fulltext',          // full text publicly readable (primary sources only)
+        'country_ss',            // country
+        'newspaper_ss',          // publisher
+        'places_ss',             // locations
+        'persons_ss',            // persons
+        'organisations_ss',      // organisations
+        'topics_ss',             // subjects
+        // Sentiment trio — grouped under one collapsible section in the client.
+        'gemini_polarite_ss',    // polarity
+        'gemini_centralite_ss',  // centrality (of Islam/Muslims)
+        'gemini_subjectivite',   // subjectivity (1–5)
+    ];
 }

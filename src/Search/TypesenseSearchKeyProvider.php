@@ -44,17 +44,13 @@ final class TypesenseSearchKeyProvider
     private const SETTINGS_KEY    = 'iwac_search_typesense_search_key';
     private const KEY_DESCRIPTION = 'IwacSearch public search-only parent (auto-created)';
 
-    /**
-     * Lazily-resolved Typesense client, cached per instance. The factory
-     * closure is invoked on first use — deferring construction so any
-     * missing Docker secret / unreachable Typesense surfaces inside
-     * mintPublicScopedKey(), where SearchController::tokenAction can
-     * catch and return a clean JSON 503 (instead of a 500 HTML page
-     * from an exception escaping the Laminas dispatcher).
-     */
-    private ?TypesenseClient $cachedClient = null;
-
     public function __construct(
+        // Lazily-resolved, memoizing client factory (TypesenseClientLazy):
+        // construction is deferred to first use so any missing Docker secret
+        // / unreachable Typesense surfaces inside mintPublicScopedKey(),
+        // where SearchController::tokenAction can catch and return a clean
+        // JSON 503 (instead of a 500 HTML page from an exception escaping
+        // the Laminas dispatcher).
         /** @var Closure(): TypesenseClient */
         private readonly Closure $clientFactory,
         private readonly SettingsInterface $settings,
@@ -63,11 +59,6 @@ final class TypesenseSearchKeyProvider
         // not to keep the search-only key in the database.
         private readonly string $searchKeyFile = '/run/secrets/typesense_search_key'
     ) {
-    }
-
-    private function client(): TypesenseClient
-    {
-        return $this->cachedClient ??= ($this->clientFactory)();
     }
 
     /**
@@ -88,7 +79,7 @@ final class TypesenseSearchKeyProvider
         $parent    = $this->resolveSearchOnlyKey();
         $expiresAt = time() + max(60, $expiresInSeconds);
 
-        $scoped = $this->client()->keys->generateScopedSearchKey($parent, [
+        $scoped = ($this->clientFactory)()->keys->generateScopedSearchKey($parent, [
             'filter_by'      => 'is_public:=true',
             'exclude_fields' => 'ocr_text',
             'expires_at'     => $expiresAt,
@@ -132,15 +123,24 @@ final class TypesenseSearchKeyProvider
         $this->logger->info('Bootstrapping Typesense search-only parent key');
 
         try {
-            $response = $this->client()->keys->create([
+            $response = ($this->clientFactory)()->keys->create([
                 'description' => self::KEY_DESCRIPTION,
                 // documents:search is the ONLY allowed action — anything
                 // else (e.g. documents:create) would let scoped keys derived
                 // from this one perform writes if a downstream signing call
                 // forgot to constrain them.
                 'actions'     => ['documents:search'],
-                // '*' covers iwac_current today and any future collections.
-                // Tighten to ['iwac_current'] if you want stricter scoping.
+                // '*' means scoped keys derived from this one can address ANY
+                // collection — including future ones (e.g. the analytics
+                // collections, which hold visitor query logs). Today that is
+                // blocked only incidentally: the scoped filter `is_public:=true`
+                // errors on collections lacking the field. Tightening this to
+                // ['iwac_current', 'iwac_index_current'] is the right move but
+                // MUST be verified on the live container first — the Typesense
+                // docs don't spell out whether key scopes match the requested
+                // alias name or the resolved collection name (same caveat as
+                // the analytics rules, see ROADMAP.md). When tightening, bump
+                // SETTINGS_KEY so cached wide-scope keys are re-minted.
                 'collections' => ['*'],
             ]);
         } catch (Throwable $e) {

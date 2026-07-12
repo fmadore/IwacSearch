@@ -59,22 +59,4 @@ final class SchemaLoader
         $schema['_base_name']    = $base;
         return $schema;
     }
-
-    /**
-     * Field names declared in the schema. Used by the document mapper to
-     * detect drift (fields the indexer populates but the schema doesn't
-     * know about, or vice versa).
-     *
-     * @return list<string>
-     */
-    public function fieldNames(): array
-    {
-        $names = [];
-        foreach ($this->load()['fields'] as $field) {
-            if (isset($field['name'])) {
-                $names[] = (string) $field['name'];
-            }
-        }
-        return $names;
-    }
 }

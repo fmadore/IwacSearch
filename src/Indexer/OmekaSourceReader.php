@@ -32,9 +32,6 @@ final class OmekaSourceReader
     /** Items read per keyset page. */
     private const PAGE = 500;
 
-    /** @var array<string,?int> term ("prefix:local") → property id, cached for the run */
-    private array $propIdCache = [];
-
     public function __construct(
         private readonly Connection $connection,
     ) {
@@ -270,20 +267,5 @@ final class OmekaSourceReader
             }
         }
         return $out;
-    }
-
-    /** Resolve (and cache) a property id from its "prefix:local" term. */
-    public function propertyId(string $term): ?int
-    {
-        if (array_key_exists($term, $this->propIdCache)) {
-            return $this->propIdCache[$term];
-        }
-        [$prefix, $local] = array_pad(explode(':', $term, 2), 2, '');
-        $id = $this->connection->executeQuery(
-            'SELECT p.id FROM property p JOIN vocabulary vo ON p.vocabulary_id = vo.id'
-            . ' WHERE vo.prefix = :prefix AND p.local_name = :local',
-            ['prefix' => $prefix, 'local' => $local],
-        )->fetchOne();
-        return $this->propIdCache[$term] = ($id !== false ? (int) $id : null);
     }
 }

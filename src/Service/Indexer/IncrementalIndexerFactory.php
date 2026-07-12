@@ -7,13 +7,7 @@ use Doctrine\DBAL\Connection;
 use IwacSearch\Indexer\CountryResolver;
 use IwacSearch\Indexer\EntityAuthority;
 use IwacSearch\Indexer\IncrementalIndexer;
-use IwacSearch\Indexer\Mapper\ArticleMapper;
-use IwacSearch\Indexer\Mapper\AudiovisualMapper;
-use IwacSearch\Indexer\Mapper\DocumentMapper;
 use IwacSearch\Indexer\Mapper\MapperRegistry;
-use IwacSearch\Indexer\Mapper\PhotographMapper;
-use IwacSearch\Indexer\Mapper\PublicationMapper;
-use IwacSearch\Indexer\Mapper\ReferenceMapper;
 use IwacSearch\Indexer\OmekaSourceReader;
 use IwacSearch\Log\LoggerResolver;
 use IwacSearch\Service\TypesenseClientLazy;
@@ -48,14 +42,7 @@ final class IncrementalIndexerFactory implements FactoryInterface
         $authority = new EntityAuthority();
         $countries = new CountryResolver($moduleRoot . '/data/newspaper-countries.json');
 
-        $registry = new MapperRegistry([
-            new ArticleMapper($authority, $countries),
-            new PublicationMapper($authority, $countries),
-            new DocumentMapper($authority, $countries),
-            new AudiovisualMapper($authority, $countries),
-            new PhotographMapper($authority, $countries),
-            new ReferenceMapper($authority, $countries),
-        ]);
+        $registry = MapperRegistry::default($authority, $countries);
 
         return new IncrementalIndexer(
             clientFactory:   TypesenseClientLazy::fromContainer($container),

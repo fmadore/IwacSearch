@@ -57,33 +57,10 @@ final class IndexReindexer
         $previous = $this->ops->resolveAliasTarget($alias);
 
         $this->logger->info('Creating new index collection', ['name' => $newName, 'alias' => $alias]);
-        $createPayload = $schema;
-        unset($createPayload['_alias_target'], $createPayload['_base_name']);
-        $this->typesense->collections->create($createPayload);
-
-        $indexed = 0;
-        $errors  = 0;
-        $batch   = [];
+        $this->ops->createVersioned($schema);
 
         try {
-            foreach ($this->authority->entities() as $entity) {
-                $doc = $this->mapper->map($entity, $this->occurrences->aggregate($entity['id']));
-                if ($doc === null) {
-                    continue;
-                }
-                $batch[] = $doc;
-                if (count($batch) >= self::BATCH_SIZE) {
-                    [$ok, $err] = $this->ops->flushBatch($newName, $batch);
-                    $indexed += $ok;
-                    $errors  += $err;
-                    $batch = [];
-                }
-            }
-            if ($batch !== []) {
-                [$ok, $err] = $this->ops->flushBatch($newName, $batch);
-                $indexed += $ok;
-                $errors  += $err;
-            }
+            [$indexed, $errors] = $this->ops->importAll($newName, $this->mapEntities(), self::BATCH_SIZE);
         } catch (Throwable $e) {
             $this->logger->error('Index reindex failed; dropping half-built collection', [
                 'collection' => $newName,
@@ -93,13 +70,10 @@ final class IndexReindexer
             throw $e;
         }
 
-        $this->logger->info('Swapping index alias', ['alias' => $alias, 'to' => $newName]);
-        $this->typesense->aliases->upsert($alias, ['collection_name' => $newName]);
-
-        if ($previous !== null && $previous !== $newName) {
-            $this->logger->info('Dropping previous index collection', ['name' => $previous]);
-            $this->ops->safelyDropCollection($previous);
-        }
+        // Guarded swap: refuses (keeping the previous collection live) when the
+        // import was empty or mostly errors — e.g. Reindexer::run() never ran,
+        // leaving the authority empty — then sweeps stale iwac_index_vN_*.
+        $this->ops->promote($alias, $newName, $schema['_base_name'], $previous, $indexed, $errors);
 
         return [
             'collection'       => $newName,
@@ -110,4 +84,20 @@ final class IndexReindexer
         ];
     }
 
+    /**
+     * Map every cached entity to its index document, merging in the
+     * occurrence aggregate accumulated during the content pass.
+     *
+     * @return \Generator<array<string,mixed>>
+     */
+    private function mapEntities(): \Generator
+    {
+        foreach ($this->authority->entities() as $entity) {
+            $doc = $this->mapper->map($entity, $this->occurrences->aggregate($entity['id']));
+            if ($doc === null) {
+                continue;
+            }
+            yield $doc;
+        }
+    }
 }
