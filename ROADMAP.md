@@ -4,6 +4,9 @@ Forward-looking companion to the README's status table. Items live here
 when they are deliberate deferrals (with the reasoning), need an
 infrastructure decision, or block on work in another repo.
 
+Engineering-side deferrals (tests, static analysis, refactors, request
+reductions) live in [docs/engineering-roadmap.md](docs/engineering-roadmap.md).
+
 ## 3.6.0 deployment prerequisites (do these in order)
 
 1. **Copy the module + `composer install --no-dev`** in the php container

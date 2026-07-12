@@ -10,10 +10,12 @@ provides the Typesense container, nginx `/search-api/` proxy, and backups.
 
 ## Architecture invariants
 
-- **Schema is the contract.** `data/schema.yaml` defines the Typesense
-  collection. Everything downstream (indexer, scoped-key params, Svelte
-  facet panel, browse configs) derives from it. Edit with care; schema
-  changes force an `iwac_v1` → `iwac_v2` alias swap.
+- **Schema is the contract.** `data/schema.yaml` defines the content
+  collection (and `data/schema-index.yaml` the entity collection).
+  Everything downstream (indexer, scoped-key params, Svelte facet panel,
+  presets) derives from them. Edit with care; schema changes force a
+  version bump (`iwac_vN` → `iwac_vN+1`) and an alias swap on the next
+  reindex.
 
 - **Single source: the Omeka S MySQL database.** The indexer reads content,
   entities, sentiment, OCR (`bibo:content`), and `is_public` directly from
@@ -25,21 +27,30 @@ provides the Typesense container, nginx `/search-api/` proxy, and backups.
 
 - **OCR privacy is enforced by scoped keys, not frontend discipline.**
   The public scoped key carries `exclude_fields: ocr_text` AND
-  `filter_by: is_public:=true`. Both are belt-and-suspenders security
-  controls. Loosening either requires sign-off.
+  `filter_by: is_public:=true`, hardcoded in
+  `TypesenseSearchKeyProvider::mintPublicScopedKey()` (the single source
+  of truth — deliberately NOT config-driven). Both are belt-and-suspenders
+  security controls. Loosening either requires sign-off. A page block's
+  `locked_filters` are NOT part of this boundary — they are cosmetic
+  client-side scoping only.
 
 - **Admin API key never reaches the browser.** It's read from
-  `/run/secrets/typesense_api_key` by `SearchControllerFactory`. The
-  browser only ever sees a 1h scoped key.
+  `/run/secrets/typesense_api_key` by `TypesenseClientFactory` (the only
+  reader). The browser only ever sees a 1h scoped key.
 
 ## Module lifecycle
 
-- `Module.php :: install/uninstall` — module-owned tables only
-  (`iwac_browse_config` from M3). Never touches Typesense data.
-- `Module.php :: attachListeners` — wires `api.*.post` events from M4.
-  Empty in M0–M3.
-- `SearchControllerFactory` — injects the Typesense client + module
-  config into the controller.
+- `Module.php :: install` — empty; the module owns NO database tables
+  (the legacy `iwac_browse_config` table is dropped by `upgrade()` /
+  `uninstall()` if present). Never touches Typesense data.
+- `Module.php :: attachListeners` — injects the Svelte assets on the
+  search routes + the site-wide header enhancer, and wires the
+  `api.*.post` incremental-indexing events. The indexer listener is
+  resolved lazily at event fire time — do not resolve it eagerly, or
+  every anonymous GET pays for the full indexer graph.
+- `SearchControllerFactory` — injects the scoped-key provider, the SSR
+  renderer and module config into the controller (deliberately NOT the
+  Typesense client itself).
 
 ## Conventions
 
@@ -56,7 +67,9 @@ provides the Typesense container, nginx `/search-api/` proxy, and backups.
   `cli/synonyms-sync.php` or the admin button, no reindex.
 - All bulk-reindex wiring lives in `src/Indexer/ReindexOrchestrator.php` —
   `cli/reindex.php` and `Job\BulkReindex` are thin entry points around it.
-  Add new sync steps / mappers THERE, never in the entry points.
+  Add new sync steps THERE, never in the entry points. New content mappers
+  register in `MapperRegistry::default()` — the one list both the bulk and
+  the incremental pipelines construct from.
 - `npm run lint` includes `scripts/check-schema-drift.js`, which fails CI
   when `FacetCatalog::FACETABLE_FIELDS`, the schema YAMLs, and the i18n
   `FACET_LABELS` disagree. If you add a facet, all four must move together.
@@ -64,11 +77,13 @@ provides the Typesense container, nginx `/search-api/` proxy, and backups.
 ## Adding a new field
 
 1. Add it to `data/schema.yaml`.
-2. Bump the collection name (e.g. `iwac_v2` → `iwac_v3`) in the schema.
+2. Bump the collection name (`iwac_vN` → `iwac_vN+1`) in the schema.
 3. Update the relevant mapper to populate it from its Omeka property
    (declare the term in the mapper's `readTerms()`).
-4. Run `omeka-s-cli discovery:reindex` — the indexer builds the new
-   collection, verifies, then atomic-swaps the `iwac_current` alias.
+4. Run `cli/reindex.php` (or `omeka-cli discovery:reindex`, or the admin
+   reindex button) — the indexer builds the new collection, then
+   atomic-swaps the `iwac_current` alias. The swap is guarded: an empty or
+   mostly-failed import aborts and the previous collection stays live.
 5. Update the Svelte client if the field is user-visible.
 
 ## Architectural references
@@ -76,8 +91,9 @@ provides the Typesense container, nginx `/search-api/` proxy, and backups.
 - **Triad (EngineAdapter / Indexer / Querier).** Mirrors
   [Daniel-KM's AdvancedSearch module](https://github.com/Daniel-KM/Omeka-S-module-AdvancedSearch).
   We're single-backend (Typesense), so EngineAdapter is implicit, but
-  `src/Indexer/` and `src/Querier/` follow the same naming so editors who
-  know AdvancedSearch can navigate this codebase.
+  `src/Indexer/` (and a future `src/Querier/`, if server-side querying
+  ever grows beyond the SSR renderer) follows the same naming so editors
+  who know AdvancedSearch can navigate this codebase.
 - **AbstractBlockLayout pattern** for the page block — standard Omeka S
   4.x convention. Block data is persisted as JSON in `site_block.data`;
   multiple block instances per page are supported.

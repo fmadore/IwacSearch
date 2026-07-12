@@ -12,15 +12,15 @@ on Omeka.
 
 **Public SSR.** Every discovery surface (`/search`, the federated `/search/everything`, and page blocks) paints results on first frame. The server calls Typesense during PHP dispatch, inlines the first-page response + facet counts into the bootstrap JSON, and the Svelte client seeds its `response` state at mount without any fetch roundtrip. If Typesense is unreachable the SSR quietly returns null and the client falls back to its normal scoped-key flow — same end state, one extra flash.
 
-Admin CRUD mutations are optimistic (row appears / updates / disappears immediately) with rollback on server error. Editors + site-admins + global-admins have access via ACL rules in `Module::onBootstrap`.
+The admin surface is the **maintenance page** (`/admin/iwac-search/maintenance`): live Typesense status panel, bulk-reindex / stopwords-sync / synonyms-sync / provision-analytics buttons (each dispatched as an Omeka background job), and the search-analytics digest. Editors + site-admins + global-admins have access via ACL rules in `Module::onBootstrap`. The earlier browse-config CRUD UI was retired — see "Retired: the curated browse-config system" below.
 
 | Milestone  |   Status   | Highlights                                                                         |
 | ---------- | :--------: | ---------------------------------------------------------------------------------- |
 | M0         |  ✅ done   | Schema, Omeka-MySQL indexer pipeline, stopwords, atomic alias swap                 |
 | M1         |  ✅ done   | `/search`, `/discovery/token`, page block, Svelte 5 client, alias-spelling search  |
 | M2         |  ✅ done   | Facet panel, year range slider, URL state, sort, hybrid keyword+vector search      |
-| M3         |  ✅ done   | `iwac_browse_config` table + 6 auto-seeded country pages + `/browse` landing       |
-| M3.5       |  ✅ done   | Admin CRUD UI (Svelte, optimistic, SSR-inlined initial state, JSON API)            |
+| M3         |  ✅ done   | `iwac_browse_config` table + 6 auto-seeded country pages (retired — now presets)   |
+| M3.5       |  ✅ done   | Admin CRUD UI (retired with M3 — superseded by PresetCatalog + page blocks)        |
 | Public SSR |  ✅ done   | PHP-side Typesense call inlines first page + facets into every public surface      |
 | M4         |  ✅ done   | Full incremental sync: item create/update/delete + batch ops + media + item sets   |
 | M5         |  ✅ done   | Typeahead dropdown — prefix search, keyboard nav, click-to-navigate                |
@@ -46,34 +46,28 @@ as you confirm; remove rows once they've been through a full cycle.
 - [ ] **3.6.0 typeahead history**: run two searches, clear the box, focus it — both appear under "Recent searches"; the clear action empties the list.
 - [ ] **3.6.0 "/" shortcut + copy link**: press `/` anywhere on `/search` → the box focuses. Copy-link button puts the exact current URL (filters included) on the clipboard and confirms.
 - [ ] **3.6.0 did-you-mean**: search a near-miss spelling of an entity (e.g. `Tidjaniya`). On zero results, entity chips appear above the empty state; clicking one applies the filter.
-- [ ] **Install / upgrade path**: visit `/admin/module/browse`, confirm IwacSearch is at `0.1.0`; click Configure → empty page renders (expected — no settings form yet). Green "installed" banner gone on refresh.
-- [ ] **Admin sidebar entry**: left sidebar shows **IWAC Search** under the Modules group. Click it, land on the browse-config table.
-- [ ] **Admin: instant paint**: 6 seeded country rows visible on first frame (no spinner). Network tab shows zero XHR on mount.
-- [ ] **Admin: create**: click _+ New browse page_, fill in slug / title / locked filter / pick 3 facets, hit Create. Row appears with pulsing optimistic style → settles once server responds. CSRF header is sent (check request headers).
-- [ ] **Admin: edit**: click Edit on any row, change title + reorder facets, Save. Drawer closes, row updates in place.
-- [ ] **Admin: delete + confirm**: click Delete → "Confirm?" button appears → click Confirm → row disappears. No modal. Confirm on server log that the DELETE request returned `{deleted: true}`.
-- [ ] **Admin: slug validation**: try to create with uppercase slug, with spaces, with starting digit — each should show the red error banner _and_ leave the drawer open.
-- [ ] **Admin: duplicate slug**: try to create `benin` (already exists) — server returns 409 with `slug_taken`; banner shows the detail; row rolls back.
-- [ ] **Admin: ACL**: log in as an editor (non-admin). Can they reach `/admin/iwac-search/browse-config`? Expected: yes. Log out → expected: Omeka redirects to login.
+- [ ] **Install / upgrade path**: visit `/admin/module/browse`, confirm IwacSearch is at the version in `config/module.ini`; no Configure button appears (`configurable = false` — there is no settings form). Green "installed" banner gone on refresh.
+- [ ] **Admin sidebar entry**: left sidebar shows **IWAC Search** under the Modules group. Click it, land on the maintenance page (status panel + reindex/sync buttons).
+- [ ] **Admin: ACL**: log in as an editor (non-admin). Can they reach `/admin/iwac-search/maintenance`? Expected: yes. Log out → expected: Omeka redirects to login.
 - [ ] **Public: `/search` SSR**: arrive with an empty URL. First 10 items visible in view-source (HTML, not just JS). No flash of empty state.
-- [ ] **Public: `/browse/benin` SSR**: same. Country-filtered results in view-source.
+- [ ] **Public: `/browse/benin` legacy redirect**: 302 → `/search?f.country_ss=Bénin`; the client hydrates the country facet. `/browse/index` lands on `/search/everything?tab=entities`.
 - [ ] **Public: page block with locked filter**: any site page with the IWAC Search block. Results in view-source, not flashed after mount.
 - [ ] **Public: `/search?q=ramadan` still fetches**: URL-hydrated query differs from SSR snapshot; client fetches and replaces within ~200ms.
 - [ ] **Public: year slider**: drag either handle, see results update. Inline range display updates. Reset restores bounds.
-- [ ] **Public: token endpoint resilience**: temporarily rename `/run/secrets/typesense_api_key`, refresh `/search`. Page still loads (SSR gracefully returns null), error banner shows actual reason — the `detail` field now walks the full `getPrevious()` chain so ops sees the root cause, not just Laminas's `ServiceNotCreatedException` wrapper.
+- [ ] **Public: token endpoint resilience**: temporarily rename `/run/secrets/typesense_api_key`, refresh `/search`. Page still loads (SSR gracefully returns null); the banner shows the generic "scoped-key minting failed" message. The FULL exception chain (root cause included) lands in the Omeka log only — it is deliberately no longer shipped to anonymous clients, since it can name internal hosts and secret paths.
 - [ ] **Public: anonymous access (0.2.1 ACL fix)**: log out completely, then visit `/search`, `/browse/benin`, and any site page that hosts an IWAC Search block (e.g. `/s/westafrica/page/benin-typesense`). The Svelte client must mount and the `/discovery/token` request must return a real scoped key — not `PermissionDeniedException` or `Token HTTP 500`. Direct curl: `curl -i https://islam.zmo.de/discovery/token` should yield 200 + JSON body, not 500 HTML.
 - [ ] **0.2.4 PSR-18 deps installed**: after the deploy script copies the module into the Omeka volume, `composer install --no-dev` MUST run inside the php container so guzzlehttp/guzzle, php-http/guzzle7-adapter, and http-interop/http-factory-guzzle land in the module's `vendor/`. Verify with: `docker compose exec php ls /var/www/html/modules/IwacSearch/vendor/php-http/guzzle7-adapter` — directory must exist. If it doesn't, the token endpoint will 503 with "No PSR-18 clients found".
 - [ ] **0.2.5 per-search error handling**: temporarily point the bootstrap at a non-existent collection (e.g. rename the alias in Typesense to `iwac_missing`) and reload `/search` or any page block. The Svelte client must show the red **Search unavailable** banner with a message like `Search HTTP 404: Could not find a collection named iwac_missing` — NOT a console crash with `Cannot read properties of undefined (reading 'length')` and a half-rendered empty UI. SSR must also fall through (no `initial_response` in the inlined JSON; check view-source). Flip the alias back; the banner should clear on the next reload.
 - [ ] **Slider, single-track final form (0.2.3)**: `/search` page on a desktop browser, scroll to the Year filter. Visible elements: ONE horizontal grey track with ONE primary-coloured filled segment between TWO circular thumbs. No second parallel line. Drag a thumb — it tracks the cursor, the filled segment resizes live, the inline `Year: NNNN – NNNN` display updates. Click anywhere on the empty track — the nearer thumb snaps to that position. Keyboard: tab to focus a thumb, arrow keys move ±1, Page ±10, Home/End jump to bounds. The thumbs cannot cross.
 - [ ] **Public: search input**: typing is debounced, not wiped mid-keystroke (regression from the earlier `$effect` self-retrigger bug).
-- [ ] **M4: is_public toggle**: take any item currently showing on `/browse/benin`. In the Omeka item admin, flip visibility to private. Save. Refresh `/browse/benin` within 5 s — the item must be gone. Flip back to public, refresh — it reappears. Check `/var/log/...` for an `IwacSearch: is_public updated in Typesense` info line per save.
+- [ ] **M4: is_public toggle**: take any item currently showing on `/search`. In the Omeka item admin, flip visibility to private. Save. Refresh within 5 s — the item must be gone. Flip back to public, refresh — it reappears. Check the log for an `IwacSearch: item re-indexed in Typesense` info line per save.
 - [ ] **M4: item delete**: create a throwaway item in Omeka admin, confirm it appears in Typesense (via `GET /search-api/collections/iwac_current/documents/<id>` or by showing up in a search). Delete the item. The Typesense doc should also be gone (`404` from the same GET). Log shows `IwacSearch: item deleted from Typesense`.
-- [ ] **M4: failure mode**: temporarily block Typesense (e.g. `docker compose stop typesense`). Toggle an item's visibility — the save should complete normally, the admin shouldn't see an error, and the log should show `IwacSearch: failed to update is_public in Typesense`. Restart Typesense; subsequent saves should succeed again without any intervention.
+- [ ] **M4: failure mode**: temporarily block Typesense (e.g. `docker compose stop typesense`). Toggle an item's visibility — the save should complete normally, the admin shouldn't see an error, and the log should show `IwacSearch: failed to re-index item in Typesense`. Restart Typesense; subsequent saves should succeed again without any intervention.
 - [ ] **M5: typeahead dropdown**: focus the search input on `/search`, type `ram` (or any 2+ char prefix). A dropdown with up to 6 hits should appear within ~150 ms. Each row shows the highlighted title plus a type chip.
 - [ ] **M5: keyboard nav**: with the dropdown open, ↓ highlights the first row, ↓↓ the second; ↑ wraps. Esc closes. Enter on a highlighted row navigates to its `omeka_url` (or seeds the query if no URL).
 - [ ] **M5: click-to-navigate**: clicking a suggestion opens its Omeka detail page. Cmd/Ctrl-click opens in a new tab. Plain click closes the dropdown.
 - [ ] **M5: blur close**: click anywhere outside the search box → dropdown disappears. Click inside the dropdown → does NOT close (no premature blur).
-- [ ] **M5: scoped suggestions**: on `/browse/benin`, type a prefix that matches docs from another country (e.g. an entity unique to Niger). The dropdown should show only Bénin docs — `locked_filters` is honored on the suggest call too.
+- [ ] **M5: scoped suggestions**: on a page block with a country preset (e.g. Bénin), type a prefix that matches docs from another country (e.g. an entity unique to Niger). The dropdown should show only Bénin docs — `locked_filters` is honored on the suggest call too.
 - [ ] **M5: graceful failure**: stop Typesense, type into the box. The dropdown stays empty (no error popup); the main search shows its existing error banner. Restart Typesense, keep typing — suggestions resume without a page reload.
 - [ ] **M6: mobile drawer trigger**: load `/search` on a phone (or DevTools mobile emulation < 768 px). The facet column should be **hidden**; a "Filters" button appears in the results toolbar instead.
 - [ ] **M6: drawer open + close**: tap the Filters button → panel slides in from the right with a backdrop fade. Apply a filter → results update behind the drawer. Tap × / backdrop / press Esc → drawer slides out.
@@ -82,12 +76,19 @@ as you confirm; remove rows once they've been through a full cycle.
 - [ ] **M6: result count display**: above the results, on every surface, a "142 results" line is visible (or "1 result" / "No results"). Updates in real-time as filters change.
 - [ ] **M6: empty state**: search for `xyzzyx` (or apply mutually-exclusive filters). The results pane shows a dashed empty state with "Clear all filters" if filters are active, or a "try a broader query" message if just the query missed. No "Type a search term…" hint.
 - [ ] **M6: desktop unchanged**: viewport ≥ 768 px, the facet column is back to its sticky two-pane layout — Filters button is hidden, drawer chrome is suppressed. No regressions on desktop.
-- [ ] **Drawer extraction: admin form regression**: open `/admin/iwac-search/browse-config`, click Edit on any row. Drawer slides in from right, header shows `Edit: …`, × button closes, ESC closes, backdrop click closes. Body scroll locks while open, restores on close. (Same behaviour as before; just verifying the move to shared `<Drawer>` didn't break it.)
-- [ ] **Drawer extraction: mobile filter regression**: same set of behaviours on the public `/search` page in a narrow viewport. Open Filters → close via × / Esc / backdrop. No layout flicker, no double-rendered FacetPanel.
+- [ ] **Drawer extraction: mobile filter regression**: open Filters on the public `/search` page in a narrow viewport → close via × / Esc / backdrop. No layout flicker, no double-rendered FacetPanel.
 - [ ] **Drawer extraction: viewport resize**: open the mobile filter drawer, then drag DevTools to widen past 48rem. Drawer should auto-close (no orphan overlay floating over the desktop layout). Narrow back down — Filters trigger reappears, drawer state defaults to closed.
 - [ ] **Drawer extraction: scroll lock cleanup**: open drawer on a long page → `document.body.style.overflow` is `hidden`. Close → it's back to `''`. Refresh mid-open → no leaked overflow lock on next load.
+- [ ] **3.7.0 intro purification**: as a site editor, save an IWAC Search page block whose Intro HTML contains `<script>alert(1)</script><p>ok</p>`. On the public page only `<p>ok</p>` survives (view-source: no script tag). Pre-existing blocks are re-purified at render time too.
+- [ ] **3.7.0 guarded alias swap**: point the indexer at a deliberately broken schema (or empty DB) and run a reindex — the job must FAIL with "Reindex aborted before alias swap" and live search must keep serving the previous collection. `GET /collections` shows no orphaned `iwac_v*_<timestamp>` leftovers after the next successful run.
+- [ ] **3.7.0 batch reindex path**: batch-edit visibility on ~20 items — one Typesense import request in the network/server logs (`IwacSearch: batch re-indexed`), not 20.
+- [ ] **3.7.0 unmappable item cleanup**: change an indexed item's resource class to a non-content class (e.g. an authority class). Its document must disappear from public search within seconds (log: item deleted).
+- [ ] **3.7.0 federated keyboard tabs**: on `/search/everything`, Tab to the tablist, use ←/→/Home/End — focus AND selection move; no pointer needed.
+- [ ] **3.7.0 federated Back button**: run two searches and switch tabs on `/search/everything`, then press Back — it steps through the previous states instead of leaving the page.
+- [ ] **3.7.0 sorted share links**: open `/search?sort=date:asc` in a fresh tab — results actually arrive oldest-first (no default-sorted SSR snapshot with a lying summary strip).
+- [ ] **3.7.0 deep pagination links**: share a `/search?page=60` URL — it opens on page 60 (previously silently clamped to 50).
 
-Full roadmap: [IWAC-docker/docs/iwac-search-roadmap.md](https://github.com/fmadore/IWAC-docker/blob/main/docs/iwac-search-roadmap.md).
+Full roadmap: [IWAC-docker/docs/iwac-search-roadmap.md](https://github.com/fmadore/IWAC-docker/blob/main/docs/iwac-search-roadmap.md). Engineering/refactoring roadmap: [docs/engineering-roadmap.md](docs/engineering-roadmap.md).
 
 ## Companion stack
 
@@ -118,87 +119,101 @@ IwacSearch/
 ├── src/
 │   ├── Controller/
 │   │   ├── SearchController.php                # /search, /search/everything, /discovery/token, /browse redirect
-│   │   └── Admin/MaintenanceController.php     # /admin/iwac-search/maintenance (reindex, stopwords, status)
-│   ├── Indexer/                                # Bulk reindex pipeline (reads Omeka MySQL)
-│   │   ├── SchemaLoader.php                    #   reads data/schema.yaml
+│   │   └── Admin/MaintenanceController.php     # /admin/iwac-search/maintenance (reindex, syncs, status)
+│   ├── Asset/SvelteAssets.php                  # ONE place that knows the compiled bundle's file set
+│   ├── Indexer/                                # Bulk + incremental indexing (reads Omeka MySQL)
+│   │   ├── SchemaLoader.php                    #   reads data/schema*.yaml, versions collection names
 │   │   ├── OmekaSourceReader.php               #   DBAL: keyset item stream + value loading
 │   │   ├── EntityAuthority.php                 #   entity lookup from classes 94/9/96/54/244
-│   │   ├── EntityOccurrences.php               #   per-entity metric accumulator
+│   │   ├── EntityOccurrences.php               #   per-entity metric accumulator (histogram)
 │   │   ├── CountryResolver.php                 #   derives country_ss (newspaper / item-set)
 │   │   ├── StopwordsSync.php                   #   PUTs fr_default to Typesense
 │   │   ├── CurationSync.php                    #   PUTs iwac_diversity curation set
+│   │   ├── SynonymsSync.php                    #   PUTs iwac_synonyms global synonym set
+│   │   ├── AnalyticsSync.php                   #   provisions search-analytics rules (non-fatal)
 │   │   ├── Mapper/                             #   one mapper per content subset (by class)
-│   │   │   ├── MapperInterface.php
-│   │   │   ├── AbstractMapper.php
+│   │   │   ├── MapperInterface.php · AbstractMapper.php
 │   │   │   ├── ArticleMapper.php · PublicationMapper.php · DocumentMapper.php
-│   │   │   ├── AudiovisualMapper.php · ReferenceMapper.php · IndexEntityMapper.php
-│   │   │   └── MapperRegistry.php
-│   │   ├── Reindexer.php                       #   content collection, atomic alias swap
-│   │   └── IndexReindexer.php                  #   entity (iwac_index) collection
-│   ├── Browse/
-│   │   └── FacetCatalog.php                    #   facetable fields + content/entity sort sets
+│   │   │   ├── AudiovisualMapper.php · PhotographMapper.php · ReferenceMapper.php
+│   │   │   ├── IndexEntityMapper.php           #   entity (index) collection docs
+│   │   │   └── MapperRegistry.php              #   MapperRegistry::default() = ONE registration point
+│   │   ├── CollectionOps.php                   #   shared create/import/guarded-promote lifecycle
+│   │   ├── Reindexer.php                       #   content collection bulk pass
+│   │   ├── IndexReindexer.php                  #   entity (iwac_index) collection bulk pass
+│   │   ├── ReindexOrchestrator.php             #   wires the full bulk run (CLI + job share it)
+│   │   ├── IncrementalIndexer.php              #   live upserts/deletes on api.*.post events
+│   │   └── ItemEventListener.php               #   event handler bodies (items, media, item sets)
+│   ├── Browse/FacetCatalog.php                 # facetable fields + content/entity sort sets
 │   ├── Site/BlockLayout/IwacSearchBlock.php    # Page block — drop into any Site page
+│   ├── Job/                                    # Omeka background jobs (admin maintenance buttons)
+│   │   └── BulkReindex · SyncStopwords · SyncSynonyms · ProvisionAnalytics
+│   ├── Form/MaintenanceForm.php                # CSRF-bearing POST forms for the maintenance page
 │   ├── Log/
 │   │   ├── OmekaPsrLogger.php                  # PSR-3 ↔ Laminas\Log adapter (psr/log 3.x-safe)
 │   │   └── LoggerResolver.php                  # static helper: container → wrapped PSR-3 logger
-│   ├── View/Helper/IwacBootstrapJson.php       # encodes bootstrap blob with the canonical JSON flag set
+│   ├── Util/ExceptionMessage.php               # flattens exception chains for logging
+│   ├── View/Helper/                            # IwacBootstrapJson · IwacLocale · IwacSearchUrl
 │   ├── Search/
 │   │   ├── PresetCatalog.php · Preset.php      # page-block scopes (all / country / references / entity index)
-│   │   ├── SearchDefaults.php                  # per-collection query_by / highlight fields
+│   │   ├── SearchDefaults.php                  # per-collection query_by / highlights / default facet stack
 │   │   ├── InitialResponseRenderer.php         # SSR: PHP→Typesense, inlines first page into bootstrap
 │   │   └── TypesenseSearchKeyProvider.php      # mints scoped keys for the browser
 │   ├── svelte/                                 # Svelte 5 + TS client source — public bundle
 │   │   ├── App.svelte                          #   per-mount root, owns search state
-│   │   ├── components/
-│   │   │   ├── SearchInput.svelte              #   debounced text input
-│   │   │   ├── SuggestDropdown.svelte          #   typeahead — prefix-search dropdown (M5)
-│   │   │   ├── FacetPanel.svelte               #   sticky left column + active-filter chips
-│   │   │   ├── FacetGroup.svelte               #   one collapsible facet (checkboxes + show-more)
-│   │   │   ├── DateRangeSlider.svelte          #   two-handle year range
-│   │   │   ├── SortSelect.svelte               #   relevance | newest | oldest
-│   │   │   ├── ResultsList.svelte              #   paginated load-more
-│   │   │   └── ResultItem.svelte               #   title + date + snippet + thumbnail
-│   │   ├── lib/
-│   │   │   ├── typesense.ts                    #   thin REST wrapper, scoped-key cache
-│   │   │   ├── types.ts                        #   IwacBootstrap, SearchState, etc.
-│   │   │   ├── urlState.ts                     #   bidirectional URL ↔ memory sync
-│   │   │   └── labels.ts                       #   schema field → display label
-│   │   └── main.ts                             #   IIFE entry; auto-mounts on every root
-│   ├── svelte-shared/                          # Reusable widgets used by the public bundle
-│   │   └── components/
-│   │       └── Drawer.svelte                   #   slide-in overlay (animation, ESC, scroll lock)
+│   │   ├── main.ts                             #   IIFE entry; auto-mounts on every root
+│   │   ├── header.ts · header.css              #   site-wide header typeahead bundle (framework-free)
+│   │   ├── components/                         #   SearchInput · SuggestDropdown · FacetPanel ·
+│   │   │                                       #   FacetGroup · DateRangeSlider · SortSelect ·
+│   │   │                                       #   ResultsList · ResultItem · ResultSummary ·
+│   │   │                                       #   ResultsEmpty · ResultSkeleton · Pagination ·
+│   │   │                                       #   ExportMenu · ViewToggle · MapView · Sparkline ·
+│   │   │                                       #   FederatedApp · Icon
+│   │   └── lib/                                #   typesense.ts (REST wrapper, scoped-key cache) ·
+│   │                                           #   types.ts · urlState.ts · i18n.ts · queryBuilders ·
+│   │                                           #   transport · sanitize · suggestions · searchHistory ·
+│   │                                           #   filterChips · filterDrawer · viewMode · export ·
+│   │                                           #   sparkline · thumbnail · maplibreLoader
+│   ├── svelte-shared/components/Drawer.svelte  # slide-in overlay (animation, ESC, scroll lock)
 │   └── Service/                                # Service-locator factories only (services live elsewhere)
 │       ├── SearchControllerFactory.php
 │       ├── TypesenseClientFactory.php          # Admin client (reads Docker secret)
-│       ├── TypesenseClientLazy.php             # static helper: container → Closure(): TypesenseClient
+│       ├── TypesenseClientLazy.php             # static helper: container → memoizing Closure
 │       ├── BlockLayout/IwacSearchBlockFactory.php
 │       ├── Controller/MaintenanceControllerFactory.php
 │       ├── Indexer/{IncrementalIndexerFactory,ItemEventListenerFactory}.php
 │       └── Search/InitialResponseRendererFactory.php
 ├── cli/
-│   └── reindex.php                             # `discovery:reindex` entry point
+│   ├── bootstrap.php                           # shared CLI bootstrap (autoload, logger, client)
+│   ├── reindex.php                             # `discovery:reindex` entry point
+│   ├── stopwords-sync.php                      # fr_default set only, no reindex
+│   └── synonyms-sync.php                       # iwac_synonyms set only, no reindex
 ├── data/
 │   ├── schema.yaml                             # Content collection (source of truth)
 │   ├── schema-index.yaml                       # Entity (iwac_index) collection
 │   ├── stopwords-fr.json                       # French stopword set (loaded as fr_default)
+│   ├── synonyms-fr.json                        # Arabic-transliteration synonym groups
 │   └── newspaper-countries.json                # Newspaper → country map (derives country_ss)
+├── scripts/
+│   ├── check-schema-drift.js                   # CI gate: catalog ↔ schemas ↔ i18n labels
+│   └── check-theme-tokens.js                   # CI gate: CSS custom-property fallbacks ↔ tokens.json
 ├── view/
 │   ├── iwac-search/search/{index,everything}.phtml
 │   ├── iwac-search/admin/maintenance/index.phtml      # Admin maintenance page
 │   ├── common/iwac-search-mount.phtml                 # Shared Svelte mount partial (one source of truth)
+│   ├── common/iwac-federated-mount.phtml
 │   └── common/block-layout/iwac-search-block.phtml
 ├── asset/
 │   ├── css/iwac-search.css                     # Block container + skeleton (consumes IWAC-theme tokens)
-│   └── dist/                                   # Compiled Svelte bundles (committed; CI rebuilds on PR)
-│       ├── iwac-search.js                      #   public client (~35 KB gzipped IIFE)
-│       ├── iwac-search.css                     #   public component styles
-│       ├── iwac-search-header.js               #   header typeahead (~12 KB gzipped IIFE)
-│       └── iwac-search-header.css              #   header dropdown styles
+│   └── dist/                                   # Compiled bundles (committed; CI diffs them vs source)
+│       ├── iwac-search.{js,css}                #   public client
+│       └── iwac-search-header.{js,css}         #   site-wide header typeahead
 ├── .github/
 │   ├── dependabot.yml                          # weekly grouped updates: npm + composer + actions
-│   └── workflows/ci.yml                        # lint + svelte-check + build + PHP syntax
+│   └── workflows/ci.yml                        # lint + svelte-check + build + dist diff + PHP 8.2/8.4 lint
 ├── docs/
-│   └── data-sources.md                         # Why the indexer reads Omeka MySQL directly
+│   ├── data-sources.md                         # Why the indexer reads Omeka MySQL directly
+│   └── engineering-roadmap.md                  # Refactoring / hardening roadmap + deferred items
+├── tokens.json                                 # Generated snapshot of IWAC-theme's design tokens
 ├── package.json                                # Vite 8 + Svelte 5 + TypeScript 6 toolchain
 ├── vite.config.ts
 ├── tsconfig.json
@@ -221,24 +236,33 @@ this codebase without surprise.
 Standalone `/search` and freshly-dropped page blocks ship with this
 facet set, ordered coarse → fine:
 
-| Field                | What it filters                                                                                       |
-| -------------------- | ----------------------------------------------------------------------------------------------------- |
-| `type_s`             | Article / Publication / Document / Audiovisual                                                        |
-| `country_ss`         | Country (Bénin, Burkina Faso, Côte d'Ivoire, Niger, Togo, Nigeria)                                    |
-| `newspaper_ss`       | Publisher (newspaper / magazine title)                                                                |
-| `places_ss`          | Mentioned locations                                                                                   |
-| `persons_ss`         | Mentioned persons                                                                                     |
-| `organisations_ss`   | Mentioned organisations                                                                               |
-| `topics_ss`          | Subjects (controlled vocabulary — `fabio:AuthorityFile` authority items)                              |
-| `gemini_polarite_ss` | Sentiment polarity (Gemini model — ChatGPT/Mistral are alternates available via the block admin form) |
+| Field                  | What it filters                                                          |
+| ---------------------- | ------------------------------------------------------------------------ |
+| `type_s`               | Article / Publication / Document / Audiovisual / Photograph / Reference  |
+| `has_fulltext`         | Full text (bibo:content) exists AND is publicly readable                 |
+| `country_ss`           | Country (Bénin, Burkina Faso, Côte d'Ivoire, Niger, Togo, Nigeria)       |
+| `newspaper_ss`         | Publisher (newspaper / magazine title)                                   |
+| `places_ss`            | Mentioned locations                                                      |
+| `persons_ss`           | Mentioned persons                                                        |
+| `organisations_ss`     | Mentioned organisations                                                  |
+| `topics_ss`            | Subjects (controlled vocabulary — `fabio:AuthorityFile` authority items) |
+| `gemini_polarite_ss`   | Sentiment polarity (Gemini model)                                        |
+| `gemini_centralite_ss` | Centrality of Islam/Muslims (Gemini model)                               |
+| `gemini_subjectivite`  | Subjectivity, 1–5 (Gemini model)                                         |
+
+The canonical list is `SearchDefaults::CONTENT_PROMINENT_FACETS` — the
+standalone route, the federated Content tab, and the page-block default
+all read it, so they cannot drift.
 
 Plus a dedicated `pub_year` two-handle range slider (1960..2025 default
 bounds) — kept separate from the categorical list because numeric range
 semantics don't fit the checkbox UI.
 
 Block admins can override the visible facets per-instance via the page
-block form (12 facetable fields are exposed in total — see
-`src/Site/BlockLayout/IwacSearchBlock.php`).
+block form. The full catalog of facetable fields lives in
+`FacetCatalog::FACETABLE_FIELDS` (`src/Browse/FacetCatalog.php`) —
+`scripts/check-schema-drift.js` fails CI if it disagrees with the schema
+YAMLs or the client's facet labels, so the count there is always current.
 
 ### URL state
 

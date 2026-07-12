@@ -335,7 +335,8 @@
   </div>
 
   <!-- Focus lives on the tab buttons (roving tabindex); the tablist itself
-       only routes arrow keys. -->
+       only routes arrow keys, so it needs no tabindex of its own. -->
+  <!-- svelte-ignore a11y_interactive_supports_focus -->
   <div
     class="iwac-fed__tabs"
     role="tablist"

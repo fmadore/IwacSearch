@@ -1,0 +1,176 @@
+# Engineering roadmap — refactoring, hardening, and deferred work
+
+Outcome of the July 2026 whole-repo engineering review (four parallel
+audits: PHP indexer, PHP web/service layer, Svelte/TS client, and
+build/CI/docs). Companion to [ROADMAP.md](../ROADMAP.md), which tracks
+_product_ deferrals; this file tracks _engineering_ ones.
+
+Two sections: what the review fixed (so future readers know why the code
+looks the way it does), and what remains — ordered by phase, each item
+with enough context to be picked up cold.
+
+---
+
+## Done (July 2026 review branch)
+
+### Security / correctness
+
+| Fix                                                                                                                                                                                             | Where                                        |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------- |
+| Stored-XSS: block `intro_html` purified via Omeka's `HtmlPurifier` on save (`onHydrate`) and re-purified at render for legacy blocks                                                            | `IwacSearchBlock`                            |
+| Guarded alias swap: a reindex whose import was empty or >10 % errors aborts _before_ the swap — previously a systemic import failure put an empty collection live and dropped the last good one | `CollectionOps::promote()`                   |
+| Orphan-collection sweep after every successful swap: crashed/overlapping runs used to leak timestamped collections (Typesense is RAM-resident — leaks are permanent)                            | `CollectionOps::promote()`                   |
+| Items that stop being mappable get their stale (possibly public) document deleted instead of left live                                                                                          | `IncrementalIndexer`                         |
+| `/discovery/token` 503 no longer ships the exception chain (internal hosts, secret paths) to anonymous clients — Omeka log only                                                                 | `SearchController::tokenAction`              |
+| False "locked_filters are enforced server-side" claim corrected: they are cosmetic client scoping; the scoped key's `is_public` + `ocr_text` constraints are the only privacy boundary          | `IwacSearchBlock` docblock + admin form help |
+| Dead `public_search_key.filter_by/exclude_fields` config keys removed — they were never read; the provider hardcodes the security contract (single source of truth)                             | `config/module.config.php`                   |
+| Highlight sanitising unified on escape-then-restore-`<mark>` — the suggest path's tag-allowlist regex let `<mark onmouseover=…>` through                                                        | `src/svelte/lib/sanitize.ts`                 |
+
+### Efficiency
+
+| Fix                                                                                                                                                                                                 | Where                                     |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------- |
+| Indexer event listener resolved lazily at fire time — the full graph (6 mappers, EntityAuthority, CountryResolver's JSON parse) was built on **every** HTTP request                                 | `Module::attachListeners`                 |
+| `reindexItems()` batch path: one DB load + one entity resolution + one JSONL import for batch update/create and item-set cascades (was ~4 SQL + 1 HTTP per item, inside synchronous admin requests) | `IncrementalIndexer`, `ItemEventListener` |
+| SSR skipped on `/search` deep links (`?q=`, `?f.*`, sort/page/date) whose snapshot the client immediately discards                                                                                  | `SearchController`                        |
+| Scoped-key cache module-scoped in the client — the federated page's per-query `App` remounts re-minted a token per committed keystroke                                                              | `typesense.ts`                            |
+| `PresetCatalog::all()` memoized; `EntityOccurrences` accumulates a year histogram instead of storing every occurrence year                                                                          | `Search/`, `Indexer/`                     |
+
+### Drift prevention / refactoring
+
+| Fix                                                                                                                                                                                                     | Where                               |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------- |
+| `MapperRegistry::default()` — one mapper registration point for bulk + incremental (two hand-copied lists before)                                                                                       | `Mapper/MapperRegistry.php`         |
+| `CollectionOps::createVersioned()/importAll()/promote()` — the two reindexers' copy-paste lifecycle unified                                                                                             | `Indexer/CollectionOps.php`         |
+| `SearchDefaults::CONTENT_PROMINENT_FACETS` — one facet stack for `/search`, the federated Content tab, and the block-form default (the block copy had silently drifted)                                 | `Search/SearchDefaults.php`         |
+| `Preset::redirectQuery` — `/browse` redirects read declared data instead of regex-reverse-parsing the filter string the catalog itself built                                                            | `Search/Preset.php`, `browseAction` |
+| `cli/bootstrap.php` — ~50 triplicated bootstrap lines extracted; the "exit 2 = setup error" contract now actually enforced                                                                              | `cli/`                              |
+| `Asset\SvelteAssets` — one place that knows the compiled bundle's file set (Module + page block both inject through it)                                                                                 | `src/Asset/`                        |
+| `TypesenseClientLazy` closure memoizes; three per-class `$cachedClient` fields deleted                                                                                                                  | `Service/`                          |
+| Dead code removed: `SchemaLoader::fieldNames`, `OmekaSourceReader::propertyId`, `MapperRegistry::has`, `PresetCatalog::has`, three unused `FacetCatalog` helpers, `Button.svelte`, two unused i18n keys | —                                   |
+
+### CI / tooling
+
+| Fix                                                                                                                                                                                                                                   | Where    |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- |
+| `git diff --exit-code -- asset/dist` after the CI build — a PR editing `src/svelte*` without rebuilding now fails instead of shipping a stale bundle (production has no Node toolchain)                                               | `ci.yml` |
+| PHP job: 8.2 + 8.4 matrix; `php -l` now covers `config/` and `view/**/*.phtml`                                                                                                                                                        | `ci.yml` |
+| `scripts/` linted + formatted (the CI-gating scripts escaped their own gates); `engines: node>=22`; `tokens.json` prettier-ignored; Guzzle stack added to the dependabot composer group; `configurable=false` (no config form exists) | various  |
+
+### A11y / UX correctness
+
+| Fix                                                                                                                                                                   | Where                 |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------- |
+| Federated tabs keyboard-navigable (arrows/Home/End; inactive tabs were unreachable — WCAG 2.1.1) and Back-button-able (history pushes on committed query/tab changes) | `FederatedApp.svelte` |
+| Map fetch sequence-guarded (stale multi-page loop could overwrite newer markers)                                                                                      | `App.svelte`          |
+| `?sort=` share links fetch instead of reusing the default-sorted SSR snapshot                                                                                         | `App.svelte`          |
+| URL `page` clamp raised 50 → 10 000 sanity ceiling (deep links were silently re-clamped)                                                                              | `urlState.ts`         |
+| `ExportMenu` downgraded from fake `role="menu"` to honest disclosure semantics; `IwacHit.highlights` typed optional (crash on browse-shaped hits in the suggest path) | components            |
+
+---
+
+## Phase 1 — Test harness + static analysis (next up)
+
+The repo currently has **zero tests and no PHP static analysis**; CI's PHP
+gate is `php -l`. The pure seams are deliberately test-friendly — start
+there, no Typesense or MySQL needed:
+
+1. **PHPUnit (module-local `composer require --dev phpunit/phpunit`)**
+   covering, in rough order of value:
+   - `CollectionOps::promote()` — the error-ratio guard (0 indexed,
+     > 10 % errors, healthy) and orphan-sweep name matching, against a
+     > stubbed Typesense client. This is the code that protects live search.
+   - The six mappers + `AbstractMapper` derivations (`has_fulltext` from
+     `vpub`, `country_ss` derivation, date parsing) over fixture rows —
+     the shapes are plain arrays.
+   - `CountryResolver`, `FacetCatalog::normaliseFacets`,
+     `PresetCatalog` (redirect queries, legacy slugs),
+     `EntityOccurrences::aggregate`, `SearchController::requestCarriesSearchState`.
+   - Client side: `urlState` codec round-trips, `queryBuilders`,
+     `sanitize.ts` (Vitest — the toolchain is already Vite).
+2. **PHPStan** — level 6 is realistic for this strict-types codebase.
+   Needs `omeka-s` (or `laminas/*` + a small stub layer) as a dev
+   dependency or a `scanDirectories` pointer at an Omeka checkout;
+   that's the reason it wasn't bolted on during the review (an untested
+   red gate is worse than none). Wire as a third CI job once it passes
+   locally.
+
+## Phase 2 — Known behavioural gaps (each small, verify on live stack)
+
+- **Tighten the search-only parent key scope** from `collections: ['*']`
+  to the two aliases. Blocked on verifying (live container) whether
+  Typesense matches key scopes against the requested alias name or the
+  resolved collection name — same caveat as the analytics rules in
+  ROADMAP.md. When done: bump `TypesenseSearchKeyProvider::SETTINGS_KEY`
+  so cached wide-scope keys are re-minted, and delete the old key in
+  Typesense.
+- **Edits during a bulk reindex are lost at the swap** (documented in
+  `IncrementalIndexer`'s header): upserts go through the alias → the
+  outgoing collection. Fix shape: record a start watermark, collect item
+  ids saved during the build (or query `resource.modified`), re-run
+  `reindexItems()` against the new collection after the swap.
+- **Union-tab deep pagination cap** — `FederatedApp` clamps the union
+  list to 50 pages; fine for a merged relevance list, but worth a
+  "refine your query" hint at the cap.
+
+## Phase 3 — Request-count reductions (medium effort, measurable wins)
+
+- **Fold the year histogram into the main search** as a second
+  `multi_search` sub-search (`per_page: 0`, `facet_by: pub_year`,
+  year-filter stripped): every query/filter change currently costs two
+  POSTs. Add `withYearDistribution` to `TypesenseClient.search()` and
+  drop the separate effect in `App.svelte`.
+- **`InitialResponseRenderer::renderMany()`** — `/search/everything`
+  makes two sequential SSR round-trips; the renderer already uses
+  `multiSearch->perform()` and just needs a multi-bootstrap body.
+- **Cache the empty-query SSR snapshot** (APCu or filesystem, 30–60 s,
+  keyed on a hash of the bootstrap search params) — it's identical for
+  every anonymous visitor of `/search` and the federated landing.
+- **Pass `query` to `App` as a reactive prop on the federated page**
+  instead of `{#key}`-remounting per committed query — remounts still
+  refetch everything and lose facet expand/scroll state (the token
+  re-mint half is already fixed). Requires `App` to react to
+  `initial_query` changes post-mount; touchy, do it with the Vitest
+  harness from Phase 1 in place.
+
+## Phase 4 — Mechanical UI dedupe (needs visual QA, zero behaviour change)
+
+- **`FilterChip.svelte`** — the removable-chip button markup + ~40 lines
+  of CSS are triplicated across `FacetPanel`, `ResultSummary`,
+  `ResultsEmpty` (the chip _data_ is already shared via
+  `deriveActiveChips`).
+- **Reuse `SearchInput` in `FederatedApp`** — the federated page
+  hand-rolls the same debounced input + clear button + webkit-cancel
+  suppression.
+- **`TypesenseClient` internal helpers** — the stopword-recovery retry
+  loop exists three times (`search`, `unionSearch`, `fetchForExport`) and
+  five methods repeat the key→collection→browse-mode→query_by preamble;
+  extract `withStopwordRetry()` + `resolveContext()` next time the file
+  is open for a feature.
+- **`ResultItem` list/gallery split** — already tracked in ROADMAP.md;
+  same batch.
+
+## Phase 5 — Schema/data hygiene
+
+- **Make the drift check per-schema instead of OR-ing**: a catalog key
+  currently passes if it's `facet: true` in _either_ YAML, so a facet
+  flag lost in one collection stays green while that surface's panel
+  breaks. Flag `declared-but-not-facet` per file for keys both schemas
+  declare (`country_ss`, `pub_year`).
+- **Document the deliberate `title_txt` stemming asymmetry** (content
+  schema stems, entity schema doesn't — proper nouns) with a comment in
+  `schema-index.yaml` so it stops looking like drift.
+- **Consider generating the shared field blocks** of the two YAMLs from
+  one source if they diverge again.
+
+## Notes for future sessions
+
+- The admin-shaped scoped key (no `exclude_fields`, gated on the Omeka
+  session) sketched for M4 was never built; `tokenAction` serves the
+  public key to everyone. Build it only with a concrete admin use case.
+- `sourcemap: false` + committed minified bundles means production JS
+  errors are undebuggable; `sourcemap: 'hidden'` interacts with the CI
+  dist-diff check (maps must be committed or excluded) — decide together.
+- The duplicated drift/theme checks in both `lint` and `build` npm
+  scripts are deliberate (local `npm run build` should self-guard); CI
+  pays a few redundant seconds.
