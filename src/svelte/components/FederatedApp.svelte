@@ -90,7 +90,11 @@
     endpoints: bootstrap.endpoints,
   });
 
-  const countCollections = tabs.map((tab) => ({
+  /**
+   * One search spec per collection tab — the same shape feeds both the
+   * counts-only multi_search (tab badges) and the union "All" search.
+   */
+  const collectionSearches = tabs.map((tab) => ({
     collection: tab.bootstrap.collection_alias ?? 'iwac_current',
     queryBy: tab.bootstrap.query_by ?? 'title_txt',
     filterBy: tab.bootstrap.locked_filters || undefined,
@@ -100,7 +104,7 @@
   async function loadCounts(q: string): Promise<void> {
     const myId = ++countReq;
     try {
-      const found = await countClient.countAcross(q, countCollections);
+      const found = await countClient.countAcross(q, collectionSearches);
       if (myId !== countReq) return;
       const next: Record<string, number | null> = {};
       tabs.forEach((tab, i) => {
@@ -123,11 +127,6 @@
   });
 
   // ── Union "All" tab ─────────────────────────────────────────────────
-  const unionSearches = tabs.map((tab) => ({
-    collection: tab.bootstrap.collection_alias ?? 'iwac_current',
-    queryBy: tab.bootstrap.query_by ?? 'title_txt',
-    filterBy: tab.bootstrap.locked_filters || undefined,
-  }));
   const unionPerPage = tabs[0]?.bootstrap.results_per_page || 20;
 
   let unionResponse = $state<IwacSearchResponse | null>(null);
@@ -148,7 +147,7 @@
     unionLoading = true;
     unionError = null;
     countClient
-      .unionSearch({ q, page: p, perPage: unionPerPage, searches: unionSearches })
+      .unionSearch({ q, page: p, perPage: unionPerPage, searches: collectionSearches })
       .then((r) => {
         unionResponse = r;
         unionLoading = false;
@@ -178,17 +177,31 @@
     activeTab = target;
   }
 
-  // Mirror state into the URL so a federated search is shareable / bookmarkable.
+  // Mirror state into the URL so a federated search is shareable /
+  // bookmarkable. A changed committed query or tab PUSHES (back-button-able,
+  // matching the per-collection App); the first sync after mount replaces.
+  // The early return when the URL already matches is what keeps popstate
+  // re-hydration from pushing a duplicate entry.
+  let prevUrlState: { q: string; tab: TabId } | null = null;
   $effect(() => {
     if (typeof window === 'undefined') return;
+    const next = { q: query, tab: activeTab };
     const url = new URL(window.location.href);
-    if (query) {
-      url.searchParams.set('q', query);
+    if (next.q) {
+      url.searchParams.set('q', next.q);
     } else {
       url.searchParams.delete('q');
     }
-    url.searchParams.set('tab', activeTab);
-    window.history.replaceState(window.history.state, '', url.toString());
+    url.searchParams.set('tab', next.tab);
+
+    const prev = prevUrlState;
+    prevUrlState = next;
+    if (url.toString() === window.location.href) return;
+    if (prev === null) {
+      window.history.replaceState(window.history.state, '', url.toString());
+    } else {
+      window.history.pushState(window.history.state, '', url.toString());
+    }
   });
 
   // Back / forward → re-hydrate query + tab from the URL.
@@ -231,6 +244,37 @@
 
   /** Tab order: the merged ranking first, then the per-collection views. */
   const tabIds: TabId[] = ['all', ...tabs.map((tab) => tab.id)];
+
+  /**
+   * Keyboard support for the roving-tabindex tablist (WAI-ARIA tabs
+   * pattern): arrows move focus AND selection, Home/End jump to the ends.
+   * Without this, the inactive tabs (tabindex="-1") are unreachable by
+   * keyboard entirely.
+   */
+  function onTablistKeydown(e: KeyboardEvent): void {
+    const idx = tabIds.indexOf(activeTab);
+    let nextIdx: number;
+    switch (e.key) {
+      case 'ArrowRight':
+        nextIdx = (idx + 1) % tabIds.length;
+        break;
+      case 'ArrowLeft':
+        nextIdx = (idx - 1 + tabIds.length) % tabIds.length;
+        break;
+      case 'Home':
+        nextIdx = 0;
+        break;
+      case 'End':
+        nextIdx = tabIds.length - 1;
+        break;
+      default:
+        return;
+    }
+    e.preventDefault();
+    const id = tabIds[nextIdx];
+    selectTab(id);
+    document.getElementById(`iwac-fed-tab-${id}`)?.focus();
+  }
 
   function tabLabel(id: TabId): string {
     if (id === 'all') return t('tab_all');
@@ -290,7 +334,14 @@
     {/if}
   </div>
 
-  <div class="iwac-fed__tabs" role="tablist" aria-label={t('result_types')}>
+  <!-- Focus lives on the tab buttons (roving tabindex); the tablist itself
+       only routes arrow keys. -->
+  <div
+    class="iwac-fed__tabs"
+    role="tablist"
+    aria-label={t('result_types')}
+    onkeydown={onTablistKeydown}
+  >
     {#each tabIds as id (id)}
       <button
         type="button"

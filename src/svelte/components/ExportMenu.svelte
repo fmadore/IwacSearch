@@ -87,10 +87,12 @@
 </script>
 
 <div class="iwac-export" bind:this={root}>
+  <!-- Disclosure pattern, NOT role="menu": menu semantics promise arrow-key
+       navigation + focus management this simple format list doesn't implement.
+       Plain buttons are natively Tab-reachable, which is the honest contract. -->
   <button
     type="button"
     class="iwac-export__trigger"
-    aria-haspopup="true"
     aria-expanded={open}
     aria-controls={open ? menuId : undefined}
     aria-label={t('export_results')}
@@ -102,12 +104,11 @@
   </button>
 
   {#if open}
-    <div class="iwac-export__menu" id={menuId} role="menu" aria-label={t('export_results')}>
+    <div class="iwac-export__menu" id={menuId} aria-label={t('export_results')}>
       {#each EXPORT_FORMATS as spec (spec.format)}
         <button
           type="button"
           class="iwac-export__item"
-          role="menuitem"
           disabled={busy}
           onclick={() => run(spec.format)}
         >

@@ -117,6 +117,14 @@ const EXPORT_INCLUDE_FIELDS = [
 /** Cap on geo-tagged entities the map view fetches (Typesense pages at 250). */
 export const MAP_MAX_HITS = 2000;
 
+/**
+ * Facet values requested per field on the main search — enough for "show
+ * more" inside a facet group without paging the facet API. Exported so
+ * FacetGroup can infer truncation ("are there more values server-side?")
+ * from the same number instead of hardcoding its own copy.
+ */
+export const MAX_FACET_VALUES = 50;
+
 /** Fields the map view needs per entity marker. */
 const MAP_INCLUDE_FIELDS = [
   'id',
@@ -141,14 +149,6 @@ const MAP_INCLUDE_FIELDS = [
  * key lifecycle and the per-surface request composition.
  */
 export class TypesenseClient {
-  /**
-   * Cached scoped key. Held in memory only — never persisted to
-   * localStorage / sessionStorage — so it dies with the tab. Refreshed
-   * 60 s before its `expires_at` to avoid mid-search expiry.
-   */
-  private cachedKey: ScopedKeyResponse | null = null;
-  private inflight: Promise<ScopedKeyResponse> | null = null;
-
   /**
    * Per-channel abort controllers: a new search/suggest/histogram call
    * aborts its still-in-flight predecessor, so a fast typist can't get
@@ -259,9 +259,7 @@ export class TypesenseClient {
           // through every match (not just the first 250). per_page stays ≤ 50,
           // and Pagination windows the page bar, so deep result sets are fine.
           facet_by: facets.length > 0 ? facets.join(',') : undefined,
-          // Show up to 50 values per facet — enough for "show more" inside
-          // a facet group without paging the facet API.
-          max_facet_values: 50,
+          max_facet_values: MAX_FACET_VALUES,
           // Result diversification (Typesense 30.2 MMR). Only on a real
           // query: browse mode (q=*) is date-sorted and must not be
           // reshuffled, and the clustering of near-identical syndicated
@@ -905,20 +903,27 @@ export class TypesenseClient {
   }
 
   /**
-   * Get a valid scoped key, refreshing in-flight requests get coalesced
-   * so a burst of debounced searches doesn't N-amplify token requests.
+   * Get a valid scoped key. The cache is MODULE-scoped (keyed by token
+   * endpoint), not per-instance: several client instances on one page
+   * (multiple blocks, the federated page's per-tab App remounts) share one
+   * key and one refresh cycle. In-flight requests are coalesced so a burst
+   * of debounced searches doesn't N-amplify token requests.
    */
   private async getKey(): Promise<ScopedKeyResponse> {
+    const endpoint = this.bootstrap.endpoints.token;
+    const slot = keyCache.get(endpoint) ?? { key: null, inflight: null };
+    keyCache.set(endpoint, slot);
+
     const now = Math.floor(Date.now() / 1000);
-    if (this.cachedKey && this.cachedKey.expires_at - 60 > now) {
-      return this.cachedKey;
+    if (slot.key && slot.key.expires_at - 60 > now) {
+      return slot.key;
     }
-    if (this.inflight) {
-      return this.inflight;
+    if (slot.inflight) {
+      return slot.inflight;
     }
-    this.inflight = (async () => {
+    slot.inflight = (async () => {
       try {
-        const res = await fetch(this.bootstrap.endpoints.token, {
+        const res = await fetch(endpoint, {
           credentials: 'same-origin',
           headers: { Accept: 'application/json' },
         });
@@ -929,12 +934,22 @@ export class TypesenseClient {
         if (!key.key) {
           throw new Error('Token endpoint returned no key');
         }
-        this.cachedKey = key;
+        slot.key = key;
         return key;
       } finally {
-        this.inflight = null;
+        slot.inflight = null;
       }
     })();
-    return this.inflight;
+    return slot.inflight;
   }
 }
+
+/**
+ * Module-level scoped-key cache, one slot per token endpoint (all surfaces
+ * on a page share the same endpoint, so in practice one slot). Keys are
+ * memory-only — never persisted — so they still die with the tab.
+ */
+const keyCache = new Map<
+  string,
+  { key: ScopedKeyResponse | null; inflight: Promise<ScopedKeyResponse> | null }
+>();

@@ -165,14 +165,20 @@
   // First $effect run skips its fetch when the live state matches the
   // state the server used for SSR (empty q, page 1, default sort, no
   // filters, no year range). Any URL-hydrated non-pristine state (e.g.
-  // /search?q=ramadan) triggers a real fetch so the user sees what they
-  // asked for, not the "browse everything" SSR snapshot. Plain `let`
+  // /search?q=ramadan or ?sort=date:asc) triggers a real fetch so the user
+  // sees what they asked for, not the "browse everything" SSR snapshot.
+  // The sort check matters: the snapshot was built with the bootstrap
+  // default sort, so a sorted share link must not reuse it. Plain `let`
   // (not $state) — reading it inside the effect doesn't create a
   // reactive dependency, so mutating it doesn't re-trigger the effect.
+  // The bootstrap.default_sort read is deliberately non-reactive too —
+  // bootstrap is server-emitted and never changes post-mount.
+  // svelte-ignore state_referenced_locally
   let skipNextFetch =
     initialResponse != null &&
     initial.q === '' &&
     initial.page === 1 &&
+    initial.sort === (bootstrap.default_sort || '_text_match:desc') &&
     Object.keys(initial.filters).length === 0 &&
     initial.yearRange === null;
 
@@ -339,20 +345,28 @@
   // Map data: when the Map view is active, fetch every geo-tagged entity
   // matching the current query + filters (year range included — unlike the
   // histogram, the map should reflect the selected window).
+  //
+  // Sequence-guarded: fetchForMap is a multi-page loop with no
+  // AbortController, so without the guard two quick filter toggles could
+  // let the slower (stale) loop finish last and overwrite the newer
+  // markers.
+  let mapSeq = 0;
   $effect(() => {
     if (view.mode !== 'map') return;
     const q = query;
     const f = filters;
     const y = yearRange;
+    const seq = ++mapSeq;
     mapLoading = true;
     client
       .fetchForMap({ q, activeFilters: f, yearRange: y })
       .then((docs) => {
+        if (seq !== mapSeq) return; // superseded — newer fetch in flight
         mapDocs = docs;
         mapLoading = false;
       })
       .catch((e: unknown) => {
-        if (isAbortError(e)) return;
+        if (seq !== mapSeq) return;
         console.warn('[iwac-search] map fetch failed', e);
         mapDocs = [];
         mapLoading = false;
