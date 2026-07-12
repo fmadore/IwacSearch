@@ -36,6 +36,18 @@ export default [
     },
   },
   {
+    // The two CI-gating Node scripts get linted too (they used to escape
+    // their own quality gates entirely). Node globals + console allowed —
+    // their console output IS their interface.
+    files: ['scripts/**/*.js', 'vite.config.ts', 'eslint.config.js'],
+    languageOptions: {
+      globals: { ...globals.node },
+    },
+    rules: {
+      'no-console': 'off',
+    },
+  },
+  {
     // The Svelte plugin needs the .svelte parser explicitly per-file.
     // `.svelte.ts` / `.svelte.js` are Svelte 5's rune-in-TS files —
     // svelte-eslint-parser v1+ handles them via the nested ts parser.

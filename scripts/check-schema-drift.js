@@ -77,7 +77,7 @@ function parseSchemaFields(yamlText, label) {
   if (fields.size < 5) {
     throw new Error(
       `${label}: parsed only ${fields.size} fields — the schema format has ` +
-        'probably changed; update scripts/check-schema-drift.js.'
+        'probably changed; update scripts/check-schema-drift.js.',
     );
   }
   return fields;
@@ -94,7 +94,7 @@ function parseFacetCatalog(phpText) {
   const keys = [...body.matchAll(/^\s*'([A-Za-z0-9_]+)'\s*=>/gm)].map((m) => m[1]);
   if (keys.length < 5) {
     throw new Error(
-      `FacetCatalog.php: parsed only ${keys.length} FACETABLE_FIELDS keys — format drift?`
+      `FacetCatalog.php: parsed only ${keys.length} FACETABLE_FIELDS keys — format drift?`,
     );
   }
   return keys;
@@ -174,14 +174,14 @@ try {
   }
   if (unoffered.length > 0) {
     console.log(
-      `ℹ facet-enabled schema fields not offered in the admin catalog (deliberate): ${unoffered.join(', ')}`
+      `ℹ facet-enabled schema fields not offered in the admin catalog (deliberate): ${unoffered.join(', ')}`,
     );
   }
 
   if (!failed) {
     console.log(
       `✅ schema drift check: ${catalogKeys.length} catalog keys consistent across ` +
-        'schema.yaml / schema-index.yaml / FacetCatalog.php / i18n.ts'
+        'schema.yaml / schema-index.yaml / FacetCatalog.php / i18n.ts',
     );
   }
 } catch (err) {

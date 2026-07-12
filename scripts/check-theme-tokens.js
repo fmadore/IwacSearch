@@ -23,7 +23,7 @@
  *      Svelte TEMPLATE markup (SVG fills, inline attrs) is exempt — only the
  *      `<style>` region is scanned. So is any line touching a sanctioned
  *      `--iwac-vis-*` data colour.
- * Lines marked `/​* allow-hex *​/` are exempt from 3 and 4.
+ * Lines carrying an `allow-hex` marker comment are exempt from 3 and 4.
  *
  * Usage: node scripts/check-theme-tokens.js   (npm run lint:theme)
  * Exit 1 on any violation, else 0. If tokens.json is missing, value checks
@@ -39,29 +39,36 @@ const TOKENS_PATH = join(ROOT, 'tokens.json');
 const EXTS = ['.svelte', '.css', '.ts'];
 
 function walk(dir, out = []) {
-    for (const entry of readdirSync(dir)) {
-        const p = join(dir, entry);
-        if (statSync(p).isDirectory()) walk(p, out);
-        else if (EXTS.some((e) => p.endsWith(e)) && !p.endsWith('.d.ts')) out.push(p);
-    }
-    return out;
+  for (const entry of readdirSync(dir)) {
+    const p = join(dir, entry);
+    if (statSync(p).isDirectory()) walk(p, out);
+    else if (EXTS.some((e) => p.endsWith(e)) && !p.endsWith('.d.ts')) out.push(p);
+  }
+  return out;
 }
 
 function normHex(hex) {
-    let h = hex.replace('#', '').toLowerCase();
-    if (h.length === 3 || h.length === 4) h = h.slice(0, 3).split('').map((c) => c + c).join('');
-    return '#' + h.slice(0, 6);
+  let h = hex.replace('#', '').toLowerCase();
+  if (h.length === 3 || h.length === 4)
+    h = h
+      .slice(0, 3)
+      .split('')
+      .map((c) => c + c)
+      .join('');
+  return '#' + h.slice(0, 6);
 }
 
 let TOKENS = null;
 if (existsSync(TOKENS_PATH)) {
-    try {
-        TOKENS = JSON.parse(readFileSync(TOKENS_PATH, 'utf8'));
-    } catch {
-        console.warn('  ! tokens.json present but unparseable — value checks skipped\n');
-    }
+  try {
+    TOKENS = JSON.parse(readFileSync(TOKENS_PATH, 'utf8'));
+  } catch {
+    console.warn('  ! tokens.json present but unparseable — value checks skipped\n');
+  }
 } else {
-    console.warn('  ! tokens.json not found — value checks skipped (run `npm run build:tokens` in IWAC-theme)\n');
+  console.warn(
+    '  ! tokens.json not found — value checks skipped (run `npm run build:tokens` in IWAC-theme)\n',
+  );
 }
 
 const REMOVED_TOKEN = /--primary-(hue|sat)\b/;
@@ -71,71 +78,89 @@ const VAR_FALLBACK = /var\(\s*(--[\w-]+)\s*,\s*(#[0-9a-fA-F]{3,8})\b/g;
 
 const violations = [];
 function flag(file, line, msg, snippet) {
-    violations.push({ file: relative(ROOT, file), line, msg, snippet: snippet.trim() });
+  violations.push({ file: relative(ROOT, file), line, msg, snippet: snippet.trim() });
 }
 
 function scan(file) {
-    const isCss = file.endsWith('.css');
-    const isSvelte = file.endsWith('.svelte');
-    // Track the <style> region of a Svelte SFC so the bare-hex rule scans the
-    // module's CSS but not its template markup (SVG fills, inline attrs).
-    let inStyle = false;
-    readFileSync(file, 'utf8').split('\n').forEach((raw, i) => {
-        const n = i + 1;
-        if (isSvelte && /<style\b/.test(raw)) inStyle = true;
-        const cssContext = isCss || (isSvelte && inStyle);
+  const isCss = file.endsWith('.css');
+  const isSvelte = file.endsWith('.svelte');
+  // Track the <style> region of a Svelte SFC so the bare-hex rule scans the
+  // module's CSS but not its template markup (SVG fills, inline attrs).
+  let inStyle = false;
+  readFileSync(file, 'utf8')
+    .split('\n')
+    .forEach((raw, i) => {
+      const n = i + 1;
+      if (isSvelte && /<style\b/.test(raw)) inStyle = true;
+      const cssContext = isCss || (isSvelte && inStyle);
 
-        if (REMOVED_TOKEN.test(raw)) {
-            flag(file, n, 'removed token --primary-hue/--primary-sat (derive via color-mix from --primary)', raw);
-        }
-        if (SRGB_MIX.test(raw)) {
-            flag(file, n, 'color-mix(in srgb …) — use `in oklab`', raw);
-        }
-        if (!/allow-hex/.test(raw)) {
-            // Rule 3 — fallback value must equal canonical light token.
-            if (TOKENS) {
-                let m;
-                VAR_FALLBACK.lastIndex = 0;
-                while ((m = VAR_FALLBACK.exec(raw)) !== null) {
-                    const canon = TOKENS.light[m[1]];
-                    if (canon && normHex(m[2]) !== canon.toLowerCase()) {
-                        flag(file, n, `fallback ${m[2]} for ${m[1]} ≠ canonical light ${canon} (tokens.json)`, raw);
-                    }
-                }
+      if (REMOVED_TOKEN.test(raw)) {
+        flag(
+          file,
+          n,
+          'removed token --primary-hue/--primary-sat (derive via color-mix from --primary)',
+          raw,
+        );
+      }
+      if (SRGB_MIX.test(raw)) {
+        flag(file, n, 'color-mix(in srgb …) — use `in oklab`', raw);
+      }
+      if (!/allow-hex/.test(raw)) {
+        // Rule 3 — fallback value must equal canonical light token.
+        if (TOKENS) {
+          let m;
+          VAR_FALLBACK.lastIndex = 0;
+          while ((m = VAR_FALLBACK.exec(raw)) !== null) {
+            const canon = TOKENS.light[m[1]];
+            if (canon && normHex(m[2]) !== canon.toLowerCase()) {
+              flag(
+                file,
+                n,
+                `fallback ${m[2]} for ${m[1]} ≠ canonical light ${canon} (tokens.json)`,
+                raw,
+              );
             }
-            // Rule 4 — bare hex in any CSS context (a .css file, or a Svelte
-            // <style> block). A var() fallback slot is fine (Rule 3 vets it);
-            // a sanctioned --iwac-vis-* data colour is exempt.
-            if (cssContext && !/--iwac-vis-/.test(raw)) {
-                let m;
-                HEX.lastIndex = 0;
-                while ((m = HEX.exec(raw)) !== null) {
-                    const before = raw.slice(0, m.index);
-                    const isFallback = /,\s*$/.test(before)
-                        && (before.match(/var\(/g) || []).length > (before.match(/\)/g) || []).length;
-                    if (!isFallback) {
-                        flag(file, n, 'bare hex outside a var() fallback (use a theme token, or mark /* allow-hex */)', raw);
-                        break;
-                    }
-                }
-            }
+          }
         }
+        // Rule 4 — bare hex in any CSS context (a .css file, or a Svelte
+        // <style> block). A var() fallback slot is fine (Rule 3 vets it);
+        // a sanctioned --iwac-vis-* data colour is exempt.
+        if (cssContext && !/--iwac-vis-/.test(raw)) {
+          let m;
+          HEX.lastIndex = 0;
+          while ((m = HEX.exec(raw)) !== null) {
+            const before = raw.slice(0, m.index);
+            const isFallback =
+              /,\s*$/.test(before) &&
+              (before.match(/var\(/g) || []).length > (before.match(/\)/g) || []).length;
+            if (!isFallback) {
+              flag(
+                file,
+                n,
+                'bare hex outside a var() fallback (use a theme token, or mark /* allow-hex */)',
+                raw,
+              );
+              break;
+            }
+          }
+        }
+      }
 
-        if (isSvelte && /<\/style>/.test(raw)) inStyle = false;
+      if (isSvelte && /<\/style>/.test(raw)) inStyle = false;
     });
 }
 
 walk(SRC_DIR).forEach(scan);
 
 if (violations.length) {
-    console.error(`\n✗ theme-token guard: ${violations.length} violation(s)\n`);
-    for (const v of violations) {
-        console.error(`  ${v.file}:${v.line}  ${v.msg}`);
-        console.error(`      ${v.snippet}`);
-    }
-    console.error('\nSee IWAC-theme/docs/DESIGN-SYSTEM.md. Canonical values: tokens.json');
-    console.error('(regenerate with `npm run build:tokens` in IWAC-theme).\n');
-    process.exit(1);
+  console.error(`\n✗ theme-token guard: ${violations.length} violation(s)\n`);
+  for (const v of violations) {
+    console.error(`  ${v.file}:${v.line}  ${v.msg}`);
+    console.error(`      ${v.snippet}`);
+  }
+  console.error('\nSee IWAC-theme/docs/DESIGN-SYSTEM.md. Canonical values: tokens.json');
+  console.error('(regenerate with `npm run build:tokens` in IWAC-theme).\n');
+  process.exit(1);
 }
 
 console.log('✓ theme-token guard: no violations');

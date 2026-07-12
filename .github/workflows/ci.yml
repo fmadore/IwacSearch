@@ -1,9 +1,9 @@
 # CI: lint, type-check, and build the Svelte client on every PR + push to main.
 #
-# We deliberately do NOT run PHP tests here yet — the indexer requires a
-# live Typesense instance to integration-test, and unit-testable seams
-# (the mappers, the authority resolver) don't have a test harness yet.
-# Adding php-test-runner is a follow-up task.
+# We deliberately do NOT run PHP integration tests here yet — the indexer
+# requires a live Typesense instance. Unit tests for the pure seams (the
+# mappers, CountryResolver, FacetCatalog, PresetCatalog) are the next step;
+# see docs/engineering-roadmap.md.
 
 name: CI
 
@@ -44,20 +44,33 @@ jobs:
       - name: Build
         run: npm run build
 
-      - name: Verify build output exists
+      # asset/dist is committed (production has no Node toolchain), so a PR
+      # that edits src/svelte* without rebuilding would ship a stale bundle.
+      # The Vite lib build has fixed filenames and no content hashes, so a
+      # byte diff against the committed output is the sync check.
+      - name: Verify committed bundles match the source
         run: |
           test -f asset/dist/iwac-search.js
           test -f asset/dist/iwac-search.css
+          test -f asset/dist/iwac-search-header.js
+          test -f asset/dist/iwac-search-header.css
+          git diff --exit-code -- asset/dist \
+            || (echo '::error::asset/dist is stale — run `npm run build` and commit the result' && exit 1)
 
   php:
     name: PHP module (syntax check)
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        # 8.2 = composer.json floor (production containers may lag);
+        # 8.4 = current.
+        php-version: ['8.2', '8.4']
     steps:
       - uses: actions/checkout@v6
 
       - uses: shivammathur/setup-php@v2
         with:
-          php-version: '8.4'
+          php-version: ${{ matrix.php-version }}
           coverage: none
           tools: composer:v2
 
@@ -69,6 +82,6 @@ jobs:
 
       - name: PHP syntax check (lint pass)
         run: |
-          find Module.php cli src -name '*.php' -print0 \
+          find Module.php config cli src view \( -name '*.php' -o -name '*.phtml' \) -print0 \
             | xargs -0 -n1 php -l > /tmp/php-lint.log 2>&1 \
             || (cat /tmp/php-lint.log && exit 1)
