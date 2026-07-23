@@ -28,6 +28,7 @@
 <script lang="ts">
   import type { IwacFacetCount } from '../lib/types';
   import { facetLabel, facetValueLabel, useI18n } from '../lib/i18n';
+  import { MAX_FACET_VALUES } from '../lib/typesense';
   import Icon from './Icon.svelte';
 
   /**
@@ -147,11 +148,11 @@
   const showSearch = $derived(counts.length > searchThreshold);
 
   // Does the facet hold more values than were loaded? If so, the search box
-  // must hit the server to reach them; otherwise the loaded list is complete.
-  // 50 = the max_facet_values the search request sends (a full page implies
-  // truncation when total_values isn't reported).
+  // must hit the server to reach them; otherwise the loaded list is complete
+  // (a full max_facet_values page implies truncation when total_values isn't
+  // reported).
   const hasMoreValues = $derived(
-    totalValues != null ? totalValues > counts.length : counts.length >= 50,
+    totalValues != null ? totalValues > counts.length : counts.length >= MAX_FACET_VALUES,
   );
   const useServerSearch = $derived(!!onFacetSearch && hasMoreValues);
 

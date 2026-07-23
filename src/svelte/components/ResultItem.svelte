@@ -7,6 +7,7 @@
     typeLabel as typeLabelFor,
     useI18n,
   } from '../lib/i18n';
+  import { sanitizeHighlight } from '../lib/sanitize';
   import { sizedThumbnail } from '../lib/thumbnail';
   import { parseMentionsByYear, densifyByYear } from '../lib/sparkline';
   import Icon from './Icon.svelte';
@@ -46,7 +47,7 @@
    *
    * Snippet sanitisation: Typesense returns highlighted HTML with <mark> tags.
    * We HTML-escape the snippet client-side and only reinstate literal
-   * <mark>/</mark> — see sanitizeSnippet().
+   * <mark>/</mark> — see lib/sanitize.ts.
    */
 
   interface Props {
@@ -195,14 +196,14 @@
       hit.highlights?.find((h) => h.field === 'abstract')?.snippet ??
       '',
   );
-  const snippet = $derived(sanitizeSnippet(rawSnippet));
+  const snippet = $derived(sanitizeHighlight(rawSnippet));
 
   // Title with the query match marked. highlight_full_fields covers title_txt,
   // so `value` carries the COMPLETE title. Empty (→ plain title) when no match.
   const titleMarkup = $derived.by(() => {
     const h = hit.highlights?.find((x) => x.field === 'title_txt');
     const s = h?.value ?? h?.snippet ?? '';
-    return s.includes('<mark>') ? sanitizeSnippet(s) : '';
+    return s.includes('<mark>') ? sanitizeHighlight(s) : '';
   });
 
   // ── Match attribution: WHY is this hit shown? ───────────────────────
@@ -221,7 +222,7 @@
       out.push({
         field: h.field,
         label: facetLabel(h.field, locale),
-        snippet: sanitizeSnippet(raw),
+        snippet: sanitizeHighlight(raw),
       });
     }
     return out.slice(0, 3);
@@ -287,26 +288,6 @@
     }
     return year ? String(year) : '';
   }
-
-  /**
-   * Escape every HTML-significant character, then re-introduce only the literal
-   * <mark>/</mark> tags Typesense uses to surround matches. Defense in depth.
-   */
-  function sanitizeSnippet(html: string): string {
-    if (!html) return '';
-    const escaped = html.replace(
-      /[&<>"']/g,
-      (c) =>
-        ({
-          '&': '&amp;',
-          '<': '&lt;',
-          '>': '&gt;',
-          '"': '&quot;',
-          "'": '&#39;',
-        })[c]!,
-    );
-    return escaped.replace(/&lt;mark&gt;/g, '<mark>').replace(/&lt;\/mark&gt;/g, '</mark>');
-  }
 </script>
 
 <!-- A source/country chip rendered as a facet toggle button. -->
@@ -364,7 +345,7 @@
 <!-- Title link, with the query match highlighted in place when present. -->
 {#snippet titleLink()}
   {#if titleMarkup}
-    <!-- sanitizeSnippet escaped everything but literal mark tags -->
+    <!-- sanitizeHighlight escaped everything but literal mark tags -->
     <!-- eslint-disable-next-line svelte/no-at-html-tags -->
     <a href={itemUrl}>{@html titleMarkup}</a>
   {:else}

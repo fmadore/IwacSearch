@@ -125,10 +125,14 @@ The entity collection (`iwac_index`) carries occurrence metrics — `frequency`,
 during the content pass (a reverse scan of the public content that references
 each entity), so it needs no second database pass.
 
-Adding a content subset = drop a `MyMapper extends AbstractMapper` declaring its
-`classIds()` + `readTerms()`, and register it in the `MapperRegistry` in
-`cli/reindex.php` and `Job\BulkReindex`. The reindexer iterates
-`MapperRegistry::subsets()`, so the orchestrator needs no edit.
+Adding a content subset = drop a `MyMapper extends AbstractMapper` declaring
+its `classIds()` + `readTerms()`, and register it in
+`MapperRegistry::default()` (`src/Indexer/Mapper/MapperRegistry.php`) — the
+ONE registration point both the bulk pipeline (`ReindexOrchestrator`) and
+the incremental pipeline (`IncrementalIndexerFactory`) construct from.
+Never register mappers in the entry points (`cli/reindex.php`,
+`Job\BulkReindex`) — they are thin wrappers. The reindexer iterates
+`MapperRegistry::subsets()`, so the orchestrator needs no edit either.
 
 ## Connection
 

@@ -38,7 +38,8 @@ const bundles = {
 
 // Vite's lib mode takes a single entry, so we select one per build via the
 // IWAC_BUNDLE env var (`cross-env IWAC_BUNDLE=header vite build`). The npm
-// scripts drive both in sequence; CI runs them in parallel via matrix.
+// `build` script drives both in sequence — locally and in CI (one job, so
+// the committed-bundle diff check sees both outputs together).
 const activeBundleName = (process.env.IWAC_BUNDLE ?? 'public') as keyof typeof bundles;
 const active = bundles[activeBundleName] ?? bundles.public;
 

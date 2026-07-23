@@ -55,11 +55,10 @@ class MaintenanceController extends AbstractActionController
      *   atomic-swaps the iwac_current alias to it. We surface the
      *   base name in the page description and flash messages so the
      *   prose stays accurate after every schema bump.
-     */
-    /**
-     * @param Closure(): TypesenseClient|null $clientFactory Lazy client so a
-     *   missing Docker secret / unreachable Typesense degrades to an
-     *   "unreachable" status panel rather than a 500.
+     * @param Closure(): TypesenseClient|null $clientFactory Lazy, memoizing
+     *   client factory (TypesenseClientLazy) so a missing Docker secret /
+     *   unreachable Typesense degrades to an "unreachable" status panel
+     *   rather than a 500.
      */
     public function __construct(
         private readonly string $collectionBaseName = 'iwac_v1',
@@ -69,19 +68,11 @@ class MaintenanceController extends AbstractActionController
     ) {
     }
 
-    private ?TypesenseClient $cachedClient = null;
-
-    /** Resolve the lazy client once; null if unconfigured/unreachable. */
+    /** Resolve the lazy client; null if unconfigured/unreachable. */
     private function client(): ?TypesenseClient
     {
-        if ($this->clientFactory === null) {
-            return null;
-        }
-        if ($this->cachedClient !== null) {
-            return $this->cachedClient;
-        }
         try {
-            return $this->cachedClient = ($this->clientFactory)();
+            return $this->clientFactory !== null ? ($this->clientFactory)() : null;
         } catch (Throwable) {
             return null;
         }

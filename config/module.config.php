@@ -365,10 +365,11 @@ return [
             'index_collection_alias' => 'iwac_index_current',
         ],
         'public_search_key' => [
-            // Constraints baked into every public scoped key. See "Security
-            // model" in the roadmap. Loosening any of these requires sign-off.
-            'filter_by'          => 'is_public:=true',
-            'exclude_fields'     => 'ocr_text',
+            // TTL of the public scoped key. The key's SECURITY constraints
+            // (filter_by is_public:=true + exclude_fields ocr_text) are NOT
+            // configurable — they are hardcoded in
+            // TypesenseSearchKeyProvider::mintPublicScopedKey(), the single
+            // source of truth. Loosening them there requires sign-off.
             'expires_at_seconds' => 3600,
         ],
     ],

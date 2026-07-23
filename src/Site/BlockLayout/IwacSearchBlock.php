@@ -3,6 +3,8 @@ declare(strict_types=1);
 
 namespace IwacSearch\Site\BlockLayout;
 
+use HTMLPurifier;
+use IwacSearch\Asset\SvelteAssets;
 use IwacSearch\Browse\FacetCatalog;
 use IwacSearch\Search\InitialResponseRenderer;
 use IwacSearch\Search\PresetCatalog;
@@ -11,7 +13,9 @@ use Laminas\View\Renderer\PhpRenderer;
 use Omeka\Api\Representation\SitePageBlockRepresentation;
 use Omeka\Api\Representation\SitePageRepresentation;
 use Omeka\Api\Representation\SiteRepresentation;
+use Omeka\Entity\SitePageBlock;
 use Omeka\Site\BlockLayout\AbstractBlockLayout;
+use Omeka\Stdlib\ErrorStore;
 
 /**
  * Page block that drops the IwacSearch surface into any Omeka Site page.
@@ -44,18 +48,47 @@ use Omeka\Site\BlockLayout\AbstractBlockLayout;
  * dropdown existed have no `preset` key and default to `custom`, so their stored
  * filters keep working unchanged.
  *
- * locked_filters uses Typesense filter_by syntax directly. They're enforced
- * server-side at scoped-key mint time (not just hidden in the UI), so the
- * block instance cannot leak data outside its scope even if the client
- * tampers with the request.
+ * locked_filters uses Typesense filter_by syntax directly. NOTE: they are
+ * COSMETIC scoping only — the client applies them to every query this block
+ * issues, but they are NOT baked into the scoped search key, so a tampering
+ * client can drop them and search the whole public corpus. Privacy is
+ * enforced solely by the scoped key's own constraints (is_public:=true +
+ * ocr_text exclusion, minted in TypesenseSearchKeyProvider). Never use
+ * locked_filters to hide non-public data.
  */
 class IwacSearchBlock extends AbstractBlockLayout
 {
     public function __construct(
         private readonly InitialResponseRenderer $initialRenderer,
+        private readonly HTMLPurifier $htmlPurifier,
         private readonly string $contentAlias = 'iwac_current',
         private readonly string $indexAlias = 'iwac_index_current',
     ) {
+    }
+
+    /**
+     * Sanitise the block data before it is persisted (mirrors Omeka core's
+     * Html block). intro_html is written by site editors and rendered raw on
+     * the public page, so it MUST be purified on save — page-edit rights are
+     * much broader than global admin, and an unpurified value is stored XSS.
+     * prominent_facets is normalised against the catalog so unknown field
+     * names can't persist in block data.
+     */
+    public function onHydrate(SitePageBlock $block, ErrorStore $errorStore): void
+    {
+        $data = $block->getData() ?? [];
+
+        $introHtml = (string) ($data['intro_html'] ?? '');
+        $data['intro_html'] = $introHtml === '' ? '' : $this->htmlPurifier->purify($introHtml);
+
+        $data['prominent_facets'] = FacetCatalog::normaliseFacets(
+            is_iterable($data['prominent_facets'] ?? null) ? $data['prominent_facets'] : []
+        );
+
+        $perPage = (int) ($data['results_per_page'] ?? 10);
+        $data['results_per_page'] = max(1, min(50, $perPage));
+
+        $block->setData($data);
     }
 
     public function getLabel()
@@ -84,21 +117,11 @@ class IwacSearchBlock extends AbstractBlockLayout
         $title            = $data['title']            ?? '';
         $introHtml        = $data['intro_html']       ?? '';
         $lockedFilters    = $data['locked_filters']   ?? '';
-        // Default mirrors what the standalone /search route shows. Block
-        // admin can override per-instance via the form below.
+        // Default mirrors what the standalone /search route shows — the
+        // SAME constant, so the two can't drift. Block admin can override
+        // per-instance via the form below.
         $prominentFacets  = $data['prominent_facets']
-            ?? [
-                'type_s',
-                'country_ss',
-                'newspaper_ss',
-                'places_ss',
-                'persons_ss',
-                'organisations_ss',
-                'topics_ss',
-                'gemini_polarite_ss',
-                'gemini_centralite_ss',
-                'gemini_subjectivite',
-            ];
+            ?? SearchDefaults::CONTENT_PROMINENT_FACETS;
         // Empty = "use the scope's own default sort". An explicit choice
         // overrides it (when valid for the scope's collection — see render()).
         $defaultSort      = $data['default_sort']     ?? '';
@@ -185,7 +208,7 @@ class IwacSearchBlock extends AbstractBlockLayout
             <div class="field-meta">
                 <label for="iwac-search-locked-<?= $escAttr($uid) ?>"><?= $esc($t('Locked filters (Typesense filter_by)')) ?></label>
                 <div class="field-description">
-                    <?= $esc($t('Custom scope only. Enforced server-side. Example: country_ss:=`Burkina Faso` && date:>=946684800')) ?>
+                    <?= $esc($t('Custom scope only. Applied to every query from this block (cosmetic scoping — not a privacy boundary). Example: country_ss:=`Burkina Faso` && date:>=946684800')) ?>
                 </div>
             </div>
             <div class="inputs">
@@ -279,23 +302,9 @@ class IwacSearchBlock extends AbstractBlockLayout
 
         // Append the compiled Svelte bundle once per request. headScript and
         // headLink dedupe identical URLs, so calling this from N blocks on
-        // the same page still results in one <script>/<link>. Matches the
-        // standalone /search route (see Module::injectSvelteAssets).
-        $view->headLink()->appendStylesheet(
-            $view->assetUrl('css/iwac-search.css', 'IwacSearch')
-        );
-        // The compiled Svelte bundle's CSS — every component-scoped style
-        // lives here. Vite's IIFE lib build does NOT auto-inject this from
-        // the JS at runtime; without this <link> the components mount but
-        // render unstyled.
-        $view->headLink()->appendStylesheet(
-            $view->assetUrl('dist/iwac-search.css', 'IwacSearch')
-        );
-        $view->headScript()->appendFile(
-            $view->assetUrl('dist/iwac-search.js', 'IwacSearch'),
-            'text/javascript',
-            ['defer' => true]
-        );
+        // the same page still results in one <script>/<link>. Same helper
+        // the standalone /search route uses (Module::injectSvelteAssets).
+        SvelteAssets::injectSearchApp($view);
 
         // Resolve the block's Scope. A preset (whole corpus, one country,
         // references, or the entity index) drives the collection, locked
@@ -378,12 +387,20 @@ class IwacSearchBlock extends AbstractBlockLayout
             $bootstrap['initial_response'] = $initial;
         }
 
+        // Re-purify at render time as well: blocks saved before onHydrate()
+        // existed persist whatever the editor typed, and the template outputs
+        // this raw. Cheap for the short intro strings blocks carry.
+        $introHtml = (string) ($data['intro_html'] ?? '');
+        if ($introHtml !== '') {
+            $introHtml = $this->htmlPurifier->purify($introHtml);
+        }
+
         return $view->partial($templateViewScript, [
             'block'      => $block,
             'data'       => $data,
             'bootstrap'  => $bootstrap,
             'title'      => $data['title']      ?? '',
-            'intro_html' => $data['intro_html'] ?? '',
+            'intro_html' => $introHtml,
         ]);
     }
 }

@@ -4,14 +4,8 @@ declare(strict_types=1);
 namespace IwacSearch\Indexer;
 
 use Doctrine\DBAL\Connection;
-use IwacSearch\Indexer\Mapper\ArticleMapper;
-use IwacSearch\Indexer\Mapper\AudiovisualMapper;
-use IwacSearch\Indexer\Mapper\DocumentMapper;
 use IwacSearch\Indexer\Mapper\IndexEntityMapper;
 use IwacSearch\Indexer\Mapper\MapperRegistry;
-use IwacSearch\Indexer\Mapper\PhotographMapper;
-use IwacSearch\Indexer\Mapper\PublicationMapper;
-use IwacSearch\Indexer\Mapper\ReferenceMapper;
 use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
 use Typesense\Client as TypesenseClient;
@@ -52,14 +46,7 @@ final class ReindexOrchestrator
         $countries   = new CountryResolver($this->moduleRoot . '/data/newspaper-countries.json');
         $occurrences = new EntityOccurrences();
 
-        $registry = new MapperRegistry([
-            new ArticleMapper($authority, $countries),
-            new PublicationMapper($authority, $countries),
-            new DocumentMapper($authority, $countries),
-            new AudiovisualMapper($authority, $countries),
-            new PhotographMapper($authority, $countries),
-            new ReferenceMapper($authority, $countries),
-        ]);
+        $registry = MapperRegistry::default($authority, $countries);
 
         $reindexer = new Reindexer(
             typesense:     $this->typesense,

@@ -120,6 +120,9 @@ final class PresetCatalog
         ['name' => 'Togo',          'slug' => 'togo'],
     ];
 
+    /** @var ?array<string, Preset> Memoized preset map — get()/optionsList()/findByLegacySlug() all call all(). */
+    private static ?array $cache = null;
+
     /**
      * Build the ordered preset map: All · 6 countries · References · Index.
      *
@@ -127,6 +130,10 @@ final class PresetCatalog
      */
     public static function all(): array
     {
+        if (self::$cache !== null) {
+            return self::$cache;
+        }
+
         $presets = [];
 
         // Whole corpus — no lock.
@@ -157,6 +164,7 @@ final class PresetCatalog
                 legacySlug:    $country['slug'],
                 // The scope IS this country — don't repeat it on every card.
                 hideCountry:   true,
+                redirectQuery: ['f.country_ss' => $country['name']],
             );
         }
 
@@ -169,6 +177,7 @@ final class PresetCatalog
             facets:        self::REFERENCES_FACETS,
             defaultSort:   'date:desc',
             legacySlug:    'references',
+            redirectQuery: ['f.type_s' => 'reference'],
         );
 
         // Entity index — the SEPARATE authority collection.
@@ -182,17 +191,12 @@ final class PresetCatalog
             legacySlug:    'index',
         );
 
-        return $presets;
+        return self::$cache = $presets;
     }
 
     public static function get(string $key): ?Preset
     {
         return self::all()[$key] ?? null;
-    }
-
-    public static function has(string $key): bool
-    {
-        return isset(self::all()[$key]);
     }
 
     /**

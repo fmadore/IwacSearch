@@ -44,9 +44,10 @@ use Typesense\Client as TypesenseClient;
  */
 final class InitialResponseRenderer
 {
-    private ?TypesenseClient $cachedClient = null;
-
     public function __construct(
+        // Lazily-resolved, memoizing client factory (TypesenseClientLazy) —
+        // a missing secret / down Typesense surfaces inside render()'s
+        // catch, so the page still renders (without an initial response).
         /** @var Closure(): TypesenseClient */
         private readonly Closure $clientFactory,
         private readonly LoggerInterface $logger = new NullLogger(),
@@ -160,7 +161,7 @@ final class InitialResponseRenderer
             $canRetry = $attempt === 0 && isset($body['searches'][0]['stopwords']);
 
             try {
-                $response = $this->client()->multiSearch->perform($body);
+                $response = ($this->clientFactory)()->multiSearch->perform($body);
             } catch (Throwable $e) {
                 if ($canRetry && $this->isStopwordError($e->getMessage())) {
                     $this->logStopwordRetry($e->getMessage());
@@ -282,8 +283,4 @@ final class InitialResponseRenderer
         return $out;
     }
 
-    private function client(): TypesenseClient
-    {
-        return $this->cachedClient ??= ($this->clientFactory)();
-    }
 }

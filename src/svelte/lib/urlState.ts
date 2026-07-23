@@ -47,7 +47,10 @@ export function readUrlState(href: string = window.location.href, prefix = ''): 
 
   return {
     q: params.get(`${prefix}q`) ?? '',
-    page: clampInt(params.get(`${prefix}page`), 1, 50, 1),
+    // Sanity ceiling only — Pagination computes totalPages straight from
+    // `found` ("every match is reachable"), so a shared deep link must not
+    // be silently re-clamped to an arbitrary low page.
+    page: clampInt(params.get(`${prefix}page`), 1, 10000, 1),
     sort: params.get(`${prefix}sort`) ?? '_text_match:desc',
     filters,
     yearRange: parseYearRange(params, prefix),

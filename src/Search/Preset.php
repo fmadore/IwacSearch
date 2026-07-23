@@ -33,8 +33,13 @@ namespace IwacSearch\Search;
 final class Preset
 {
     /**
-     * @param list<string> $facets Schema field names rendered as facet
-     *                             groups, in display order.
+     * @param list<string>          $facets        Schema field names rendered
+     *                                             as facet groups, in display order.
+     * @param array<string, string> $redirectQuery Query params the legacy
+     *                                             /browse/{legacySlug} redirect appends to /search
+     *                                             (e.g. ['f.country_ss' => 'Bénin']). Declared by the
+     *                                             catalog next to lockedFilters so the redirect never
+     *                                             has to reverse-parse the filter string.
      */
     public function __construct(
         public readonly string $key,
@@ -45,6 +50,7 @@ final class Preset
         public readonly string $defaultSort,
         public readonly ?string $legacySlug = null,
         public readonly bool $hideCountry = false,
+        public readonly array $redirectQuery = [],
     ) {
     }
 

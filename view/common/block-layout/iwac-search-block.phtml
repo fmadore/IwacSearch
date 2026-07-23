@@ -5,7 +5,8 @@
  * @var array $data        Raw block data (site_block.data).
  * @var array $bootstrap   Config blob the Svelte client reads on mount.
  * @var string $title
- * @var string $intro_html Already-validated HTML — admin-provided, not user.
+ * @var string $intro_html HTML purified by IwacSearchBlock (onHydrate on
+ *                          save, re-purified in render() for legacy blocks).
  *
  * Mount target + bootstrap script are rendered by the shared
  * common/iwac-search-mount partial (one source of truth for the
@@ -29,7 +30,7 @@ $blockId = (int) $block->id();
 
     <?php if (trim($intro_html) !== ''): ?>
         <div class="iwac-search-block__intro">
-            <?php // intro_html is admin-authored; surface as raw HTML. ?>
+            <?php // Purified HTML (see IwacSearchBlock::onHydrate / render). ?>
             <?= $intro_html ?>
         </div>
     <?php endif; ?>

@@ -5,7 +5,6 @@
    * Slide-in overlay panel — the canonical shape used by:
    *
    *   - the public mobile filter drawer (App.svelte)
-   *   - the admin CRUD edit/create panel (ConfigFormDrawer.svelte)
    *   - any future "open a side panel for one task" surface
    *
    * What it owns:
@@ -44,7 +43,7 @@
     title?: string;
     /** Side the panel slides in from. */
     side?: 'right' | 'left';
-    /** CSS width (or block-size on left/right). Defaults to ~22rem. */
+    /** CSS width (or block-size on left/right). Defaults to min(42rem, 100vw). */
     width?: string;
     /** ARIA label override — only useful when `title` is empty. */
     ariaLabel?: string;

@@ -4,6 +4,9 @@
   "description": "Svelte client for the IwacSearch Omeka S module — public discovery surface backed by Typesense.",
   "private": true,
   "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "dev": "vite build --watch",
     "build": "npm run lint:theme && npm run lint:drift && npm run build:public && npm run build:header",
@@ -12,9 +15,9 @@
     "check": "svelte-check --tsconfig ./tsconfig.json",
     "lint:theme": "node scripts/check-theme-tokens.js",
     "lint:drift": "node scripts/check-schema-drift.js",
-    "lint": "npm run lint:theme && npm run lint:drift && eslint src/svelte src/svelte-shared && prettier --check \"src/svelte/**/*.{ts,svelte}\" \"src/svelte-shared/**/*.{ts,svelte}\" \"*.{ts,json,md}\"",
-    "lint:fix": "eslint src/svelte src/svelte-shared --fix && prettier --write \"src/svelte/**/*.{ts,svelte}\" \"src/svelte-shared/**/*.{ts,svelte}\" \"*.{ts,json,md}\"",
-    "format": "prettier --write \"src/svelte/**/*.{ts,svelte}\" \"src/svelte-shared/**/*.{ts,svelte}\" \"*.{ts,json,md}\""
+    "lint": "npm run lint:theme && npm run lint:drift && eslint src/svelte src/svelte-shared scripts && prettier --check \"src/svelte/**/*.{ts,svelte}\" \"src/svelte-shared/**/*.{ts,svelte}\" \"scripts/**/*.js\" \"*.{ts,json,md}\"",
+    "lint:fix": "eslint src/svelte src/svelte-shared scripts --fix && prettier --write \"src/svelte/**/*.{ts,svelte}\" \"src/svelte-shared/**/*.{ts,svelte}\" \"scripts/**/*.js\" \"*.{ts,json,md}\"",
+    "format": "prettier --write \"src/svelte/**/*.{ts,svelte}\" \"src/svelte-shared/**/*.{ts,svelte}\" \"scripts/**/*.js\" \"*.{ts,json,md}\""
   },
   "devDependencies": {
     "@eslint/js": "^10.0.0",

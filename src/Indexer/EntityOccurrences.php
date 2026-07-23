@@ -16,7 +16,14 @@ namespace IwacSearch\Indexer;
  */
 final class EntityOccurrences
 {
-    /** @var array<int, array{count:int, years:list<int>, countries:array<string,true>}> */
+    /**
+     * Per-entity accumulator. `by_year` is a year → count histogram built
+     * incrementally (not a raw list of every occurrence year — a heavily
+     * cited entity would otherwise hold thousands of ints for aggregate()
+     * to rescan).
+     *
+     * @var array<int, array{count:int, by_year:array<int,int>, countries:array<string,true>}>
+     */
     private array $byEntity = [];
 
     /**
@@ -40,11 +47,11 @@ final class EntityOccurrences
 
         foreach ($ids as $eid) {
             if (!isset($this->byEntity[$eid])) {
-                $this->byEntity[$eid] = ['count' => 0, 'years' => [], 'countries' => []];
+                $this->byEntity[$eid] = ['count' => 0, 'by_year' => [], 'countries' => []];
             }
             $this->byEntity[$eid]['count']++;
             if (is_int($year)) {
-                $this->byEntity[$eid]['years'][] = $year;
+                $this->byEntity[$eid]['by_year'][$year] = ($this->byEntity[$eid]['by_year'][$year] ?? 0) + 1;
             }
             foreach ($countries as $c) {
                 $this->byEntity[$eid]['countries'][$c] = true;
@@ -67,18 +74,15 @@ final class EntityOccurrences
                 'last_year' => null, 'mentions_by_year' => [],
             ];
         }
-        $years = $e['years'];
         // Per-year occurrence counts (ascending), for the entity-card sparkline.
-        $byYear = [];
-        foreach ($years as $y) {
-            $byYear[$y] = ($byYear[$y] ?? 0) + 1;
-        }
+        $byYear = $e['by_year'];
         ksort($byYear);
+        $years = array_keys($byYear);
         return [
             'frequency'  => $e['count'],
             'countries'  => array_keys($e['countries']),
-            'first_year' => $years !== [] ? min($years) : null,
-            'last_year'  => $years !== [] ? max($years) : null,
+            'first_year' => $years !== [] ? $years[0] : null,
+            'last_year'  => $years !== [] ? $years[count($years) - 1] : null,
             'mentions_by_year' => $byYear,
         ];
     }

@@ -29,6 +29,9 @@ final class IwacSearchBlockFactory implements FactoryInterface
 
         return new IwacSearchBlock(
             initialRenderer: $container->get(InitialResponseRenderer::class),
+            // Same purifier Omeka core's Html block uses — onHydrate() runs
+            // editor-supplied intro_html through it before persisting.
+            htmlPurifier:    $container->get('Omeka\HtmlPurifier'),
             contentAlias:    $typesense['collection_alias'] ?? 'iwac_current',
             indexAlias:      $typesense['index_collection_alias'] ?? 'iwac_index_current',
         );

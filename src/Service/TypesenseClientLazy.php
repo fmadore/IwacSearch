@@ -30,11 +30,12 @@ use Typesense\Client as TypesenseClient;
  *
  *   clientFactory: TypesenseClientLazy::fromContainer($container),
  *
- * The behavioural contract — first call resolves the service, the
- * resulting client is cached by the consumer for subsequent uses,
- * and any RuntimeException from missing/unreadable Docker secrets
- * surfaces *inside* the consumer's catch site rather than at factory
- * dispatch time — is now documented in one place.
+ * The behavioural contract — first call resolves the service, later calls
+ * return the same client, and any RuntimeException from missing/unreadable
+ * Docker secrets surfaces *inside* the consumer's catch site rather than at
+ * factory dispatch time — lives in one place: the closure itself memoizes,
+ * so consumers call it directly instead of keeping their own
+ * `?TypesenseClient $cachedClient` fields (three classes used to).
  */
 final class TypesenseClientLazy
 {
@@ -43,6 +44,9 @@ final class TypesenseClientLazy
      */
     public static function fromContainer(ContainerInterface $container): Closure
     {
-        return fn(): TypesenseClient => $container->get(TypesenseClient::class);
+        $client = null;
+        return function () use ($container, &$client): TypesenseClient {
+            return $client ??= $container->get(TypesenseClient::class);
+        };
     }
 }

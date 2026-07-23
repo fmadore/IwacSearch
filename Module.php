@@ -105,8 +105,8 @@ class Module extends AbstractModule
      * api.create.post IS now attached: since the indexer reads the same
      * Omeka database the save just wrote to, a new item gets a complete
      * document immediately — no longer the half-baked placeholder the old
-     * HF-only pipeline would have produced. Non-content items (photographs,
-     * authority records) are skipped inside the indexer.
+     * HF-only pipeline would have produced. Non-content items (authority
+     * records, unmapped classes) are skipped inside the indexer.
      *
      * The admin CRUD surface (M3.5) doesn't need event wiring; it loads
      * its own bundle via the view template.
@@ -135,42 +135,51 @@ class Module extends AbstractModule
 
         // M4 incremental indexing — handler bodies live in
         // Indexer\ItemEventListener so they're testable + so Module.php
-        // doesn't accumulate listener logic. Resolving the listener
-        // here (rather than at fire time) is fine because the listener
-        // itself holds the IncrementalIndexer, which lazy-resolves the
-        // TypesenseClient on first use.
-        $listener = $this->resolveItemEventListener();
-        if ($listener !== null) {
-            $itemAdapter = \Omeka\Api\Adapter\ItemAdapter::class;
-            $sharedEventManager->attach($itemAdapter, 'api.create.post', [$listener, 'onItemCreate']);
-            $sharedEventManager->attach($itemAdapter, 'api.update.post', [$listener, 'onItemUpdate']);
-            $sharedEventManager->attach($itemAdapter, 'api.delete.post', [$listener, 'onItemDelete']);
+        // doesn't accumulate listener logic.
+        //
+        // Resolution is DEFERRED to fire time: building the listener here
+        // would construct the whole indexer graph (six mappers,
+        // EntityAuthority, CountryResolver's newspaper-countries.json parse)
+        // on every request — including anonymous GETs where no api.*.post
+        // can ever fire. The memoized closure makes the first write event of
+        // a request pay the construction cost once; read requests pay nothing.
+        $listener = null;
+        $deferred = function (string $method) use (&$listener): callable {
+            return function (Event $event) use (&$listener, $method): void {
+                $listener ??= $this->resolveItemEventListener();
+                $listener?->$method($event);
+            };
+        };
 
-            // Batch operations hydrate entities directly — the per-item
-            // events above never fire for them. Privacy-relevant: a batch
-            // visibility flip must reach Typesense promptly, because the
-            // public key filters on the INDEXED is_public value.
-            $sharedEventManager->attach($itemAdapter, 'api.batch_create.post', [$listener, 'onItemBatchCreate']);
-            $sharedEventManager->attach($itemAdapter, 'api.batch_update.post', [$listener, 'onItemBatchUpdate']);
-            $sharedEventManager->attach($itemAdapter, 'api.batch_delete.post', [$listener, 'onItemBatchDelete']);
+        $itemAdapter = \Omeka\Api\Adapter\ItemAdapter::class;
+        $sharedEventManager->attach($itemAdapter, 'api.create.post', $deferred('onItemCreate'));
+        $sharedEventManager->attach($itemAdapter, 'api.update.post', $deferred('onItemUpdate'));
+        $sharedEventManager->attach($itemAdapter, 'api.delete.post', $deferred('onItemDelete'));
 
-            // Direct media edits (upload to an existing item via the API,
-            // replace file, toggle visibility, delete) fire no item event,
-            // yet thumbnail_url / iiif_manifest derive from the item's
-            // primary media — re-map the parent.
-            $mediaAdapter = \Omeka\Api\Adapter\MediaAdapter::class;
-            $sharedEventManager->attach($mediaAdapter, 'api.create.post', [$listener, 'onMediaWrite']);
-            $sharedEventManager->attach($mediaAdapter, 'api.update.post', [$listener, 'onMediaWrite']);
-            $sharedEventManager->attach($mediaAdapter, 'api.delete.post', [$listener, 'onMediaDelete']);
+        // Batch operations hydrate entities directly — the per-item
+        // events above never fire for them. Privacy-relevant: a batch
+        // visibility flip must reach Typesense promptly, because the
+        // public key filters on the INDEXED is_public value.
+        $sharedEventManager->attach($itemAdapter, 'api.batch_create.post', $deferred('onItemBatchCreate'));
+        $sharedEventManager->attach($itemAdapter, 'api.batch_update.post', $deferred('onItemBatchUpdate'));
+        $sharedEventManager->attach($itemAdapter, 'api.batch_delete.post', $deferred('onItemBatchDelete'));
 
-            // Item-set deletion silently unlinks every member, and
-            // country_ss (references / documents / photographs) derives
-            // from those memberships. Capture members at .pre (join rows
-            // are gone by .post), re-map them at .post.
-            $itemSetAdapter = \Omeka\Api\Adapter\ItemSetAdapter::class;
-            $sharedEventManager->attach($itemSetAdapter, 'api.delete.pre', [$listener, 'onItemSetDeletePre']);
-            $sharedEventManager->attach($itemSetAdapter, 'api.delete.post', [$listener, 'onItemSetDeletePost']);
-        }
+        // Direct media edits (upload to an existing item via the API,
+        // replace file, toggle visibility, delete) fire no item event,
+        // yet thumbnail_url / iiif_manifest derive from the item's
+        // primary media — re-map the parent.
+        $mediaAdapter = \Omeka\Api\Adapter\MediaAdapter::class;
+        $sharedEventManager->attach($mediaAdapter, 'api.create.post', $deferred('onMediaWrite'));
+        $sharedEventManager->attach($mediaAdapter, 'api.update.post', $deferred('onMediaWrite'));
+        $sharedEventManager->attach($mediaAdapter, 'api.delete.post', $deferred('onMediaDelete'));
+
+        // Item-set deletion silently unlinks every member, and
+        // country_ss (references / documents / photographs) derives
+        // from those memberships. Capture members at .pre (join rows
+        // are gone by .post), re-map them at .post.
+        $itemSetAdapter = \Omeka\Api\Adapter\ItemSetAdapter::class;
+        $sharedEventManager->attach($itemSetAdapter, 'api.delete.pre', $deferred('onItemSetDeletePre'));
+        $sharedEventManager->attach($itemSetAdapter, 'api.delete.post', $deferred('onItemSetDeletePost'));
     }
 
     /**
@@ -207,27 +216,9 @@ class Module extends AbstractModule
         if (!$view instanceof \Laminas\View\Renderer\PhpRenderer) {
             return;
         }
-        // The block CSS (server-rendered skeleton + container) loads first.
-        $view->headLink()->appendStylesheet(
-            $view->assetUrl('css/iwac-search.css', 'IwacSearch')
-        );
-        // The compiled Svelte bundle's CSS — contains every component-scoped
-        // style (FacetPanel, ResultItem, Pagination, …). Vite's IIFE lib
-        // build does NOT auto-inject this from the JS at runtime, so without
-        // this <link> tag the page mounts the components but renders them
-        // with zero styling — which is exactly the "hot mess" we hit at
-        // 0.2.18 → 0.2.19. Belongs in the same headLink stack as the static
-        // CSS above; Laminas dedupes by URL so calling it from the block
-        // layout too is harmless.
-        $view->headLink()->appendStylesheet(
-            $view->assetUrl('dist/iwac-search.css', 'IwacSearch')
-        );
-        // The compiled Svelte bundle.
-        $view->headScript()->appendFile(
-            $view->assetUrl('dist/iwac-search.js', 'IwacSearch'),
-            'text/javascript',
-            ['defer' => true]
-        );
+        // Shared with IwacSearchBlock::render — one source of truth for the
+        // bundle's file set (see Asset\SvelteAssets for the why of each file).
+        Asset\SvelteAssets::injectSearchApp($view);
     }
 
     /**

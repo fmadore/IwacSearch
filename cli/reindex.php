@@ -12,84 +12,36 @@ declare(strict_types=1);
  *   docker compose -f services/omeka-cli/docker-compose.yml run --rm \
  *       omeka-cli discovery:reindex
  *
- * Env overrides (all optional — defaults match the IWAC-docker stack):
- *   IWAC_TYPESENSE_HOST       default: typesense
- *   IWAC_TYPESENSE_PORT       default: 8108
- *   IWAC_TYPESENSE_PROTOCOL   default: http
- *   IWAC_TYPESENSE_KEY_FILE   default: /run/secrets/typesense_api_key
- *   IWAC_OMEKA_VENDOR         default: /var/www/html/vendor/autoload.php
- *   IWAC_OMEKA_DB_INI         default: <omeka root>/config/database.ini
+ * Env overrides: see cli/bootstrap.php (IWAC_TYPESENSE_*, IWAC_OMEKA_VENDOR),
+ * plus:
+ *   IWAC_OMEKA_DB_INI   default: <omeka root>/config/database.ini
  *
  * Exit codes:
  *   0  success
  *   1  reindex failed (collection dropped, alias unchanged — safe state)
- *   2  setup error (missing secret, schema, composer deps, DB config)
+ *   2  setup error (missing composer deps, unreadable admin-key secret,
+ *      missing database.ini) — bootstrap.php enforces the first two
  */
 
 use Doctrine\DBAL\DriverManager;
 use IwacSearch\Indexer\ReindexOrchestrator;
-use IwacSearch\Service\TypesenseClientFactory;
 
-// ── Bootstrap autoloader ──────────────────────────────────────────────────
-$moduleRoot = dirname(__DIR__);
-$autoload   = $moduleRoot . '/vendor/autoload.php';
-if (!is_readable($autoload)) {
-    fwrite(STDERR, "ERROR: vendor/autoload.php not found. Run 'composer install --no-dev' inside {$moduleRoot}.\n");
+['logger' => $logger, 'typesense' => $typesense, 'moduleRoot' => $moduleRoot,
+ 'tsConfig' => $tsConfig, 'omekaVendor' => $omekaVendor] = require __DIR__ . '/bootstrap.php';
+
+// ── Omeka DB connection (DBAL) from database.ini ──────────────────────────
+// The CLI runs outside Omeka's HTTP bootstrap, so we build the DBAL
+// connection straight from Omeka's own config/database.ini rather than the
+// service container (the BulkReindex job, which has the container, pulls
+// 'Omeka\Connection' instead).
+$omekaRoot = dirname($omekaVendor, 2); // …/vendor/autoload.php → …
+$dbIni = getenv('IWAC_OMEKA_DB_INI') ?: $omekaRoot . '/config/database.ini';
+if (!is_readable($dbIni)) {
+    fwrite(STDERR, "ERROR: Omeka database.ini not readable at {$dbIni}. Set IWAC_OMEKA_DB_INI.\n");
     exit(2);
 }
 
-// Omeka core vendor first — provides Laminas + PSR interfaces AND Doctrine
-// DBAL (which the source reader uses). NOT bundled in the module's own
-// composer.json on purpose (would collide with Omeka's versions at runtime).
-// Override the path with IWAC_OMEKA_VENDOR for non-Docker dev.
-$omekaVendor = getenv('IWAC_OMEKA_VENDOR') ?: '/var/www/html/vendor/autoload.php';
-if (is_readable($omekaVendor)) {
-    require_once $omekaVendor;
-}
-
-require $autoload;
-
-// ── Minimal stderr logger (PSR-3) ─────────────────────────────────────────
-$logger = new class extends \Psr\Log\AbstractLogger {
-    public function log($level, $message, array $context = []): void
-    {
-        $ctx = $context !== [] ? ' ' . json_encode($context, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) : '';
-        fprintf(STDERR, "[%s] %-7s %s%s\n", date('H:i:s'), strtoupper((string) $level), $message, $ctx);
-    }
-};
-
 try {
-    // ── Config ───────────────────────────────────────────────────────────────
-    $tsConfig = [
-        'host'         => getenv('IWAC_TYPESENSE_HOST')     ?: 'typesense',
-        'port'         => (int) (getenv('IWAC_TYPESENSE_PORT') ?: 8108),
-        'protocol'     => getenv('IWAC_TYPESENSE_PROTOCOL') ?: 'http',
-        'api_key_file' => getenv('IWAC_TYPESENSE_KEY_FILE') ?: '/run/secrets/typesense_api_key',
-    ];
-
-    // ── Typesense client (factory needs a minimal Config-providing container)
-    $container = new class(['iwac_search' => ['typesense' => $tsConfig]]) implements \Psr\Container\ContainerInterface {
-        public function __construct(private readonly array $config) {}
-        public function get(string $id): mixed
-        {
-            if ($id === 'Config') { return $this->config; }
-            throw new RuntimeException("CLI container has no service: {$id}");
-        }
-        public function has(string $id): bool { return $id === 'Config'; }
-    };
-    $typesense = (new TypesenseClientFactory())($container, '');
-
-    // ── Omeka DB connection (DBAL) from database.ini ──────────────────────────
-    // The CLI runs outside Omeka's HTTP bootstrap, so we build the DBAL
-    // connection straight from Omeka's own config/database.ini rather than the
-    // service container (the BulkReindex job, which has the container, pulls
-    // 'Omeka\Connection' instead).
-    $omekaRoot = dirname($omekaVendor, 2); // …/vendor/autoload.php → …
-    $dbIni = getenv('IWAC_OMEKA_DB_INI') ?: $omekaRoot . '/config/database.ini';
-    if (!is_readable($dbIni)) {
-        fwrite(STDERR, "ERROR: Omeka database.ini not readable at {$dbIni}. Set IWAC_OMEKA_DB_INI.\n");
-        exit(2);
-    }
     $ini = parse_ini_file($dbIni) ?: [];
     $params = [
         'driver'   => 'pdo_mysql',

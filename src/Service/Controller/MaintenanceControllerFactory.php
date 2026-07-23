@@ -12,11 +12,13 @@ use Psr\Container\ContainerInterface;
 /**
  * Factory for the maintenance controller.
  *
- * Reads the current `name:` field from data/schema.yaml at boot so the
- * maintenance page description and the post-dispatch flash message
- * always reflect the live schema's base collection name (iwac_v1,
- * iwac_v2, …) rather than a hardcoded literal that drifts every time
- * the schema is bumped.
+ * Reads the current `name:` field from data/schema.yaml — once per
+ * dispatch of a maintenance route (controller factories run per request,
+ * not per boot; that's fine here, the admin page is low-traffic and the
+ * YAML is small) — so the page description and the post-dispatch flash
+ * message always reflect the live schema's base collection name (iwac_v1,
+ * iwac_v2, …) rather than a hardcoded literal that drifts every time the
+ * schema is bumped.
  *
  * Also injects a lazy Typesense client + both collection aliases so the
  * page can show a live status panel (reachable? document counts?). The

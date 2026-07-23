@@ -55,9 +55,10 @@ final class ItemEventListener
     /**
      * Cap for the item-set delete cascade, which runs inside the admin's
      * synchronous delete request (not a job). Curated country sets hold
-     * thousands of members; re-mapping those inline would hang the request,
-     * and deleting one is a deliberate restructure that warrants a bulk
-     * reindex anyway. Members beyond the cap are logged, not re-mapped.
+     * thousands of members; re-mapping those inline (even batched through
+     * reindexItems) would hang the request, and deleting one is a deliberate
+     * restructure that warrants a bulk reindex anyway. Members beyond the
+     * cap are logged, not re-mapped.
      */
     private const ITEM_SET_CASCADE_CAP = 200;
 
@@ -92,8 +93,8 @@ final class ItemEventListener
      * indexer reads the same Omeka database the create just wrote to — a new
      * item gets a complete document, not the half-baked placeholder the old
      * HF-only indexing path would have produced (which is why create was not
-     * wired before). Non-content items (photographs, authority records) are skipped
-     * inside the indexer.
+     * wired before). Non-content items (authority records, unmapped classes)
+     * are skipped inside the indexer.
      */
     public function onItemCreate(Event $event): void
     {
@@ -134,17 +135,13 @@ final class ItemEventListener
      */
     public function onItemBatchUpdate(Event $event): void
     {
-        foreach ($this->extractBatchItemIds($event) as $id) {
-            $this->indexer->reindexItem($id);
-        }
+        $this->indexer->reindexItems($this->extractBatchItemIds($event));
     }
 
     /** Index items created in bulk (CSV Import and friends use batchCreate). */
     public function onItemBatchCreate(Event $event): void
     {
-        foreach ($this->extractBatchItemIds($event) as $id) {
-            $this->indexer->reindexItem($id);
-        }
+        $this->indexer->reindexItems($this->extractBatchItemIds($event));
     }
 
     /** Remove every doc deleted by a batch delete ("delete selected"). */
@@ -234,9 +231,7 @@ final class ItemEventListener
             );
             $memberIds = array_slice($memberIds, 0, self::ITEM_SET_CASCADE_CAP);
         }
-        foreach ($memberIds as $id) {
-            $this->indexer->reindexItem($id);
-        }
+        $this->indexer->reindexItems($memberIds);
     }
 
     // ────────────────────────────────────────────────────────────────────

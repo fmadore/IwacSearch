@@ -218,7 +218,8 @@ export interface IwacHighlight {
 
 export interface IwacHit {
   document: IwacDoc;
-  highlights: IwacHighlight[];
+  /** Absent on browse (q=*) responses — Typesense only highlights real queries. */
+  highlights?: IwacHighlight[];
   text_match?: number;
 }
 

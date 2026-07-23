@@ -1,4 +1,5 @@
 import type { EntitySuggestion, IwacHit } from './types';
+import { escapeHtml, sanitizeHighlight } from './sanitize';
 
 /**
  * Shared typeahead row model + markup helpers — ONE definition for the two
@@ -50,25 +51,16 @@ export function buildHistoryRows(history: string[]): SuggestRow[] {
   return history.map((query) => ({ kind: 'history', query }));
 }
 
-/**
- * Strip every tag except <mark> from a Typesense highlight snippet so it
- * can be {@html}-rendered with our own mark styling and nothing else.
- */
-export function safeMarkup(html: string | undefined): string {
-  if (!html) return '';
-  return html.replace(/<(?!\/?mark\b)[^>]*>/gi, '');
-}
-
 /** Marked-up title of a hit (full highlight → windowed snippet → escaped raw). */
 export function titleMarkupOf(hit: IwacHit): string {
-  const titleHl = hit.highlights.find((h) => h.field === 'title_txt');
+  // `highlights` is absent on browse (q=*) responses — never assume it.
+  const titleHl = hit.highlights?.find((h) => h.field === 'title_txt');
   // `value` is the full marked-up title; `snippet` windows long titles.
   const markup = titleHl?.value ?? titleHl?.snippet;
   if (markup) {
-    return safeMarkup(markup);
+    return sanitizeHighlight(markup);
   }
-  const tx = hit.document.title ?? '';
-  return tx.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  return escapeHtml(hit.document.title ?? '');
 }
 
 /** Where an article row navigates: the item page, else the original source. */

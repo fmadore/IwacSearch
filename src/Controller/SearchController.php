@@ -32,26 +32,14 @@ use Throwable;
 class SearchController extends AbstractActionController
 {
     /**
-     * Above-the-fold facet stack for the full content corpus. Ordered
-     * coarse → fine: type, then geography, publisher, the entity authorities,
-     * then the grouped sentiment trio. Shared by the standalone /search shell
-     * and the federated page's Content tab so the two stay identical.
+     * Raw endpoint stems — basePath() is resolved at view time by the mount
+     * partials; pre-baking the stems here keeps the renderer dumb.
      *
-     * @var list<string>
+     * @var array<string, string>
      */
-    private const CONTENT_PROMINENT_FACETS = [
-        'type_s',                // article | publication | document | audiovisual
-        'has_fulltext',          // full text publicly readable (primary sources only)
-        'country_ss',            // country
-        'newspaper_ss',          // publisher
-        'places_ss',             // locations
-        'persons_ss',            // persons
-        'organisations_ss',      // organisations
-        'topics_ss',             // subjects
-        // Sentiment trio — grouped under one collapsible section in the client.
-        'gemini_polarite_ss',    // polarity
-        'gemini_centralite_ss',  // centrality (of Islam/Muslims)
-        'gemini_subjectivite',   // subjectivity (1–5)
+    private const ENDPOINT_STEMS = [
+        'token'  => '/discovery/token',
+        'search' => '/search-api/multi_search',
     ];
 
     public function __construct(
@@ -70,52 +58,88 @@ class SearchController extends AbstractActionController
      */
     public function indexAction(): ViewModel
     {
-        $aliasName = $this->config['typesense']['collection_alias'] ?? 'iwac_current';
-
-        $bootstrap = [
-            'block_id'         => 'standalone',
-            'mode'             => 'full',
-            'locked_filters'   => '',
-            // Curatorial choice, ordered coarse → fine. The year range
-            // slider (DateRangeSlider.svelte) renders separately; it's not a
-            // categorical facet so it doesn't appear in this list. Shared with
-            // the federated Content tab via the class const.
-            'prominent_facets' => self::CONTENT_PROMINENT_FACETS,
-            'default_sort'     => '_text_match:desc',
-            // Diversify the standalone /search results (Typesense 30.2 MMR):
-            // on a text query, push down near-duplicate syndicated articles
-            // so one wire story doesn't fill the first page. Activates the
-            // iwac_diversity curation set (CurationSync) via curation_tags;
-            // applied client-side and only when a query is present (browse
-            // mode stays date-sorted). Curated /browse pages and page blocks
-            // deliberately omit this — they keep raw relevance order.
-            'diversify_tag'    => CurationSync::TAG,
-            'diversity_lambda' => 0.7,
-            'results_per_page' => 10,
-            'collection_alias' => $aliasName,
-            // Entity collection — lets the autocomplete federate to it.
-            'index_collection_alias' => $this->config['typesense']['index_collection_alias'] ?? 'iwac_index_current',
-            'endpoints' => [
-                // basePath() is set by the renderer at view time; we'd
-                // prefer to compute these in the view, but pre-baking them
-                // here keeps the renderer dumb.
-                'token'  => '/discovery/token',
-                'search' => '/search-api/multi_search',
-            ],
-        ];
+        $bootstrap = $this->contentBootstrap('standalone');
 
         // SSR the first page of results + facets so the Svelte client
         // paints real content on first frame. If Typesense is down, the
         // renderer returns null and the client falls back to its own
         // scoped-key fetch — same end-state, one extra flash.
-        $initial = $this->initialRenderer->render($bootstrap);
-        if ($initial !== null) {
-            $bootstrap['initial_response'] = $initial;
+        //
+        // Skipped for deep links (?q=…, ?f.*=…, ?sort=…, …): the snapshot is
+        // the default first page, which the client would immediately discard
+        // and refetch — the Typesense round trip would be pure waste.
+        if (!$this->requestCarriesSearchState()) {
+            $initial = $this->initialRenderer->render($bootstrap);
+            if ($initial !== null) {
+                $bootstrap['initial_response'] = $initial;
+            }
         }
 
         $view = new ViewModel(['bootstrap' => $bootstrap]);
         $view->setTemplate('iwac-search/search/index');
         return $view;
+    }
+
+    /**
+     * The shared content-corpus bootstrap: the standalone /search shell and
+     * the federated page's Content tab must stay identical, so both build on
+     * this and only override per-surface keys. Notes on the choices:
+     *
+     *   - prominent_facets: curatorial, ordered coarse → fine. The year-range
+     *     slider (DateRangeSlider.svelte) renders separately; it's not a
+     *     categorical facet so it doesn't appear in the list.
+     *   - diversify_tag / diversity_lambda (Typesense 30.2 MMR): on a text
+     *     query, push down near-duplicate syndicated articles so one wire
+     *     story doesn't fill the first page. Activates the iwac_diversity
+     *     curation set (CurationSync) via curation_tags; applied client-side
+     *     and only when a query is present (browse mode stays date-sorted).
+     *     Curated page blocks deliberately omit this — raw relevance order.
+     *   - index_collection_alias: always advertised so the autocomplete can
+     *     federate to the entity index.
+     *
+     * @return array<string, mixed>
+     */
+    private function contentBootstrap(string $blockId): array
+    {
+        return [
+            'block_id'         => $blockId,
+            'mode'             => 'full',
+            'locked_filters'   => '',
+            'prominent_facets' => SearchDefaults::CONTENT_PROMINENT_FACETS,
+            'default_sort'     => '_text_match:desc',
+            'diversify_tag'    => CurationSync::TAG,
+            'diversity_lambda' => 0.7,
+            'results_per_page' => 10,
+            'collection_alias' => $this->config['typesense']['collection_alias'] ?? 'iwac_current',
+            'index_collection_alias' => $this->config['typesense']['index_collection_alias'] ?? 'iwac_index_current',
+            'endpoints'        => self::ENDPOINT_STEMS,
+        ];
+    }
+
+    /**
+     * Whether the request URL carries client search state (urlState.ts's
+     * unprefixed param set) that would make the default-first-page SSR
+     * snapshot useless to the client.
+     */
+    private function requestCarriesSearchState(): bool
+    {
+        $params = $this->params()->fromQuery();
+        if (!is_array($params)) {
+            return false;
+        }
+        foreach ($params as $key => $value) {
+            $key = (string) $key;
+            if (str_starts_with($key, 'f.')) {
+                return true;
+            }
+            if (in_array($key, ['q', 'sort', 'date.from', 'date.to'], true) && (string) $value !== '') {
+                return true;
+            }
+            if ($key === 'page' && (int) $value > 1) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
@@ -132,34 +156,16 @@ class SearchController extends AbstractActionController
      */
     public function everythingAction(): ViewModel
     {
-        $contentAlias = $this->config['typesense']['collection_alias'] ?? 'iwac_current';
-        $indexAlias   = $this->config['typesense']['index_collection_alias'] ?? 'iwac_index_current';
-        $query        = (string) $this->params()->fromQuery('q', '');
-        $defaultTab   = $this->params()->fromQuery('tab') === 'entities' ? 'entities' : 'content';
-
-        // Raw stems; common/iwac-federated-mount resolves basePath at view time.
-        $endpoints = [
-            'token'  => '/discovery/token',
-            'search' => '/search-api/multi_search',
-        ];
+        $indexAlias = $this->config['typesense']['index_collection_alias'] ?? 'iwac_index_current';
+        $query      = (string) $this->params()->fromQuery('q', '');
+        $defaultTab = $this->params()->fromQuery('tab') === 'entities' ? 'entities' : 'content';
 
         // Content tab — whole corpus, mirrors /search (incl. MMR diversification
         // of near-duplicate syndicated articles on a text query).
-        $contentTab = [
-            'block_id'         => 'everything-content',
-            'mode'             => 'full',
+        $contentTab = $this->contentBootstrap('everything-content') + [
             'card'             => 'content',
-            'locked_filters'   => '',
-            'prominent_facets' => self::CONTENT_PROMINENT_FACETS,
-            'default_sort'     => '_text_match:desc',
-            'diversify_tag'    => CurationSync::TAG,
-            'diversity_lambda' => 0.7,
-            'results_per_page' => 10,
-            'collection_alias' => $contentAlias,
-            'index_collection_alias' => $indexAlias,
             'query_by'         => SearchDefaults::CONTENT_QUERY_BY,
             'highlight_fields' => SearchDefaults::CONTENT_HIGHLIGHT_FIELDS,
-            'endpoints'        => $endpoints,
         ];
 
         // Entity tab — the index/authority collection. Facets + sort come from
@@ -178,7 +184,7 @@ class SearchController extends AbstractActionController
             'index_collection_alias' => $indexAlias,
             'query_by'         => SearchDefaults::ENTITY_QUERY_BY,
             'highlight_fields' => SearchDefaults::ENTITY_HIGHLIGHT_FIELDS,
-            'endpoints'        => $endpoints,
+            'endpoints'        => self::ENDPOINT_STEMS,
         ];
 
         if ($query === '') {
@@ -200,7 +206,7 @@ class SearchController extends AbstractActionController
                 ['id' => 'content',  'bootstrap' => $contentTab],
                 ['id' => 'entities', 'bootstrap' => $entityTab],
             ],
-            'endpoints'     => $endpoints,
+            'endpoints'     => self::ENDPOINT_STEMS,
         ];
 
         $view = new ViewModel(['bootstrap' => $bootstrap]);
@@ -216,8 +222,9 @@ class SearchController extends AbstractActionController
      * malicious form submission can only get the same public-shaped key
      * any anonymous visitor would receive.
      *
-     * M4 will read the Omeka session here and return an admin-shaped key
-     * (no exclude_fields) for authenticated admin users.
+     * Every caller receives the public-shaped key. An admin-shaped variant
+     * (no exclude_fields, gated on the Omeka session) was sketched for M4
+     * but never built — see docs/engineering-roadmap.md if it's ever needed.
      */
     public function tokenAction(): JsonModel
     {
@@ -238,24 +245,20 @@ class SearchController extends AbstractActionController
 
             return new JsonModel($minted);
         } catch (Throwable $e) {
-            $detail = ExceptionMessage::chain($e);
-            // Belt-and-suspenders: also log the full chain to Omeka's
-            // log file so ops can grep `journalctl` / `omeka.log` when
-            // the response body has been swallowed by an intermediate
-            // tool (a paste, a curl pipe, an error-tracking aggregator
-            // that truncates at 256 chars). Same string shipped to the
-            // browser, just a second sink.
-            $this->logger->error('IwacSearch token mint failed', ['detail' => $detail]);
+            // The full exception chain (joined with " ← caused by: "
+            // separators, bypassing Laminas's ServiceNotCreatedException
+            // wrapper) goes to Omeka's log ONLY. It can name internal
+            // hosts/ports and the Docker secret path, so it must never
+            // reach the anonymous caller's response body.
+            $this->logger->error('IwacSearch token mint failed', [
+                'detail' => ExceptionMessage::chain($e),
+            ]);
 
             $this->getResponse()->setStatusCode(Response::STATUS_CODE_503);
             return new JsonModel([
                 'error'   => 'token_unavailable',
-                'message' => 'Typesense scoped-key minting failed. Is the typesense service up?',
-                // The full chain, joined with " ← caused by: " separators,
-                // bypasses Laminas's ServiceNotCreatedException wrapper so
-                // the response carries the actual root cause (e.g.
-                // "Connection refused" from the SDK's HTTP client).
-                'detail'  => $detail,
+                'message' => 'Typesense scoped-key minting failed. Is the typesense service up?'
+                    . ' Details are in the Omeka log.',
             ]);
         }
     }
@@ -290,18 +293,11 @@ class SearchController extends AbstractActionController
         }
 
         // Country / references presets re-apply their old scope as a facet on
-        // /search (the client hydrates ?f.<field>= via urlState.ts); 'all' and
-        // unknown slugs land on the bare /search shell.
-        $query = [];
-        if ($preset !== null) {
-            // Country locks now carry a trailing `&& type_s:!=reference`
-            // clause, so match the country term only — not the whole string.
-            if (preg_match('/^country_ss:=`([^`]+)`/', $preset->lockedFilters, $m)) {
-                $query = ['f.country_ss' => $m[1]];
-            } elseif ($preset->lockedFilters === 'type_s:=reference') {
-                $query = ['f.type_s' => 'reference'];
-            }
-        }
+        // /search (the client hydrates ?f.<field>= via urlState.ts) using the
+        // redirectQuery the catalog declares next to each lockedFilters —
+        // no reverse-parsing of the filter string. 'all' and unknown slugs
+        // land on the bare /search shell.
+        $query = $preset?->redirectQuery ?? [];
 
         $route   = $siteSlug !== null ? 'site/iwac-search' : 'iwac-search';
         $options = $query === [] ? [] : ['query' => $query];

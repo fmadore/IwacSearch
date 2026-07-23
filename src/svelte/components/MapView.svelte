@@ -12,6 +12,7 @@
    * cluster to zoom in, click a point for a popup linking to the entity.
    */
   import type { IwacDoc } from '../lib/types';
+  import { escapeHtml } from '../lib/sanitize';
   import { MAP_MAX_HITS } from '../lib/typesense';
   import {
     BASEMAP_STYLE_URL,
@@ -187,12 +188,7 @@
             const f = evt.features?.[0];
             if (!f || !lib || !map) return;
             const props = f.properties;
-            const esc = (s: string): string =>
-              s.replace(
-                /[&<>"']/g,
-                (c) =>
-                  ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c] ?? c,
-              );
+            const esc = escapeHtml;
             const mentions = t(props.frequency === 1 ? 'mention_one' : 'mention_other', {
               n: props.frequency,
             });

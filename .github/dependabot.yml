@@ -2,7 +2,8 @@
 #
 # Three ecosystems live in this repo:
 #   - npm        (Svelte client: vite/svelte/typescript/eslint/prettier)
-#   - composer   (PHP module: typesense/typesense-php, symfony/yaml)
+#   - composer   (PHP module: typesense/typesense-php, symfony/yaml,
+#                 the Guzzle HTTP stack)
 #   - github-actions  (CI workflows in .github/workflows/)
 #
 # Strategy: weekly cadence, group all patch + minor updates into one PR
@@ -86,6 +87,11 @@ updates:
         patterns:
           - 'typesense/*'
           - 'symfony/*'
+          # Guzzle HTTP stack (typesense-php's transport) — without these
+          # patterns each got its own weekly PR, defeating the grouping.
+          - 'guzzlehttp/*'
+          - 'php-http/*'
+          - 'http-interop/*'
         update-types:
           - 'minor'
           - 'patch'
