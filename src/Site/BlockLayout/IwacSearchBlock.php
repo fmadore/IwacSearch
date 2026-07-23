@@ -3,7 +3,6 @@ declare(strict_types=1);
 
 namespace IwacSearch\Site\BlockLayout;
 
-use HTMLPurifier;
 use IwacSearch\Asset\SvelteAssets;
 use IwacSearch\Browse\FacetCatalog;
 use IwacSearch\Search\InitialResponseRenderer;
@@ -16,6 +15,7 @@ use Omeka\Api\Representation\SiteRepresentation;
 use Omeka\Entity\SitePageBlock;
 use Omeka\Site\BlockLayout\AbstractBlockLayout;
 use Omeka\Stdlib\ErrorStore;
+use Omeka\Stdlib\HtmlPurifier;
 
 /**
  * Page block that drops the IwacSearch surface into any Omeka Site page.
@@ -60,7 +60,7 @@ class IwacSearchBlock extends AbstractBlockLayout
 {
     public function __construct(
         private readonly InitialResponseRenderer $initialRenderer,
-        private readonly HTMLPurifier $htmlPurifier,
+        private readonly HtmlPurifier $htmlPurifier,
         private readonly string $contentAlias = 'iwac_current',
         private readonly string $indexAlias = 'iwac_index_current',
     ) {
