@@ -205,7 +205,7 @@
   .iwac-export__menu {
     position: absolute;
     inset-inline-end: 0;
-    inset-block-start: calc(100% + var(--space-2xs, 0.25rem));
+    inset-block-start: calc(100% + var(--space-xs, 0.25rem));
     z-index: 30;
     min-width: 14rem;
     background: var(--surface, #fdfcfb);

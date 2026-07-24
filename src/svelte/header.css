@@ -19,7 +19,7 @@
 
 .iwac-header-suggest {
   position: absolute;
-  inset-block-start: calc(100% + var(--space-2xs, 0.25rem));
+  inset-block-start: calc(100% + var(--space-xs, 0.25rem));
   inset-inline-end: 0;
   z-index: 1000;
   min-width: min(22rem, 92vw);

@@ -23,6 +23,14 @@
  *      Svelte TEMPLATE markup (SVG fills, inline attrs) is exempt — only the
  *      `<style>` region is scanned. So is any line touching a sanctioned
  *      `--iwac-vis-*` data colour.
+ *   5. Every `var(--…)` must NAME a token that exists: one published in
+ *      `tokens.json`'s `names` (the theme's full vocabulary), one this module
+ *      declares itself, or one in the module-owned `--iwac-` namespace.
+ *      Rule 3 only ever checked hex *values*, so a reference to a token the
+ *      theme never defined passed cleanly while rendering from its fallback
+ *      forever, silently decoupled from the scale it appeared to track.
+ *      `--space-2xs` sat here undetected that way until the theme published
+ *      `names` (IWAC-theme 2.9.1).
  * Lines carrying an `allow-hex` marker comment are exempt from 3 and 4.
  *
  * Usage: node scripts/check-theme-tokens.js   (npm run lint:theme)
@@ -75,10 +83,49 @@ const REMOVED_TOKEN = /--primary-(hue|sat)\b/;
 const SRGB_MIX = /color-mix\(\s*in\s+srgb\b/i;
 const HEX = /#[0-9a-fA-F]{3}(?:[0-9a-fA-F]{3}(?:[0-9a-fA-F]{2})?)?\b/g;
 const VAR_FALLBACK = /var\(\s*(--[\w-]+)\s*,\s*(#[0-9a-fA-F]{3,8})\b/g;
+const VAR_USE = /var\(\s*(--[\w-]+)/g;
+const DECL = /(--[\w-]+)\s*:/g;
+// Module-owned namespace: data colours, and properties set at runtime (e.g.
+// Svelte's `style:--iwac-drawer-width={width}` directive).
+const MODULE_PREFIX = /^--iwac-/;
 
 const violations = [];
 function flag(file, line, msg, snippet) {
   violations.push({ file: relative(ROOT, file), line, msg, snippet: snippet.trim() });
+}
+
+/**
+ * Every custom property this module declares itself — collected before any
+ * file is scanned, since a property declared in one file is legitimately
+ * consumed from another.
+ */
+const moduleOwned = new Set();
+function collectModuleOwned(files) {
+  for (const file of files) {
+    const src = readFileSync(file, 'utf8');
+    let m;
+    DECL.lastIndex = 0;
+    while ((m = DECL.exec(src)) !== null) moduleOwned.add(m[1]);
+  }
+}
+
+/** Rule 5 — every var(--…) must name a token that actually exists. */
+function checkVarNames(file, raw, n) {
+  if (!TOKENS || !Array.isArray(TOKENS.names)) return;
+  let m;
+  VAR_USE.lastIndex = 0;
+  while ((m = VAR_USE.exec(raw)) !== null) {
+    const name = m[1];
+    if (MODULE_PREFIX.test(name) || moduleOwned.has(name) || TOKENS.names.includes(name)) {
+      continue;
+    }
+    flag(
+      file,
+      n,
+      `unknown token ${name} — not a theme token (tokens.json names), not module-owned (--iwac-*)`,
+      raw,
+    );
+  }
 }
 
 function scan(file) {
@@ -105,6 +152,7 @@ function scan(file) {
       if (SRGB_MIX.test(raw)) {
         flag(file, n, 'color-mix(in srgb …) — use `in oklab`', raw);
       }
+      checkVarNames(file, raw, n);
       if (!/allow-hex/.test(raw)) {
         // Rule 3 — fallback value must equal canonical light token.
         if (TOKENS) {
@@ -150,7 +198,9 @@ function scan(file) {
     });
 }
 
-walk(SRC_DIR).forEach(scan);
+const sources = walk(SRC_DIR);
+collectModuleOwned(sources);
+sources.forEach(scan);
 
 if (violations.length) {
   console.error(`\n✗ theme-token guard: ${violations.length} violation(s)\n`);
