@@ -324,7 +324,7 @@
   .iwac-suggest {
     position: absolute;
     inset-inline: 0;
-    inset-block-start: calc(100% + var(--space-2xs, 0.25rem));
+    inset-block-start: calc(100% + var(--space-xs, 0.25rem));
     z-index: 30;
     background: var(--surface, #fdfcfb);
     border: 1px solid var(--border, #ced1d6);
