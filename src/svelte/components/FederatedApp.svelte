@@ -236,7 +236,10 @@
    */
   function commitQuery(next: string): void {
     inputValue = next;
-    seed = null; // a fresh query clears any handed-off filter
+    // Stop re-seeding the hand-off on a later tab switch. A filter already
+    // applied inside the mounted tab stays applied — same as typing a new
+    // query on /search, where filters are the scope you search WITHIN.
+    seed = null;
     query = next.trim();
   }
 
@@ -295,19 +298,19 @@
     return typeof n === 'number' ? n.toLocaleString() : '';
   }
 
-  // The active tab's full per-collection bootstrap, seeded with the shared
-  // query (+ any union-chip filter hand-off). The {#key} below re-mounts App
-  // when the tab or query changes so it re-seeds cleanly (App reads
-  // initial_query/initial_filters once at init).
+  /**
+   * The active tab's per-collection bootstrap, plus any union-chip filter
+   * hand-off. Deliberately does NOT depend on `query` — that arrives as a
+   * live prop (App's `sharedQuery`), so typing a new query updates the
+   * mounted tab in place. Only a TAB switch remounts (see the {#key}
+   * below), which is honest: it's a different collection, different facets,
+   * different sort vocabulary.
+   */
   const activeBootstrap = $derived.by<IwacBootstrap>(() => {
     const base = tabs.find((tab) => tab.id === activeTab)?.bootstrap ?? tabs[0].bootstrap;
     return {
       ...base,
-      initial_query: query,
       initial_filters: seed?.tab === activeTab ? seed.filters : undefined,
-      // The SSR'd first page is for the empty-query landing only; a typed
-      // query must fetch fresh rather than flash the all-content snapshot.
-      initial_response: query === '' ? base.initial_response : undefined,
     };
   });
 </script>
@@ -401,8 +404,8 @@
         {/if}
       </div>
     {:else}
-      {#key activeTab + '::' + query}
-        <App bootstrap={activeBootstrap} showSearchBox={false} />
+      {#key activeTab}
+        <App bootstrap={activeBootstrap} showSearchBox={false} sharedQuery={query} />
       {/key}
     {/if}
   </div>

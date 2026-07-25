@@ -85,6 +85,7 @@ as you confirm; remove rows once they've been through a full cycle.
 - [ ] **3.7.0 batch reindex path**: batch-edit visibility on ~20 items — one Typesense import request in the network/server logs (`IwacSearch: batch re-indexed`), not 20.
 - [ ] **3.7.0 unmappable item cleanup**: change an indexed item's resource class to a non-content class (e.g. an authority class). Its document must disappear from public search within seconds (log: item deleted).
 - [ ] **3.7.0 federated keyboard tabs**: on `/search/everything`, Tab to the tablist, use ←/→/Home/End — focus AND selection move; no pointer needed.
+- [ ] **3.7.0 federated query without remount**: on `/search/everything` Content tab, expand a facet group (or select a filter), scroll down, then type a new query in the shared box. Results update in place — the facet group stays expanded, the filter stays applied, and the page doesn't jump back to the top as if freshly mounted.
 - [ ] **3.7.0 federated Back button**: run two searches and switch tabs on `/search/everything`, then press Back — it steps through the previous states instead of leaving the page.
 - [ ] **3.7.0 sorted share links**: open `/search?sort=date:asc` in a fresh tab — results actually arrive oldest-first (no default-sorted SSR snapshot with a lying summary strip).
 - [ ] **3.7.0 deep pagination links**: share a `/search?page=60` URL — it opens on page 60 (previously silently clamped to 50).

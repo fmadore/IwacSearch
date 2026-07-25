@@ -195,12 +195,16 @@ Two findings from setting it up, so the next person doesn't rediscover them:
 - **Cache the empty-query SSR snapshot** (APCu or filesystem, 30–60 s,
   keyed on a hash of the bootstrap search params) — it's identical for
   every anonymous visitor of `/search` and the federated landing.
-- **Pass `query` to `App` as a reactive prop on the federated page**
-  instead of `{#key}`-remounting per committed query — remounts still
-  refetch everything and lose facet expand/scroll state (the token
-  re-mint half is already fixed). Requires `App` to react to
-  `initial_query` changes post-mount; touchy, do it with the Vitest
-  harness from Phase 1 in place.
+- ~~**Pass `query` to `App` as a reactive prop on the federated page**~~ —
+  done. `App` takes a `sharedQuery` prop and adopts it in place (guarded
+  by the last value ADOPTED, so a query edited inside the App isn't
+  snapped back), and `{#key}` now covers only the tab — a genuinely
+  different collection, facets and sort vocabulary. Typing a new query
+  keeps facet expand state, view mode and scroll position instead of
+  rebuilding the tab. The `initial_query` bootstrap field is gone: a
+  live prop replaces a mount-time seed, and the "don't flash the browse
+  snapshot when mounting with a query" rule moved into `App` where the
+  initial state is actually known.
 
 ## Phase 4 — Mechanical UI dedupe (needs visual QA, zero behaviour change)
 
