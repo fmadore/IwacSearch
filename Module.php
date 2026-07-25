@@ -41,6 +41,7 @@ class Module extends AbstractModule
      */
     private const BROWSE_CONFIG_RETIRED_IN = '3.0.0';
 
+    /** @return array<string, mixed> */
     public function getConfig(): array
     {
         return include __DIR__ . '/config/module.config.php';
@@ -333,6 +334,10 @@ class Module extends AbstractModule
      * every future upgrade was harmless but left no record of WHEN it stopped
      * being relevant — the guard is that record, and lets the whole branch be
      * deleted once no install can still be below the floor.
+     */
+    /**
+     * @param mixed $oldVersion
+     * @param mixed $newVersion
      */
     public function upgrade($oldVersion, $newVersion, ServiceLocatorInterface $services): void
     {

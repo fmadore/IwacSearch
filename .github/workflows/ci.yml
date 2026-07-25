@@ -86,18 +86,12 @@ jobs:
 
       - name: PHP syntax check (lint pass)
         run: |
-          find Module.php config cli src view tests \( -name '*.php' -o -name '*.phtml' \) -print0 \
+          find Module.php config cli src view tests tools \( -name '*.php' -o -name '*.phtml' \) -print0 \
             | xargs -0 -n1 php -l > /tmp/php-lint.log 2>&1 \
             || (cat /tmp/php-lint.log && exit 1)
 
       - name: Unit tests (phpunit)
         run: vendor/bin/phpunit
 
-      # ADVISORY until someone runs it locally and fixes what it finds — see
-      # the header of phpstan.neon. The config and the Omeka/Laminas stubs it
-      # needs are committed, but the analysis has never been executed, so
-      # failing the build on it would be gating on an unknown. Read the step's
-      # output, get it green, then delete `continue-on-error` here.
-      - name: Static analysis (phpstan) — advisory
-        continue-on-error: true
+      - name: Static analysis (phpstan)
         run: vendor/bin/phpstan analyse --no-progress

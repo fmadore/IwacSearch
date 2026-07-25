@@ -23,8 +23,15 @@ use Psr\Container\ContainerInterface;
  */
 class SearchControllerFactory implements FactoryInterface
 {
-    public function __invoke(ContainerInterface $container, $requestedName, ?array $options = null)
-    {
+    /**
+     * @param  mixed $requestedName
+     * @param  array<string, mixed>|null $options
+     */
+    public function __invoke(
+        ContainerInterface $container,
+        $requestedName,
+        ?array $options = null
+    ): SearchController {
         $config = $container->get('Config')['iwac_search'] ?? [];
 
         $logger = LoggerResolver::fromContainer($container);

@@ -21,7 +21,8 @@ final class SchemaLoader
     }
 
     /**
-     * @return array{name: string, fields: array, default_sorting_field?: string, token_separators?: array, symbols_to_index?: array}
+     * @return array<string, mixed> The parsed schema; always carries at least
+     *   `name` (string) and `fields` (list of field definitions).
      */
     public function load(): array
     {
@@ -48,6 +49,9 @@ final class SchemaLoader
      * swap the iwac_current alias atomically.
      *
      * Example: iwac_v1 → iwac_v1_20260420_143015
+     *
+     * @return array<string, mixed> The schema plus the private `_alias_target`
+     *   and `_base_name` keys CollectionOps strips before creating.
      */
     public function loadForReindex(string $aliasTarget = 'iwac_current'): array
     {

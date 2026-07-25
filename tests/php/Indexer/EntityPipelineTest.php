@@ -184,6 +184,7 @@ final class EntityPipelineTest extends TestCase
         ];
     }
 
+    /** @param ?array{0: float, 1: float} $expected */
     #[DataProvider('coordinateCases')]
     public function testCoordinatesParseToAGeopointOrAreSkippedSilently(
         string $raw,

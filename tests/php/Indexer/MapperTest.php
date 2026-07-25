@@ -128,7 +128,7 @@ final class MapperTest extends TestCase
                     return 'clone';
                 }
 
-                public function map(array $item, PropertyValues $values, ?string $thumbnailUrl): ?array
+                public function map(array $item, PropertyValues $values, ?string $thumbnailUrl): array
                 {
                     return $this->buildBase($item, $values, $thumbnailUrl);
                 }

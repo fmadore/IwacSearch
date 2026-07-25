@@ -1,26 +1,18 @@
-# Static analysis for the PHP side.
-#
-# ⚠ ADVISORY, NOT YET A GATE. This configuration has never been executed —
-# the environment it was written in could not download PHPStan (its dist
-# comes from GitHub, which that sandbox's proxy blocks). The CI step that
-# runs it is therefore marked `continue-on-error: true`.
-#
-# To promote it to a real gate:
-#   1. composer install
-#   2. vendor/bin/phpstan analyse
-#   3. Fix what it finds, or lower `level` until it is green, or add
-#      narrowly-scoped ignoreErrors entries with a comment each.
-#   4. Drop `continue-on-error` from the phpstan step in ci.yml.
-#
-# A red gate nobody can act on is worse than no gate — hence the flag, and
-# hence not claiming a level the code has not actually been held to.
+# Static analysis for the PHP side. Runs in CI as a blocking gate.
 #
 # Omeka S is an application, not a Packagist library, and Omeka pins its own
-# Laminas versions, so both are provided as stubs rather than dev
-# dependencies: analysing against a DIFFERENT Laminas version than production
-# runs is precisely the failure a type gate exists to prevent. The two stub
-# files are also, deliberately, a readable map of this module's entire
-# framework coupling.
+# Laminas versions — so both are provided as stubs under tools/phpstan/ rather
+# than as dev dependencies. Analysing against a DIFFERENT Laminas version than
+# production runs is precisely the failure a type gate exists to prevent.
+# (There is also a hard blocker: `laminas/laminas-log` 2.17, the version Omeka
+# S 4 ships, declares `php ~8.1 || ~8.2 || ~8.3` and cannot install on the 8.4
+# leg of the CI matrix at all.)
+#
+# The two stub files are deliberately also a readable map of this module's
+# entire framework coupling — if something isn't declared there, the module
+# doesn't use it. View helpers, which resolve through PhpRenderer::__call, are
+# declared as @method on the stub rather than ignored, so a typo in a helper
+# name is still an error.
 
 parameters:
     level: 6
@@ -35,37 +27,32 @@ parameters:
         - tools/phpstan/omeka.stub.php
         - tools/phpstan/framework.stub.php
 
-    # cli/ is excluded: those scripts run outside the Omeka bootstrap and
-    # build their own container/connection from ini files, so they are
-    # covered by `php -l` in CI and exercised by hand on the live stack.
+    # cli/ is excluded: those scripts run outside the Omeka bootstrap and build
+    # their own container/connection from ini files, so they are covered by
+    # `php -l` in CI and exercised by hand on the live stack.
     excludePaths:
         - cli/*
 
     treatPhpDocTypesAsCertain: false
 
     ignoreErrors:
-        # The Typesense PHP client exposes its resources as dynamic __get
-        # properties (`$client->stopwords`, `->curationSets`, `->synonymSets`,
-        # `->analytics`), which no amount of stubbing can type. The call sites
-        # already carry `@phpstan-ignore-next-line` markers; this keeps the
-        # message actionable if one is removed.
+        # PresetCatalog::all() is a literal map, so PHPStan can constant-fold
+        # `get('index')` and prove it non-null — which makes the `?->` look
+        # redundant. It is not: these are the documented fallbacks for a
+        # preset being renamed or removed, and the whole point is that they
+        # keep working when the catalogue changes. Keeping the defensive form
+        # costs nothing; deleting it would turn a future rename into a fatal.
         -
-            identifier: property.notFound
-            path: src/Indexer/*Sync.php
+            identifier: nullsafe.neverNull
+            paths:
+                - src/Controller/SearchController.php
+                - src/Site/BlockLayout/IwacSearchBlock.php
 
         # Laminas controllers resolve plugins through __call (`$this->url()`,
-        # `$this->messenger()`, `$this->jobDispatcher()`, `$this->getForm()`).
-        # Omeka registers its own on top, so an exhaustive stub would be a
-        # second copy of Omeka's plugin manager.
+        # `$this->messenger()`, `$this->jobDispatcher()`, `$this->getForm()`),
+        # and Omeka registers its own on top. Stubbing them exhaustively would
+        # mean re-declaring Omeka's whole plugin manager for no real gain —
+        # unlike the view helpers, these are framework-owned, not ours.
         -
             identifier: method.notFound
             path: src/Controller/*
-
-        # View helpers are called on PhpRenderer via __call by design
-        # (`$view->basePath()`, `$view->iwacLocale()`, `$view->assetUrl()`).
-        -
-            identifier: method.notFound
-            paths:
-                - src/Asset/SvelteAssets.php
-                - src/View/Helper/*
-                - src/Site/BlockLayout/*

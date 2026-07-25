@@ -93,7 +93,6 @@ final class CurationSync
         ];
 
         try {
-            // @phpstan-ignore-next-line  curationSets is the v6 client accessor
             $this->typesense->curationSets->upsert(self::SET_NAME, $payload);
         } catch (Throwable $e) {
             // Surface the root cause: this almost always means the server
