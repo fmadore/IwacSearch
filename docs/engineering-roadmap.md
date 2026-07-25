@@ -91,31 +91,49 @@ record.
 
 ---
 
-## Phase 1 — Test harness + static analysis (next up)
+## Phase 1 — Test harness (done) + static analysis (started)
 
-The repo currently has **zero tests and no PHP static analysis**; CI's PHP
-gate is `php -l`. The pure seams are deliberately test-friendly — start
-there, no Typesense or MySQL needed:
+**Tests: done.** Two suites, both wired into CI as blocking gates:
 
-1. **PHPUnit (module-local `composer require --dev phpunit/phpunit`)**
-   covering, in rough order of value:
-   - `CollectionOps::promote()` — the error-ratio guard (0 indexed,
-     > 10 % errors, healthy) and orphan-sweep name matching, against a
-     > stubbed Typesense client. This is the code that protects live search.
-   - The six mappers + `AbstractMapper` derivations (`has_fulltext` from
-     `vpub`, `country_ss` derivation, date parsing) over fixture rows —
-     the shapes are plain arrays.
-   - `CountryResolver`, `FacetCatalog::normaliseFacets`,
-     `PresetCatalog` (redirect queries, legacy slugs),
-     `EntityOccurrences::aggregate`, `SearchController::requestCarriesSearchState`.
-   - Client side: `urlState` codec round-trips, `queryBuilders`,
-     `sanitize.ts` (Vitest — the toolchain is already Vite).
-2. **PHPStan** — level 6 is realistic for this strict-types codebase.
-   Needs `omeka-s` (or `laminas/*` + a small stub layer) as a dev
-   dependency or a `scanDirectories` pointer at an Omeka checkout;
-   that's the reason it wasn't bolted on during the review (an untested
-   red gate is worse than none). Wire as a third CI job once it passes
-   locally.
+| Suite   | Command                                | Covers                                                                                                                                                                                                                                                                       |
+| ------- | -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Vitest  | `npm test`                             | `urlState` codec round-trips (incl. the surface-default-sort fallback that A1 got wrong), `queryBuilders` filter/sort construction, `sanitize` XSS neutralisation, the `filterState` composable                                                                              |
+| PHPUnit | `composer test` / `vendor/bin/phpunit` | `CollectionOps::promote()` health guard + orphan sweep against an in-memory Typesense fake, the six mappers' derivations, `PropertyValues`, `CountryResolver`, `SchemaLoader`, `EntityOccurrences`, `IndexEntityMapper`, `FacetCatalog`, `PresetCatalog`, `SurfaceBootstrap` |
+
+Both run without Typesense, MySQL or an Omeka bootstrap — that is what
+made the seams worth extracting in the first place. `tests/php/Support/FakeTypesense.php`
+is a hand-written in-memory server (collections, alias table, import log)
+rather than nested mock expectations, so the alias-guard tests read as
+scenarios rather than call assertions.
+
+Deliberately NOT covered, and why: `OmekaSourceReader` (its whole job is
+SQL, and Doctrine DBAL is an Omeka-core dependency this module doesn't
+ship), the controllers and block layout (they extend Laminas/Omeka base
+classes that aren't installable standalone), and the `Job` classes (thin
+wrappers over an `AbstractJob` we don't have). Those are exercised by the
+IWAC-docker stack.
+
+**PHPStan: configured, NOT yet verified.** `phpstan.neon` plus the two stub
+files under `tools/phpstan/` are committed, and CI runs the analysis — but
+with `continue-on-error: true`, because **the analysis has never actually
+been executed**. Finishing it is a short, well-defined task:
+
+1. `composer install && vendor/bin/phpstan analyse`
+2. Fix what it reports, or lower `level` (currently 6) until green, or add
+   narrowly-scoped `ignoreErrors` entries with a comment each.
+3. Delete `continue-on-error` from the phpstan step in `ci.yml`.
+
+Two findings from setting it up, so the next person doesn't rediscover them:
+
+- **Omeka and Laminas are stubbed, not dev-dependencies.** Omeka S is an
+  application, not a Packagist library. And Omeka pins its own Laminas
+  versions, so a `require-dev` copy would have PHPStan analysing against
+  signatures that differ from production — exactly the failure a type gate
+  exists to prevent. The two stub files are also a readable map of this
+  module's entire framework coupling (~16 Omeka classes, ~20 Laminas).
+- **`laminas/laminas-log` cannot be a dev dependency at all**: version 2.17,
+  which Omeka S 4 ships, declares `php ~8.1 || ~8.2 || ~8.3` and so fails to
+  install on the 8.4 leg of the CI matrix. Its one interface is stubbed.
 
 ## Phase 2 — Known behavioural gaps (each small, verify on live stack)
 

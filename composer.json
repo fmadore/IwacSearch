@@ -18,5 +18,17 @@
     "psr-4": {
       "IwacSearch\\": "src/"
     }
+  },
+  "require-dev": {
+    "phpstan/phpstan": "^2.0",
+    "phpunit/phpunit": "^11.0"
+  },
+  "autoload-dev": {
+    "psr-4": {
+      "IwacSearch\\Tests\\": "tests/php/"
+    }
+  },
+  "scripts": {
+    "test": "phpunit"
   }
 }
