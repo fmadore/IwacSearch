@@ -225,8 +225,10 @@ Two findings from setting it up, so the next person doesn't rediscover them:
   retry/preamble halves stay open deliberately: they restructure the
   request path of the module's most critical file, which wants the Vitest
   harness from Phase 1 in place first.)
-- **`ResultItem` list/gallery split** — already tracked in ROADMAP.md;
-  same batch.
+- ~~**`ResultItem` list/gallery split**~~ — done as a derivations
+  extraction (`lib/resultCard.ts` + `lib/resultCard.svelte.ts`, 19 new
+  Vitest cases) rather than a component split; see ROADMAP.md for why the
+  two layouts stayed one file.
 
 ## Phase 5 — Schema/data hygiene (done)
 
