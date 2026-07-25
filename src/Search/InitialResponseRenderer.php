@@ -52,7 +52,10 @@ final class InitialResponseRenderer
         /** @var Closure(): TypesenseClient */
         private readonly Closure $clientFactory,
         private readonly LoggerInterface $logger = new NullLogger(),
-        private readonly string $defaultCollection = 'iwac_current'
+        private readonly string $defaultCollection = 'iwac_current',
+        // Short-lived, shared across visitors — safe because every snapshot
+        // is public-only by construction. See SnapshotCache.
+        private readonly ?SnapshotCacheInterface $cache = null,
     ) {
     }
 
@@ -103,8 +106,27 @@ final class InitialResponseRenderer
             fn(array $b): string => (string) ($b['collection_alias'] ?? $this->defaultCollection),
             $bootstraps
         );
+        $body = ['searches' => array_values($searches)];
 
-        return $this->performSearches(['searches' => array_values($searches)], $collections);
+        // Every anonymous visitor of a landing page produces the identical
+        // request, so the burst collapses to one Typesense round trip per TTL.
+        $cacheKey = $this->cache?->key($body);
+        if ($cacheKey !== null) {
+            $hit = $this->cache?->get($cacheKey);
+            if ($hit !== null) {
+                return $hit;
+            }
+        }
+
+        $results = $this->performSearches($body, $collections);
+
+        // Only cache a fully successful render: storing a null would pin a
+        // transient Typesense blip in front of every visitor for the whole TTL.
+        if ($cacheKey !== null && !in_array(null, $results, true)) {
+            $this->cache?->set($cacheKey, $results);
+        }
+
+        return $results;
     }
 
     /**

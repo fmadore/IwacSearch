@@ -364,6 +364,14 @@ return [
             // IndexReindexer and surfaced via the /search/everything Entities tab.
             'index_collection_alias' => 'iwac_index_current',
         ],
+        // Server-rendered first page, cached briefly in APCu (no-op when the
+        // extension is absent). Safe to share between visitors because every
+        // snapshot is public-only by construction — see Search\SnapshotCache.
+        // The TTL is the ONLY invalidation: it bounds how long a landing page
+        // can show a just-reindexed-away item. Set to 0 to disable.
+        'ssr_cache' => [
+            'ttl_seconds' => 30,
+        ],
         'public_search_key' => [
             // TTL of the public scoped key. The key's SECURITY constraints
             // (filter_by is_public:=true + exclude_fields ocr_text) are NOT

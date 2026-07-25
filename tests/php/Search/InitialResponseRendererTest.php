@@ -5,6 +5,8 @@ namespace IwacSearch\Tests\Search;
 
 use IwacSearch\Search\InitialResponseRenderer;
 use IwacSearch\Search\SearchDefaults;
+use IwacSearch\Search\SnapshotCache;
+use IwacSearch\Search\SnapshotCacheInterface;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use RuntimeException;
@@ -28,8 +30,10 @@ final class InitialResponseRendererTest extends TestCase
      * @param  list<mixed>|\Throwable $responses One perform() result per call,
      *   or a throwable to raise on every call.
      */
-    private function renderer(array|\Throwable $responses): InitialResponseRenderer
-    {
+    private function renderer(
+        array|\Throwable $responses,
+        ?SnapshotCacheInterface $cache = null
+    ): InitialResponseRenderer {
         $sent = &$this->sent;
         $client = (new \ReflectionClass(TypesenseClient::class))->newInstanceWithoutConstructor();
         $client->multiSearch = new class ($responses, $sent) extends MultiSearch {
@@ -50,7 +54,10 @@ final class InitialResponseRendererTest extends TestCase
             }
         };
 
-        return new InitialResponseRenderer(static fn(): TypesenseClient => $client);
+        return new InitialResponseRenderer(
+            clientFactory: static fn(): TypesenseClient => $client,
+            cache: $cache,
+        );
     }
 
     /** @return array<string, mixed> */
@@ -245,6 +252,97 @@ final class InitialResponseRendererTest extends TestCase
             self::assertArrayNotHasKey('stopwords', $search);
         }
         self::assertSame([1, 2], [$out[0]['found'], $out[1]['found']]);
+    }
+
+    // ── Snapshot cache ──────────────────────────────────────────────────
+
+    /**
+     * An in-memory stand-in for the APCu-backed cache — the real one is a
+     * no-op without the extension, which CI does not have.
+     */
+    private function memoryCache(): SnapshotCacheInterface
+    {
+        return new class implements SnapshotCacheInterface {
+            /** @var array<string, list<array<string, mixed>|null>> */
+            public array $store = [];
+
+            public function key(array $body): string
+            {
+                return hash('xxh128', json_encode($body) ?: '');
+            }
+
+            public function get(string $key): ?array
+            {
+                return $this->store[$key] ?? null;
+            }
+
+            public function set(string $key, array $value): void
+            {
+                $this->store[$key] = $value;
+            }
+        };
+    }
+
+    public function testAnIdenticalRenderIsServedFromCache(): void
+    {
+        // Every anonymous visitor of a landing page produces the same request.
+        $cache = $this->memoryCache();
+        $renderer = $this->renderer([['results' => [self::page(7)]]], $cache);
+
+        $first = $renderer->render(self::bootstrap());
+        $second = $renderer->render(self::bootstrap());
+
+        self::assertSame(7, $first['found']);
+        self::assertSame(7, $second['found']);
+        self::assertCount(1, $this->sent, 'the second render must not hit Typesense');
+    }
+
+    public function testSurfacesWithDifferentParamsDoNotShareAnEntry(): void
+    {
+        $cache = $this->memoryCache();
+        $renderer = $this->renderer([['results' => [self::page(1)]], ['results' => [self::page(2)]]], $cache);
+
+        $a = $renderer->render(self::bootstrap(['locked_filters' => 'country_ss:=`Niger`']));
+        $b = $renderer->render(self::bootstrap(['locked_filters' => 'country_ss:=`Bénin`']));
+
+        self::assertSame([1, 2], [$a['found'], $b['found']]);
+        self::assertCount(2, $this->sent);
+    }
+
+    public function testAFailedRenderIsNotCached(): void
+    {
+        // Otherwise a transient Typesense blip would be pinned in front of
+        // every visitor for the whole TTL, turning a hiccup into an outage.
+        $cache = $this->memoryCache();
+        $renderer = $this->renderer(new RuntimeException('connection refused'), $cache);
+
+        self::assertNull($renderer->render(self::bootstrap()));
+        self::assertSame([], $cache->store);
+    }
+
+    public function testAPartiallyFailedRenderIsNotCachedEither(): void
+    {
+        $cache = $this->memoryCache();
+        $renderer = $this->renderer([[
+            'results' => [self::page(1), ['error' => 'Field `nope` not found in schema.']],
+        ]], $cache);
+
+        $renderer->renderMany([self::bootstrap(), self::bootstrap()]);
+
+        self::assertSame([], $cache->store);
+    }
+
+    public function testTheRealCacheIsANoOpRatherThanAnErrorWithoutApcu(): void
+    {
+        // The module must work on a PHP build with no APCu — it just pays the
+        // round trip it pays today.
+        $renderer = $this->renderer(
+            [['results' => [self::page()]], ['results' => [self::page()]]],
+            new SnapshotCache(30)
+        );
+
+        self::assertNotNull($renderer->render(self::bootstrap()));
+        self::assertNotNull($renderer->render(self::bootstrap()));
     }
 
     public function testItGivesUpAfterOneRetryRatherThanLooping(): void
