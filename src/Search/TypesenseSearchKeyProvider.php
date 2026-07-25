@@ -22,7 +22,7 @@ use Typesense\Client as TypesenseClient;
  *      or the database. Used only by PHP-side indexer and key bootstrap.
  *
  *   2. SEARCH-ONLY parent key — created ONCE in Typesense via the admin
- *      key, restricted to documents:search across all collections.
+ *      key, restricted to documents:search over $collectionScope.
  *      Cached in Omeka settings (`iwac_search_typesense_search_key`)
  *      because Typesense never echoes a key value back after creation.
  *      Still never sent to the browser directly — only used to sign
@@ -44,6 +44,42 @@ final class TypesenseSearchKeyProvider
     private const SETTINGS_KEY    = 'iwac_search_typesense_search_key';
     private const KEY_DESCRIPTION = 'IwacSearch public search-only parent (auto-created)';
 
+    /**
+     * Collection scope the parent key is created with when the deployment
+     * doesn't configure one. `*` = every collection, present and future.
+     *
+     * @var list<string>
+     */
+    public const DEFAULT_COLLECTION_SCOPE = ['*'];
+
+    /**
+     * The tightened scope this module would like to run with, offered as a
+     * ready-made value for `iwac_search.public_search_key.collections`.
+     *
+     * It names both aliases AND the versioned collections behind them
+     * (`iwac_v*` / `iwac_index_v*`, matched by Typesense's trailing-`*`
+     * prefix rule), because the Typesense docs don't say whether a key scope
+     * is matched against the alias the client requests or the collection the
+     * alias resolves to. Covering both makes the answer moot. What it leaves
+     * out is the point: the analytics collections, which hold visitor query
+     * logs and are today reachable by any public scoped key.
+     *
+     * Not the default because getting a key scope wrong takes down public
+     * search entirely, and this module cannot verify the match semantics
+     * without a live container. Set it in config, reload, search once — if
+     * the scope is wrong the key is re-minted by reverting the config line,
+     * with no code deploy and no manual settings surgery (see
+     * {@see settingsKey()}).
+     *
+     * @var list<string>
+     */
+    public const TIGHTENED_COLLECTION_SCOPE = [
+        'iwac_current',
+        'iwac_index_current',
+        'iwac_v*',
+        'iwac_index_v*',
+    ];
+
     public function __construct(
         // Lazily-resolved, memoizing client factory (TypesenseClientLazy):
         // construction is deferred to first use so any missing Docker secret
@@ -57,7 +93,13 @@ final class TypesenseSearchKeyProvider
         private readonly LoggerInterface $logger = new NullLogger(),
         // Optional override file for production deployments that prefer
         // not to keep the search-only key in the database.
-        private readonly string $searchKeyFile = '/run/secrets/typesense_search_key'
+        private readonly string $searchKeyFile = '/run/secrets/typesense_search_key',
+        // Collections the parent key may search. Changing this re-mints the
+        // key on next use (the settings slot is keyed by the scope), so an
+        // operator can try TIGHTENED_COLLECTION_SCOPE and roll back with a
+        // single config line.
+        /** @var list<string> */
+        private readonly array $collectionScope = self::DEFAULT_COLLECTION_SCOPE,
     ) {
     }
 
@@ -110,7 +152,7 @@ final class TypesenseSearchKeyProvider
             }
         }
 
-        $cached = $this->settings->get(self::SETTINGS_KEY);
+        $cached = $this->settings->get($this->settingsKey());
         if (is_string($cached) && $cached !== '') {
             return $cached;
         }
@@ -118,9 +160,35 @@ final class TypesenseSearchKeyProvider
         return $this->bootstrapSearchOnlyKey();
     }
 
+    /**
+     * Settings slot holding the cached parent key.
+     *
+     * The slot name carries a hash of the collection scope, so a key minted
+     * under one scope is never reused under another: change the config and
+     * the next request mints a fresh key with the new scope; change it back
+     * and the original key is found again, still valid. This replaces the
+     * old manual ritual of editing a constant to invalidate the cache, which
+     * only worked if whoever tightened the scope remembered to do it — and
+     * silently kept serving a wide-scope key if they didn't.
+     *
+     * The default scope keeps the bare, historical slot name so existing
+     * installs don't re-mint on upgrade for a scope that hasn't changed.
+     */
+    private function settingsKey(): string
+    {
+        $scope = $this->collectionScope;
+        sort($scope); // order is not part of the scope's meaning
+        if ($scope === self::DEFAULT_COLLECTION_SCOPE) {
+            return self::SETTINGS_KEY;
+        }
+        return self::SETTINGS_KEY . '_' . substr(hash('xxh128', implode(',', $scope)), 0, 12);
+    }
+
     private function bootstrapSearchOnlyKey(): string
     {
-        $this->logger->info('Bootstrapping Typesense search-only parent key');
+        $this->logger->info('Bootstrapping Typesense search-only parent key', [
+            'collections' => $this->collectionScope,
+        ]);
 
         try {
             $response = ($this->clientFactory)()->keys->create([
@@ -130,18 +198,15 @@ final class TypesenseSearchKeyProvider
                 // from this one perform writes if a downstream signing call
                 // forgot to constrain them.
                 'actions'     => ['documents:search'],
-                // '*' means scoped keys derived from this one can address ANY
-                // collection — including future ones (e.g. the analytics
-                // collections, which hold visitor query logs). Today that is
-                // blocked only incidentally: the scoped filter `is_public:=true`
-                // errors on collections lacking the field. Tightening this to
-                // ['iwac_current', 'iwac_index_current'] is the right move but
-                // MUST be verified on the live container first — the Typesense
-                // docs don't spell out whether key scopes match the requested
-                // alias name or the resolved collection name (same caveat as
-                // the analytics rules, see ROADMAP.md). When tightening, bump
-                // SETTINGS_KEY so cached wide-scope keys are re-minted.
-                'collections' => ['*'],
+                // Scope defaults to '*': scoped keys derived from this one
+                // can address ANY collection, including the analytics ones
+                // holding visitor query logs. Today those are protected only
+                // incidentally, by the scoped filter `is_public:=true`
+                // erroring on collections that lack the field — which is a
+                // side effect, not a control. TIGHTENED_COLLECTION_SCOPE is
+                // the intended value; see its docblock for why it isn't the
+                // default and how to switch safely.
+                'collections' => $this->collectionScope,
             ]);
         } catch (Throwable $e) {
             // Flatten the whole exception chain into the message so
@@ -166,7 +231,7 @@ final class TypesenseSearchKeyProvider
 
         // Persist immediately. Typesense will not echo this value back
         // again on subsequent /keys calls — only metadata.
-        $this->settings->set(self::SETTINGS_KEY, $value);
+        $this->settings->set($this->settingsKey(), $value);
         $this->logger->info('Search-only key cached in Omeka settings', [
             'key_id' => $response['id'] ?? null,
         ]);

@@ -160,9 +160,21 @@
       });
   });
 
-  const unionTotalPages = $derived(
-    unionResponse ? Math.max(1, Math.min(50, Math.ceil(unionResponse.found / unionPerPage))) : 1,
+  /**
+   * The merged ranking is capped rather than fully pageable. Deep paging a
+   * union has no stable meaning — the interleaving of two collections shifts
+   * as scores tighten — and nobody reads to page 51 of a relevance list. The
+   * per-collection tabs page through everything, which is where a user who
+   * genuinely wants the tail should be.
+   */
+  const UNION_MAX_PAGES = 50;
+
+  const unionNaturalPages = $derived(
+    unionResponse ? Math.max(1, Math.ceil(unionResponse.found / unionPerPage)) : 1,
   );
+  const unionTotalPages = $derived(Math.min(UNION_MAX_PAGES, unionNaturalPages));
+  /** True when the cap is actually hiding pages, not merely equal to them. */
+  const unionCapped = $derived(unionNaturalPages > UNION_MAX_PAGES);
 
   /**
    * A chip clicked on a union card hands off to the right per-collection
@@ -380,6 +392,11 @@
                 onPageChange={(next) => (unionPage = next)}
               />
             {/if}
+            {#if unionCapped && unionPage >= unionTotalPages}
+              <!-- Only at the cap: saying this up front would read as a
+                   limitation on a list most people never page through. -->
+              <p class="iwac-fed__cap" role="status">{t('union_cap_hint')}</p>
+            {/if}
           {/if}
         {/if}
       </div>
@@ -409,6 +426,18 @@
   }
   .iwac-fed__search :global(.iwac-input) {
     width: 100%;
+  }
+
+  /*
+   * End-of-merged-list note. Quiet — it is guidance at a boundary, not a
+   * warning: the answer is almost always to narrow the query or switch to a
+   * per-collection tab, both of which are one click away.
+   */
+  .iwac-fed__cap {
+    margin: var(--space-md, 1rem) 0 0;
+    color: var(--muted, #66696e);
+    font-size: var(--text-sm, 0.9375rem);
+    text-align: center;
   }
 
   /* Type tabs. */

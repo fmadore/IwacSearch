@@ -120,6 +120,8 @@ const STRINGS: Record<Locale, Record<string, string>> = {
     results_in_scope: 'dans',
     sorted_by: 'triés par',
     no_results_in_scope: 'Aucun résultat dans',
+    union_cap_hint:
+      'Fin des résultats combinés. Affinez votre recherche, ou ouvrez un onglet pour parcourir la totalité d’une collection.',
     loading_results: 'Chargement des résultats…',
     mentions_trend: 'Évolution des mentions',
     export: 'Exporter',
@@ -213,6 +215,8 @@ const STRINGS: Record<Locale, Record<string, string>> = {
     results_in_scope: 'in',
     sorted_by: 'sorted by',
     no_results_in_scope: 'No results in',
+    union_cap_hint:
+      'End of the combined results. Refine your search, or open a tab to page through a whole collection.',
     loading_results: 'Loading results…',
     mentions_trend: 'Mentions over time',
     export: 'Export',

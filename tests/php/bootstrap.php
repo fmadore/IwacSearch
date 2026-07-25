@@ -11,3 +11,7 @@ declare(strict_types=1);
  */
 
 require_once dirname(__DIR__, 2) . '/vendor/autoload.php';
+
+// …plus the few Omeka interfaces a test needs to build a double for; Omeka
+// itself is the host application, not a dependency. See runtime-stubs.php.
+require_once __DIR__ . '/runtime-stubs.php';

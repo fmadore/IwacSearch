@@ -379,6 +379,21 @@ return [
             // TypesenseSearchKeyProvider::mintPublicScopedKey(), the single
             // source of truth. Loosening them there requires sign-off.
             'expires_at_seconds' => 3600,
+
+            // Collections the search-only PARENT key may address. The
+            // default ['*'] also reaches the analytics collections (visitor
+            // query logs), which nothing here needs. The tightened value is
+            //
+            //   ['iwac_current', 'iwac_index_current', 'iwac_v*', 'iwac_index_v*']
+            //
+            // (= TypesenseSearchKeyProvider::TIGHTENED_COLLECTION_SCOPE),
+            // which names the aliases and the versioned collections behind
+            // them because Typesense's docs don't say which of the two a key
+            // scope is matched against. Switching is safe to try: changing
+            // this line re-mints the parent key under a scope-specific
+            // settings slot, so reverting it restores the previous key. Try
+            // it on staging, run one search per surface, keep it if green.
+            'collections' => ['*'],
         ],
     ],
 ];

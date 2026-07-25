@@ -151,21 +151,29 @@ Two findings from setting it up, so the next person doesn't rediscover them:
   yes for export; the map's `frequency:desc` browse ordering makes it less
   clear-cut).
 
-- **Tighten the search-only parent key scope** from `collections: ['*']`
-  to the two aliases. Blocked on verifying (live container) whether
-  Typesense matches key scopes against the requested alias name or the
-  resolved collection name — same caveat as the analytics rules in
-  ROADMAP.md. When done: bump `TypesenseSearchKeyProvider::SETTINGS_KEY`
-  so cached wide-scope keys are re-minted, and delete the old key in
-  Typesense.
+- ~~**Tighten the search-only parent key scope** from `collections: ['*']`
+  to the two aliases.~~ **Unblocked, one config line away.** The blocker
+  was never really the Typesense semantics (does a key scope match the
+  requested alias or the resolved collection?) — it was that answering it
+  required a code deploy per attempt. The scope is now
+  `iwac_search.public_search_key.collections`, and the settings slot
+  caching the parent key is keyed by a hash of the scope, so changing the
+  config re-mints automatically and reverting it finds the old key again.
+  `TypesenseSearchKeyProvider::TIGHTENED_COLLECTION_SCOPE` holds the
+  intended value — both aliases *and* the `iwac_v*` / `iwac_index_v*`
+  prefixes, which makes the alias-vs-resolved-name question moot while
+  still excluding the analytics collections (visitor query logs).
+  Remaining: try it on the live stack, then delete the wide-scope key in
+  Typesense. Default stays `['*']` until someone does.
 - **Edits during a bulk reindex are lost at the swap** (documented in
   `IncrementalIndexer`'s header): upserts go through the alias → the
   outgoing collection. Fix shape: record a start watermark, collect item
   ids saved during the build (or query `resource.modified`), re-run
   `reindexItems()` against the new collection after the swap.
-- **Union-tab deep pagination cap** — `FederatedApp` clamps the union
-  list to 50 pages; fine for a merged relevance list, but worth a
-  "refine your query" hint at the cap.
+- ~~**Union-tab deep pagination cap**~~ — done. `FederatedApp` still
+  clamps the union list to 50 pages (Typesense won't page deeper on a
+  merged list), but the last page now carries a "refine your query" hint
+  instead of just ending.
 
 ## Phase 3 — Request-count reductions (medium effort, measurable wins)
 

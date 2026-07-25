@@ -32,6 +32,9 @@ parameters:
     # `php -l` in CI and exercised by hand on the live stack.
     excludePaths:
         - cli/*
+        # Redeclares Omeka interfaces for PHPUnit's runtime; scanFiles already
+        # provides them to the analyser, and two declarations collide.
+        - tests/php/runtime-stubs.php
 
     treatPhpDocTypesAsCertain: false
 
