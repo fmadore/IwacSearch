@@ -137,6 +137,20 @@ Two findings from setting it up, so the next person doesn't rediscover them:
 
 ## Phase 2 — Known behavioural gaps (each small, verify on live stack)
 
+- **Export and map fetches don't apply exact mode, but the live search
+  does.** Surfaced while extracting `resolveContext()`: `search()` and
+  `yearDistribution()` switch a quoted / `-excluded` query to strict
+  keyword matching (drop `embedding`, no typo tolerance), while
+  `fetchForExport()`, `fetchForMap()` and `searchFacetValues()` do not. So
+  exporting the results of `"radicalisation en Côte d'Ivoire"` can include
+  semantically-similar documents the user never saw on screen. The
+  refactor preserved the existing behaviour deliberately — changing what
+  an export contains is a product decision, not a cleanup — and the call
+  sites now say `applyExact: false` explicitly instead of diverging by
+  omission. Decide whether export/map should mirror the live set (probably
+  yes for export; the map's `frequency:desc` browse ordering makes it less
+  clear-cut).
+
 - **Tighten the search-only parent key scope** from `collections: ['*']`
   to the two aliases. Blocked on verifying (live container) whether
   Typesense matches key scopes against the requested alias name or the
