@@ -1,6 +1,5 @@
 import type {
   ActiveFilters,
-  EntitySuggestion,
   IwacBootstrap,
   IwacDoc,
   IwacFacetCount,
@@ -22,57 +21,15 @@ import {
   withoutField,
 } from './queryBuilders';
 import {
+  AbortSlot,
   type MultiSearchEnvelope,
   type TypesensePerSearchError,
-  formatHttpError,
   perSearchError,
   postJson,
   validateSearchResult,
 } from './transport';
-
-/**
- * Facet fields the typeahead may prefix-match via `facet_query`. The list a
- * surface actually queries is its prominent_facets ∩ this set, so the
- * suggestions follow the scope: a country block suggests places / topics /
- * persons / organisations, while the references scope suggests authors,
- * journals/publishers and merged subjects — without any extra config.
- */
-const SUGGESTABLE_FACET_FIELDS: ReadonlySet<string> = new Set([
-  'places_ss',
-  'topics_ss',
-  'persons_ss',
-  'organisations_ss',
-  'events_ss',
-  'subjects_ss',
-  'creator_ss',
-  'publisher_s',
-  'book_title_s',
-  'newspaper_ss',
-]);
-
-/** Fallback for surfaces without prominent facets (e.g. the header box). */
-const DEFAULT_SUGGEST_FACET_FIELDS = [
-  'places_ss',
-  'topics_ss',
-  'persons_ss',
-  'organisations_ss',
-] as const;
-
-/** Cap on facet_query sub-searches per keystroke. */
-const MAX_SUGGEST_FACET_FIELDS = 5;
-
-/**
- * Entity-index `entity_type_s` → the content facet field a suggestion
- * picked from the index collection should toggle. "Notices d'autorité"
- * are deliberately absent (they never feed content facets).
- */
-const ENTITY_TYPE_FACET: Record<string, string> = {
-  Personnes: 'persons_ss',
-  Lieux: 'places_ss',
-  Organisations: 'organisations_ss',
-  Événements: 'events_ss',
-  Sujets: 'topics_ss',
-};
+import { getScopedKey } from './scopedKey';
+import { runSuggest } from './suggestQuery';
 
 /**
  * Hard cap on exported hits (Typesense pages at 250/request, so 4 pages).
@@ -150,15 +107,15 @@ const MAP_INCLUDE_FIELDS = [
  */
 export class TypesenseClient {
   /**
-   * Per-channel abort controllers: a new search/suggest/histogram call
+   * Per-channel abort slots: a new search/suggest/histogram/union call
    * aborts its still-in-flight predecessor, so a fast typist can't get
    * out-of-order responses (or pay for their bandwidth). Callers swallow
    * the resulting AbortError via transport.isAbortError().
    */
-  private searchAbort: AbortController | null = null;
-  private suggestAbort: AbortController | null = null;
-  private yearAbort: AbortController | null = null;
-  private unionAbort: AbortController | null = null;
+  private readonly searchAbort = new AbortSlot();
+  private readonly suggestAbort = new AbortSlot();
+  private readonly yearAbort = new AbortSlot();
+  private readonly unionAbort = new AbortSlot();
 
   constructor(private readonly bootstrap: IwacBootstrap) {}
 
@@ -280,9 +237,7 @@ export class TypesenseClient {
     });
 
     // A newer search supersedes any in-flight one.
-    this.searchAbort?.abort();
-    this.searchAbort = new AbortController();
-    const signal = this.searchAbort.signal;
+    const signal = this.searchAbort.next();
 
     // Recovery path for a missing stopword set on the Typesense server:
     // it surfaces either as an HTTP 404 at the multi_search wrapper or as
@@ -372,15 +327,12 @@ export class TypesenseClient {
       ],
     };
 
-    this.yearAbort?.abort();
-    this.yearAbort = new AbortController();
-
     const json = await postJson<MultiSearchEnvelope>(
       this.bootstrap.endpoints.search,
       key.key,
       body,
       'Year histogram',
-      this.yearAbort.signal,
+      this.yearAbort.next(),
     );
     const first = json.results?.[0];
     if (!first) {
@@ -492,143 +444,15 @@ export class TypesenseClient {
    * decides whether to surface in the UI or swallow. A superseded call
    * rejects with an AbortError (see transport.isAbortError).
    */
+  /**
+   * Typeahead/suggest for a short prefix. The request shape lives in
+   * suggestQuery.ts so the site-wide header bundle can run the identical
+   * query without importing this class (see that module's header). This
+   * wrapper adds only the per-instance abort channel: a keystroke-driven
+   * call must not let a slow response for "ram" paint over "ramadan".
+   */
   async suggest(prefix: string, perPage = 6): Promise<SuggestResult> {
-    const trimmed = prefix.trim();
-    if (trimmed.length < 2) {
-      return { articles: [], entities: [] };
-    }
-
-    const key = await this.getKey();
-    const collection = this.bootstrap.collection_alias ?? key.collection;
-    const filterBy = this.bootstrap.locked_filters?.trim() || undefined;
-    const isEntitySurface = this.bootstrap.card === 'entity';
-
-    // Facet fields this surface suggests from: its prominent facets, kept to
-    // the suggestable string facets. A country block gets places / topics /
-    // persons / organisations; the references scope gets authors, journals/
-    // publishers and merged subjects. Surfaces without prominent facets
-    // (header box) fall back to the entity quartet. Entity-index surfaces
-    // skip facet suggestions entirely — their facets (entity_type_s,
-    // is_part_of_ss) make poor typeahead rows.
-    const prominent = (this.bootstrap.prominent_facets ?? []).filter((f) =>
-      SUGGESTABLE_FACET_FIELDS.has(f),
-    );
-    const facetFields = isEntitySurface
-      ? []
-      : (prominent.length > 0 ? prominent : [...DEFAULT_SUGGEST_FACET_FIELDS]).slice(
-          0,
-          MAX_SUGGEST_FACET_FIELDS,
-        );
-
-    // One multi_search request bundles:
-    //   [0]    article title hits (title + alternative titles + aliases)
-    //   [1…n]  one facet_query per suggestable facet field
-    //   [last] the entity INDEX collection, queried by name + alias — this is
-    //          what reconciles alternative spellings: typing "RCI" surfaces
-    //          "Radio Côte d'Ivoire" even though no facet VALUE contains
-    //          "RCI". Mapped back to a content facet via entity_type_s.
-    // locked_filters apply to the content sub-searches so suggestions on a
-    // country block stay scoped; the index sub-search runs unfiltered (its
-    // schema lacks the content fields a locked filter may reference).
-    const titleSearch = {
-      collection,
-      q: trimmed,
-      // Narrower than the main search query_by — dropdown should surface
-      // clear title hits, not fuzzy OCR matches that wouldn't make sense
-      // out of context. alt_title_txt reconciles variant titles.
-      query_by: isEntitySurface
-        ? 'title_txt,entity_aliases_txt'
-        : 'title_txt,alt_title_txt,entity_aliases_txt',
-      prefix: true,
-      filter_by: filterBy,
-      // Newest first feels right for a typeahead (recent docs surface
-      // before older ones even when match scores are similar).
-      sort_by: '_text_match:desc,date:desc',
-      page: 1,
-      per_page: Math.max(1, Math.min(15, perPage)),
-      highlight_fields: 'title_txt',
-      highlight_full_fields: 'title_txt',
-      // No snippet — keeps the response tiny and the dropdown render fast.
-      exclude_fields: 'ocr_text,embedding',
-      limit_hits: 50,
-    };
-
-    const entitySearches = facetFields.map((field) => ({
-      collection,
-      q: '*',
-      query_by: 'title_txt',
-      filter_by: filterBy,
-      facet_by: field,
-      // Prefix/substring-match facet values against the typed text.
-      facet_query: `${field}:${trimmed}`,
-      max_facet_values: 4,
-      per_page: 0,
-    }));
-
-    const indexAlias = !isEntitySurface ? this.bootstrap.index_collection_alias : undefined;
-    const indexSearch = indexAlias
-      ? [
-          {
-            collection: indexAlias,
-            q: trimmed,
-            query_by: 'title_txt,entity_aliases_txt',
-            prefix: true,
-            sort_by: '_text_match:desc,frequency:desc',
-            page: 1,
-            per_page: 4,
-            include_fields: 'title,entity_type_s,frequency',
-            highlight_fields: 'title_txt',
-          },
-        ]
-      : [];
-
-    // Keystroke-driven: abort the previous suggest so a slow response for
-    // "ram" can't paint over the results for "ramadan".
-    this.suggestAbort?.abort();
-    this.suggestAbort = new AbortController();
-
-    const json = await postJson<MultiSearchEnvelope>(
-      this.bootstrap.endpoints.search,
-      key.key,
-      { searches: [titleSearch, ...entitySearches, ...indexSearch] },
-      'Suggest',
-      this.suggestAbort.signal,
-    );
-
-    const articles = validateSearchResult('Suggest', json.results?.[0]).hits;
-
-    // Collect matching facet values across the facet sub-searches.
-    const entities: EntitySuggestion[] = [];
-    facetFields.forEach((field, i) => {
-      const r = json.results?.[i + 1];
-      if (!r || 'error' in r) return;
-      const fc = (r as IwacSearchResponse).facet_counts?.find((f) => f.field_name === field);
-      for (const c of fc?.counts ?? []) {
-        if (c.value) entities.push({ field, value: c.value, count: c.count });
-      }
-    });
-    // Highest-coverage entities first.
-    entities.sort((a, b) => b.count - a.count);
-
-    // Index-collection hits — alias-reconciled entities the facet_query
-    // pass can't see. Appended after the scope-accurate facet matches,
-    // deduped on (field, value).
-    if (indexAlias) {
-      const r = json.results?.[1 + facetFields.length];
-      if (r && !('error' in r)) {
-        const seen = new Set(entities.map((e) => `${e.field}|${e.value}`));
-        for (const hit of (r as IwacSearchResponse).hits ?? []) {
-          const doc = hit.document;
-          const field = doc.entity_type_s ? ENTITY_TYPE_FACET[doc.entity_type_s] : undefined;
-          const value = (doc.title ?? '').trim();
-          if (!field || !value || seen.has(`${field}|${value}`)) continue;
-          seen.add(`${field}|${value}`);
-          entities.push({ field, value, count: doc.frequency ?? 0 });
-        }
-      }
-    }
-
-    return { articles, entities: entities.slice(0, 6) };
+    return runSuggest(this.bootstrap, prefix, perPage, this.suggestAbort.next());
   }
 
   /**
@@ -813,9 +637,7 @@ export class TypesenseClient {
     url.searchParams.set('page', String(args.page ?? 1));
     url.searchParams.set('per_page', String(args.perPage ?? this.bootstrap.results_per_page));
 
-    this.unionAbort?.abort();
-    this.unionAbort = new AbortController();
-    const signal = this.unionAbort.signal;
+    const signal = this.unionAbort.next();
 
     let lastMessage = 'Everything search failed';
     for (let attempt = 0; attempt < 2; attempt++) {
@@ -903,53 +725,13 @@ export class TypesenseClient {
   }
 
   /**
-   * Get a valid scoped key. The cache is MODULE-scoped (keyed by token
-   * endpoint), not per-instance: several client instances on one page
-   * (multiple blocks, the federated page's per-tab App remounts) share one
-   * key and one refresh cycle. In-flight requests are coalesced so a burst
-   * of debounced searches doesn't N-amplify token requests.
+   * Get a valid scoped key. The cache lives in scopedKey.ts and is
+   * MODULE-scoped (keyed by token endpoint), not per-instance: several
+   * client instances on one page (multiple blocks, the federated page's
+   * per-tab App remounts, the header box) share one key and one refresh
+   * cycle, and in-flight requests are coalesced.
    */
-  private async getKey(): Promise<ScopedKeyResponse> {
-    const endpoint = this.bootstrap.endpoints.token;
-    const slot = keyCache.get(endpoint) ?? { key: null, inflight: null };
-    keyCache.set(endpoint, slot);
-
-    const now = Math.floor(Date.now() / 1000);
-    if (slot.key && slot.key.expires_at - 60 > now) {
-      return slot.key;
-    }
-    if (slot.inflight) {
-      return slot.inflight;
-    }
-    slot.inflight = (async () => {
-      try {
-        const res = await fetch(endpoint, {
-          credentials: 'same-origin',
-          headers: { Accept: 'application/json' },
-        });
-        if (!res.ok) {
-          throw new Error(await formatHttpError('Token', res));
-        }
-        const key = (await res.json()) as ScopedKeyResponse;
-        if (!key.key) {
-          throw new Error('Token endpoint returned no key');
-        }
-        slot.key = key;
-        return key;
-      } finally {
-        slot.inflight = null;
-      }
-    })();
-    return slot.inflight;
+  private getKey(): Promise<ScopedKeyResponse> {
+    return getScopedKey(this.bootstrap.endpoints.token);
   }
 }
-
-/**
- * Module-level scoped-key cache, one slot per token endpoint (all surfaces
- * on a page share the same endpoint, so in practice one slot). Keys are
- * memory-only — never persisted — so they still die with the tab.
- */
-const keyCache = new Map<
-  string,
-  { key: ScopedKeyResponse | null; inflight: Promise<ScopedKeyResponse> | null }
->();

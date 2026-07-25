@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace IwacSearch\Indexer;
 
+use IwacSearch\IwacInstance;
 use RuntimeException;
 
 /**
@@ -12,43 +13,16 @@ use RuntimeException;
  *   - Articles / publications / audiovisual: from the newspaper/publisher
  *     name (`dcterms:publisher`, a literal) via the ported country_mapper
  *     table in data/newspaper-countries.json.
- *   - References: from membership in a per-country "Références" item set
- *     (the reference records carry no newspaper).
+ *   - References / documents / photographs: from membership in a per-country
+ *     item set ({@see IwacInstance::COUNTRY_ITEM_SETS}) — those records carry
+ *     no newspaper.
  *
  * Output values are the accented display form (Bénin, Côte d'Ivoire, …) so
- * they match Browse\Countries::ALL and the existing country_ss facet exactly
- * — the curated /browse/{country} locked filters depend on this.
+ * they match the preset locked filters and the existing country_ss facet
+ * exactly — Typesense filter_by is accent- and case-sensitive.
  */
 final class CountryResolver
 {
-    /**
-     * Per-country item set → country (accented), for subsets that carry no
-     * newspaper: the "Références" sets (references subset), the "Documents
-     * divers" sets (documents subset), and the "Photographies" sets
-     * (photographs subset). The families don't overlap, so one lookup
-     * serves them all.
-     */
-    private const COUNTRY_ITEM_SETS = [
-        // Références
-        2193 => 'Bénin',
-        2212 => 'Burkina Faso',
-        2217 => "Côte d'Ivoire",
-        2222 => 'Niger',
-        2225 => 'Nigeria',
-        2228 => 'Togo',
-        // Documents divers
-        23452 => 'Bénin',
-        23453 => 'Burkina Faso',
-        76366 => "Côte d'Ivoire",
-        26327 => 'Togo',
-        // Photographies
-        2192 => 'Bénin',
-        2211 => 'Burkina Faso',
-        2216 => "Côte d'Ivoire",
-        2220 => 'Niger',
-        2227 => 'Togo',
-    ];
-
     /** @var array<string, string> normalised newspaper name → country */
     private array $byNewspaper;
 
@@ -101,7 +75,7 @@ final class CountryResolver
     {
         $out = [];
         foreach ($itemSetIds as $setId) {
-            $country = self::COUNTRY_ITEM_SETS[$setId] ?? null;
+            $country = IwacInstance::COUNTRY_ITEM_SETS[$setId] ?? null;
             if ($country !== null) {
                 $out[] = $country;
             }

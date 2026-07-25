@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace IwacSearch\Indexer;
 
+use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
 use Generator;
 use Omeka\Entity\Item;
@@ -49,7 +50,7 @@ final class OmekaSourceReader
      * @param  bool           $withThumbnail resolve the item's first thumbnailed media
      * @return Generator<int, array{
      *     item: array{id:int,title:string,is_public:bool,class:int,item_sets:list<int>},
-     *     values: array<string, list<array{vrid:?int,value:?string,uri:?string,title:?string}>>,
+     *     values: PropertyValues,
      *     thumbnail: ?string
      * }>
      */
@@ -70,9 +71,12 @@ final class OmekaSourceReader
             $setClause = " AND id IN (SELECT item_id FROM item_item_set WHERE item_set_id IN ($setList))";
         }
 
-        // resource_class_id and the item-set list are validated ints inlined into
-        // the SQL; :rt and :lastId stay the only bound params so keyset paging is
-        // a stable prepared statement.
+        // The one place that still inlines ids rather than binding an
+        // ArrayParameterType list (every other query here binds): the class and
+        // item-set lists are LOOP-INVARIANT, so inlining them keeps :rt and
+        // :lastId the only bound params and the keyset page a single stable
+        // prepared statement re-executed per page. Both are cast through
+        // intval, so the inlining is safe by construction.
         $sql = 'SELECT id, title, is_public, resource_class_id FROM resource'
             . ' WHERE resource_type = :rt'
             . ' AND resource_class_id IN (' . $classList . ')'
@@ -106,7 +110,7 @@ final class OmekaSourceReader
                         'class'     => (int) $r['resource_class_id'],
                         'item_sets' => $sets[$id] ?? [],
                     ],
-                    'values'    => $valuesByItem[$id] ?? [],
+                    'values'    => PropertyValues::fromRows($valuesByItem[$id] ?? []),
                     'thumbnail' => $thumbs[$id] ?? null,
                 ];
             }
@@ -123,20 +127,20 @@ final class OmekaSourceReader
      * @param  list<string> $terms
      * @return array<int, array{
      *     item: array{id:int,title:string,is_public:bool,class:int,item_sets:list<int>},
-     *     values: array<string, list<array{vrid:?int,value:?string,uri:?string,title:?string}>>,
+     *     values: PropertyValues,
      *     thumbnail: ?string
      * }>
      */
     public function loadResources(array $ids, array $terms): array
     {
-        $idList = implode(',', array_map('intval', $ids));
-        if ($idList === '') {
+        if ($ids === []) {
             return [];
         }
         $rows = $this->connection->executeQuery(
             'SELECT id, title, is_public, resource_class_id FROM resource'
-            . ' WHERE resource_type = :rt AND id IN (' . $idList . ')',
-            ['rt' => Item::class],
+            . ' WHERE resource_type = :rt AND id IN (:ids)',
+            ['rt' => Item::class, 'ids' => $ids],
+            ['ids' => ArrayParameterType::INTEGER],
         )->fetchAllAssociative();
         if ($rows === []) {
             return [];
@@ -158,7 +162,7 @@ final class OmekaSourceReader
                     'class'     => (int) $r['resource_class_id'],
                     'item_sets' => $sets[$id] ?? [],
                 ],
-                'values'    => $valuesByItem[$id] ?? [],
+                'values'    => PropertyValues::fromRows($valuesByItem[$id] ?? []),
                 'thumbnail' => $thumbs[$id] ?? null,
             ];
         }
@@ -180,15 +184,9 @@ final class OmekaSourceReader
      */
     public function loadValues(array $ids, array $terms): array
     {
-        $idList = implode(',', array_map('intval', $ids));
-        if ($idList === '' || $terms === []) {
+        if ($ids === [] || $terms === []) {
             return [];
         }
-        // Escape single quotes defensively though terms are code-defined.
-        $termList = "'" . implode("','", array_map(
-            static fn(string $t): string => str_replace("'", "''", $t),
-            $terms
-        )) . "'";
 
         $sql = "SELECT v.resource_id AS rid, CONCAT(vo.prefix, ':', p.local_name) AS term,"
             . ' v.value_resource_id AS vrid, v.value AS val, v.uri AS turi, v.is_public AS vpub,'
@@ -197,13 +195,16 @@ final class OmekaSourceReader
             . ' JOIN property p ON v.property_id = p.id'
             . ' JOIN vocabulary vo ON p.vocabulary_id = vo.id'
             . ' LEFT JOIN resource t ON v.value_resource_id = t.id'
-            . " WHERE v.resource_id IN ($idList)"
-            . " AND CONCAT(vo.prefix, ':', p.local_name) IN ($termList)"
+            . ' WHERE v.resource_id IN (:ids)'
+            . " AND CONCAT(vo.prefix, ':', p.local_name) IN (:terms)"
             // Preserve insertion order within a property (Omeka value id order).
             . ' ORDER BY v.resource_id ASC, v.id ASC';
 
+        $params = ['ids' => $ids, 'terms' => $terms];
+        $types  = ['ids' => ArrayParameterType::INTEGER, 'terms' => ArrayParameterType::STRING];
+
         $out = [];
-        foreach ($this->connection->executeQuery($sql)->fetchAllAssociative() as $row) {
+        foreach ($this->connection->executeQuery($sql, $params, $types)->fetchAllAssociative() as $row) {
             $rid = (int) $row['rid'];
             $out[$rid][(string) $row['term']][] = [
                 'vrid'  => $row['vrid'] !== null ? (int) $row['vrid'] : null,
@@ -225,13 +226,15 @@ final class OmekaSourceReader
      */
     public function loadItemSets(array $ids): array
     {
-        $idList = implode(',', array_map('intval', $ids));
-        if ($idList === '') {
+        if ($ids === []) {
             return [];
         }
-        $sql = "SELECT item_id AS iid, item_set_id AS sid FROM item_item_set WHERE item_id IN ($idList)";
+        $sql = 'SELECT item_id AS iid, item_set_id AS sid FROM item_item_set WHERE item_id IN (:ids)';
         $out = [];
-        foreach ($this->connection->executeQuery($sql)->fetchAllAssociative() as $row) {
+        $rows = $this->connection
+            ->executeQuery($sql, ['ids' => $ids], ['ids' => ArrayParameterType::INTEGER])
+            ->fetchAllAssociative();
+        foreach ($rows as $row) {
             $out[(int) $row['iid']][] = (int) $row['sid'];
         }
         return $out;
@@ -247,16 +250,18 @@ final class OmekaSourceReader
      */
     public function mediaThumbnails(array $ids): array
     {
-        $idList = implode(',', array_map('intval', $ids));
-        if ($idList === '') {
+        if ($ids === []) {
             return [];
         }
         $sql = 'SELECT m.item_id AS iid, m.storage_id AS sid FROM media m'
-            . " WHERE m.item_id IN ($idList) AND m.has_thumbnails = 1"
+            . ' WHERE m.item_id IN (:ids) AND m.has_thumbnails = 1'
             . ' ORDER BY m.item_id ASC, m.position ASC, m.id ASC';
 
         $out = [];
-        foreach ($this->connection->executeQuery($sql)->fetchAllAssociative() as $row) {
+        $rows = $this->connection
+            ->executeQuery($sql, ['ids' => $ids], ['ids' => ArrayParameterType::INTEGER])
+            ->fetchAllAssociative();
+        foreach ($rows as $row) {
             $iid = (int) $row['iid'];
             if (isset($out[$iid])) {
                 continue; // keep the first (lowest position) only

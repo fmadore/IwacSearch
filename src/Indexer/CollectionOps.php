@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace IwacSearch\Indexer;
 
+use Closure;
 use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
 use RuntimeException;
@@ -29,10 +30,24 @@ final class CollectionOps
     private const MAX_ERROR_RATIO = 0.1;
 
     public function __construct(
-        private readonly TypesenseClient $typesense,
+        /**
+         * Lazily-resolved, memoizing client factory. The bulk reindexers
+         * already hold a live client and pass a closure over it; the
+         * INCREMENTAL path needs the laziness for real — it runs inside
+         * Omeka's api.*.post events, where constructing a client for an
+         * unreachable Typesense must not block the admin's save.
+         *
+         * @var Closure(): TypesenseClient
+         */
+        private readonly Closure $clientFactory,
         private readonly LoggerInterface $logger = new NullLogger(),
         private readonly string $logLabel = 'content'
     ) {
+    }
+
+    private function client(): TypesenseClient
+    {
+        return ($this->clientFactory)();
     }
 
     /**
@@ -44,7 +59,7 @@ final class CollectionOps
     public function createVersioned(array $versionedSchema): void
     {
         unset($versionedSchema['_alias_target'], $versionedSchema['_base_name']);
-        $this->typesense->collections->create($versionedSchema);
+        $this->client()->collections->create($versionedSchema);
     }
 
     /**
@@ -116,7 +131,7 @@ final class CollectionOps
         }
 
         $this->logger->info("Swapping alias ({$this->logLabel})", ['alias' => $alias, 'to' => $newName]);
-        $this->typesense->aliases->upsert($alias, ['collection_name' => $newName]);
+        $this->client()->aliases->upsert($alias, ['collection_name' => $newName]);
 
         if ($previous !== null && $previous !== $newName) {
             $this->logger->info("Dropping previous collection ({$this->logLabel})", ['name' => $previous]);
@@ -133,7 +148,7 @@ final class CollectionOps
     private function dropOrphans(string $baseName, string $keep): void
     {
         try {
-            $all = $this->typesense->collections->retrieve();
+            $all = $this->client()->collections->retrieve();
         } catch (Throwable $e) {
             $this->logger->warning("Orphan sweep skipped — could not list collections ({$this->logLabel})", [
                 'error' => $e->getMessage(),
@@ -163,7 +178,7 @@ final class CollectionOps
             $jsonl .= json_encode($doc, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . "\n";
         }
 
-        $response = $this->typesense->collections[$collection]->documents->import(
+        $response = $this->client()->collections[$collection]->documents->import(
             $jsonl,
             ['action' => 'upsert', 'batch_size' => 100]
         );
@@ -186,11 +201,37 @@ final class CollectionOps
         return [$ok, $err];
     }
 
+    /**
+     * Delete one document by id.
+     *
+     * Returns false when the document wasn't there — Typesense's PHP SDK
+     * wraps HTTP errors in several exception classes, so a "did it exist"
+     * check matches on the message rather than importing all of them. Every
+     * OTHER failure throws, so callers can tell "nothing to do" from "the
+     * delete failed".
+     */
+    public function deleteDocument(string $collection, string $documentId): bool
+    {
+        try {
+            $this->client()->collections[$collection]->documents[$documentId]->delete();
+            return true;
+        } catch (Throwable $e) {
+            $msg = strtolower($e->getMessage());
+            $absent = str_contains($msg, 'not found')
+                || str_contains($msg, '404')
+                || str_contains($msg, 'could not find');
+            if ($absent) {
+                return false;
+            }
+            throw $e;
+        }
+    }
+
     /** The collection an alias currently points at, or null if unresolvable. */
     public function resolveAliasTarget(string $alias): ?string
     {
         try {
-            $info = $this->typesense->aliases[$alias]->retrieve();
+            $info = $this->client()->aliases[$alias]->retrieve();
             return $info['collection_name'] ?? null;
         } catch (Throwable) {
             return null;
@@ -201,7 +242,7 @@ final class CollectionOps
     public function safelyDropCollection(string $name): void
     {
         try {
-            $this->typesense->collections[$name]->delete();
+            $this->client()->collections[$name]->delete();
         } catch (Throwable $e) {
             $this->logger->warning("Failed to drop collection ({$this->logLabel})", [
                 'name'  => $name,

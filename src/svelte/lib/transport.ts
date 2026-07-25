@@ -56,6 +56,44 @@ export async function postJson<T>(
  * rejects with. Callers MUST swallow these silently — an aborted request
  * means "a newer one is in flight", never "show the error state".
  */
+/**
+ * One "latest request wins" channel.
+ *
+ * Every keystroke-driven call needs the same three lines — abort the
+ * predecessor, make a fresh controller, hand out its signal — once per
+ * channel (search, suggest, histogram, union), so they live here instead of
+ * four times over. Callers swallow the resulting AbortError via
+ * {@link isAbortError}.
+ */
+export class AbortSlot {
+  private current: AbortController | null = null;
+
+  /** Abort whatever is in flight on this channel and open a new one. */
+  next(): AbortSignal {
+    this.current?.abort();
+    this.current = new AbortController();
+    return this.current.signal;
+  }
+}
+
+/**
+ * Sequence guard for request loops that can't be aborted — `fetchForMap`
+ * pages through several requests, so an AbortController on any single one
+ * wouldn't stop the loop. Each start() takes a ticket; isStale() tells a
+ * completing loop whether a newer one has started since.
+ */
+export class SeqGuard {
+  private seq = 0;
+
+  start(): number {
+    return ++this.seq;
+  }
+
+  isStale(ticket: number): boolean {
+    return ticket !== this.seq;
+  }
+}
+
 export function isAbortError(e: unknown): boolean {
   return e instanceof DOMException && e.name === 'AbortError';
 }

@@ -3,6 +3,9 @@ declare(strict_types=1);
 
 namespace IwacSearch\Indexer\Mapper;
 
+use IwacSearch\IwacInstance;
+use IwacSearch\Indexer\PropertyValues;
+
 /**
  * References — bibliographic citations across 9 RDF classes. Unlike the
  * primary-source subsets these are catalogued with bibliographic vocab:
@@ -21,19 +24,6 @@ namespace IwacSearch\Indexer\Mapper;
  */
 final class ReferenceMapper extends AbstractMapper
 {
-    /** The 9 reference classes → their French type label (o:resource_class). */
-    private const CLASS_LABELS = [
-        35  => 'Article de revue',
-        43  => 'Chapitre',
-        88  => 'Thèse',
-        40  => 'Livre',
-        82  => 'Rapport',
-        178 => 'Compte rendu',
-        77  => 'Communication',
-        52  => 'Ouvrage collectif',
-        305 => 'Article de blog',
-    ];
-
     public function subsetName(): string
     {
         return 'references';
@@ -41,7 +31,7 @@ final class ReferenceMapper extends AbstractMapper
 
     public function classIds(): array
     {
-        return array_keys(self::CLASS_LABELS);
+        return array_keys(IwacInstance::REFERENCE_CLASS_LABELS);
     }
 
     protected function typeTag(): string
@@ -61,55 +51,55 @@ final class ReferenceMapper extends AbstractMapper
         ];
     }
 
-    public function map(array $item, array $values, ?string $thumbnailUrl): ?array
+    public function map(array $item, PropertyValues $values, ?string $thumbnailUrl): ?array
     {
         $doc = $this->buildBase($item, $values, $thumbnailUrl);
 
         // ── Authorship (bibo:authorList, not dcterms:creator) ──────────────
-        $creators = $this->disp($values, 'bibo:authorList');
+        $creators = $values->displays('bibo:authorList');
         $this->maybeAddList($doc, 'creator_ss', $creators);
         if ($creators !== []) {
             $this->maybeAdd($doc, 'creator_sort', $this->authorSortKey($creators[0]));
         }
-        $this->maybeAddList($doc, 'language_ss', $this->disp($values, 'dcterms:language'));
+        $this->maybeAddList($doc, 'language_ss', $values->displays('dcterms:language'));
 
         // ── Country from the per-country Références item set ────────────────
         $this->maybeAddList($doc, 'country_ss', $this->countries->forItemSets($item['item_sets']));
 
         // ── Reference type from the RDF class ───────────────────────────────
-        $label = self::CLASS_LABELS[$item['class']] ?? '';
+        $label = IwacInstance::REFERENCE_CLASS_LABELS[$item['class']] ?? '';
         if ($label !== '') {
             $doc['reference_type_ss'] = [$label];
         }
 
         // ── Bibliographic detail (citation line + journal/publisher facet) ──
-        $this->maybeAdd($doc, 'publisher_s',  $this->firstDisp($values, 'dcterms:publisher'));
+        $this->maybeAdd($doc, 'publisher_s',  $values->firstDisplay('dcterms:publisher'));
         // IWAC catalogues a chapter's containing-book title in
         // dcterms:ALTERNATIVE (verified live; dcterms:isPartOf is empty on
         // chapters — same convention the IWAC-SEO CitationMeta relies on).
         // isPartOf stays as a fallback for records catalogued the other way.
-        if ($item['class'] === 43) {
-            $book = $this->firstDisp($values, 'dcterms:alternative');
+        if ($item['class'] === IwacInstance::CLASS_CHAPTER) {
+            $book = $values->firstDisplay('dcterms:alternative');
             if ($book === '') {
-                $book = $this->firstDisp($values, 'dcterms:isPartOf');
+                $book = $values->firstDisplay('dcterms:isPartOf');
             }
             $this->maybeAdd($doc, 'book_title_s', $book);
         } else {
-            $this->maybeAdd($doc, 'book_title_s', $this->firstDisp($values, 'dcterms:isPartOf'));
+            $this->maybeAdd($doc, 'book_title_s', $values->firstDisplay('dcterms:isPartOf'));
         }
-        $this->maybeAdd($doc, 'edition_s',    $this->firstLiteral($values, 'bibo:edition'));
-        $this->maybeAddList($doc, 'editor_ss', $this->disp($values, 'bibo:editorList'));
-        $this->maybeAdd($doc, 'volume_s', $this->firstLiteral($values, 'bibo:volume'));
-        $this->maybeAdd($doc, 'issue_s',  $this->firstLiteral($values, 'bibo:issue'));
+        $this->maybeAdd($doc, 'edition_s',    $values->firstLiteral('bibo:edition'));
+        $this->maybeAddList($doc, 'editor_ss', $values->displays('bibo:editorList'));
+        $this->maybeAdd($doc, 'volume_s', $values->firstLiteral('bibo:volume'));
+        $this->maybeAdd($doc, 'issue_s',  $values->firstLiteral('bibo:issue'));
         $this->maybeAdd($doc, 'pages_s', $this->pageRange(
-            $this->firstLiteral($values, 'bibo:pageStart'),
-            $this->firstLiteral($values, 'bibo:pageEnd'),
+            $values->firstLiteral('bibo:pageStart'),
+            $values->firstLiteral('bibo:pageEnd'),
         ));
 
         // ── Body = the real abstract; outbound links ────────────────────────
-        $this->maybeAdd($doc, 'abstract',   $this->firstLiteral($values, 'dcterms:abstract'));
-        $this->maybeAdd($doc, 'source_url', $this->firstScalar($values, 'fabio:hasURL'));
-        $this->maybeAdd($doc, 'doi',        $this->firstScalar($values, 'bibo:doi'));
+        $this->maybeAdd($doc, 'abstract',   $values->firstLiteral('dcterms:abstract'));
+        $this->maybeAdd($doc, 'source_url', $values->firstScalar('fabio:hasURL'));
+        $this->maybeAdd($doc, 'doi',        $values->firstScalar('bibo:doi'));
 
         // ── Shared: authority entities + dates ──────────────────────────────
         $this->addAuthorityEntities($doc, $values);

@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace IwacSearch\Service\Indexer;
 
 use Doctrine\DBAL\Connection;
+use IwacSearch\Indexer\CollectionOps;
 use IwacSearch\Indexer\CountryResolver;
 use IwacSearch\Indexer\EntityAuthority;
 use IwacSearch\Indexer\IncrementalIndexer;
@@ -44,13 +45,19 @@ final class IncrementalIndexerFactory implements FactoryInterface
 
         $registry = MapperRegistry::default($authority, $countries);
 
+        $logger = LoggerResolver::fromContainer($container);
+
         return new IncrementalIndexer(
-            clientFactory:   TypesenseClientLazy::fromContainer($container),
+            ops:             new CollectionOps(
+                TypesenseClientLazy::fromContainer($container),
+                $logger,
+                'incremental'
+            ),
             reader:          $reader,
             mappers:         $registry,
             authority:       $authority,
             collectionAlias: $alias,
-            logger:          LoggerResolver::fromContainer($container)
+            logger:          $logger
         );
     }
 }

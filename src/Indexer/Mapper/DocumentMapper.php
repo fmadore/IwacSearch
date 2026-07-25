@@ -3,6 +3,9 @@ declare(strict_types=1);
 
 namespace IwacSearch\Indexer\Mapper;
 
+use IwacSearch\IwacInstance;
+use IwacSearch\Indexer\PropertyValues;
+
 /**
  * Documents (bibo:Document, class 49) — miscellaneous written documents
  * (letters, communiqués, sermons, leaflets, reports, …). OCR + AI summary,
@@ -18,7 +21,7 @@ final class DocumentMapper extends AbstractMapper
 
     public function classIds(): array
     {
-        return [49];
+        return [IwacInstance::CLASS_DOCUMENT];
     }
 
     protected function typeTag(): string
@@ -35,7 +38,7 @@ final class DocumentMapper extends AbstractMapper
         )));
     }
 
-    public function map(array $item, array $values, ?string $thumbnailUrl): ?array
+    public function map(array $item, PropertyValues $values, ?string $thumbnailUrl): ?array
     {
         $doc = $this->buildBase($item, $values, $thumbnailUrl);
 

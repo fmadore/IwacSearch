@@ -1,5 +1,12 @@
 # IwacSearch module review — July 2026
 
+> **Status: implemented.** Everything in sections A–C below was applied in
+> the same branch as this document; see the "Done" table in
+> [engineering-roadmap.md](engineering-roadmap.md) for the per-item landing
+> record. The findings are kept here in full because they explain _why_ the
+> code now looks the way it does. Section D (test harness, static analysis)
+> remains open and is tracked in the roadmap's Phase 1.
+
 A read-through of the whole module (PHP + Svelte client + build wiring)
 looking for correctness bugs, duplication, modularity seams, and
 practice gaps.
@@ -54,7 +61,7 @@ Three consequences, all invisible until you look for them:
    `<select>` falls back to displaying its first option (“Most mentioned”)
    while `resolveSortBy()` actually browse-sorts by `date:desc`.
 
-Not reachable on `/search` (its bootstrap default *is* `_text_match:desc`)
+Not reachable on `/search` (its bootstrap default _is_ `_text_match:desc`)
 nor on the federated tabs (`showSearchBox=false` → `syncUrl=false`), which
 is why it survived.
 
@@ -66,9 +73,10 @@ and use it for the `sort` key only. One line each in `urlState.ts` and
 ### A2. The site-wide header bundle carries the entire search client
 
 `Module::injectHeaderSearchAssets` injects `iwac-search-header.js` on
-**every public site page**. The docblock calls it “framework-free and
-small (~15 KB)”. It is **42.8 KB** (`asset/dist/iwac-search-header.js`),
-because `header.ts` imports `TypesenseClient` — and class methods are never
+**every public site page**. It was **42.8 KB raw / 14.7 KB gzipped**
+(the docblock's “~15 KB” was the gzipped figure — accurate, just ambiguous;
+the docblock now states both). The size isn't the finding — the _contents_
+are: `header.ts` imported `TypesenseClient`, and class methods are never
 tree-shaken. Verified against the built bundle:
 
 | Symbol present in the header bundle | Used by the header typeahead? |
@@ -84,14 +92,18 @@ tree-shaken. Verified against the built bundle:
 Plus the whole of `i18n.ts` (both locales’ `FACET_LABELS`) for one
 `facetLabel()` call.
 
-Reusing `TypesenseClient` was the right call for *contract* reasons (one
+Reusing `TypesenseClient` was the right call for _contract_ reasons (one
 scoped-key mint, one suggest shape) — the problem is only that a class is
-the wrong unit for tree-shaking. **Fix:** split the client into free
-functions over a small context object (`{bootstrap, getKey}`), or extract
-`suggest()` + its key-mint into `lib/suggestClient.ts` that both
-`TypesenseClient` and `header.ts` compose. Either way the header bundle
-drops to roughly what the docblock already claims. At minimum, correct the
-docblock so the number isn’t load-bearing misinformation.
+the wrong unit for tree-shaking.
+
+**Fixed** by extracting `lib/suggestQuery.ts` (`runSuggest()` as a free
+function) and `lib/scopedKey.ts` (the module-scoped key cache).
+`TypesenseClient.suggest()` delegates to the former and `getKey()` to the
+latter, so the contract stays single-sourced while `header.ts` imports only
+what it runs. Header bundle: **42.8 → 33.9 KB raw, 14.7 → 12.8 KB gzipped**,
+with all six unused methods gone from it. The remainder is i18n (both
+locales), the shared suggest-row builders and the DOM enhancer — all
+genuinely used.
 
 ### A3. `/search` runs SSR and client against two independent copies of `query_by`
 
@@ -146,14 +158,14 @@ script that exists for exactly this class of bug).
 
 The same “read Omeka grouped values” primitives exist in three classes:
 
-| Primitive                    | `AbstractMapper` | `EntityAuthority` | `IncrementalIndexer` |
-| ---------------------------- | ---------------- | ----------------- | -------------------- |
-| display value (title ‖ literal) | `disp()`      | `displays()`      | —                    |
-| first display value          | `firstDisp()`    | —                 | —                    |
-| literals only                | —                | `literals()`      | —                    |
-| first literal                | `firstLiteral()` | `firstLiteral()`  | —                    |
-| first scalar (literal ‖ uri) | `firstScalar()`  | —                 | —                    |
-| linked resource ids          | `linkedIds()`    | —                 | `vrids()`            |
+| Primitive                       | `AbstractMapper` | `EntityAuthority` | `IncrementalIndexer` |
+| ------------------------------- | ---------------- | ----------------- | -------------------- |
+| display value (title ‖ literal) | `disp()`         | `displays()`      | —                    |
+| first display value             | `firstDisp()`    | —                 | —                    |
+| literals only                   | —                | `literals()`      | —                    |
+| first literal                   | `firstLiteral()` | `firstLiteral()`  | —                    |
+| first scalar (literal ‖ uri)    | `firstScalar()`  | —                 | —                    |
+| linked resource ids             | `linkedIds()`    | —                 | `vrids()`            |
 
 `AbstractMapper::disp()` and `EntityAuthority::displays()` are
 character-for-character the same function; `firstLiteral()` is duplicated
@@ -244,18 +256,18 @@ The module is hard-wired to one Omeka instance, which is a reasonable
 decision for a bespoke module — but the constants that encode it are
 spread out with no index:
 
-| Constant                       | Where                                        |
-| ------------------------------ | -------------------------------------------- |
-| Content class ids 36/60/49/38/58 | one `classIds()` per mapper (5 files)      |
-| 9 reference class ids          | `ReferenceMapper::CLASS_LABELS`              |
-| Entity class ids 94/96/9/54/244 | `EntityAuthority::CLASS_IDS` + `classDefault()` |
-| Item set 267 (“Notices”)       | `EntityAuthority::SET_NOTICES`               |
-| 15 per-country item-set ids    | `CountryResolver::COUNTRY_ITEM_SETS`         |
-| Class 43 (chapter) special case | `ReferenceMapper::map()`                    |
-| Site base URL + slug           | `Mapper\SiteUrls`                            |
-| Site slugs `afrique_ouest` / `westafrica` | `IwacLocale`, plus both shell PHTMLs |
+| Constant                                  | Where                                           |
+| ----------------------------------------- | ----------------------------------------------- |
+| Content class ids 36/60/49/38/58          | one `classIds()` per mapper (5 files)           |
+| 9 reference class ids                     | `ReferenceMapper::CLASS_LABELS`                 |
+| Entity class ids 94/96/9/54/244           | `EntityAuthority::CLASS_IDS` + `classDefault()` |
+| Item set 267 (“Notices”)                  | `EntityAuthority::SET_NOTICES`                  |
+| 15 per-country item-set ids               | `CountryResolver::COUNTRY_ITEM_SETS`            |
+| Class 43 (chapter) special case           | `ReferenceMapper::map()`                        |
+| Site base URL + slug                      | `Mapper\SiteUrls`                               |
+| Site slugs `afrique_ouest` / `westafrica` | `IwacLocale`, plus both shell PHTMLs            |
 
-Nothing here is *wrong*, but there is no single place to answer “what does
+Nothing here is _wrong_, but there is no single place to answer “what does
 this module assume about the Omeka install?”, which is the first question
 on any migration, any template renumbering, and any attempt to reuse the
 module. `data/newspaper-countries.json` already sets the precedent for
@@ -384,12 +396,12 @@ Worth stating explicitly, because most of it is unusual:
   event listener) — a down Typesense degrades every surface instead of
   500-ing any of them, and anonymous GETs don’t pay for the indexer graph.
 - **The scoped-key model** with the security constraints deliberately
-  hardcoded and *not* config-driven, plus the explicit “locked_filters are
+  hardcoded and _not_ config-driven, plus the explicit “locked_filters are
   cosmetic” warning in the block docblock. That comment prevents a whole
   class of future mistake.
 - **`check-schema-drift.js`** — a project-specific CI gate for a
   project-specific failure mode is exactly the right instinct; the
-  suggestions in A3/B6 are asking for *more* of it, not less.
+  suggestions in A3/B6 are asking for _more_ of it, not less.
 - **The docblocks explain “why”, not “what”**, and record decisions
   (why `api.create.post` is now attached, why the batch events exist, why
   the header CSS loads via the media-swap trick). This is the reason a
@@ -399,14 +411,25 @@ Worth stating explicitly, because most of it is unusual:
 
 ## Suggested order
 
-| # | Item | Effort | Why first |
-| - | ---- | ------ | --------- |
-| 1 | A1 default-sort fallback | trivial | live bug, breaks an admin-facing feature + wastes SSR |
-| 2 | A4 `fr_default` constant, `onHydrate` normalisation, `MapperInterface` shape | trivial | one-liners |
-| 3 | A3 + B6 drift-guard extensions | small | prevents the next silent divergence |
-| 4 | B4, C3 | small | pure deletions / three-line changes |
-| 5 | A2 header bundle split | medium | ships on every page of the site |
-| 6 | B1 `PropertyValues` | medium | unblocks the mapper tests |
-| 7 | B2, B3, B5 | medium | mechanical, zero behaviour change |
-| 8 | C1 instance constants | medium | do it with B1, same files |
-| 9 | C4, C5 client extractions | medium | do it when a feature next opens those files |
+All of A–C landed in one branch, in this order (each verified by
+`npm run lint && npm run check && npm run build` plus `php -l` across the
+module, with throwaway assertion scripts covering the mapper and bootstrap
+outputs):
+
+| #   | Item                       | Why in this position                                                                          |
+| --- | -------------------------- | --------------------------------------------------------------------------------------------- |
+| 1   | A1 default-sort fallback   | live bug, breaks an admin-facing feature + wastes SSR                                         |
+| 2   | A4 hygiene one-liners      | trivial, no dependencies                                                                      |
+| 3   | A3 + B5 + B6               | A3's fix IS the bootstrap builder, so they land together; the drift guard locks the result in |
+| 4   | B4 + C3                    | pure deletions / three-line changes                                                           |
+| 5   | B1 `PropertyValues`        | the widest-reaching PHP change — do it before anything else touches the mappers               |
+| 6   | B2 + B3                    | mechanical, and B2 depends on C3's `CollectionOps` injection                                  |
+| 7   | C1 + C2                    | same files as B1, so batched with it                                                          |
+| 8   | A2 header split            | independent of the PHP work                                                                   |
+| 9   | C4 + C5 client extractions | last, since they touch the largest single file                                                |
+
+**Still open:** section D. The Vitest/PHPUnit harness and PHPStan are
+additive infrastructure rather than changes to this code, and D2 has a real
+blocker (Omeka in `require-dev` or a stub layer). They stay in the
+roadmap's Phase 1 — with the note that A1 is precisely the bug a
+`readUrlState` round-trip test would have caught first.

@@ -5,9 +5,7 @@ namespace IwacSearch\Job;
 
 use Doctrine\DBAL\Connection;
 use IwacSearch\Indexer\ReindexOrchestrator;
-use IwacSearch\Log\LoggerResolver;
-use Omeka\Job\AbstractJob;
-use Throwable;
+use Psr\Log\LoggerInterface;
 use Typesense\Client as TypesenseClient;
 
 /**
@@ -17,46 +15,30 @@ use Typesense\Client as TypesenseClient;
  * cli/reindex.php, dispatched from the admin "Run reindex" button.
  * Long-running (5–15 min on the IWAC corpus); status at /admin/job/{id}/log.
  *
- * Construction: the TypesenseClient and the DBAL Connection come from the
- * service container (the job runs inside Omeka, so 'Omeka\Connection' is the
- * live database connection). All indexer wiring lives in ReindexOrchestrator,
- * shared with cli/reindex.php so the two entry points can't drift.
+ * The DBAL Connection comes from the service container ('Omeka\Connection' is
+ * the live database connection, since the job runs inside Omeka). All indexer
+ * wiring lives in ReindexOrchestrator, shared with cli/reindex.php so the two
+ * entry points can't drift.
  *
- * On any throw, AbstractJob marks the job ERROR — Reindexer::run() drops the
- * half-built collection on failure, so the live alias keeps pointing at the
- * previous good collection.
+ * On any throw, AbstractTypesenseJob logs and rethrows so Omeka marks the job
+ * ERROR — Reindexer::run() has already dropped the half-built collection, so
+ * the live alias still points at the previous good one.
  */
-class BulkReindex extends AbstractJob
+class BulkReindex extends AbstractTypesenseJob
 {
-    public function perform(): void
+    protected function label(): string
     {
-        $services = $this->getServiceLocator();
-        $logger = LoggerResolver::fromContainer($services);
+        return 'bulk reindex';
+    }
 
-        /** @var TypesenseClient $typesense */
-        $typesense = $services->get(TypesenseClient::class);
+    protected function operate(
+        TypesenseClient $typesense,
+        string $moduleRoot,
+        LoggerInterface $logger
+    ): array {
         /** @var Connection $connection */
-        $connection = $services->get('Omeka\Connection');
+        $connection = $this->getServiceLocator()->get('Omeka\Connection');
 
-        // src/Job/BulkReindex.php → module root is two levels up.
-        $moduleRoot = dirname(__DIR__, 2);
-
-        $logger->info('IwacSearch: starting bulk reindex from Omeka job', [
-            'job_id'      => $this->job->getId(),
-            'module_root' => $moduleRoot,
-        ]);
-
-        try {
-            $stats = (new ReindexOrchestrator($typesense, $connection, $moduleRoot, $logger))->run();
-        } catch (Throwable $e) {
-            $logger->error('IwacSearch: reindex failed', [
-                'class'   => $e::class,
-                'message' => $e->getMessage(),
-            ]);
-            // Re-throw so AbstractJob marks the job as ERROR.
-            throw $e;
-        }
-
-        $logger->info('IwacSearch: reindex complete', $stats);
+        return (new ReindexOrchestrator($typesense, $connection, $moduleRoot, $logger))->run();
     }
 }

@@ -1,6 +1,5 @@
 <script lang="ts">
   import type {
-    ActiveFilters,
     EntitySuggestion,
     IwacBootstrap,
     IwacDoc,
@@ -8,16 +7,17 @@
     IwacSearchResponse,
     SearchState,
     YearBucket,
-    YearRange,
   } from './lib/types';
   import { TypesenseClient } from './lib/typesense';
-  import { isAbortError } from './lib/transport';
-  import { onUrlPop, readUrlState, syncToUrl } from './lib/urlState';
+  import { SeqGuard, isAbortError } from './lib/transport';
+  import { FALLBACK_SORT, onUrlPop, readUrlState, syncToUrl } from './lib/urlState';
   import { facetLabel, normalizeCard, normalizeLocale, provideI18n } from './lib/i18n';
   import { createViewMode } from './lib/viewMode.svelte';
   import { createFilterDrawer } from './lib/filterDrawer.svelte';
+  import { createFilterState } from './lib/filterState.svelte';
+  import { createTypeahead, slashShortcut } from './lib/typeahead.svelte';
+  import { createCopyState } from './lib/clipboard.svelte';
   import { recordSearch } from './lib/searchHistory';
-  import type { ActiveFilterChip } from './lib/filterChips';
   import SearchInput from './components/SearchInput.svelte';
   import SuggestDropdown from './components/SuggestDropdown.svelte';
   import ResultsList from './components/ResultsList.svelte';
@@ -45,12 +45,20 @@
    * Page blocks keep everything in memory — multiple block instances
    * on one page would clash if they all fought over the URL.
    *
-   * Modularity note: this component is the orchestrator. It owns state
-   * and wires events. The actual UI is in small focused components
-   * (SearchInput, FacetPanel, ResultsList, Pagination, ResultItem,
-   * SortSelect, …); cross-cutting state mechanics live in composables
-   * (viewMode.svelte.ts, filterDrawer.svelte.ts) so styling and
-   * behaviour stay scoped.
+   * Modularity note: this component is the orchestrator. It owns the query /
+   * page / sort state and the fetch effects, and wires everything together.
+   * The UI is in small focused components (SearchInput, FacetPanel,
+   * ResultsList, Pagination, ResultItem, SortSelect, …); each self-contained
+   * cluster of state mechanics is a composable —
+   *
+   *   filterState.svelte.ts   facet selections + year range (+ their rules)
+   *   typeahead.svelte.ts     suggest dropdown state, ARIA wiring, "/" shortcut
+   *   viewMode.svelte.ts      list / gallery / map resolution + persistence
+   *   filterDrawer.svelte.ts  narrow-viewport drawer
+   *   clipboard.svelte.ts     copy-link button state
+   *
+   * — so each stays independently readable and testable, and this file keeps
+   * only what genuinely crosses between them.
    */
 
   interface Props {
@@ -86,6 +94,14 @@
   const syncUrl = $derived(isStandalone || (showSearchBox && bootstrap.mode === 'full'));
   const urlPrefix = $derived(isStandalone ? '' : `b${bootstrap.block_id}.`);
 
+  // The surface's own default sort — the preset's (or the block admin's)
+  // choice, `_text_match:desc` on /search. It is BOTH the value an absent
+  // ?sort= decodes to and the value omitted when writing, so the URL round
+  // trip preserves whatever this surface was configured with. Passing the
+  // global fallback here instead would make every full-mode block ignore its
+  // configured Default sort and discard the SSR snapshot on mount.
+  const defaultSort = $derived(bootstrap.default_sort || FALLBACK_SORT);
+
   // TypesenseClient caches a scoped key, so we want exactly one per
   // mount. $derived.by reruns only if bootstrap changes, which it
   // doesn't post-mount — same effect as `const`, but satisfies
@@ -99,14 +115,14 @@
   // change post-mount (bootstrap is server-emitted, the rest derive from it).
   // svelte-ignore state_referenced_locally
   const initial: SearchState = syncUrl
-    ? readUrlState(window.location.href, urlPrefix)
+    ? readUrlState(window.location.href, urlPrefix, defaultSort)
     : {
         // initial_query / initial_filters are set by the federated page so
         // the tab seeds with the shared query (and any filter handed off
         // from the union tab); empty on page blocks.
         q: bootstrap.initial_query ?? '',
         page: 1,
-        sort: bootstrap.default_sort || '_text_match:desc',
+        sort: defaultSort,
         filters: bootstrap.initial_filters ?? {},
         yearRange: null,
         view: 'list',
@@ -115,8 +131,15 @@
   let query = $state(initial.q);
   let page = $state(initial.page);
   let sort = $state(initial.sort);
-  let filters = $state<ActiveFilters>(initial.filters);
-  let yearRange = $state<YearRange | null>(initial.yearRange);
+
+  // Categorical facet selections + the year range. The composable owns the
+  // mutation rules (drop empty keys, replace-don't-mutate) and resets the
+  // page on every change — the one cross-cutting effect they all share.
+  const filterState = createFilterState(initial.filters, initial.yearRange, () => {
+    page = 1;
+  });
+  const filters = $derived(filterState.filters);
+  const yearRange = $derived(filterState.yearRange);
 
   // ── Result presentation (List / Gallery / Map) ───────────────────────
   // Content surfaces offer the image-forward Gallery (design review §01);
@@ -167,18 +190,18 @@
   // filters, no year range). Any URL-hydrated non-pristine state (e.g.
   // /search?q=ramadan or ?sort=date:asc) triggers a real fetch so the user
   // sees what they asked for, not the "browse everything" SSR snapshot.
-  // The sort check matters: the snapshot was built with the bootstrap
+  // The sort check matters: the snapshot was built with the surface's
   // default sort, so a sorted share link must not reuse it. Plain `let`
   // (not $state) — reading it inside the effect doesn't create a
   // reactive dependency, so mutating it doesn't re-trigger the effect.
-  // The bootstrap.default_sort read is deliberately non-reactive too —
-  // bootstrap is server-emitted and never changes post-mount.
+  // The defaultSort read is deliberately non-reactive too — it derives
+  // from bootstrap, which is server-emitted and never changes post-mount.
   // svelte-ignore state_referenced_locally
   let skipNextFetch =
     initialResponse != null &&
     initial.q === '' &&
     initial.page === 1 &&
-    initial.sort === (bootstrap.default_sort || '_text_match:desc') &&
+    initial.sort === defaultSort &&
     Object.keys(initial.filters).length === 0 &&
     initial.yearRange === null;
 
@@ -203,7 +226,7 @@
       yearRange,
       view: view.explicit ? view.mode : 'list',
     };
-    syncToUrl(next, prevState, urlPrefix);
+    syncToUrl(next, prevState, urlPrefix, defaultSort);
     // Snapshot for the next diff. NOT structuredClone(next): `filters` and
     // `yearRange` are deep Svelte 5 reactive proxies, and structuredClone
     // throws DataCloneError on a proxy. Build a plain deep copy by hand so
@@ -221,14 +244,17 @@
   // Back / forward → re-hydrate state from URL.
   $effect(() => {
     if (!syncUrl) return;
-    return onUrlPop((s) => {
-      query = s.q;
-      page = s.page;
-      sort = s.sort;
-      filters = s.filters;
-      yearRange = s.yearRange;
-      view.applyPop(s.view);
-    }, urlPrefix);
+    return onUrlPop(
+      (s) => {
+        query = s.q;
+        page = s.page;
+        sort = s.sort;
+        filterState.hydrate(s.filters, s.yearRange);
+        view.applyPop(s.view);
+      },
+      urlPrefix,
+      defaultSort,
+    );
   });
 
   // Auto-suggest Gallery once, on the first response, when the set is
@@ -350,23 +376,23 @@
   // AbortController, so without the guard two quick filter toggles could
   // let the slower (stale) loop finish last and overwrite the newer
   // markers.
-  let mapSeq = 0;
+  const mapSeq = new SeqGuard();
   $effect(() => {
     if (view.mode !== 'map') return;
     const q = query;
     const f = filters;
     const y = yearRange;
-    const seq = ++mapSeq;
+    const ticket = mapSeq.start();
     mapLoading = true;
     client
       .fetchForMap({ q, activeFilters: f, yearRange: y })
       .then((docs) => {
-        if (seq !== mapSeq) return; // superseded — newer fetch in flight
+        if (mapSeq.isStale(ticket)) return; // superseded — newer fetch in flight
         mapDocs = docs;
         mapLoading = false;
       })
       .catch((e: unknown) => {
-        if (seq !== mapSeq) return;
+        if (mapSeq.isStale(ticket)) return;
         console.warn('[iwac-search] map fetch failed', e);
         mapDocs = [];
         mapLoading = false;
@@ -376,143 +402,44 @@
   function handleQueryChange(next: string): void {
     query = next;
     page = 1; // any new query resets pagination
-    // Re-arm the dropdown whenever the query mutates — even if the
-    // user has just blurred the input, fresh keystrokes should reopen
-    // suggestions.
-    suggestOpen = true;
+    // Re-arm the dropdown whenever the query mutates — even if the user has
+    // just blurred the input, fresh keystrokes should reopen suggestions.
+    suggest.armForQuery();
   }
 
-  // ── Typeahead state ─────────────────────────────────────────────────
-  // Open while the search box has focus. With ≥2 chars typed it shows
-  // suggestions; empty it shows recent searches. Closes on blur (after a
-  // tick to let dropdown clicks land), on Esc, after picking a suggestion,
-  // or on result navigation.
-  let suggestOpen = $state(false);
-  let suggestRef: SuggestDropdown | undefined = $state();
-
-  // ARIA combobox wiring. block_id is unique per mount, so the listbox id (and
-  // the option ids derived from it) never collide when several search surfaces
-  // share a page. suggestActiveId is mirrored up from the dropdown so the input
-  // can set aria-activedescendant; suggestExpanded matches the dropdown's own
-  // render condition.
-  const suggestListboxId = $derived(`iwac-suggest-${bootstrap.block_id}`);
-  let suggestActiveId = $state<string | null>(null);
-  const suggestExpanded = $derived(suggestOpen && suggestActiveId !== null);
-
-  function handleSearchFocus(): void {
-    suggestOpen = true;
-  }
-  function handleSearchBlur(): void {
-    // Defer the close so a click on a suggestion item registers before
-    // the dropdown is unmounted. The dropdown also blocks the parent
-    // blur via preventBlur on mousedown — both belts make this robust.
-    window.setTimeout(() => {
-      suggestOpen = false;
-    }, 120);
-  }
-  function handleSuggestClose(): void {
-    suggestOpen = false;
-  }
-  function handleSuggestPickQuery(text: string): void {
-    handleQueryChange(text);
-    suggestOpen = false;
-  }
-  // Enter (or clicking the "Search for …" row) runs a full-text search for
-  // exactly what was typed — no need to pick a suggestion. The search runs
-  // reactively off `query`; this just commits the text and closes the
-  // dropdown so the user lands on results.
-  function handleSuggestRunSearch(text: string): void {
-    if (text !== query) {
-      query = text;
-      page = 1;
-    }
-    suggestOpen = false;
-  }
-  // Picking an entity (place / topic / person / organisation) applies it as
-  // a facet filter and clears the free-text query, so the user sees every
-  // document tagged with that entity within the current scope.
-  function handleSuggestPickEntity(field: string, value: string): void {
-    query = '';
-    suggestOpen = false;
-    handleFacetToggle(field, value, true);
-  }
-  function handleSearchKeydown(e: KeyboardEvent): void {
-    if (suggestRef?.handleKeydown(e)) {
-      // Dropdown consumed it (arrow / enter / escape).
-      return;
-    }
-  }
+  // ── Typeahead ───────────────────────────────────────────────────────
+  // Open/closed state, the ARIA combobox wiring and the focus/blur/keydown
+  // handlers live in the composable; App supplies only the two callbacks
+  // that touch search state. block_id only seeds the listbox id and never
+  // changes post-mount (bootstrap is server-emitted), so reading it once
+  // here is correct.
+  // svelte-ignore state_referenced_locally
+  const suggest = createTypeahead(bootstrap.block_id, {
+    onCommitQuery: (text) => {
+      if (text !== query) {
+        query = text;
+        page = 1;
+      }
+    },
+    onPickEntity: (field, value) => {
+      query = '';
+      filterState.toggle(field, value, true);
+    },
+  });
 
   // ── "/" keyboard shortcut ───────────────────────────────────────────
-  // Slash focuses the search box from anywhere on the page (the GitHub /
-  // Wikipedia convention), unless the user is already typing somewhere.
   let searchFormEl: HTMLFormElement | null = $state(null);
 
   $effect(() => {
     if (!showSearchBox) return;
-    const onKeydown = (e: KeyboardEvent): void => {
-      if (e.key !== '/' || e.defaultPrevented || e.ctrlKey || e.metaKey || e.altKey) return;
-      const target = e.target as HTMLElement | null;
-      if (
-        target &&
-        (target.isContentEditable ||
-          target.tagName === 'INPUT' ||
-          target.tagName === 'TEXTAREA' ||
-          target.tagName === 'SELECT')
-      ) {
-        return;
-      }
-      const input = searchFormEl?.querySelector('input');
-      if (input) {
-        e.preventDefault();
-        input.focus();
-        input.select();
-      }
-    };
-    window.addEventListener('keydown', onKeydown);
-    return () => window.removeEventListener('keydown', onKeydown);
+    return slashShortcut(() => searchFormEl);
   });
 
   // ── Copy link ───────────────────────────────────────────────────────
   // The URL mirrors the full search state on syncing surfaces, so "copy
   // link" is just the address — the button saves the trip to the URL bar
-  // and confirms the copy. Transient label swap instead of a toast.
-  let linkCopied = $state(false);
-  let linkCopiedTimer: number | null = null;
-
-  function handleCopyLink(): void {
-    const url = window.location.href;
-    const confirm = (): void => {
-      linkCopied = true;
-      if (linkCopiedTimer !== null) window.clearTimeout(linkCopiedTimer);
-      linkCopiedTimer = window.setTimeout(() => {
-        linkCopied = false;
-      }, 2000);
-    };
-    if (navigator.clipboard?.writeText) {
-      navigator.clipboard.writeText(url).then(confirm, () => fallbackCopy(url) && confirm());
-    } else if (fallbackCopy(url)) {
-      confirm();
-    }
-  }
-
-  /** execCommand fallback for non-secure contexts / older WebViews. */
-  function fallbackCopy(text: string): boolean {
-    try {
-      const ta = document.createElement('textarea');
-      ta.value = text;
-      ta.setAttribute('readonly', '');
-      ta.style.position = 'fixed';
-      ta.style.opacity = '0';
-      document.body.appendChild(ta);
-      ta.select();
-      const ok = document.execCommand('copy');
-      document.body.removeChild(ta);
-      return ok;
-    } catch {
-      return false;
-    }
-  }
+  // and confirms the copy with a transient label swap instead of a toast.
+  const copyLink = createCopyState();
 
   // ── Mobile filter drawer ────────────────────────────────────────────
   // Composable owns the matchMedia listener + open/close state; the
@@ -520,35 +447,8 @@
   const drawer = createFilterDrawer();
   $effect(() => drawer.attach());
 
-  // Number of currently-active filters (categorical chips + year range).
-  // Drives the badge on the mobile Filters trigger.
-  const activeFilterCount = $derived(
-    Object.values(filters).reduce((n, vs) => n + (vs?.length ?? 0), 0) + (yearRange ? 1 : 0),
-  );
-
   function handleSortChange(next: string): void {
     sort = next;
-    page = 1;
-  }
-
-  function handleFacetToggle(field: string, value: string, nextChecked: boolean): void {
-    const current = filters[field] ?? [];
-    if (nextChecked) {
-      if (!current.includes(value)) {
-        filters = { ...filters, [field]: [...current, value] };
-      }
-    } else {
-      const kept = current.filter((v) => v !== value);
-      if (kept.length === 0) {
-        // Drop the key entirely so empty filter entries don't pollute
-        // the URL state.
-        const next = { ...filters };
-        delete next[field];
-        filters = next;
-      } else {
-        filters = { ...filters, [field]: kept };
-      }
-    }
     page = 1;
   }
 
@@ -581,36 +481,6 @@
       activeFilters: filters,
       yearRange,
     });
-  }
-
-  function handleClearField(field: string): void {
-    const next = { ...filters };
-    delete next[field];
-    filters = next;
-    page = 1;
-  }
-
-  function handleClearAll(): void {
-    filters = {};
-    yearRange = null;
-    page = 1;
-  }
-
-  /**
-   * Remove one active-filter chip from the summary strip / empty state. The
-   * year chip clears the range; every other chip toggles its facet value off.
-   */
-  function handleRemoveChip(chip: ActiveFilterChip): void {
-    if (chip.kind === 'year') {
-      handleYearRangeChange(null);
-    } else {
-      handleFacetToggle(chip.field, chip.value, false);
-    }
-  }
-
-  function handleYearRangeChange(next: YearRange | null): void {
-    yearRange = next;
-    page = 1;
   }
 
   /**
@@ -677,30 +547,30 @@
       class="iwac-search__searchbox"
       role="search"
       bind:this={searchFormEl}
-      onfocusin={handleSearchFocus}
-      onfocusout={handleSearchBlur}
-      onkeydown={handleSearchKeydown}
+      onfocusin={() => suggest.handleFocus()}
+      onfocusout={() => suggest.handleBlur()}
+      onkeydown={(e) => suggest.handleKeydown(e)}
       onsubmit={(e) => e.preventDefault()}
     >
       <SearchInput
         value={query}
         placeholder={t('search_placeholder')}
         onChange={handleQueryChange}
-        listboxId={suggestListboxId}
-        expanded={suggestExpanded}
-        activeDescendant={suggestActiveId}
+        listboxId={suggest.listboxId}
+        expanded={suggest.expanded}
+        activeDescendant={suggest.activeId}
       />
       <SuggestDropdown
-        bind:this={suggestRef}
+        bind:this={suggest.ref}
         {query}
         {client}
-        enabled={suggestOpen}
-        listboxId={suggestListboxId}
-        onActiveChange={(id) => (suggestActiveId = id)}
-        onPickQuery={handleSuggestPickQuery}
-        onRunSearch={handleSuggestRunSearch}
-        onPickEntity={handleSuggestPickEntity}
-        onClose={handleSuggestClose}
+        enabled={suggest.open}
+        listboxId={suggest.listboxId}
+        onActiveChange={(id) => suggest.setActiveId(id)}
+        onPickQuery={(text) => suggest.pickQuery(text)}
+        onRunSearch={(text) => suggest.runSearch(text)}
+        onPickEntity={(field, value) => suggest.pickEntity(field, value)}
+        onClose={() => suggest.close()}
       />
     </form>
   {/if}
@@ -730,10 +600,10 @@
               selected={filters}
               {yearRange}
               distribution={yearDistribution}
-              onToggle={handleFacetToggle}
-              onClearAll={handleClearAll}
-              onClearField={handleClearField}
-              onYearRangeChange={handleYearRangeChange}
+              onToggle={(f, v, c) => filterState.toggle(f, v, c)}
+              onClearAll={() => filterState.clearAll()}
+              onClearField={(f) => filterState.clearField(f)}
+              onYearRangeChange={(r) => filterState.setYearRange(r)}
               onFacetSearch={handleFacetSearch}
             />
           </div>
@@ -746,10 +616,10 @@
             selected={filters}
             {yearRange}
             distribution={yearDistribution}
-            onToggle={handleFacetToggle}
-            onClearAll={handleClearAll}
-            onClearField={handleClearField}
-            onYearRangeChange={handleYearRangeChange}
+            onToggle={(f, v, c) => filterState.toggle(f, v, c)}
+            onClearAll={() => filterState.clearAll()}
+            onClearField={(f) => filterState.clearField(f)}
+            onYearRangeChange={(r) => filterState.setYearRange(r)}
             onFacetSearch={handleFacetSearch}
           />
         </aside>
@@ -777,23 +647,24 @@
                     <Icon name="filter" />
                   </span>
                   <span class="iwac-search__filters-trigger-label">{t('filters')}</span>
-                  {#if activeFilterCount > 0}
-                    <span class="iwac-search__filters-trigger-badge">{activeFilterCount}</span>
+                  {#if filterState.activeCount > 0}
+                    <span class="iwac-search__filters-trigger-badge">{filterState.activeCount}</span
+                    >
                   {/if}
                 </button>
                 {#if syncUrl}
                   <button
                     type="button"
                     class="iwac-search__copylink"
-                    class:is-copied={linkCopied}
-                    onclick={handleCopyLink}
+                    class:is-copied={copyLink.copied}
+                    onclick={() => copyLink.copy(window.location.href)}
                     aria-label={t('copy_link')}
                   >
                     <span class="iwac-search__copylink-icon" aria-hidden="true">
                       <Icon name="link" />
                     </span>
                     <span class="iwac-search__copylink-label">
-                      {linkCopied ? t('link_copied') : t('copy_link')}
+                      {copyLink.copied ? t('link_copied') : t('copy_link')}
                     </span>
                   </button>
                 {/if}
@@ -814,8 +685,8 @@
               {filters}
               {yearRange}
               {sort}
-              onRemoveChip={handleRemoveChip}
-              onClearAll={handleClearAll}
+              onRemoveChip={(c) => filterState.removeChip(c)}
+              onClearAll={() => filterState.clearAll()}
             />
           {/if}
         {/if}
@@ -837,7 +708,7 @@
                 <button
                   type="button"
                   class="iwac-search__didyoumean-chip"
-                  onclick={() => handleSuggestPickEntity(s.field, s.value)}
+                  onclick={() => suggest.pickEntity(s.field, s.value)}
                 >
                   {s.value}
                   <span class="iwac-search__didyoumean-tag">{facetLabel(s.field, locale)}</span>
@@ -849,8 +720,8 @@
             {filters}
             {yearRange}
             {query}
-            onRemoveChip={handleRemoveChip}
-            onClearAll={handleClearAll}
+            onRemoveChip={(c) => filterState.removeChip(c)}
+            onClearAll={() => filterState.clearAll()}
           />
         {:else if response}
           <ResultsList
@@ -858,7 +729,7 @@
             {perPage}
             onPageChange={handlePageChange}
             activeFilters={filters}
-            onFacetToggle={handleFacetToggle}
+            onFacetToggle={(f, v, c) => filterState.toggle(f, v, c)}
             {hideCountry}
             view={view.mode}
           />
@@ -873,7 +744,7 @@
       {perPage}
       onPageChange={handlePageChange}
       activeFilters={filters}
-      onFacetToggle={handleFacetToggle}
+      onFacetToggle={(f, v, c) => filterState.toggle(f, v, c)}
       {hideCountry}
     />
   {/if}

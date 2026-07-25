@@ -5,6 +5,7 @@ namespace IwacSearch\Search;
 
 use Closure;
 use IwacSearch\Browse\FacetCatalog;
+use IwacSearch\Indexer\StopwordsSync;
 use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
 use Throwable;
@@ -110,7 +111,10 @@ final class InitialResponseRenderer
                 'collection'            => $collection,
                 'q'                     => $q,
                 'query_by'              => $queryBy,
-                'stopwords'             => 'fr_default',
+                // Same set the bulk reindex PUTs and the scoped key names —
+                // one constant, so a rename can't leave the SSR path pointing
+                // at a set that no longer exists.
+                'stopwords'             => StopwordsSync::SET_NAME,
                 'filter_by'             => $filterBy,
                 'sort_by'               => $sort,
                 'page'                  => 1,
@@ -122,7 +126,14 @@ final class InitialResponseRenderer
                 'highlight_fields'      => 'title_txt',
                 'highlight_full_fields' => 'title_txt',
                 'snippet_threshold'     => 30,
-                'facet_by'              => $facets === [] ? null : implode(',', $this->dedupeFacets($facets)),
+                // normaliseFacets drops anything not in the catalog — a safety
+                // net against a stale bootstrap still naming a field removed
+                // from schema.yaml, which Typesense would 400 the whole
+                // request over. Rendering with fewer facets beats not
+                // rendering. Same normaliser the block form applies on save.
+                'facet_by'              => $facets === []
+                    ? null
+                    : (implode(',', FacetCatalog::normaliseFacets($facets)) ?: null),
                 'max_facet_values'      => 50,
                 // No limit_hits — the live client pages through all matches
                 // (Typesense default is uncapped); the SSR only renders page 1,
@@ -254,33 +265,6 @@ final class InitialResponseRenderer
             $parts[] = $trimmed;
         }
         return implode(' && ', $parts);
-    }
-
-    /**
-     * Drop facet fields that aren't in the catalog — a safety net
-     * against stale bootstrap configs that still reference a field
-     * removed from schema.yaml. Typesense would 400 the whole request
-     * for one bad name; we'd rather render with fewer facets than not
-     * render at all.
-     *
-     * @param list<string> $fields
-     * @return list<string>
-     */
-    private function dedupeFacets(array $fields): array
-    {
-        $seen = [];
-        $out = [];
-        foreach ($fields as $field) {
-            if (isset($seen[$field])) {
-                continue;
-            }
-            if (!isset(FacetCatalog::FACETABLE_FIELDS[$field])) {
-                continue;
-            }
-            $seen[$field] = true;
-            $out[] = $field;
-        }
-        return $out;
     }
 
 }

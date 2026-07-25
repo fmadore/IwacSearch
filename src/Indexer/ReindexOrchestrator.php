@@ -37,6 +37,12 @@ final class ReindexOrchestrator
      */
     public function run(): array
     {
+        // The orchestrator already holds a live client; CollectionOps takes a
+        // factory because the INCREMENTAL path needs the laziness (see its
+        // constructor). Wrapping it here costs one closure.
+        $typesense = $this->typesense;
+        $typesenseFactory = static fn(): TypesenseClient => $typesense;
+
         // Shared, mutable authority cache: Reindexer->run() builds it from
         // MySQL, every mapper in the registry holds the same reference, and
         // IndexReindexer reads it afterwards. EntityOccurrences is filled
@@ -48,8 +54,10 @@ final class ReindexOrchestrator
 
         $registry = MapperRegistry::default($authority, $countries);
 
+        // One CollectionOps per pass — same plumbing, different log label so
+        // the content-pass and index-pass lines stay tellable apart.
         $reindexer = new Reindexer(
-            typesense:     $this->typesense,
+            ops:           new CollectionOps($typesenseFactory, $this->logger, 'content'),
             schemaLoader:  new SchemaLoader($this->moduleRoot . '/data/schema.yaml'),
             reader:        $reader,
             mappers:       $registry,
@@ -64,7 +72,7 @@ final class ReindexOrchestrator
         // Entity (index) collection — built on the same run from the shared,
         // now-populated authority + occurrence aggregates. Independent alias swap.
         $indexReindexer = new IndexReindexer(
-            typesense:    $this->typesense,
+            ops:          new CollectionOps($typesenseFactory, $this->logger, 'index'),
             schemaLoader: new SchemaLoader($this->moduleRoot . '/data/schema-index.yaml'),
             authority:    $authority,
             occurrences:  $occurrences,

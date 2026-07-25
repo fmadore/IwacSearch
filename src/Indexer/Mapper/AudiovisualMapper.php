@@ -3,6 +3,9 @@ declare(strict_types=1);
 
 namespace IwacSearch\Indexer\Mapper;
 
+use IwacSearch\IwacInstance;
+use IwacSearch\Indexer\PropertyValues;
+
 /**
  * Audiovisual (bibo:AudioVisualDocument, class 38) — audio/video recordings,
  * primarily Nigerian. No OCR, no sentiment: identity + facets + entities +
@@ -22,7 +25,7 @@ final class AudiovisualMapper extends AbstractMapper
 
     public function classIds(): array
     {
-        return [38];
+        return [IwacInstance::CLASS_AUDIOVISUAL];
     }
 
     protected function typeTag(): string
@@ -38,7 +41,7 @@ final class AudiovisualMapper extends AbstractMapper
         )));
     }
 
-    public function map(array $item, array $values, ?string $thumbnailUrl): ?array
+    public function map(array $item, PropertyValues $values, ?string $thumbnailUrl): ?array
     {
         $doc = $this->buildBase($item, $values, $thumbnailUrl);
 

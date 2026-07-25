@@ -42,23 +42,45 @@ final class MapperRegistry
     /** @var array<string, MapperInterface> subset name → mapper */
     private readonly array $mappers;
 
+    /** @var array<int, MapperInterface> resource class id → mapper */
+    private readonly array $byClass;
+
     /**
      * @param iterable<MapperInterface> $mappers
      */
     public function __construct(iterable $mappers)
     {
         $byName = [];
+        $byClass = [];
         foreach ($mappers as $mapper) {
             $name = $mapper->subsetName();
             if (isset($byName[$name])) {
                 throw new RuntimeException("Duplicate mapper for subset: {$name}");
             }
             $byName[$name] = $mapper;
+
+            // Class → mapper is resolved ONCE here rather than by scanning
+            // every mapper's classIds() per item: forClass() runs on the hot
+            // incremental path and on every row of a batch update. A class
+            // claimed twice is a wiring bug — fail at construction, not with
+            // whichever mapper happened to be registered first.
+            foreach ($mapper->classIds() as $classId) {
+                if (isset($byClass[$classId])) {
+                    throw new RuntimeException(sprintf(
+                        'Resource class %d is claimed by both the %s and %s mappers.',
+                        $classId,
+                        $byClass[$classId]->subsetName(),
+                        $name
+                    ));
+                }
+                $byClass[$classId] = $mapper;
+            }
         }
         if ($byName === []) {
             throw new RuntimeException('MapperRegistry: at least one mapper required');
         }
         $this->mappers = $byName;
+        $this->byClass = $byClass;
     }
 
     public function get(string $subset): MapperInterface
@@ -81,12 +103,7 @@ final class MapperRegistry
      */
     public function forClass(int $classId): ?MapperInterface
     {
-        foreach ($this->mappers as $mapper) {
-            if (in_array($classId, $mapper->classIds(), true)) {
-                return $mapper;
-            }
-        }
-        return null;
+        return $this->byClass[$classId] ?? null;
     }
 
     /**
