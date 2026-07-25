@@ -195,18 +195,27 @@ Two findings from setting it up, so the next person doesn't rediscover them:
 - **`ResultItem` list/gallery split** — already tracked in ROADMAP.md;
   same batch.
 
-## Phase 5 — Schema/data hygiene
+## Phase 5 — Schema/data hygiene (done)
 
-- **Make the drift check per-schema instead of OR-ing**: a catalog key
-  currently passes if it's `facet: true` in _either_ YAML, so a facet
-  flag lost in one collection stays green while that surface's panel
-  breaks. Flag `declared-but-not-facet` per file for keys both schemas
-  declare (`country_ss`, `pub_year`).
-- **Document the deliberate `title_txt` stemming asymmetry** (content
-  schema stems, entity schema doesn't — proper nouns) with a comment in
-  `schema-index.yaml` so it stops looking like drift.
-- **Consider generating the shared field blocks** of the two YAMLs from
-  one source if they diverge again.
+- **The drift check is per-schema now, not OR-ed.** A catalog key is
+  validated against every schema that DECLARES it, so losing `facet: true`
+  in one collection while the other keeps it is a failure instead of
+  silently green. Only `country_ss` is currently declared in both, and the
+  check prints that list so the coverage stays visible. (Verified by
+  dropping the flag from the entity schema alone: red, as intended.)
+- **The `title_txt` stemming asymmetry is documented** in
+  `schema-index.yaml` where someone comparing the two files will actually
+  see it. Content titles are prose and stem; entity titles are proper nouns
+  and must not — a French stemmer would conflate "Tijaniyya"/"Tijaniyyas"
+  and chew the tail off "Bamako". Alias reconciliation on that collection
+  is entity_aliases_txt + the synonym set's job, not the stemmer's.
+- **Generating the shared field blocks from one source: decided against.**
+  The two schemas share 11 fields, nearly all trivial (`id`, `title`,
+  `is_public`, `omeka_url`, …), and the one interesting shared field —
+  `title_txt` — is deliberately DIFFERENT between them. A generator would
+  add a build step, obscure that asymmetry, and defend against a failure
+  the per-schema drift check now catches directly. Revisit only if the
+  shared surface grows well beyond its current size.
 
 ## Notes for future sessions
 
