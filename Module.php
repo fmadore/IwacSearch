@@ -34,6 +34,13 @@ use Omeka\Permissions\Acl;
 
 class Module extends AbstractModule
 {
+    /**
+     * Module version that retired the curated-browse system (and its
+     * `iwac_browse_config` table). Upgrades from at or above this version
+     * have nothing to drop — see upgrade().
+     */
+    private const BROWSE_CONFIG_RETIRED_IN = '3.0.0';
+
     public function getConfig(): array
     {
         return include __DIR__ . '/config/module.config.php';
@@ -224,11 +231,16 @@ class Module extends AbstractModule
     /**
      * Inject the tiny header-search enhancer on every public SITE page.
      *
-     * Separate from injectSvelteAssets (which ships the full ~90 KB search
-     * app only on SearchController routes): the header search box lives in
-     * the theme chrome on every page, so its typeahead must load site-wide.
-     * The bundle is framework-free and small (~15 KB); it no-ops harmlessly
-     * if the active theme has no [data-iwac-header-search] form.
+     * Separate from injectSvelteAssets (which ships the full search app only
+     * on SearchController routes): the header search box lives in the theme
+     * chrome on every page, so its typeahead must load site-wide. The bundle
+     * is framework-free and small (~34 KB raw / ~13 KB gzipped); it no-ops
+     * harmlessly if the active theme has no [data-iwac-header-search] form.
+     *
+     * Keep it that way: it imports `runSuggest()` rather than TypesenseClient
+     * precisely because class methods can't be tree-shaken, and importing the
+     * client put the export / map / union / histogram / facet-value code on
+     * every public page. Adding an import here is a site-wide cost.
      *
      * Skips admin + API layouts via the status() helper. The inline config
      * blob carries the (basePath-resolved) token + search endpoints and the
@@ -256,10 +268,10 @@ class Module extends AbstractModule
         // or /search-api); basePath() keeps them correct under a subdirectory
         // install. Locale picks the FR/EN dropdown strings.
         $config = [
-            'endpoints' => [
-                'token'  => $view->basePath('/discovery/token'),
-                'search' => $view->basePath('/search-api/multi_search'),
-            ],
+            'endpoints' => array_map(
+                static fn(string $stem): string => $view->basePath($stem),
+                Search\SurfaceBootstrap::ENDPOINT_STEMS
+            ),
             'locale' => $view->iwacLocale(),
         ];
         // JSON_HEX_TAG neutralises any "</script>" inside the (server-trusted)
@@ -315,9 +327,18 @@ class Module extends AbstractModule
      * scopes picked per page block — dropping it loses no search data. Old
      * /browse/{slug} bookmarks keep working via SearchController::browseAction,
      * which 302-redirects them to /search. Idempotent (DROP … IF EXISTS).
+     *
+     * Version-gated: the table was retired in 3.0.0, so an install already at
+     * or past that version cannot have it. Running the DROP unconditionally on
+     * every future upgrade was harmless but left no record of WHEN it stopped
+     * being relevant — the guard is that record, and lets the whole branch be
+     * deleted once no install can still be below the floor.
      */
     public function upgrade($oldVersion, $newVersion, ServiceLocatorInterface $services): void
     {
+        if (version_compare((string) $oldVersion, self::BROWSE_CONFIG_RETIRED_IN, '>=')) {
+            return;
+        }
         $connection = $services->get('Omeka\Connection');
         $connection->executeStatement('DROP TABLE IF EXISTS iwac_browse_config');
     }

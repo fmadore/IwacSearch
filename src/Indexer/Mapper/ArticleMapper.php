@@ -3,6 +3,9 @@ declare(strict_types=1);
 
 namespace IwacSearch\Indexer\Mapper;
 
+use IwacSearch\IwacInstance;
+use IwacSearch\Indexer\PropertyValues;
+
 /**
  * Articles (bibo:Article, class 36) — digitised newspaper articles.
  *
@@ -18,7 +21,7 @@ final class ArticleMapper extends AbstractMapper
 
     public function classIds(): array
     {
-        return [36];
+        return [IwacInstance::CLASS_ARTICLE];
     }
 
     protected function typeTag(): string
@@ -36,11 +39,11 @@ final class ArticleMapper extends AbstractMapper
         )));
     }
 
-    public function map(array $item, array $values, ?string $thumbnailUrl): ?array
+    public function map(array $item, PropertyValues $values, ?string $thumbnailUrl): ?array
     {
         $doc = $this->buildBase($item, $values, $thumbnailUrl);
 
-        $this->maybeAdd($doc, 'source_url', $this->firstScalar($values, 'fabio:hasURL'));
+        $this->maybeAdd($doc, 'source_url', $values->firstScalar('fabio:hasURL'));
         $this->addCommonFacets($doc, $values);
         $this->addAuthorityEntities($doc, $values);
         $this->addDateFields($doc, $values);

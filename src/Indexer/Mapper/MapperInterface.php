@@ -3,6 +3,8 @@ declare(strict_types=1);
 
 namespace IwacSearch\Indexer\Mapper;
 
+use IwacSearch\Indexer\PropertyValues;
+
 /**
  * Maps one Omeka item (with its grouped property values) to one Typesense
  * document for the content collection.
@@ -50,10 +52,13 @@ interface MapperInterface
     /**
      * Convert one Omeka item to one Typesense document.
      *
-     * @param  array{id:int,title:string,is_public:bool,class:int} $item
-     * @param  array<string, list<array{vrid:?int,value:?string,uri:?string,title:?string}>> $values
+     * `item_sets` is part of the contract, not incidental: the document /
+     * photograph / reference mappers derive `country_ss` from per-country set
+     * membership, and every subset emits `item_set_ids`.
+     *
+     * @param  array{id:int,title:string,is_public:bool,class:int,item_sets:list<int>} $item
      * @param  ?string $thumbnailUrl  first thumbnailed-media derivative URL, or null
      * @return array<string,mixed>|null  null = skip this item
      */
-    public function map(array $item, array $values, ?string $thumbnailUrl): ?array;
+    public function map(array $item, PropertyValues $values, ?string $thumbnailUrl): ?array;
 }

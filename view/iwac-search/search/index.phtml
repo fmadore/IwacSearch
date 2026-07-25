@@ -21,11 +21,11 @@ $this->headTitle(($isEn ? 'Search' : 'Recherche') . ' · Islam West Africa Colle
 
     <noscript>
         <p>This search requires JavaScript. Browse the
-            <a href="<?= $this->escapeHtmlAttr($this->basePath('/s/afrique_ouest')) ?>">
+            <a href="<?= $this->escapeHtmlAttr($this->basePath('/s/' . \IwacSearch\IwacInstance::SITE_SLUG_FR)) ?>">
                 French
             </a>
             or
-            <a href="<?= $this->escapeHtmlAttr($this->basePath('/s/westafrica')) ?>">
+            <a href="<?= $this->escapeHtmlAttr($this->basePath('/s/' . \IwacSearch\IwacInstance::SITE_SLUG_EN)) ?>">
                 English
             </a>
             site instead.

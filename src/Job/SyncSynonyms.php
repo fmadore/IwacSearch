@@ -4,9 +4,7 @@ declare(strict_types=1);
 namespace IwacSearch\Job;
 
 use IwacSearch\Indexer\SynonymsSync;
-use IwacSearch\Log\LoggerResolver;
-use Omeka\Job\AbstractJob;
-use Throwable;
+use Psr\Log\LoggerInterface;
 use Typesense\Client as TypesenseClient;
 
 /**
@@ -23,39 +21,18 @@ use Typesense\Client as TypesenseClient;
  *     synonym expansion is search-time, so no reindex is needed.
  *   - The set is missing on a fresh Typesense volume.
  */
-class SyncSynonyms extends AbstractJob
+class SyncSynonyms extends AbstractTypesenseJob
 {
-    public function perform(): void
+    protected function label(): string
     {
-        $services = $this->getServiceLocator();
-        $logger = LoggerResolver::fromContainer($services);
+        return 'synonym set sync';
+    }
 
-        /** @var TypesenseClient $typesense */
-        $typesense = $services->get(TypesenseClient::class);
-
-        // src/Job/SyncSynonyms.php → module root is two levels up.
-        $moduleRoot = dirname(__DIR__, 2);
-
-        $sync = new SynonymsSync(
-            $typesense,
-            $moduleRoot . '/data/synonyms-fr.json',
-            $logger
-        );
-
-        $logger->info('IwacSearch: syncing synonym set from Omeka job', [
-            'job_id' => $this->job->getId(),
-        ]);
-
-        try {
-            $stats = $sync->sync();
-        } catch (Throwable $e) {
-            $logger->error('IwacSearch: synonyms sync failed', [
-                'class'   => $e::class,
-                'message' => $e->getMessage(),
-            ]);
-            throw $e;
-        }
-
-        $logger->info('IwacSearch: synonyms synced', $stats);
+    protected function operate(
+        TypesenseClient $typesense,
+        string $moduleRoot,
+        LoggerInterface $logger
+    ): array {
+        return (new SynonymsSync($typesense, $moduleRoot . '/data/synonyms-fr.json', $logger))->sync();
     }
 }

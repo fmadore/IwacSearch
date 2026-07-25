@@ -7,6 +7,7 @@ use IwacSearch\Indexer\CurationSync;
 use IwacSearch\Search\InitialResponseRenderer;
 use IwacSearch\Search\PresetCatalog;
 use IwacSearch\Search\SearchDefaults;
+use IwacSearch\Search\SurfaceBootstrap;
 use IwacSearch\Search\TypesenseSearchKeyProvider;
 use IwacSearch\Util\ExceptionMessage;
 use Laminas\Http\Response;
@@ -31,17 +32,6 @@ use Throwable;
  */
 class SearchController extends AbstractActionController
 {
-    /**
-     * Raw endpoint stems — basePath() is resolved at view time by the mount
-     * partials; pre-baking the stems here keeps the renderer dumb.
-     *
-     * @var array<string, string>
-     */
-    private const ENDPOINT_STEMS = [
-        'token'  => '/discovery/token',
-        'search' => '/search-api/multi_search',
-    ];
-
     public function __construct(
         private readonly TypesenseSearchKeyProvider $keyProvider,
         private readonly InitialResponseRenderer $initialRenderer,
@@ -96,24 +86,34 @@ class SearchController extends AbstractActionController
      *     Curated page blocks deliberately omit this — raw relevance order.
      *   - index_collection_alias: always advertised so the autocomplete can
      *     federate to the entity index.
+     *   - query_by / highlight_fields come from SearchDefaults via the
+     *     builder, so this surface's SSR search and its client search read
+     *     the same field list (they used to be two independent copies — the
+     *     PHP constant for SSR, the TS fallback for the client).
      *
      * @return array<string, mixed>
      */
     private function contentBootstrap(string $blockId): array
     {
-        return [
-            'block_id'         => $blockId,
-            'mode'             => 'full',
-            'locked_filters'   => '',
-            'prominent_facets' => SearchDefaults::CONTENT_PROMINENT_FACETS,
-            'default_sort'     => '_text_match:desc',
-            'diversify_tag'    => CurationSync::TAG,
-            'diversity_lambda' => 0.7,
-            'results_per_page' => 10,
-            'collection_alias' => $this->config['typesense']['collection_alias'] ?? 'iwac_current',
-            'index_collection_alias' => $this->config['typesense']['index_collection_alias'] ?? 'iwac_index_current',
-            'endpoints'        => self::ENDPOINT_STEMS,
-        ];
+        return SurfaceBootstrap::build(
+            blockId:          $blockId,
+            card:             PresetCatalog::CARD_CONTENT,
+            contentAlias:     $this->contentAlias(),
+            indexAlias:       $this->indexAlias(),
+            prominentFacets:  SearchDefaults::CONTENT_PROMINENT_FACETS,
+            defaultSort:      '_text_match:desc',
+            diversifyTag:     CurationSync::TAG,
+        );
+    }
+
+    private function contentAlias(): string
+    {
+        return (string) ($this->config['typesense']['collection_alias'] ?? 'iwac_current');
+    }
+
+    private function indexAlias(): string
+    {
+        return (string) ($this->config['typesense']['index_collection_alias'] ?? 'iwac_index_current');
     }
 
     /**
@@ -156,36 +156,26 @@ class SearchController extends AbstractActionController
      */
     public function everythingAction(): ViewModel
     {
-        $indexAlias = $this->config['typesense']['index_collection_alias'] ?? 'iwac_index_current';
         $query      = (string) $this->params()->fromQuery('q', '');
         $defaultTab = $this->params()->fromQuery('tab') === 'entities' ? 'entities' : 'content';
 
-        // Content tab — whole corpus, mirrors /search (incl. MMR diversification
-        // of near-duplicate syndicated articles on a text query).
-        $contentTab = $this->contentBootstrap('everything-content') + [
-            'card'             => 'content',
-            'query_by'         => SearchDefaults::CONTENT_QUERY_BY,
-            'highlight_fields' => SearchDefaults::CONTENT_HIGHLIGHT_FIELDS,
-        ];
+        // Content tab — whole corpus, identical to /search (incl. MMR
+        // diversification of near-duplicate syndicated articles on a text query).
+        $contentTab = $this->contentBootstrap('everything-content');
 
         // Entity tab — the index/authority collection. Facets + sort come from
         // the shared PresetCatalog 'index' scope so the block and the federated
         // page agree (defensive fallback if the preset is ever renamed).
         $indexPreset = PresetCatalog::get('index');
-        $entityTab = [
-            'block_id'         => 'everything-entities',
-            'mode'             => 'full',
-            'card'             => 'entity',
-            'locked_filters'   => '',
-            'prominent_facets' => $indexPreset?->facets ?? ['entity_type_s', 'country_ss'],
-            'default_sort'     => $indexPreset?->defaultSort ?? 'frequency:desc',
-            'results_per_page' => 20,
-            'collection_alias' => $indexAlias,
-            'index_collection_alias' => $indexAlias,
-            'query_by'         => SearchDefaults::ENTITY_QUERY_BY,
-            'highlight_fields' => SearchDefaults::ENTITY_HIGHLIGHT_FIELDS,
-            'endpoints'        => self::ENDPOINT_STEMS,
-        ];
+        $entityTab = SurfaceBootstrap::build(
+            blockId:         'everything-entities',
+            card:            PresetCatalog::CARD_ENTITY,
+            contentAlias:    $this->contentAlias(),
+            indexAlias:      $this->indexAlias(),
+            prominentFacets: $indexPreset?->facets ?? ['entity_type_s', 'country_ss'],
+            defaultSort:     $indexPreset?->defaultSort ?? 'frequency:desc',
+            resultsPerPage:  20,
+        );
 
         if ($query === '') {
             $contentSsr = $this->initialRenderer->render($contentTab);
@@ -206,7 +196,7 @@ class SearchController extends AbstractActionController
                 ['id' => 'content',  'bootstrap' => $contentTab],
                 ['id' => 'entities', 'bootstrap' => $entityTab],
             ],
-            'endpoints'     => self::ENDPOINT_STEMS,
+            'endpoints'     => SurfaceBootstrap::ENDPOINT_STEMS,
         ];
 
         $view = new ViewModel(['bootstrap' => $bootstrap]);

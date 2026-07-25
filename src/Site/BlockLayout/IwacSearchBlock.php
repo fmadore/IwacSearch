@@ -8,6 +8,7 @@ use IwacSearch\Browse\FacetCatalog;
 use IwacSearch\Search\InitialResponseRenderer;
 use IwacSearch\Search\PresetCatalog;
 use IwacSearch\Search\SearchDefaults;
+use IwacSearch\Search\SurfaceBootstrap;
 use Laminas\View\Renderer\PhpRenderer;
 use Omeka\Api\Representation\SitePageBlockRepresentation;
 use Omeka\Api\Representation\SitePageRepresentation;
@@ -71,8 +72,12 @@ class IwacSearchBlock extends AbstractBlockLayout
      * Html block). intro_html is written by site editors and rendered raw on
      * the public page, so it MUST be purified on save — page-edit rights are
      * much broader than global admin, and an unpurified value is stored XSS.
-     * prominent_facets is normalised against the catalog so unknown field
-     * names can't persist in block data.
+     *
+     * Every OTHER field is normalised against its catalog here too, so
+     * invalid state can never reach the database: render() would defend
+     * against a bad `preset` / `default_sort` anyway, but `mode` used to flow
+     * unvalidated into the bootstrap, and half-validating on save meant a
+     * stale value could sit in block data misbehaving only at render time.
      */
     public function onHydrate(SitePageBlock $block, ErrorStore $errorStore): void
     {
@@ -87,6 +92,24 @@ class IwacSearchBlock extends AbstractBlockLayout
 
         $perPage = (int) ($data['results_per_page'] ?? 10);
         $data['results_per_page'] = max(1, min(50, $perPage));
+
+        // Scope: a catalog key or the `custom` sentinel; anything else
+        // (a renamed preset, a hand-posted value) degrades to custom, which
+        // is exactly how render() treats an unresolvable preset.
+        $preset = (string) ($data['preset'] ?? PresetCatalog::CUSTOM);
+        $data['preset'] = PresetCatalog::get($preset) !== null ? $preset : PresetCatalog::CUSTOM;
+
+        // Render mode drives which chrome the client mounts; an unknown value
+        // silently rendered as a degraded "not full" surface.
+        $mode = (string) ($data['mode'] ?? 'full');
+        $data['mode'] = isset(FacetCatalog::RENDER_MODES[$mode]) ? $mode : 'full';
+
+        // Default sort: '' means "use the scope's own default". A non-empty
+        // value must be valid for the scope's collection — the same check
+        // render() applies, done once on save so stored data stays truthful.
+        $sort = (string) ($data['default_sort'] ?? '');
+        $card = PresetCatalog::get($data['preset'])?->card ?? PresetCatalog::CARD_CONTENT;
+        $data['default_sort'] = ($sort !== '' && FacetCatalog::isValidSortFor($card, $sort)) ? $sort : '';
 
         $block->setData($data);
     }
@@ -341,42 +364,27 @@ class IwacSearchBlock extends AbstractBlockLayout
             ? $adminSort
             : $scopeDefaultSort;
 
-        $isEntity        = ($card === PresetCatalog::CARD_ENTITY);
-        $collectionAlias = $isEntity ? $this->indexAlias : $this->contentAlias;
-
-        // The bootstrap config the Svelte client reads on mount. Same shape
-        // as the /search and /browse/{slug} routes emit, so the same client
-        // mount logic works for every surface. query_by / highlight_fields are
-        // collection-specific: the entity index lacks ocr_text/abstract/
-        // embedding, so it must pass its own set or Typesense 404s on them.
-        $bootstrap = [
-            'block_id'         => (int) $block->id(),
-            'mode'             => $data['mode'] ?? 'full',
-            'card'             => $card,
-            'locked_filters'   => $lockedFilters,
-            'prominent_facets' => $prominentFacets,
+        // The bootstrap config the Svelte client reads on mount. Same builder
+        // — and therefore the same shape — as the /search and
+        // /search/everything routes, so the same client mount logic works for
+        // every surface. Endpoint stems are resolved through basePath() by the
+        // shared mount partial, exactly as they are for the controller routes.
+        //
+        // Curated blocks deliberately pass no diversify tag: a locked-scope
+        // grid ("latest from Sidwaya") wants raw relevance order, not MMR.
+        $bootstrap = SurfaceBootstrap::build(
+            blockId:         (int) $block->id(),
+            card:            $card,
+            contentAlias:    $this->contentAlias,
+            indexAlias:      $this->indexAlias,
+            prominentFacets: array_values(array_filter($prominentFacets, 'is_string')),
+            defaultSort:     $defaultSort,
+            mode:            (string) ($data['mode'] ?? 'full'),
+            lockedFilters:   $lockedFilters,
+            resultsPerPage:  (int) ($data['results_per_page'] ?? 10),
             // Single-country scopes hide the (redundant) country chip on cards.
-            'hide_country'     => $hideCountry,
-            'default_sort'     => $defaultSort,
-            'results_per_page' => (int) ($data['results_per_page'] ?? 10),
-            'collection_alias' => $collectionAlias,
-            // Entity collection alias (always advertised) so the block's
-            // autocomplete can federate to the index entities like the other
-            // surfaces.
-            'index_collection_alias' => $this->indexAlias,
-            'query_by'         => $isEntity
-                ? SearchDefaults::ENTITY_QUERY_BY
-                : SearchDefaults::CONTENT_QUERY_BY,
-            'highlight_fields' => $isEntity
-                ? SearchDefaults::ENTITY_HIGHLIGHT_FIELDS
-                : SearchDefaults::CONTENT_HIGHLIGHT_FIELDS,
-            // Endpoint locations — kept here so the client doesn't hardcode
-            // Omeka's URL shape, and so site admins can override later.
-            'endpoints' => [
-                'token'  => $view->basePath('/discovery/token'),
-                'search' => $view->basePath('/search-api/multi_search'),
-            ],
-        ];
+            hideCountry:     $hideCountry,
+        );
 
         // SSR the first page so blocks with locked filters (e.g. "latest
         // from Sidwaya" on a Welcome page) show items immediately instead

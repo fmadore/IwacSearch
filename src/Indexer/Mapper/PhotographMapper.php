@@ -3,6 +3,9 @@ declare(strict_types=1);
 
 namespace IwacSearch\Indexer\Mapper;
 
+use IwacSearch\IwacInstance;
+use IwacSearch\Indexer\PropertyValues;
+
 /**
  * Photographs (bibo:Image, class 58 — 1:1 with resource template 15
  * "Photographie", verified live: 30 items on both selectors). Fieldwork
@@ -20,7 +23,7 @@ final class PhotographMapper extends AbstractMapper
 
     public function classIds(): array
     {
-        return [58];
+        return [IwacInstance::CLASS_PHOTOGRAPH];
     }
 
     protected function typeTag(): string
@@ -36,7 +39,7 @@ final class PhotographMapper extends AbstractMapper
         )));
     }
 
-    public function map(array $item, array $values, ?string $thumbnailUrl): ?array
+    public function map(array $item, PropertyValues $values, ?string $thumbnailUrl): ?array
     {
         $doc = $this->buildBase($item, $values, $thumbnailUrl);
 

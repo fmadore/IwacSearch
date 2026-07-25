@@ -20,9 +20,9 @@ $this->headTitle(($isEn ? 'Search everything' : 'Tout rechercher') . ' · Islam 
 
     <noscript>
         <p>This search requires JavaScript. Browse the
-            <a href="<?= $this->escapeHtmlAttr($this->basePath('/s/afrique_ouest')) ?>">French</a>
+            <a href="<?= $this->escapeHtmlAttr($this->basePath('/s/' . \IwacSearch\IwacInstance::SITE_SLUG_FR)) ?>">French</a>
             or
-            <a href="<?= $this->escapeHtmlAttr($this->basePath('/s/westafrica')) ?>">English</a>
+            <a href="<?= $this->escapeHtmlAttr($this->basePath('/s/' . \IwacSearch\IwacInstance::SITE_SLUG_EN)) ?>">English</a>
             site instead.
         </p>
     </noscript>

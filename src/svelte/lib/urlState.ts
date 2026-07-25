@@ -25,7 +25,29 @@ import type { ActiveFilters, SearchState, ViewMode, YearRange } from './types';
 
 const FILTER_PREFIX = 'f.';
 
-export function readUrlState(href: string = window.location.href, prefix = ''): SearchState {
+/**
+ * Sort used when a surface declares none. Every caller should pass the
+ * surface's own `bootstrap.default_sort` instead — this is only the
+ * last-resort fallback for a bootstrap that omits it.
+ */
+export const FALLBACK_SORT = '_text_match:desc';
+
+/**
+ * Decode the state a URL carries under `prefix`.
+ *
+ * `defaultSort` is the SURFACE's default (the preset's sort for a page block,
+ * `_text_match:desc` for /search). It matters because the sort param is
+ * omitted from the URL when it equals the default — so "absent" must decode
+ * back to that same default, not to a global constant. Passing the wrong one
+ * makes a block ignore its configured Default sort and, because the SSR
+ * skip-check compares against `bootstrap.default_sort`, throw away the
+ * server-rendered first page on every mount.
+ */
+export function readUrlState(
+  href: string = window.location.href,
+  prefix = '',
+  defaultSort: string = FALLBACK_SORT,
+): SearchState {
   const url = new URL(href);
   const params = url.searchParams;
   // "f." for the standalone route, "b42.f." for a page block.
@@ -51,7 +73,7 @@ export function readUrlState(href: string = window.location.href, prefix = ''): 
     // `found` ("every match is reachable"), so a shared deep link must not
     // be silently re-clamped to an arbitrary low page.
     page: clampInt(params.get(`${prefix}page`), 1, 10000, 1),
-    sort: params.get(`${prefix}sort`) ?? '_text_match:desc',
+    sort: params.get(`${prefix}sort`) || defaultSort,
     filters,
     yearRange: parseYearRange(params, prefix),
     view: parseView(params.get(`${prefix}view`)),
@@ -116,14 +138,22 @@ function clearPrefixedKeys(params: URLSearchParams, prefix: string): void {
 }
 
 /** Write this prefix's keys into `params`, in place. Defaults are omitted. */
-function applyState(params: URLSearchParams, state: SearchState, prefix: string): void {
+function applyState(
+  params: URLSearchParams,
+  state: SearchState,
+  prefix: string,
+  defaultSort: string,
+): void {
   if (state.q.trim() !== '') {
     params.set(`${prefix}q`, state.q);
   }
   if (state.page > 1) {
     params.set(`${prefix}page`, String(state.page));
   }
-  if (state.sort && state.sort !== '_text_match:desc') {
+  // Omitted when it matches the surface's own default — which is what
+  // readUrlState() restores for an absent param, so the round trip holds
+  // whatever the surface's default happens to be.
+  if (state.sort && state.sort !== defaultSort) {
     params.set(`${prefix}sort`, state.sort);
   }
   for (const [field, values] of Object.entries(state.filters)) {
@@ -155,10 +185,15 @@ function applyState(params: URLSearchParams, state: SearchState, prefix: string)
  * Defaults are omitted from the URL so a fresh surface has a clean URL, not
  * one littered with &page=1&sort=_text_match:desc.
  */
-export function writeUrlState(state: SearchState, prefix = '', baseSearch = ''): string {
+export function writeUrlState(
+  state: SearchState,
+  prefix = '',
+  baseSearch = '',
+  defaultSort: string = FALLBACK_SORT,
+): string {
   const params = new URLSearchParams(baseSearch);
   clearPrefixedKeys(params, prefix);
-  applyState(params, state, prefix);
+  applyState(params, state, prefix, defaultSort);
   const qs = params.toString();
   return qs ? `?${qs}` : '';
 }
@@ -178,9 +213,10 @@ export function syncToUrl(
   next: SearchState,
   prev: SearchState | null,
   prefix = '',
+  defaultSort: string = FALLBACK_SORT,
   pathname: string = window.location.pathname,
 ): void {
-  const qs = writeUrlState(next, prefix, window.location.search);
+  const qs = writeUrlState(next, prefix, window.location.search, defaultSort);
   const newUrl = `${pathname}${qs}`;
   if (newUrl === window.location.pathname + window.location.search) {
     return;
@@ -203,8 +239,12 @@ export function syncToUrl(
  * Listen for popstate (back/forward button) and re-hydrate state from URL.
  * Returns a cleanup function suitable for $effect's destructor.
  */
-export function onUrlPop(handler: (state: SearchState) => void, prefix = ''): () => void {
-  const listener = (): void => handler(readUrlState(window.location.href, prefix));
+export function onUrlPop(
+  handler: (state: SearchState) => void,
+  prefix = '',
+  defaultSort: string = FALLBACK_SORT,
+): () => void {
+  const listener = (): void => handler(readUrlState(window.location.href, prefix, defaultSort));
   window.addEventListener('popstate', listener);
   return () => window.removeEventListener('popstate', listener);
 }

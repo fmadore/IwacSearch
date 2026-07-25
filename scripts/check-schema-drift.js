@@ -130,11 +130,74 @@ function parseFacetLabels(tsText) {
   return byLocale;
 }
 
+/**
+ * Value of a PHP `public const NAME = '…'` string constant, with adjacent
+ * `.`-concatenated parts joined. Used for the query_by / highlight field
+ * lists in SearchDefaults.
+ */
+function parsePhpStringConst(phpText, name, label) {
+  const re = new RegExp(`const\\s+${name}\\s*=\\s*([^;]+);`, 'm');
+  const m = phpText.match(re);
+  if (!m) {
+    throw new Error(`${label}: const ${name} not found — update the drift check.`);
+  }
+  return [...m[1].matchAll(/'([^']*)'/g)].map((x) => x[1]).join('');
+}
+
+/**
+ * Value of a TS `export const NAME = '…' + '…';` string constant.
+ */
+function parseTsStringConst(tsText, name, label) {
+  const re = new RegExp(`const\\s+${name}\\s*=\\s*([^;]+);`, 'm');
+  const m = tsText.match(re);
+  if (!m) {
+    throw new Error(`${label}: const ${name} not found — update the drift check.`);
+  }
+  return [...m[1].matchAll(/'([^']*)'/g)].map((x) => x[1]).join('');
+}
+
+/** Sort values from a PHP `const NAME = [ 'value' => 'Label', … ];` map. */
+function parsePhpSortConst(phpText, name, label) {
+  const start = phpText.indexOf(`${name} = [`);
+  if (start === -1) {
+    throw new Error(`${label}: const ${name} not found — update the drift check.`);
+  }
+  const body = phpText.slice(start, phpText.indexOf('];', start));
+  const values = [...body.matchAll(/^\s*'([^']+)'\s*=>/gm)].map((m) => m[1]);
+  if (values.length === 0) {
+    throw new Error(`${label}: parsed no ${name} entries — format drift?`);
+  }
+  return values;
+}
+
+/**
+ * Sort values the client offers per card, from i18n.ts `sortOptions()`. The
+ * entity branch is the `if (card === 'entity')` block; content is the rest.
+ */
+function parseTsSortOptions(tsText, label) {
+  const start = tsText.indexOf('export function sortOptions');
+  if (start === -1) {
+    throw new Error(`${label}: sortOptions() not found — update the drift check.`);
+  }
+  const body = tsText.slice(start, tsText.indexOf('\n}', start));
+  const split = body.indexOf('return [', body.indexOf("card === 'entity'"));
+  const entityEnd = body.indexOf('];', split);
+  const grab = (text) => [...text.matchAll(/value:\s*'([^']+)'/g)].map((m) => m[1]);
+  const entity = grab(body.slice(split, entityEnd));
+  const content = grab(body.slice(entityEnd));
+  if (entity.length === 0 || content.length === 0) {
+    throw new Error(`${label}: parsed no sortOptions values — format drift?`);
+  }
+  return { entity, content };
+}
+
 let failed = false;
 const fail = (msg) => {
   failed = true;
   console.error(`❌ ${msg}`);
 };
+
+const sameList = (a, b) => a.length === b.length && a.every((v, i) => v === b[i]);
 
 try {
   const contentFields = parseSchemaFields(read('data/schema.yaml'), 'data/schema.yaml');
@@ -178,10 +241,59 @@ try {
     );
   }
 
+  // ── PHP ↔ TS search constants ────────────────────────────────────────
+  // Same failure class as the facet catalog: two hand-maintained copies of
+  // one contract.
+  //
+  //   query_by / highlight_fields — the PHP list drives the SSR search and
+  //     (via the bootstrap) the client; the TS list is the fallback the
+  //     client uses when a bootstrap omits them. Divergence means the
+  //     server-rendered first page and the client's own searches read
+  //     different fields on the same surface.
+  //
+  //   sort options — the block form offers the PHP list; SortSelect renders
+  //     the TS one. Divergence means an admin can pick an order the client
+  //     can't display (the <select> silently shows a different option than
+  //     the one actually applied).
+  const defaults = read('src/Search/SearchDefaults.php');
+  const builders = read('src/svelte/lib/queryBuilders.ts');
+  const fieldPairs = [
+    ['CONTENT_QUERY_BY', 'CONTENT_QUERY_BY_FALLBACK'],
+    ['CONTENT_HIGHLIGHT_FIELDS', 'CONTENT_HIGHLIGHT_FALLBACK'],
+  ];
+  for (const [phpName, tsName] of fieldPairs) {
+    const php = parsePhpStringConst(defaults, phpName, 'SearchDefaults.php');
+    const ts = parseTsStringConst(builders, tsName, 'queryBuilders.ts');
+    if (php !== ts) {
+      fail(
+        `SearchDefaults::${phpName} and queryBuilders.ts ${tsName} have drifted.\n` +
+          `      PHP: ${php}\n       TS: ${ts}`,
+      );
+    }
+  }
+
+  const facetCatalogPhp = read('src/Browse/FacetCatalog.php');
+  const i18n = read('src/svelte/lib/i18n.ts');
+  const tsSorts = parseTsSortOptions(i18n, 'i18n.ts');
+  const sortPairs = [
+    ['SORT_OPTIONS', tsSorts.content, 'content'],
+    ['SORT_OPTIONS_ENTITY', tsSorts.entity, 'entity'],
+  ];
+  for (const [phpName, tsValues, card] of sortPairs) {
+    const php = parsePhpSortConst(facetCatalogPhp, phpName, 'FacetCatalog.php');
+    if (!sameList(php, tsValues)) {
+      fail(
+        `FacetCatalog::${phpName} and i18n.ts sortOptions(card='${card}') have drifted.\n` +
+          `      PHP: ${php.join(', ')}\n       TS: ${tsValues.join(', ')}`,
+      );
+    }
+  }
+
   if (!failed) {
     console.log(
       `✅ schema drift check: ${catalogKeys.length} catalog keys consistent across ` +
-        'schema.yaml / schema-index.yaml / FacetCatalog.php / i18n.ts',
+        'schema.yaml / schema-index.yaml / FacetCatalog.php / i18n.ts; ' +
+        'query_by, highlight and sort constants consistent across PHP / TS',
     );
   }
 } catch (err) {

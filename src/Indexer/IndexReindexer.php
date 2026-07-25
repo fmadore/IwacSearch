@@ -7,7 +7,6 @@ use IwacSearch\Indexer\Mapper\IndexEntityMapper;
 use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
 use Throwable;
-use Typesense\Client as TypesenseClient;
 
 /**
  * Builds the INDEX (authority) collection — the entity browse surface.
@@ -25,11 +24,10 @@ final class IndexReindexer
 {
     private const BATCH_SIZE = 200;
 
-    /** Shared import/alias/drop plumbing (same helper the content Reindexer uses). */
-    private readonly CollectionOps $ops;
-
     public function __construct(
-        private readonly TypesenseClient $typesense,
+        // Same helper the content Reindexer uses, injected for the same
+        // reason (see Reindexer) — the guarded swap is the testable seam.
+        private readonly CollectionOps $ops,
         private readonly SchemaLoader $schemaLoader,
         private readonly EntityAuthority $authority,
         private readonly EntityOccurrences $occurrences,
@@ -37,7 +35,6 @@ final class IndexReindexer
         private readonly LoggerInterface $logger = new NullLogger(),
         private readonly string $aliasTarget = 'iwac_index_current'
     ) {
-        $this->ops = new CollectionOps($typesense, $this->logger, 'index');
     }
 
     /**

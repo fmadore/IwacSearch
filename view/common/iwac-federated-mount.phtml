@@ -18,8 +18,9 @@ $id = (string) ($block_id ?? 'everything');
 
 // Resolve mount-prefix-sensitive endpoints at view time (the controller bakes
 // raw stems; basePath keeps them correct under a subdirectory / site mount).
-$token  = $this->basePath($bootstrap['endpoints']['token']  ?? '/discovery/token');
-$search = $this->basePath($bootstrap['endpoints']['search'] ?? '/search-api/multi_search');
+$stems  = \IwacSearch\Search\SurfaceBootstrap::ENDPOINT_STEMS;
+$token  = $this->basePath($bootstrap['endpoints']['token']  ?? $stems['token']);
+$search = $this->basePath($bootstrap['endpoints']['search'] ?? $stems['search']);
 $locale = $this->iwacLocale();
 
 $bootstrap['endpoints'] = ['token' => $token, 'search' => $search];

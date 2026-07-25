@@ -3,12 +3,10 @@ declare(strict_types=1);
 
 namespace IwacSearch\Indexer;
 
-use Closure;
 use IwacSearch\Indexer\Mapper\MapperRegistry;
 use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
 use Throwable;
-use Typesense\Client as TypesenseClient;
 
 /**
  * Live updates to the content collection, triggered by Omeka's api.*.post
@@ -45,8 +43,11 @@ use Typesense\Client as TypesenseClient;
 final class IncrementalIndexer
 {
     public function __construct(
-        /** @var Closure(): TypesenseClient */
-        private readonly Closure $clientFactory,
+        // Import / delete plumbing shared with the bulk reindexers: the JSONL
+        // encoding, the per-line success tally and the "was it even there"
+        // 404 rule are one implementation, not three. It holds the LAZY
+        // client, so an unreachable Typesense still can't block a save.
+        private readonly CollectionOps $ops,
         private readonly OmekaSourceReader $reader,
         private readonly MapperRegistry $mappers,
         private readonly EntityAuthority $authority,
@@ -85,15 +86,12 @@ final class IncrementalIndexer
                 return;
             }
 
-            $response = $this->collection()->documents->import(
-                json_encode($doc, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
-                ['action' => 'upsert']
-            );
-            $line = json_decode(trim((string) $response), true);
-            if (is_array($line) && ($line['success'] ?? true) === false) {
+            [$indexed, $failed] = $this->ops->flushBatch($this->collectionAlias, [$doc]);
+            if ($indexed === 0) {
+                // flushBatch already logged the server's response line.
                 $this->logger->warning('IwacSearch: item upsert reported failure', [
-                    'item_id'  => $itemId,
-                    'response' => $line,
+                    'item_id' => $itemId,
+                    'failed'  => $failed,
                 ]);
                 return;
             }
@@ -141,8 +139,7 @@ final class IncrementalIndexer
             // per-row ensureLoaded() inside mapRow() then hits the cache.
             $entityIds = [];
             foreach ($rows as $row) {
-                $entityIds[] = $this->vrids($row['values'], 'dcterms:subject');
-                $entityIds[] = $this->vrids($row['values'], 'dcterms:spatial');
+                $entityIds[] = $this->linkedEntityIds($row['values']);
             }
             $this->authority->ensureLoaded($this->reader, array_merge(...($entityIds ?: [[]])));
 
@@ -168,21 +165,9 @@ final class IncrementalIndexer
                 return;
             }
 
-            $jsonl = '';
-            foreach ($docs as $doc) {
-                $jsonl .= json_encode($doc, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . "\n";
-            }
-            $response = $this->collection()->documents->import($jsonl, ['action' => 'upsert']);
-
-            $failed = 0;
-            foreach (preg_split("/\r?\n/", trim((string) $response)) ?: [] as $line) {
-                $decoded = json_decode($line, true);
-                if (is_array($decoded) && ($decoded['success'] ?? true) === false) {
-                    $failed++;
-                }
-            }
+            [$indexed, $failed] = $this->ops->flushBatch($this->collectionAlias, $docs);
             $this->logger->info('IwacSearch: batch re-indexed in Typesense', [
-                'items'  => count($docs),
+                'items'  => $indexed,
                 'failed' => $failed,
             ]);
         } catch (Throwable $e) {
@@ -202,7 +187,7 @@ final class IncrementalIndexer
      *
      * @param array{
      *     item: array{id:int,title:string,is_public:bool,class:int,item_sets:list<int>},
-     *     values: array<string, list<array{vrid:?int,value:?string,uri:?string,title:?string,vpub:bool}>>,
+     *     values: PropertyValues,
      *     thumbnail: ?string
      * } $row
      * @return ?array<string,mixed>
@@ -214,11 +199,7 @@ final class IncrementalIndexer
             return null; // not a content class (authority record / unmapped class)
         }
 
-        $entityIds = array_merge(
-            $this->vrids($row['values'], 'dcterms:subject'),
-            $this->vrids($row['values'], 'dcterms:spatial'),
-        );
-        $this->authority->ensureLoaded($this->reader, $entityIds);
+        $this->authority->ensureLoaded($this->reader, $this->linkedEntityIds($row['values']));
 
         return $mapper->map($row['item'], $row['values'], $row['thumbnail']);
     }
@@ -234,17 +215,14 @@ final class IncrementalIndexer
         }
 
         try {
-            $this->collection()->documents[(string) $itemId]->delete();
-            $this->logger->info('IwacSearch: item deleted from Typesense', [
-                'item_id' => $itemId,
-            ]);
+            $existed = $this->ops->deleteDocument($this->collectionAlias, (string) $itemId);
+            $this->logger->info(
+                $existed
+                    ? 'IwacSearch: item deleted from Typesense'
+                    : 'IwacSearch: item was not indexed, nothing to delete',
+                ['item_id' => $itemId]
+            );
         } catch (Throwable $e) {
-            if ($this->isNotFound($e)) {
-                $this->logger->info('IwacSearch: item was not indexed, nothing to delete', [
-                    'item_id' => $itemId,
-                ]);
-                return;
-            }
             $this->logger->warning('IwacSearch: failed to delete item from Typesense', [
                 'item_id' => $itemId,
                 'error'   => $e->getMessage(),
@@ -253,38 +231,17 @@ final class IncrementalIndexer
     }
 
     /**
-     * @param array<string, list<array{vrid:?int,value:?string,uri:?string,title:?string}>> $values
+     * The authority ids one content row links to — the same two terms
+     * AbstractMapper::addAuthorityEntities() resolves, so preloading these
+     * means every mapper lookup hits the cache.
+     *
      * @return list<int>
      */
-    private function vrids(array $values, string $term): array
+    private function linkedEntityIds(PropertyValues $values): array
     {
-        $out = [];
-        foreach ($values[$term] ?? [] as $v) {
-            if ($v['vrid'] !== null) {
-                $out[] = $v['vrid'];
-            }
-        }
-        return $out;
-    }
-
-    private function collection(): object
-    {
-        // Alias name doubles as a collection name in every Typesense
-        // documents/* endpoint, so we don't need to resolve it first.
-        // The factory closure memoizes (TypesenseClientLazy).
-        return ($this->clientFactory)()->collections[$this->collectionAlias];
-    }
-
-    /**
-     * Typesense's PHP SDK wraps HTTP errors in a few exception classes; match
-     * on the message / status rather than importing all of them. Good enough
-     * for a "did the doc exist" check.
-     */
-    private function isNotFound(Throwable $e): bool
-    {
-        $msg = strtolower($e->getMessage());
-        return str_contains($msg, 'not found')
-            || str_contains($msg, '404')
-            || str_contains($msg, 'could not find');
+        return array_merge(
+            $values->linkedIds('dcterms:subject'),
+            $values->linkedIds('dcterms:spatial'),
+        );
     }
 }

@@ -3,6 +3,8 @@ declare(strict_types=1);
 
 namespace IwacSearch\Indexer;
 
+use IwacSearch\IwacInstance;
+
 /**
  * In-memory authority lookup built directly from the Omeka entity classes —
  * the MySQL-native replacement for the HF-`index`-driven AuthorityResolver.
@@ -37,7 +39,8 @@ namespace IwacSearch\Indexer;
  */
 final class EntityAuthority
 {
-    public const CLASS_IDS = [94, 96, 9, 54, 244];
+    /** @var list<int> The entity classes this authority is built from. */
+    public const CLASS_IDS = IwacInstance::ENTITY_CLASSES;
 
     /** Property terms the build needs beyond the resource.title column. */
     public const READ_TERMS = [
@@ -50,8 +53,8 @@ final class EntityAuthority
         'dcterms:isPartOf',
     ];
 
-    private const AUTHORITY_FILE_CLASS = 244;
-    private const SET_NOTICES = 267;
+    private const AUTHORITY_FILE_CLASS = IwacInstance::CLASS_AUTHORITY_FILE;
+    private const SET_NOTICES = IwacInstance::SET_NOTICES_AUTORITE;
 
     /** @var array<int, array{
      *   class:int, type:string, bucket:?string, title:string, aliases:list<string>,
@@ -109,9 +112,8 @@ final class EntityAuthority
      * Record one authority item into the cache.
      *
      * @param array{id:int,title:string,is_public:bool,class:int,item_sets:list<int>} $item
-     * @param array<string, list<array{vrid:?int,value:?string,uri:?string,title:?string}>> $values
      */
-    private function addRecord(array $item, array $values, ?string $thumbnail): void
+    private function addRecord(array $item, PropertyValues $values, ?string $thumbnail): void
     {
         [$type, $bucket] = $this->classDefault($item['class']);
         // Refine authority files (class 244): an item in the Notices d'autorité
@@ -130,13 +132,13 @@ final class EntityAuthority
             'type'        => $type,
             'bucket'      => $bucket,
             'title'       => $item['title'],
-            'aliases'     => $this->literals($values, 'dcterms:alternative'),
-            'description' => $this->firstLiteral($values, 'dcterms:description'),
-            'coordinates' => $this->firstLiteral($values, 'curation:coordinates'),
-            'identifier'  => $this->firstLiteral($values, 'dcterms:identifier'),
+            'aliases'     => $values->literals('dcterms:alternative'),
+            'description' => $values->firstLiteral('dcterms:description'),
+            'coordinates' => $values->firstLiteral('curation:coordinates'),
+            'identifier'  => $values->firstLiteral('dcterms:identifier'),
             // Linked-resource title OR literal — isPartOf is catalogued both
             // ways in the IWAC index.
-            'is_part_of'  => $this->displays($values, 'dcterms:isPartOf'),
+            'is_part_of'  => $values->displays('dcterms:isPartOf'),
             'thumbnail'   => $thumbnail,
             'is_public'   => $item['is_public'],
         ];
@@ -228,59 +230,15 @@ final class EntityAuthority
     private function classDefault(int $class): array
     {
         return match ($class) {
-            94  => ['Personnes', 'persons_ss'],
-            96  => ['Organisations', 'organisations_ss'],
-            9   => ['Lieux', 'places_ss'],
-            54  => ['Événements', 'events_ss'],
-            // 244 is refined by item-set after the stream; default to Sujets.
-            244 => ['Sujets', 'topics_ss'],
+            IwacInstance::CLASS_PERSON       => ['Personnes', 'persons_ss'],
+            IwacInstance::CLASS_ORGANISATION => ['Organisations', 'organisations_ss'],
+            IwacInstance::CLASS_PLACE        => ['Lieux', 'places_ss'],
+            IwacInstance::CLASS_EVENT        => ['Événements', 'events_ss'],
+            // Authority files are refined by item-set after the stream;
+            // default to Sujets.
+            IwacInstance::CLASS_AUTHORITY_FILE => ['Sujets', 'topics_ss'],
             default => ['', null],
         };
     }
 
-    /**
-     * Display values: linked-resource title when present, else the literal.
-     *
-     * @param array<string, list<array{vrid:?int,value:?string,uri:?string,title:?string}>> $values
-     * @return list<string>
-     */
-    private function displays(array $values, string $term): array
-    {
-        $out = [];
-        foreach ($values[$term] ?? [] as $v) {
-            $s = trim((string) (($v['title'] ?? '') !== '' ? $v['title'] : ($v['value'] ?? '')));
-            if ($s !== '') {
-                $out[] = $s;
-            }
-        }
-        return array_values(array_unique($out));
-    }
-
-    /**
-     * @param array<string, list<array{vrid:?int,value:?string,uri:?string,title:?string}>> $values
-     * @return list<string>
-     */
-    private function literals(array $values, string $term): array
-    {
-        $out = [];
-        foreach ($values[$term] ?? [] as $v) {
-            $s = trim((string) ($v['value'] ?? ''));
-            if ($s !== '') {
-                $out[] = $s;
-            }
-        }
-        return array_values(array_unique($out));
-    }
-
-    /** @param array<string, list<array{vrid:?int,value:?string,uri:?string,title:?string}>> $values */
-    private function firstLiteral(array $values, string $term): string
-    {
-        foreach ($values[$term] ?? [] as $v) {
-            $s = trim((string) ($v['value'] ?? ''));
-            if ($s !== '') {
-                return $s;
-            }
-        }
-        return '';
-    }
 }

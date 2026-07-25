@@ -4,8 +4,7 @@ declare(strict_types=1);
 namespace IwacSearch\Job;
 
 use IwacSearch\Indexer\AnalyticsSync;
-use IwacSearch\Log\LoggerResolver;
-use Omeka\Job\AbstractJob;
+use Psr\Log\LoggerInterface;
 use RuntimeException;
 use Typesense\Client as TypesenseClient;
 
@@ -20,22 +19,22 @@ use Typesense\Client as TypesenseClient;
  * flags can provision analytics WITHOUT waiting for (or paying for) the
  * next full reindex — and, unlike the in-reindex pass, it FAILS LOUDLY
  * (job status ERROR) when the server still refuses, because here the
- * operator's intent is analytics itself.
+ * operator's intent is analytics itself. Hence the explicit throw on
+ * `enabled: false`: the sync reports rather than raises, so the job has to
+ * turn the report into the failure the operator is asking for.
  */
-class ProvisionAnalytics extends AbstractJob
+class ProvisionAnalytics extends AbstractTypesenseJob
 {
-    public function perform(): void
+    protected function label(): string
     {
-        $services = $this->getServiceLocator();
-        $logger = LoggerResolver::fromContainer($services);
+        return 'search analytics provisioning';
+    }
 
-        /** @var TypesenseClient $typesense */
-        $typesense = $services->get(TypesenseClient::class);
-
-        $logger->info('IwacSearch: provisioning search analytics from Omeka job', [
-            'job_id' => $this->job->getId(),
-        ]);
-
+    protected function operate(
+        TypesenseClient $typesense,
+        string $moduleRoot,
+        LoggerInterface $logger
+    ): array {
         $result = (new AnalyticsSync($typesense, $logger))->sync();
 
         if (!$result['enabled']) {
@@ -46,6 +45,6 @@ class ProvisionAnalytics extends AbstractJob
             );
         }
 
-        $logger->info('IwacSearch: analytics provisioned', $result);
+        return $result;
     }
 }

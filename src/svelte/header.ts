@@ -12,8 +12,12 @@
  * faceted /search (or /recherche) landing page, whose Svelte client
  * hydrates `?q=` straight from the URL (see lib/urlState.ts). This script
  * progressively enhances it with a Typesense typeahead, reusing the
- * module's own `TypesenseClient` so the suggest contract (scoped-key mint,
- * facet_query, locked-filter scope) lives in exactly one place.
+ * module's own `runSuggest()` so the suggest contract (scoped-key mint,
+ * facet_query, locked-filter scope) lives in exactly one place. It imports
+ * the free function rather than TypesenseClient on purpose: class methods
+ * are never tree-shaken, so importing the client would ship export / map /
+ * union / histogram / facet-value code on EVERY public page of the site for
+ * the sake of one method.
  *
  * Rows mirror the in-app SuggestDropdown:
  *   1. "Search for «q»"  → landing?q=<q>
@@ -29,7 +33,7 @@
  * the module injects; the landing URL is read from the form's own action.
  */
 
-import { TypesenseClient } from './lib/typesense';
+import { runSuggest } from './lib/suggestQuery';
 import { facetLabel, normalizeLocale, translate, type Locale } from './lib/i18n';
 import {
   actionOf,
@@ -101,7 +105,7 @@ function withParams(base: string, params: Record<string, string>): string {
 }
 
 class HeaderSearch {
-  private readonly client: TypesenseClient;
+  private readonly bootstrap: IwacBootstrap;
   private readonly locale: Locale;
   private readonly landing: string;
   private readonly listbox: HTMLDivElement;
@@ -118,7 +122,7 @@ class HeaderSearch {
     private readonly input: HTMLInputElement,
     cfg: HeaderConfig,
   ) {
-    this.client = new TypesenseClient(buildBootstrap(cfg));
+    this.bootstrap = buildBootstrap(cfg);
     this.locale = cfg.locale;
     // The landing page lives on the form's action — set by the theme via the
     // iwacSearchUrl helper (locale-correct, the federated page). Fall back to
@@ -203,8 +207,7 @@ class HeaderSearch {
     const token = ++this.inflight;
     this.debounceTimer = window.setTimeout(() => {
       this.debounceTimer = null;
-      this.client
-        .suggest(q)
+      runSuggest(this.bootstrap, q)
         .then((r) => {
           if (token !== this.inflight) return; // superseded by a newer keystroke
           this.setRows(r);

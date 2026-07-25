@@ -3,11 +3,11 @@ declare(strict_types=1);
 
 namespace IwacSearch\Indexer;
 
+use IwacSearch\Indexer\Mapper\MapperInterface;
 use IwacSearch\Indexer\Mapper\MapperRegistry;
 use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
 use Throwable;
-use Typesense\Client as TypesenseClient;
 
 /**
  * Orchestrates a full bulk reindex of the CONTENT collection, reading straight
@@ -45,11 +45,12 @@ final class Reindexer
 {
     private const BATCH_SIZE = 200;
 
-    /** Shared import/alias/drop plumbing (also used by IndexReindexer). */
-    private readonly CollectionOps $ops;
-
     public function __construct(
-        private readonly TypesenseClient $typesense,
+        // Shared import/alias/drop plumbing (also used by IndexReindexer).
+        // INJECTED, not constructed here: promote()'s health guard is the
+        // code that protects live search, and it can only be unit-tested
+        // against a stubbed client if the collaborator comes from outside.
+        private readonly CollectionOps $ops,
         private readonly SchemaLoader $schemaLoader,
         private readonly OmekaSourceReader $reader,
         private readonly MapperRegistry $mappers,
@@ -64,7 +65,6 @@ final class Reindexer
         private readonly SynonymsSync $synonymsSync,
         private readonly LoggerInterface $logger = new NullLogger()
     ) {
-        $this->ops = new CollectionOps($typesense, $this->logger, 'content');
     }
 
     /**
@@ -155,7 +155,7 @@ final class Reindexer
         $mapper = $this->mappers->get($subset);
         $this->logger->info('Indexing subset', ['subset' => $subset, 'classes' => $mapper->classIds()]);
 
-        [$indexed, $errors] = $this->ops->importAll($collection, $this->mapSubset($subset), self::BATCH_SIZE);
+        [$indexed, $errors] = $this->ops->importAll($collection, $this->mapSubset($mapper), self::BATCH_SIZE);
 
         $this->logger->info('Subset indexed', ['subset' => $subset, 'indexed' => $indexed, 'errors' => $errors]);
         return [$indexed, $errors];
@@ -167,9 +167,8 @@ final class Reindexer
      *
      * @return \Generator<array<string,mixed>>
      */
-    private function mapSubset(string $subset): \Generator
+    private function mapSubset(MapperInterface $mapper): \Generator
     {
-        $mapper = $this->mappers->get($subset);
         foreach ($this->reader->streamDocs($mapper->classIds(), $mapper->readTerms(), $mapper->itemSetIds()) as $row) {
             $doc = $mapper->map($row['item'], $row['values'], $row['thumbnail']);
             if ($doc === null) {

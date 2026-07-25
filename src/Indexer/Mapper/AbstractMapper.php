@@ -5,20 +5,20 @@ namespace IwacSearch\Indexer\Mapper;
 
 use IwacSearch\Indexer\CountryResolver;
 use IwacSearch\Indexer\EntityAuthority;
+use IwacSearch\Indexer\PropertyValues;
 
 /**
- * Shared infrastructure for the content mappers, reading Omeka grouped
- * property values (the OmekaSourceReader shape) rather than HF rows.
+ * Shared infrastructure for the content mappers.
  *
- * $values is term => list of value rows, each:
- *   ['vrid' => ?int, 'value' => ?string, 'uri' => ?string, 'title' => ?string]
- * where vrid + title come from a value_resource link, value is the literal,
- * uri is a uri value's @id.
+ * Reading Omeka's grouped property values is {@see PropertyValues}' job — this
+ * class is only about turning them into DOCUMENT FIELDS. Subclasses declare
+ * classIds()/typeTag()/readTerms() and compose map() from the protected
+ * builders below; each builder owns one cluster of schema fields (identity,
+ * facets, entities, dates, body, sentiment) so a subset opts in by calling it.
  *
- * Subclasses declare classIds()/typeTag()/readTerms() and compose map() from
- * the protected builders. Field derivations mirror the IWAC-Hugging-Face
- * pipeline 1:1 (verified by the Phase 0 parity spike) so the produced
- * documents match the previous HF-built collection.
+ * Field derivations mirror the IWAC-Hugging-Face pipeline 1:1 (verified by the
+ * Phase 0 parity spike) so the produced documents match the previous HF-built
+ * collection.
  */
 abstract class AbstractMapper implements MapperInterface
 {
@@ -86,10 +86,9 @@ abstract class AbstractMapper implements MapperInterface
      * Identity + display + ACL skeleton common to every subset.
      *
      * @param array{id:int,title:string,is_public:bool,class:int,item_sets:list<int>} $item
-     * @param array<string, list<array{vrid:?int,value:?string,uri:?string,title:?string}>> $values
      * @return array<string, mixed>
      */
-    protected function buildBase(array $item, array $values, ?string $thumbnailUrl): array
+    protected function buildBase(array $item, PropertyValues $values, ?string $thumbnailUrl): array
     {
         $oid = $item['id'];
         $title = trim($item['title']);
@@ -111,11 +110,11 @@ abstract class AbstractMapper implements MapperInterface
             $doc['item_set_ids'] = array_values($item['item_sets']);
         }
 
-        $this->maybeAdd($doc, 'identifier', $this->firstScalar($values, 'dcterms:identifier'));
+        $this->maybeAdd($doc, 'identifier', $values->firstScalar('dcterms:identifier'));
         // Alternative titles (dcterms:alternative) — a second FTS channel so
         // searching a variant title finds the item (and the autocomplete can
         // reconcile it). Display keeps the main title.
-        $this->maybeAddList($doc, 'alt_title_txt', $this->disp($values, 'dcterms:alternative'));
+        $this->maybeAddList($doc, 'alt_title_txt', $values->displays('dcterms:alternative'));
 
         // A thumbnailed media is our proxy for "has primary media", which is
         // the precondition the HF pipeline used to emit the IIIF manifest.
@@ -133,11 +132,10 @@ abstract class AbstractMapper implements MapperInterface
      * (references override creator + country — see ReferenceMapper).
      *
      * @param array<string, mixed> $doc
-     * @param array<string, list<array{vrid:?int,value:?string,uri:?string,title:?string}>> $values
      */
-    protected function addCommonFacets(array &$doc, array $values): void
+    protected function addCommonFacets(array &$doc, PropertyValues $values): void
     {
-        $creators = $this->disp($values, 'dcterms:creator');
+        $creators = $values->displays('dcterms:creator');
         $this->maybeAddList($doc, 'creator_ss', $creators);
         if ($creators !== []) {
             // creator_ss is a string[]; Typesense can't sort on it, so the
@@ -145,9 +143,9 @@ abstract class AbstractMapper implements MapperInterface
             $this->maybeAdd($doc, 'creator_sort', $this->authorSortKey($creators[0]));
         }
 
-        $this->maybeAddList($doc, 'language_ss', $this->disp($values, 'dcterms:language'));
+        $this->maybeAddList($doc, 'language_ss', $values->displays('dcterms:language'));
 
-        $newspapers = $this->disp($values, 'dcterms:publisher');
+        $newspapers = $values->displays('dcterms:publisher');
         $this->maybeAddList($doc, 'newspaper_ss', $newspapers);
         $this->maybeAddList($doc, 'country_ss', $this->countries->forNewspapers($newspapers));
     }
@@ -158,13 +156,12 @@ abstract class AbstractMapper implements MapperInterface
      * class-keyed EntityAuthority.
      *
      * @param array<string, mixed> $doc
-     * @param array<string, list<array{vrid:?int,value:?string,uri:?string,title:?string}>> $values
      */
-    protected function addAuthorityEntities(array &$doc, array $values): void
+    protected function addAuthorityEntities(array &$doc, PropertyValues $values): void
     {
         $ids = array_merge(
-            $this->linkedIds($values, 'dcterms:subject'),
-            $this->linkedIds($values, 'dcterms:spatial'),
+            $values->linkedIds('dcterms:subject'),
+            $values->linkedIds('dcterms:spatial'),
         );
         foreach ($this->authority->resolve($ids) as $field => $vals) {
             $doc[$field] = isset($doc[$field])
@@ -175,18 +172,17 @@ abstract class AbstractMapper implements MapperInterface
         // MERGED subject facet: every dcterms:subject display value in one
         // list, regardless of which entity class it resolves to (persons,
         // organisations and topics together). dcterms:spatial stays out.
-        $this->maybeAddList($doc, 'subjects_ss', $this->disp($values, 'dcterms:subject'));
+        $this->maybeAddList($doc, 'subjects_ss', $values->displays('dcterms:subject'));
     }
 
     /**
      * date / pub_year / date_decade_ss from dcterms:date.
      *
      * @param array<string, mixed> $doc
-     * @param array<string, list<array{vrid:?int,value:?string,uri:?string,title:?string}>> $values
      */
-    protected function addDateFields(array &$doc, array $values): void
+    protected function addDateFields(array &$doc, PropertyValues $values): void
     {
-        $iso = $this->firstScalar($values, 'dcterms:date');
+        $iso = $values->firstScalar('dcterms:date');
         if ($iso === '') {
             return;
         }
@@ -215,13 +211,12 @@ abstract class AbstractMapper implements MapperInterface
      * (lda_topic_label is dropped in the MySQL model — HF-only LDA.)
      *
      * @param array<string, mixed> $doc
-     * @param array<string, list<array{vrid:?int,value:?string,uri:?string,title:?string,vpub:bool}>> $values
      */
-    protected function addBodyFields(array &$doc, array $values): void
+    protected function addBodyFields(array &$doc, PropertyValues $values): void
     {
         $hasPublic = false;
         $ocr = '';
-        foreach ($values['bibo:content'] ?? [] as $v) {
+        foreach ($values->rows('bibo:content') as $v) {
             $s = trim((string) ($v['value'] ?? ''));
             if ($s === '') {
                 continue;
@@ -246,11 +241,10 @@ abstract class AbstractMapper implements MapperInterface
      * Public-safe display body from the AI summary (bibo:shortDescription).
      *
      * @param array<string, mixed> $doc
-     * @param array<string, list<array{vrid:?int,value:?string,uri:?string,title:?string}>> $values
      */
-    protected function addDescription(array &$doc, array $values): void
+    protected function addDescription(array &$doc, PropertyValues $values): void
     {
-        $this->maybeAdd($doc, 'abstract', $this->firstLiteral($values, 'bibo:shortDescription'));
+        $this->maybeAdd($doc, 'abstract', $values->firstLiteral('bibo:shortDescription'));
     }
 
     /**
@@ -259,13 +253,12 @@ abstract class AbstractMapper implements MapperInterface
      * category resolved to its 1–5 score for every model.
      *
      * @param array<string, mixed> $doc
-     * @param array<string, list<array{vrid:?int,value:?string,uri:?string,title:?string}>> $values
      */
-    protected function addAiSentiment(array &$doc, array $values): void
+    protected function addAiSentiment(array &$doc, PropertyValues $values): void
     {
         foreach (['gemini', 'chatgpt', 'mistral'] as $model) {
-            $cent = $this->firstDisp($values, "iwac:{$model}Centralite");
-            $pol  = $this->firstDisp($values, "iwac:{$model}Polarite");
+            $cent = $values->firstDisplay("iwac:{$model}Centralite");
+            $pol  = $values->firstDisplay("iwac:{$model}Polarite");
             if ($cent !== '') {
                 $doc["{$model}_centralite_ss"] = [$cent];
             }
@@ -273,7 +266,7 @@ abstract class AbstractMapper implements MapperInterface
                 $doc["{$model}_polarite_ss"] = [$pol];
             }
 
-            $subjLabel = $this->firstDisp($values, "iwac:{$model}SubjectiviteScore");
+            $subjLabel = $values->firstDisplay("iwac:{$model}SubjectiviteScore");
             $score = self::SUBJECTIVITE_LABELS[$subjLabel]
                 ?? (is_numeric($subjLabel) ? (float) $subjLabel : null);
             if ($score !== null) {
@@ -283,85 +276,15 @@ abstract class AbstractMapper implements MapperInterface
     }
 
     // ────────────────────────────────────────────────────────────────────
-    // Value extraction (final — discourage subclass override)
+    // Document assembly (final — discourage subclass override)
     // ────────────────────────────────────────────────────────────────────
 
     /**
-     * Display values for a term: the linked-resource title when present, else
-     * the literal. The multi-value facet primitive.
+     * Set a scalar field, but only when it has a value — Typesense optional
+     * fields are absent, not empty-string.
      *
-     * @param array<string, list<array{vrid:?int,value:?string,uri:?string,title:?string}>> $values
-     * @return list<string>
+     * @param array<string,mixed> $doc
      */
-    final protected function disp(array $values, string $term): array
-    {
-        $out = [];
-        foreach ($values[$term] ?? [] as $v) {
-            $s = trim((string) (($v['title'] ?? '') !== '' ? $v['title'] : ($v['value'] ?? '')));
-            if ($s !== '') {
-                $out[] = $s;
-            }
-        }
-        return array_values(array_unique($out));
-    }
-
-    /** First display value (title||literal) or ''. */
-    final protected function firstDisp(array $values, string $term): string
-    {
-        return $this->disp($values, $term)[0] ?? '';
-    }
-
-    /**
-     * First literal (@value) only — for fields that are always literals
-     * (OCR, abstract).
-     *
-     * @param array<string, list<array{vrid:?int,value:?string,uri:?string,title:?string}>> $values
-     */
-    final protected function firstLiteral(array $values, string $term): string
-    {
-        foreach ($values[$term] ?? [] as $v) {
-            $s = trim((string) ($v['value'] ?? ''));
-            if ($s !== '') {
-                return $s;
-            }
-        }
-        return '';
-    }
-
-    /**
-     * First scalar: literal, else uri @id (for identifier / date / DOI-like).
-     *
-     * @param array<string, list<array{vrid:?int,value:?string,uri:?string,title:?string}>> $values
-     */
-    final protected function firstScalar(array $values, string $term): string
-    {
-        foreach ($values[$term] ?? [] as $v) {
-            $s = trim((string) (($v['value'] ?? '') !== '' ? $v['value'] : ($v['uri'] ?? '')));
-            if ($s !== '') {
-                return $s;
-            }
-        }
-        return '';
-    }
-
-    /**
-     * value_resource ids for a term (linked-resource targets only).
-     *
-     * @param array<string, list<array{vrid:?int,value:?string,uri:?string,title:?string}>> $values
-     * @return list<int>
-     */
-    final protected function linkedIds(array $values, string $term): array
-    {
-        $out = [];
-        foreach ($values[$term] ?? [] as $v) {
-            if ($v['vrid'] !== null) {
-                $out[] = $v['vrid'];
-            }
-        }
-        return $out;
-    }
-
-    /** @param array<string,mixed> $doc */
     final protected function maybeAdd(array &$doc, string $key, string $value): void
     {
         if ($value !== '') {
@@ -369,7 +292,10 @@ abstract class AbstractMapper implements MapperInterface
         }
     }
 
-    /** @param array<string,mixed> $doc @param list<string> $values */
+    /**
+     * @param array<string,mixed> $doc
+     * @param list<string> $values
+     */
     final protected function maybeAddList(array &$doc, string $key, array $values): void
     {
         if ($values !== []) {
