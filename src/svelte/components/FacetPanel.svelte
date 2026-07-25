@@ -19,6 +19,7 @@
   import { deriveActiveChips } from '../lib/filterChips';
   import FacetGroup from './FacetGroup.svelte';
   import DateRangeSlider from './DateRangeSlider.svelte';
+  import FilterChip from './FilterChip.svelte';
 
   /**
    * Filters sidebar.
@@ -148,16 +149,7 @@
       <ul class="iwac-facets__chips">
         {#each activeChips as chip (chip.field + '|' + chip.value)}
           <li>
-            <button
-              type="button"
-              class="iwac-facets__chip"
-              onclick={() => handleChipClick(chip)}
-              aria-label={t('remove_filter', { label: chip.label, value: chip.displayValue })}
-            >
-              <span class="iwac-facets__chip-field">{chip.label}:</span>
-              <span class="iwac-facets__chip-value">{chip.displayValue}</span>
-              <span class="iwac-facets__chip-x" aria-hidden="true">×</span>
-            </button>
+            <FilterChip {chip} onRemove={handleChipClick} />
           </li>
         {/each}
       </ul>
@@ -288,62 +280,6 @@
     /* The chips themselves carry the active state (primary dot + border);
        the old block-level orange wash made the whole corner shout. */
     padding-block-start: var(--space-sm, 0.5rem);
-  }
-
-  .iwac-facets__chips {
-    list-style: none;
-    margin: 0;
-    padding: 0;
-    display: flex;
-    flex-wrap: wrap;
-    gap: var(--space-xs, 0.25rem);
-  }
-  .iwac-facets__chip {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--space-xs, 0.25rem);
-    padding: 0.25rem 0.625rem;
-    background: transparent;
-    border: 1px solid var(--primary, #ce4115);
-    border-radius: var(--radius-full, 9999px);
-    box-shadow: none;
-    cursor: pointer;
-    font: inherit;
-    font-size: var(--text-xs, 0.8125rem);
-    color: var(--ink, #13161c);
-    line-height: 1.4;
-    transition:
-      background var(--transition-fast, 150ms ease),
-      border-color var(--transition-fast, 150ms ease),
-      color var(--transition-fast, 150ms ease);
-  }
-  .iwac-facets__chip:hover {
-    background: color-mix(in oklab, var(--primary, #ce4115) 10%, transparent);
-    border-color: var(--primary, #ce4115);
-    color: var(--ink-strong, var(--ink, #13161c));
-    box-shadow: none;
-    transform: none;
-  }
-  .iwac-facets__chip:hover .iwac-facets__chip-field,
-  .iwac-facets__chip:hover .iwac-facets__chip-x {
-    color: inherit;
-    opacity: 0.85;
-  }
-  .iwac-facets__chip:focus-visible {
-    outline: none;
-    box-shadow: var(--ring-focus, 0 0 0 3px rgba(0, 0, 0, 0.1));
-  }
-  .iwac-facets__chip-field {
-    color: var(--muted, #66696e);
-    font-weight: 500;
-  }
-  .iwac-facets__chip-value {
-    font-weight: 600;
-  }
-  .iwac-facets__chip-x {
-    color: var(--muted, #66696e);
-    font-size: var(--text-sm, 0.9375rem);
-    line-height: 1;
   }
 
   .iwac-facets__groups {

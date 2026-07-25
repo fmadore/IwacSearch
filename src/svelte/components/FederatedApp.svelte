@@ -11,6 +11,7 @@
   import App from '../App.svelte';
   import ResultItem from './ResultItem.svelte';
   import Pagination from './Pagination.svelte';
+  import SearchInput from './SearchInput.svelte';
 
   /**
    * The federated "search everything" page. One instance per page.
@@ -72,7 +73,6 @@
   let activeTab = $state<TabId>(readTabFromUrl());
   let counts = $state<Record<string, number | null>>({});
   let countsReady = $state(false);
-  let inputTimer: number | null = null;
 
   // Filter handed off from a union-tab chip to a per-collection tab.
   let seed = $state<{ tab: TabId; filters: ActiveFilters } | null>(null);
@@ -218,24 +218,14 @@
     return () => window.removeEventListener('popstate', onPop);
   });
 
-  function onInput(e: Event): void {
-    inputValue = (e.target as HTMLInputElement).value;
-    if (inputTimer !== null) clearTimeout(inputTimer);
-    inputTimer = window.setTimeout(() => {
-      inputTimer = null;
-      seed = null; // a fresh query clears any handed-off filter
-      query = inputValue.trim();
-    }, 250);
-  }
-
-  function clearQuery(): void {
-    if (inputTimer !== null) {
-      clearTimeout(inputTimer);
-      inputTimer = null;
-    }
-    inputValue = '';
-    seed = null;
-    query = '';
+  /**
+   * SearchInput owns the debounce and the clear button, and calls this for
+   * both — so committing a typed query and clearing it are the same path.
+   */
+  function commitQuery(next: string): void {
+    inputValue = next;
+    seed = null; // a fresh query clears any handed-off filter
+    query = next.trim();
   }
 
   function selectTab(id: TabId): void {
@@ -312,26 +302,12 @@
 
 <div class="iwac-fed">
   <div class="iwac-fed__search" role="search">
-    <input
-      name="q"
-      class="iwac-fed__input"
-      type="search"
-      autocomplete="off"
-      spellcheck="false"
-      inputmode="search"
-      aria-label={t('search_everything')}
-      placeholder={t('search_everything')}
+    <SearchInput
       value={inputValue}
-      oninput={onInput}
+      placeholder={t('search_everything')}
+      ariaLabel={t('search_everything')}
+      onChange={commitQuery}
     />
-    {#if inputValue !== ''}
-      <button
-        type="button"
-        class="iwac-fed__clear"
-        aria-label={t('clear_search')}
-        onclick={clearQuery}>×</button
-      >
-    {/if}
   </div>
 
   <!-- Focus lives on the tab buttons (roving tabindex); the tablist itself
@@ -423,60 +399,16 @@
     color: var(--ink, #13161c);
   }
 
-  /* Shared query box. */
+  /*
+   * Shared query box. The field itself is SearchInput (same component the
+   * per-tab surfaces use), so this only owns the measure — everything
+   * inside, including the clear button, is the component's.
+   */
   .iwac-fed__search {
-    position: relative;
-    display: flex;
-    align-items: center;
     max-width: var(--measure-narrow, 36rem);
   }
-  .iwac-fed__input {
+  .iwac-fed__search :global(.iwac-input) {
     width: 100%;
-    height: var(--size-control-lg, 2.75rem);
-    padding-inline: var(--space-md, 1rem) var(--space-2xl, 3rem);
-    margin: 0;
-    font: inherit;
-    font-size: var(--text-base, 1.0625rem);
-    color: var(--ink, #13161c);
-    background: var(--surface, #fdfcfb);
-    border: 1px solid var(--border, #ced1d6);
-    border-radius: var(--radius-md, 0.5rem);
-  }
-  .iwac-fed__input:focus-visible {
-    outline: none;
-    border-color: var(--primary, #ce4115);
-    box-shadow: var(--ring-focus, 0 0 0 3px rgba(0, 0, 0, 0.1));
-  }
-  .iwac-fed__input::-webkit-search-cancel-button {
-    -webkit-appearance: none;
-    appearance: none;
-    display: none;
-  }
-  .iwac-fed__clear {
-    position: absolute;
-    inset-inline-end: var(--space-sm, 0.5rem);
-    top: 50%;
-    transform: translateY(-50%);
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 2rem;
-    height: 2rem;
-    min-width: 0;
-    margin: 0;
-    padding: 0;
-    border: 0;
-    background: transparent;
-    box-shadow: none;
-    color: var(--muted, #66696e);
-    font-size: 1.25rem;
-    line-height: 1;
-    cursor: pointer;
-    border-radius: var(--radius-full, 9999px);
-  }
-  .iwac-fed__clear:hover {
-    background: color-mix(in oklab, currentColor 14%, transparent);
-    color: var(--ink, #13161c);
   }
 
   /* Type tabs. */

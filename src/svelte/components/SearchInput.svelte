@@ -26,6 +26,12 @@
     listboxId?: string;
     expanded?: boolean;
     activeDescendant?: string | null;
+    /**
+     * Accessible name. Defaults to the generic search label; the federated
+     * page overrides it ("Search everything") because that box searches both
+     * collections and the distinction matters to a screen-reader user.
+     */
+    ariaLabel?: string;
   }
 
   const {
@@ -35,9 +41,12 @@
     listboxId,
     expanded = false,
     activeDescendant = null,
+    ariaLabel,
   }: Props = $props();
 
   const { t } = useI18n();
+
+  const accessibleName = $derived(ariaLabel ?? t('search_placeholder'));
 
   // svelte-ignore state_referenced_locally
   // Initial seed only; the $effect below re-syncs if the parent pushes
@@ -89,7 +98,7 @@
     class="iwac-input__field"
     type="search"
     role={listboxId ? 'combobox' : undefined}
-    aria-label={t('search_placeholder')}
+    aria-label={accessibleName}
     aria-autocomplete={listboxId ? 'list' : undefined}
     aria-expanded={listboxId ? expanded : undefined}
     aria-controls={listboxId && expanded ? listboxId : undefined}
