@@ -170,6 +170,45 @@ final class OmekaSourceReader
     }
 
     /**
+     * The DATABASE's current timestamp, as a `Y-m-d H:i:s` string.
+     *
+     * Deliberately not PHP's `date()`: the watermark it produces is compared
+     * against `resource.modified`, which MySQL writes with its own clock. In
+     * a container split (php + mysql) those clocks can disagree by seconds,
+     * and a watermark that runs ahead of the database silently drops the very
+     * edits it exists to catch.
+     */
+    public function databaseNow(): string
+    {
+        return (string) $this->connection->executeQuery('SELECT NOW()')->fetchOne();
+    }
+
+    /**
+     * Ids of items created or modified at/after $since — the edits a bulk
+     * reindex has to replay because they landed in the outgoing collection
+     * while the new one was being built.
+     *
+     * No class filter on purpose: an item whose class was edited AWAY from a
+     * content class during the build must come back too, so the caller can
+     * delete the document it left behind. `modified` is NULL until a resource
+     * is first edited, hence the `created` leg.
+     *
+     * @return list<int> ascending
+     */
+    public function idsModifiedSince(string $since): array
+    {
+        $rows = $this->connection->executeQuery(
+            'SELECT id FROM resource'
+            . ' WHERE resource_type = :rt'
+            . ' AND (modified >= :since OR created >= :since)'
+            . ' ORDER BY id ASC',
+            ['rt' => Item::class, 'since' => $since],
+        )->fetchFirstColumn();
+
+        return array_map('intval', $rows);
+    }
+
+    /**
      * Grouped property values for a set of resource ids, limited to the given
      * terms. Returns, per resource: term → list of value rows, each carrying
      * the linked-resource id + its title (for value_resource links), the

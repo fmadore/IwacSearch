@@ -165,11 +165,18 @@ Two findings from setting it up, so the next person doesn't rediscover them:
   still excluding the analytics collections (visitor query logs).
   Remaining: try it on the live stack, then delete the wide-scope key in
   Typesense. Default stays `['*']` until someone does.
-- **Edits during a bulk reindex are lost at the swap** (documented in
-  `IncrementalIndexer`'s header): upserts go through the alias → the
-  outgoing collection. Fix shape: record a start watermark, collect item
-  ids saved during the build (or query `resource.modified`), re-run
-  `reindexItems()` against the new collection after the swap.
+- ~~**Edits during a bulk reindex are lost at the swap**~~ — fixed.
+  `ReindexOrchestrator` takes a watermark from the DATABASE's clock (not
+  PHP's — a php/mysql container skew would drop the very edits the
+  watermark exists to catch) before the content pass, then replays every
+  item created or modified since, into the new collection by name, right
+  after the swap. Reported as `catch_up` in the reindex stats; non-fatal,
+  since the reindex itself has already succeeded by then.
+  **Residue:** an item DELETED mid-build after its page was streamed still
+  survives as a stale document — its row is gone, so no timestamp query
+  can find it. Closing that needs dual-writing deletes into the in-flight
+  collection (cross-process state: the indexer would have to know a
+  reindex is running). Self-heals on the next reindex.
 - ~~**Union-tab deep pagination cap**~~ — done. `FederatedApp` still
   clamps the union list to 50 pages (Typesense won't page deeper on a
   merged list), but the last page now carries a "refine your query" hint

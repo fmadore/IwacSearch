@@ -81,6 +81,7 @@ as you confirm; remove rows once they've been through a full cycle.
 - [ ] **Drawer extraction: scroll lock cleanup**: open drawer on a long page → `document.body.style.overflow` is `hidden`. Close → it's back to `''`. Refresh mid-open → no leaked overflow lock on next load.
 - [ ] **3.7.0 intro purification**: as a site editor, save an IWAC Search page block whose Intro HTML contains `<script>alert(1)</script><p>ok</p>`. On the public page only `<p>ok</p>` survives (view-source: no script tag). Pre-existing blocks are re-purified at render time too.
 - [ ] **3.7.0 guarded alias swap**: point the indexer at a deliberately broken schema (or empty DB) and run a reindex — the job must FAIL with "Reindex aborted before alias swap" and live search must keep serving the previous collection. `GET /collections` shows no orphaned `iwac_v*_<timestamp>` leftovers after the next successful run.
+- [ ] **3.7.0 reindex catch-up**: start a bulk reindex, and WHILE it runs edit an item's title (pick a low id, so its page is streamed early). When the job finishes, search for the new title — it must be found, and the reindex stats must report `catch_up.items ≥ 1`. Before this existed, the edit was reverted by the alias swap.
 - [ ] **3.7.0 batch reindex path**: batch-edit visibility on ~20 items — one Typesense import request in the network/server logs (`IwacSearch: batch re-indexed`), not 20.
 - [ ] **3.7.0 unmappable item cleanup**: change an indexed item's resource class to a non-content class (e.g. an authority class). Its document must disappear from public search within seconds (log: item deleted).
 - [ ] **3.7.0 federated keyboard tabs**: on `/search/everything`, Tab to the tablist, use ←/→/Home/End — focus AND selection move; no pointer needed.
@@ -381,6 +382,12 @@ directly from the Omeka MySQL database, batch-imports into Typesense, then
 atomic-swaps the `iwac_current` alias. Live search keeps serving the previous
 collection uninterrupted until the swap completes — a failed reindex
 never affects production.
+
+Right after the swap it replays every item created or edited since the build
+began (`catch_up` in the stats output): those saves went through the alias
+into the outgoing collection and would otherwise be reverted by the swap. The
+one case still not covered is an item DELETED mid-build after it was already
+streamed — its stale document survives until the next reindex.
 
 ## Building the Svelte clients
 
