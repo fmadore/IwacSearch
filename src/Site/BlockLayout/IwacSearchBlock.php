@@ -114,6 +114,7 @@ class IwacSearchBlock extends AbstractBlockLayout
         $block->setData($data);
     }
 
+    /** @return string */
     public function getLabel()
     {
         return 'IWAC Search'; // @translate
@@ -123,6 +124,8 @@ class IwacSearchBlock extends AbstractBlockLayout
      * Admin form. Hand-rolled HTML rather than Laminas Form — Omeka's block
      * form contract uses the o:block[__blockIndex__][o:data][...] name pattern
      * which Laminas Form doesn't support cleanly without a lot of ceremony.
+     *
+     * @return string Rendered form markup.
      */
     public function form(
         PhpRenderer $view,
@@ -315,6 +318,10 @@ class IwacSearchBlock extends AbstractBlockLayout
      * that the Svelte client reads on mount. Multiple blocks per page are
      * supported by suffixing both the wrapper id and the state script id
      * with $block->id().
+     */
+    /**
+     * @param  string $templateViewScript
+     * @return string Rendered block markup.
      */
     public function render(
         PhpRenderer $view,

@@ -142,7 +142,6 @@ final class AnalyticsSync
      */
     private function upsertRule(array $rule): void
     {
-        // @phpstan-ignore-next-line  analytics is the v6 client accessor
         $this->typesense->analytics->rules()[$rule['name']]->update($rule);
     }
 }

@@ -94,7 +94,6 @@ final class SynonymsSync
         ]);
 
         try {
-            // @phpstan-ignore-next-line  synonymSets is the v6 client accessor
             $this->typesense->synonymSets->upsert(self::SET_NAME, ['items' => $items]);
         } catch (Throwable $e) {
             // Almost always means the server predates v30 (no /synonym_sets

@@ -68,7 +68,6 @@ final class StopwordsSync
         // is the single create-or-update method. The set name is part of the
         // payload (`name` key), not a separate first argument — the older
         // `upsert($name, $body)` / `getApiCall()` escape hatches were removed.
-        // @phpstan-ignore-next-line  property access on Typesense\Client
         $this->typesense->stopwords->put([
             'name'      => $setName,
             'stopwords' => $payload['stopwords'],

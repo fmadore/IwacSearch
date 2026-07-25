@@ -26,23 +26,41 @@
 namespace Omeka\Module {
     abstract class AbstractModule implements \Laminas\ModuleManager\Feature\ConfigProviderInterface
     {
-        public function getConfig();
+        public function getConfig()
+        {
+        }
 
-        public function init(\Laminas\ModuleManager\ModuleManager $moduleManager);
+        public function init(\Laminas\ModuleManager\ModuleManager $moduleManager)
+        {
+        }
 
-        public function onBootstrap(\Laminas\Mvc\MvcEvent $event);
+        public function onBootstrap(\Laminas\Mvc\MvcEvent $event)
+        {
+        }
 
-        public function attachListeners(\Laminas\EventManager\SharedEventManagerInterface $sharedEventManager);
+        public function attachListeners(\Laminas\EventManager\SharedEventManagerInterface $sharedEventManager)
+        {
+        }
 
-        public function install(\Laminas\ServiceManager\ServiceLocatorInterface $services);
+        public function install(\Laminas\ServiceManager\ServiceLocatorInterface $services)
+        {
+        }
 
-        public function uninstall(\Laminas\ServiceManager\ServiceLocatorInterface $services);
+        public function uninstall(\Laminas\ServiceManager\ServiceLocatorInterface $services)
+        {
+        }
 
-        public function upgrade($oldVersion, $newVersion, \Laminas\ServiceManager\ServiceLocatorInterface $services);
+        public function upgrade($oldVersion, $newVersion, \Laminas\ServiceManager\ServiceLocatorInterface $services)
+        {
+        }
 
-        public function setServiceLocator(\Laminas\ServiceManager\ServiceLocatorInterface $serviceLocator);
+        public function setServiceLocator(\Laminas\ServiceManager\ServiceLocatorInterface $serviceLocator)
+        {
+        }
 
-        public function getServiceLocator(): ?\Laminas\ServiceManager\ServiceLocatorInterface;
+        public function getServiceLocator(): ?\Laminas\ServiceManager\ServiceLocatorInterface
+        {
+        }
     }
 }
 
@@ -72,11 +90,17 @@ namespace Omeka\Settings {
 namespace Omeka\Api {
     class Response
     {
-        public function getContent();
+        public function getContent()
+        {
+        }
 
-        public function setContent($content);
+        public function setContent($content)
+        {
+        }
 
-        public function getTotalResults();
+        public function getTotalResults()
+        {
+        }
     }
 }
 
@@ -87,12 +111,16 @@ namespace Omeka\Api\Representation {
 
     abstract class AbstractResourceRepresentation extends AbstractRepresentation
     {
-        public function id();
+        public function id()
+        {
+        }
     }
 
     abstract class AbstractResourceEntityRepresentation extends AbstractResourceRepresentation
     {
-        public function title();
+        public function title()
+        {
+        }
     }
 
     class ItemRepresentation extends AbstractResourceEntityRepresentation
@@ -101,12 +129,16 @@ namespace Omeka\Api\Representation {
 
     class MediaRepresentation extends AbstractResourceEntityRepresentation
     {
-        public function item(): ?ItemRepresentation;
+        public function item(): ?ItemRepresentation
+        {
+        }
     }
 
     class SiteRepresentation extends AbstractResourceRepresentation
     {
-        public function slug();
+        public function slug()
+        {
+        }
     }
 
     class SitePageRepresentation extends AbstractResourceRepresentation
@@ -115,10 +147,14 @@ namespace Omeka\Api\Representation {
 
     class SitePageBlockRepresentation extends AbstractRepresentation
     {
-        public function id();
+        public function id()
+        {
+        }
 
         /** @return array<string, mixed> */
-        public function data();
+        public function data()
+        {
+        }
     }
 }
 
@@ -130,10 +166,14 @@ namespace Omeka\Entity {
     class SitePageBlock
     {
         /** @return array<string, mixed>|null */
-        public function getData();
+        public function getData()
+        {
+        }
 
         /** @param array<string, mixed> $data */
-        public function setData($data);
+        public function setData($data)
+        {
+        }
     }
 }
 
@@ -145,25 +185,35 @@ namespace Omeka\Job {
 
         abstract public function perform(): void;
 
-        public function getServiceLocator(): \Laminas\ServiceManager\ServiceLocatorInterface;
+        public function getServiceLocator(): \Laminas\ServiceManager\ServiceLocatorInterface
+        {
+        }
 
-        public function shouldStop(): bool;
+        public function shouldStop(): bool
+        {
+        }
     }
 }
 
 namespace Omeka\Entity {
     class Job
     {
-        public function getId(): ?int;
+        public function getId(): ?int
+        {
+        }
     }
 }
 
 namespace Omeka\Site\BlockLayout {
     abstract class AbstractBlockLayout implements BlockLayoutInterface
     {
-        public function prepareForm(\Laminas\View\Renderer\PhpRenderer $view): void;
+        public function prepareForm(\Laminas\View\Renderer\PhpRenderer $view): void
+        {
+        }
 
-        public function onHydrate(\Omeka\Entity\SitePageBlock $block, \Omeka\Stdlib\ErrorStore $errorStore): void;
+        public function onHydrate(\Omeka\Entity\SitePageBlock $block, \Omeka\Stdlib\ErrorStore $errorStore): void
+        {
+        }
     }
 
     interface BlockLayoutInterface
@@ -188,23 +238,35 @@ namespace Omeka\Site\BlockLayout {
 namespace Omeka\Stdlib {
     class ErrorStore
     {
-        public function addError($key, $message, ?array $args = null);
+        public function addError($key, $message, ?array $args = null)
+        {
+        }
 
-        public function hasErrors();
+        public function hasErrors()
+        {
+        }
     }
 
     class HtmlPurifier
     {
-        public function purify($html);
+        public function purify($html)
+        {
+        }
     }
 
     class Message implements \Stringable
     {
-        public function __construct($message, ...$args);
+        public function __construct($message, ...$args)
+        {
+        }
 
-        public function setEscapeHtml($escapeHtml);
+        public function setEscapeHtml($escapeHtml)
+        {
+        }
 
-        public function __toString(): string;
+        public function __toString(): string
+        {
+        }
     }
 }
 

@@ -39,7 +39,7 @@ final class PhotographMapper extends AbstractMapper
         )));
     }
 
-    public function map(array $item, PropertyValues $values, ?string $thumbnailUrl): ?array
+    public function map(array $item, PropertyValues $values, ?string $thumbnailUrl): array
     {
         $doc = $this->buildBase($item, $values, $thumbnailUrl);
 

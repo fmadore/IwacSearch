@@ -87,6 +87,11 @@ final class FakeCollections extends Collections
     {
     }
 
+    /**
+     * @param  array<string, mixed> $schema
+     * @param  array<string, mixed> $options
+     * @return array<string, mixed>
+     */
     public function create(array $schema, array $options = []): array
     {
         $name = (string) ($schema['name'] ?? '');
@@ -97,6 +102,7 @@ final class FakeCollections extends Collections
         return $schema;
     }
 
+    /** @return list<array{name: string}> */
     public function retrieve(): array
     {
         if ($this->server->listFailure !== null) {
@@ -137,6 +143,7 @@ final class FakeCollection extends Collection
         $this->documents = new FakeDocuments($server, $name);
     }
 
+    /** @return array{name: string, num_documents: int} */
     public function retrieve(): array
     {
         if (!isset($this->server->collections[$this->name])) {
@@ -148,6 +155,10 @@ final class FakeCollection extends Collection
         ];
     }
 
+    /**
+     * @param  array<string, mixed> $options
+     * @return array{name: string}
+     */
     public function delete(array $options = []): array
     {
         if ($this->server->dropFailure !== null) {
@@ -174,8 +185,12 @@ final class FakeDocuments extends Documents
     /**
      * Mirrors the real JSONL import contract: one result line per input
      * line, `{"success":true}` or `{"success":false,"error":…}`.
+     *
+     * @param  string $documents JSONL, one document per line.
+     * @param  array<string, mixed> $options
+     * @return string JSONL result lines, one per input line.
      */
-    public function import($documents, array $options = [])
+    public function import($documents, array $options = []): string
     {
         $lines = array_values(array_filter(
             preg_split("/\r?\n/", trim((string) $documents)) ?: [],
@@ -227,6 +242,10 @@ final class FakeDocument extends Document
     ) {
     }
 
+    /**
+     * @param  array<string, mixed> $options
+     * @return array{id: string}
+     */
     public function delete(array $options = []): array
     {
         $docs = $this->server->collections[$this->collection] ?? [];
@@ -250,6 +269,10 @@ final class FakeAliases extends Aliases
     {
     }
 
+    /**
+     * @param  array<string, mixed> $mapping
+     * @return array<string, mixed>
+     */
     public function upsert(string $name, array $mapping): array
     {
         $this->server->aliases[$name] = (string) $mapping['collection_name'];
@@ -284,6 +307,7 @@ final class FakeAlias extends \Typesense\Alias
     ) {
     }
 
+    /** @return array{name: string, collection_name: string} */
     public function retrieve(): array
     {
         if (!isset($this->server->aliases[$this->name])) {

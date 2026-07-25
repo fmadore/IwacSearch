@@ -17,6 +17,10 @@ use Psr\Container\ContainerInterface;
  */
 final class IwacSearchBlockFactory implements FactoryInterface
 {
+    /**
+     * @param  mixed $requestedName
+     * @param  array<string, mixed>|null $options
+     */
     public function __invoke(
         ContainerInterface $container,
         $requestedName,

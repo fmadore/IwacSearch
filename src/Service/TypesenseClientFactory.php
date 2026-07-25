@@ -22,6 +22,10 @@ use Typesense\Client as TypesenseClient;
  */
 class TypesenseClientFactory implements FactoryInterface
 {
+    /**
+     * @param  mixed $requestedName
+     * @param  array<string, mixed>|null $options
+     */
     public function __invoke(ContainerInterface $container, $requestedName, ?array $options = null): TypesenseClient
     {
         $config = $container->get('Config')['iwac_search']['typesense'] ?? [];
