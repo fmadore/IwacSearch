@@ -7,6 +7,8 @@ use IwacSearch\Search\InitialResponseRenderer;
 use IwacSearch\Search\SearchDefaults;
 use IwacSearch\Search\SnapshotCache;
 use IwacSearch\Search\SnapshotCacheInterface;
+use IwacSearch\Tests\Support\CallLog;
+use IwacSearch\Tests\Support\MemorySnapshotCache;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use RuntimeException;
@@ -23,8 +25,13 @@ use Typesense\MultiSearch;
 #[CoversClass(InitialResponseRenderer::class)]
 final class InitialResponseRendererTest extends TestCase
 {
-    /** @var list<array<string, mixed>> Bodies passed to multiSearch->perform(). */
-    private array $sent = [];
+    /** Bodies passed to multiSearch->perform(), in order. */
+    private CallLog $sent;
+
+    protected function setUp(): void
+    {
+        $this->sent = new CallLog();
+    }
 
     /**
      * @param  list<mixed>|\Throwable $responses One perform() result per call,
@@ -34,19 +41,23 @@ final class InitialResponseRendererTest extends TestCase
         array|\Throwable $responses,
         ?SnapshotCacheInterface $cache = null
     ): InitialResponseRenderer {
-        $sent = &$this->sent;
         $client = (new \ReflectionClass(TypesenseClient::class))->newInstanceWithoutConstructor();
-        $client->multiSearch = new class ($responses, $sent) extends MultiSearch {
+        $client->multiSearch = new class ($responses, $this->sent) extends MultiSearch {
             private int $call = 0;
 
             /** @param list<mixed>|\Throwable $responses */
-            public function __construct(private array|\Throwable $responses, private array &$sent)
+            public function __construct(private array|\Throwable $responses, private CallLog $sent)
             {
             }
 
+            /**
+             * @param  array<string, mixed> $searches
+             * @param  array<string, mixed> $queryParameters
+             * @return array<string, mixed>
+             */
             public function perform(array $searches, array $queryParameters = []): array
             {
-                $this->sent[] = $searches;
+                $this->sent->record($searches);
                 if ($this->responses instanceof \Throwable) {
                     throw $this->responses;
                 }
@@ -60,7 +71,10 @@ final class InitialResponseRendererTest extends TestCase
         );
     }
 
-    /** @return array<string, mixed> */
+    /**
+     * @param  array<string, mixed> $overrides
+     * @return array<string, mixed>
+     */
     private static function bootstrap(array $overrides = []): array
     {
         return $overrides + [
@@ -83,7 +97,7 @@ final class InitialResponseRendererTest extends TestCase
     {
         $this->renderer([['results' => [self::page()]]])->render(self::bootstrap());
 
-        self::assertSame('is_public:=true', $this->sent[0]['searches'][0]['filter_by']);
+        self::assertSame('is_public:=true', $this->sent->entries[0]['searches'][0]['filter_by']);
     }
 
     public function testLockedFiltersAreAndedAfterThePublicGuard(): void
@@ -93,7 +107,7 @@ final class InitialResponseRendererTest extends TestCase
 
         self::assertSame(
             'is_public:=true && country_ss:=`Bénin`',
-            $this->sent[0]['searches'][0]['filter_by']
+            $this->sent->entries[0]['searches'][0]['filter_by']
         );
     }
 
@@ -102,7 +116,7 @@ final class InitialResponseRendererTest extends TestCase
         // The SSR response is inlined into the HTML; OCR fulltext must not be.
         $this->renderer([['results' => [self::page()]]])->render(self::bootstrap());
 
-        self::assertStringContainsString('ocr_text', $this->sent[0]['searches'][0]['exclude_fields']);
+        self::assertStringContainsString('ocr_text', $this->sent->entries[0]['searches'][0]['exclude_fields']);
     }
 
     // ── Request shaping ─────────────────────────────────────────────────
@@ -114,8 +128,8 @@ final class InitialResponseRendererTest extends TestCase
         $this->renderer([['results' => [self::page()]]])
             ->render(self::bootstrap(['default_sort' => '_text_match:desc']));
 
-        self::assertSame('*', $this->sent[0]['searches'][0]['q']);
-        self::assertSame('date:desc', $this->sent[0]['searches'][0]['sort_by']);
+        self::assertSame('*', $this->sent->entries[0]['searches'][0]['q']);
+        self::assertSame('date:desc', $this->sent->entries[0]['searches'][0]['sort_by']);
     }
 
     public function testTheOptionalAuthorSortGetsItsMissingValuesRule(): void
@@ -127,7 +141,7 @@ final class InitialResponseRendererTest extends TestCase
 
         self::assertSame(
             'creator_sort(missing_values:last):asc',
-            $this->sent[0]['searches'][0]['sort_by']
+            $this->sent->entries[0]['searches'][0]['sort_by']
         );
     }
 
@@ -138,7 +152,7 @@ final class InitialResponseRendererTest extends TestCase
         $this->renderer([['results' => [self::page()]]])
             ->render(self::bootstrap(['prominent_facets' => ['country_ss', 'not_a_field']]));
 
-        self::assertSame('country_ss', $this->sent[0]['searches'][0]['facet_by']);
+        self::assertSame('country_ss', $this->sent->entries[0]['searches'][0]['facet_by']);
     }
 
     public function testTheEntityCollectionKeepsItsOwnQueryBy(): void
@@ -148,7 +162,7 @@ final class InitialResponseRendererTest extends TestCase
         $this->renderer([['results' => [self::page()]]])
             ->render(self::bootstrap(['query_by' => SearchDefaults::ENTITY_QUERY_BY]));
 
-        self::assertSame(SearchDefaults::ENTITY_QUERY_BY, $this->sent[0]['searches'][0]['query_by']);
+        self::assertSame(SearchDefaults::ENTITY_QUERY_BY, $this->sent->entries[0]['searches'][0]['query_by']);
     }
 
     // ── renderMany ──────────────────────────────────────────────────────
@@ -162,8 +176,8 @@ final class InitialResponseRendererTest extends TestCase
             self::bootstrap(['collection_alias' => 'iwac_index_current']),
         ]);
 
-        self::assertCount(1, $this->sent, 'both surfaces must share one round trip');
-        self::assertCount(2, $this->sent[0]['searches']);
+        self::assertCount(1, $this->sent->entries, 'both surfaces must share one round trip');
+        self::assertCount(2, $this->sent->entries[0]['searches']);
         self::assertSame([1, 2], [$out[0]['found'], $out[1]['found']]);
     }
 
@@ -176,8 +190,8 @@ final class InitialResponseRendererTest extends TestCase
             self::bootstrap(['collection_alias' => 'b']),
         ]);
 
-        self::assertSame('a', $this->sent[0]['searches'][0]['collection']);
-        self::assertSame('b', $this->sent[0]['searches'][1]['collection']);
+        self::assertSame('a', $this->sent->entries[0]['searches'][0]['collection']);
+        self::assertSame('b', $this->sent->entries[0]['searches'][1]['collection']);
         self::assertSame(2, $out[1]['found']);
     }
 
@@ -206,7 +220,7 @@ final class InitialResponseRendererTest extends TestCase
     public function testAnEmptyInputListShortCircuits(): void
     {
         self::assertSame([], $this->renderer([])->renderMany([]));
-        self::assertSame([], $this->sent);
+        self::assertSame([], $this->sent->entries);
     }
 
     // ── Degradation ─────────────────────────────────────────────────────
@@ -232,9 +246,9 @@ final class InitialResponseRendererTest extends TestCase
         $out = $renderer->render(self::bootstrap());
 
         self::assertNotNull($out);
-        self::assertCount(2, $this->sent);
-        self::assertArrayHasKey('stopwords', $this->sent[0]['searches'][0]);
-        self::assertArrayNotHasKey('stopwords', $this->sent[1]['searches'][0]);
+        self::assertCount(2, $this->sent->entries);
+        self::assertArrayHasKey('stopwords', $this->sent->entries[0]['searches'][0]);
+        self::assertArrayNotHasKey('stopwords', $this->sent->entries[1]['searches'][0]);
     }
 
     public function testTheStopwordRetryDropsThemFromEverySubSearch(): void
@@ -247,8 +261,8 @@ final class InitialResponseRendererTest extends TestCase
 
         $out = $renderer->renderMany([self::bootstrap(), self::bootstrap()]);
 
-        self::assertCount(2, $this->sent);
-        foreach ($this->sent[1]['searches'] as $search) {
+        self::assertCount(2, $this->sent->entries);
+        foreach ($this->sent->entries[1]['searches'] as $search) {
             self::assertArrayNotHasKey('stopwords', $search);
         }
         self::assertSame([1, 2], [$out[0]['found'], $out[1]['found']]);
@@ -256,37 +270,10 @@ final class InitialResponseRendererTest extends TestCase
 
     // ── Snapshot cache ──────────────────────────────────────────────────
 
-    /**
-     * An in-memory stand-in for the APCu-backed cache — the real one is a
-     * no-op without the extension, which CI does not have.
-     */
-    private function memoryCache(): SnapshotCacheInterface
-    {
-        return new class implements SnapshotCacheInterface {
-            /** @var array<string, list<array<string, mixed>|null>> */
-            public array $store = [];
-
-            public function key(array $body): string
-            {
-                return hash('xxh128', json_encode($body) ?: '');
-            }
-
-            public function get(string $key): ?array
-            {
-                return $this->store[$key] ?? null;
-            }
-
-            public function set(string $key, array $value): void
-            {
-                $this->store[$key] = $value;
-            }
-        };
-    }
-
     public function testAnIdenticalRenderIsServedFromCache(): void
     {
         // Every anonymous visitor of a landing page produces the same request.
-        $cache = $this->memoryCache();
+        $cache = new MemorySnapshotCache();
         $renderer = $this->renderer([['results' => [self::page(7)]]], $cache);
 
         $first = $renderer->render(self::bootstrap());
@@ -294,26 +281,26 @@ final class InitialResponseRendererTest extends TestCase
 
         self::assertSame(7, $first['found']);
         self::assertSame(7, $second['found']);
-        self::assertCount(1, $this->sent, 'the second render must not hit Typesense');
+        self::assertCount(1, $this->sent->entries, 'the second render must not hit Typesense');
     }
 
     public function testSurfacesWithDifferentParamsDoNotShareAnEntry(): void
     {
-        $cache = $this->memoryCache();
+        $cache = new MemorySnapshotCache();
         $renderer = $this->renderer([['results' => [self::page(1)]], ['results' => [self::page(2)]]], $cache);
 
         $a = $renderer->render(self::bootstrap(['locked_filters' => 'country_ss:=`Niger`']));
         $b = $renderer->render(self::bootstrap(['locked_filters' => 'country_ss:=`Bénin`']));
 
         self::assertSame([1, 2], [$a['found'], $b['found']]);
-        self::assertCount(2, $this->sent);
+        self::assertCount(2, $this->sent->entries);
     }
 
     public function testAFailedRenderIsNotCached(): void
     {
         // Otherwise a transient Typesense blip would be pinned in front of
         // every visitor for the whole TTL, turning a hiccup into an outage.
-        $cache = $this->memoryCache();
+        $cache = new MemorySnapshotCache();
         $renderer = $this->renderer(new RuntimeException('connection refused'), $cache);
 
         self::assertNull($renderer->render(self::bootstrap()));
@@ -322,7 +309,7 @@ final class InitialResponseRendererTest extends TestCase
 
     public function testAPartiallyFailedRenderIsNotCachedEither(): void
     {
-        $cache = $this->memoryCache();
+        $cache = new MemorySnapshotCache();
         $renderer = $this->renderer([[
             'results' => [self::page(1), ['error' => 'Field `nope` not found in schema.']],
         ]], $cache);
@@ -352,6 +339,6 @@ final class InitialResponseRendererTest extends TestCase
         ]);
 
         self::assertNull($renderer->render(self::bootstrap()));
-        self::assertCount(2, $this->sent);
+        self::assertCount(2, $this->sent->entries);
     }
 }

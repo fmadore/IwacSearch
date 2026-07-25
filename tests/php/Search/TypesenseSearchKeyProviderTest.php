@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace IwacSearch\Tests\Search;
 
 use IwacSearch\Search\TypesenseSearchKeyProvider;
+use IwacSearch\Tests\Support\CallLog;
 use Omeka\Settings\SettingsInterface;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
@@ -22,39 +23,48 @@ use Typesense\Keys;
 #[CoversClass(TypesenseSearchKeyProvider::class)]
 final class TypesenseSearchKeyProviderTest extends TestCase
 {
-    /** @var array<string, mixed> Schemas passed to keys->create(). */
-    private array $created = [];
+    /** Schemas passed to keys->create(), in order. */
+    private CallLog $created;
 
-    /** @var list<array{string, array<string, mixed>}> generateScopedSearchKey() calls. */
-    private array $signed = [];
+    /** generateScopedSearchKey() calls: ['key' => parent, 'params' => …]. */
+    private CallLog $signed;
 
+    protected function setUp(): void
+    {
+        $this->created = new CallLog();
+        $this->signed  = new CallLog();
+    }
+
+    /** @param list<string>|null $scope */
     private function provider(
         FakeSettings $settings,
         ?array $scope = null,
         string $searchKeyFile = '/nonexistent/typesense_search_key'
     ): TypesenseSearchKeyProvider {
-        $created = &$this->created;
-        $signed  = &$this->signed;
-
         $client = (new \ReflectionClass(TypesenseClient::class))->newInstanceWithoutConstructor();
-        $client->keys = new class ($created, $signed) extends Keys {
-            public function __construct(private array &$created, private array &$signed)
+        $client->keys = new class ($this->created, $this->signed) extends Keys {
+            public function __construct(private CallLog $created, private CallLog $signed)
             {
             }
 
+            /**
+             * @param  array<string, mixed> $schema
+             * @return array<string, mixed>
+             */
             public function create(array $schema): array
             {
-                $this->created[] = $schema;
+                $this->created->record($schema);
                 // Numbered off the shared log, not a per-instance counter:
                 // several tests build more than one provider and each gets
                 // its own fake client, but the keys must stay distinguishable.
-                $n = count($this->created);
+                $n = $this->created->count();
                 return ['id' => $n, 'value' => 'parent-key-' . $n];
             }
 
+            /** @param array<string, mixed> $parameters */
             public function generateScopedSearchKey(string $key, array $parameters): string
             {
-                $this->signed[] = [$key, $parameters];
+                $this->signed->record(['key' => $key, 'params' => $parameters]);
                 return 'scoped(' . $key . ')';
             }
         };
@@ -73,7 +83,7 @@ final class TypesenseSearchKeyProviderTest extends TestCase
     {
         $this->provider(new FakeSettings())->mintPublicScopedKey();
 
-        [, $params] = $this->signed[0];
+        $params = $this->signed->entries[0]['params'];
         self::assertSame('is_public:=true', $params['filter_by']);
         self::assertSame('ocr_text', $params['exclude_fields']);
     }
@@ -84,7 +94,7 @@ final class TypesenseSearchKeyProviderTest extends TestCase
         $minted = $this->provider(new FakeSettings())->mintPublicScopedKey(expiresInSeconds: 600);
 
         self::assertGreaterThanOrEqual($before + 600, $minted['expires_at']);
-        self::assertSame($minted['expires_at'], $this->signed[0][1]['expires_at']);
+        self::assertSame($minted['expires_at'], $this->signed->entries[0]['params']['expires_at']);
     }
 
     /**
@@ -121,7 +131,7 @@ final class TypesenseSearchKeyProviderTest extends TestCase
         $provider->mintPublicScopedKey();
         $provider->mintPublicScopedKey();
 
-        self::assertCount(1, $this->created, 'second mint must reuse the cached parent key');
+        self::assertCount(1, $this->created->entries, 'second mint must reuse the cached parent key');
         self::assertSame('parent-key-1', $settings->get('iwac_search_typesense_search_key'));
     }
 
@@ -129,7 +139,7 @@ final class TypesenseSearchKeyProviderTest extends TestCase
     {
         $this->provider(new FakeSettings())->mintPublicScopedKey();
 
-        self::assertSame(['documents:search'], $this->created[0]['actions']);
+        self::assertSame(['documents:search'], $this->created->entries[0]['actions']);
     }
 
     public function testSecretFileWinsOverSettings(): void
@@ -145,8 +155,8 @@ final class TypesenseSearchKeyProviderTest extends TestCase
             unlink($file);
         }
 
-        self::assertSame([], $this->created, 'a mounted secret must not trigger a bootstrap');
-        self::assertSame('key-from-secret-file', $this->signed[0][0]);
+        self::assertSame([], $this->created->entries, 'a mounted secret must not trigger a bootstrap');
+        self::assertSame('key-from-secret-file', $this->signed->entries[0]['key']);
     }
 
     public function testEmptySecretFileFallsBackToSettings(): void
@@ -162,7 +172,7 @@ final class TypesenseSearchKeyProviderTest extends TestCase
             unlink($file);
         }
 
-        self::assertSame('key-from-settings', $this->signed[0][0]);
+        self::assertSame('key-from-settings', $this->signed->entries[0]['key']);
     }
 
     // ---- collection scope ----
@@ -172,7 +182,7 @@ final class TypesenseSearchKeyProviderTest extends TestCase
         $settings = new FakeSettings();
         $this->provider($settings)->mintPublicScopedKey();
 
-        self::assertSame(['*'], $this->created[0]['collections']);
+        self::assertSame(['*'], $this->created->entries[0]['collections']);
         self::assertSame(
             ['iwac_search_typesense_search_key'],
             array_keys($settings->all()),
@@ -185,7 +195,7 @@ final class TypesenseSearchKeyProviderTest extends TestCase
         $scope = TypesenseSearchKeyProvider::TIGHTENED_COLLECTION_SCOPE;
         $this->provider(new FakeSettings(), $scope)->mintPublicScopedKey();
 
-        self::assertSame($scope, $this->created[0]['collections']);
+        self::assertSame($scope, $this->created->entries[0]['collections']);
     }
 
     /**
@@ -200,9 +210,9 @@ final class TypesenseSearchKeyProviderTest extends TestCase
         $this->provider($settings, TypesenseSearchKeyProvider::TIGHTENED_COLLECTION_SCOPE)
             ->mintPublicScopedKey();
 
-        self::assertCount(2, $this->created);
-        self::assertSame(['*'], $this->created[0]['collections']);
-        self::assertSame('parent-key-2', $this->signed[1][0]);
+        self::assertCount(2, $this->created->entries);
+        self::assertSame(['*'], $this->created->entries[0]['collections']);
+        self::assertSame('parent-key-2', $this->signed->entries[1]['key']);
     }
 
     /** Reverting the config finds the old key again — rollback needs no surgery. */
@@ -214,8 +224,8 @@ final class TypesenseSearchKeyProviderTest extends TestCase
             ->mintPublicScopedKey();
         $this->provider($settings)->mintPublicScopedKey();
 
-        self::assertCount(2, $this->created, 'the reverted scope must hit its cached key');
-        self::assertSame('parent-key-1', $this->signed[2][0]);
+        self::assertCount(2, $this->created->entries, 'the reverted scope must hit its cached key');
+        self::assertSame('parent-key-1', $this->signed->entries[2]['key']);
     }
 
     /** Order is presentation, not meaning — reordering the list is not a new scope. */
@@ -225,7 +235,7 @@ final class TypesenseSearchKeyProviderTest extends TestCase
         $this->provider($settings, ['iwac_current', 'iwac_index_current'])->mintPublicScopedKey();
         $this->provider($settings, ['iwac_index_current', 'iwac_current'])->mintPublicScopedKey();
 
-        self::assertCount(1, $this->created);
+        self::assertCount(1, $this->created->entries);
     }
 
     // ---- failure modes ----
@@ -238,6 +248,10 @@ final class TypesenseSearchKeyProviderTest extends TestCase
             {
             }
 
+            /**
+             * @param  array<string, mixed> $schema
+             * @return array<string, mixed>
+             */
             public function create(array $schema): array
             {
                 throw new RuntimeException('connection refused', 0, new RuntimeException('no route'));
@@ -264,6 +278,10 @@ final class TypesenseSearchKeyProviderTest extends TestCase
             {
             }
 
+            /**
+             * @param  array<string, mixed> $schema
+             * @return array<string, mixed>
+             */
             public function create(array $schema): array
             {
                 return ['id' => 7];
@@ -295,16 +313,33 @@ final class FakeSettings implements SettingsInterface
     {
     }
 
+    /**
+     * Signatures mirror Omeka's untyped SettingsInterface — a parameter type
+     * cannot be narrowed in an implementation, so the types live in PHPDoc.
+     *
+     * @param  mixed $id
+     * @param  mixed $value
+     * @return void
+     */
     public function set($id, $value)
     {
         $this->values[(string) $id] = $value;
     }
 
+    /**
+     * @param  mixed $id
+     * @param  mixed $default
+     * @return mixed
+     */
     public function get($id, $default = null)
     {
         return $this->values[(string) $id] ?? $default;
     }
 
+    /**
+     * @param  mixed $id
+     * @return void
+     */
     public function delete($id)
     {
         unset($this->values[(string) $id]);
