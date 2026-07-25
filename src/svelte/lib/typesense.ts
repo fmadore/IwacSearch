@@ -113,6 +113,28 @@ function isStopwordError(message: string): boolean {
   return /stopword set/i.test(message);
 }
 
+/** What search() returns: the page of results, plus the histogram if asked. */
+export interface SearchOutcome {
+  response: IwacSearchResponse;
+  /** Present only when `withYearDistribution` was requested. */
+  years?: YearBucket[];
+}
+
+/**
+ * Pull the `pub_year` facet out of a counts-only sub-search into ascending
+ * year buckets. Empty (not an error) when the sub-search is absent or the
+ * facet came back empty — the slider still works without bars.
+ */
+function readYearBuckets(result: unknown): YearBucket[] {
+  const counts = (result as IwacSearchResponse | undefined)?.facet_counts?.find(
+    (f) => f.field_name === 'pub_year',
+  );
+  return (counts?.counts ?? [])
+    .map((c) => ({ year: Number(c.value), count: c.count }))
+    .filter((b) => Number.isFinite(b.year) && b.count > 0)
+    .sort((a, b) => a.year - b.year);
+}
+
 interface SearchContext {
   key: ScopedKeyResponse;
   collection: string;
@@ -140,14 +162,13 @@ interface SearchContext {
  */
 export class TypesenseClient {
   /**
-   * Per-channel abort slots: a new search/suggest/histogram/union call
-   * aborts its still-in-flight predecessor, so a fast typist can't get
+   * Per-channel abort slots: a new search/suggest/union call aborts its
+   * still-in-flight predecessor, so a fast typist can't get
    * out-of-order responses (or pay for their bandwidth). Callers swallow
    * the resulting AbortError via transport.isAbortError().
    */
   private readonly searchAbort = new AbortSlot();
   private readonly suggestAbort = new AbortSlot();
-  private readonly yearAbort = new AbortSlot();
   private readonly unionAbort = new AbortSlot();
 
   constructor(private readonly bootstrap: IwacBootstrap) {}
@@ -182,9 +203,28 @@ export class TypesenseClient {
      * on a non-prominent facet still shows its current values in the UI.
      */
     facetBy?: string[];
-  }): Promise<IwacSearchResponse> {
+    /**
+     * Also compute the year histogram, as a SECOND sub-search in the same
+     * multi_search body — one POST instead of two.
+     *
+     * The caller opts in only when the histogram is actually stale, because
+     * the bars depend on the query + categorical filters ONLY (never page,
+     * sort, or the year range itself — the chart must show the full span so
+     * dragging the slider just repaints which bars are highlighted). Passing
+     * it on a mere page change would make Typesense recompute a facet nobody
+     * is going to look at.
+     */
+    withYearDistribution?: boolean;
+  }): Promise<SearchOutcome> {
     const ctx = await this.resolveContext(args);
     const { collection, q, filterBy, isBrowse, exact } = ctx;
+
+    let lastEnvelope: MultiSearchEnvelope | undefined;
+
+    // The histogram sub-search needs the same filter MINUS the year range.
+    const filterByWithoutYears = args.withYearDistribution
+      ? (await this.resolveContext({ ...args, includeYearRange: false })).filterBy
+      : '';
 
     const facets = args.facetBy ?? this.bootstrap.prominent_facets;
 
@@ -237,6 +277,24 @@ export class TypesenseClient {
               }
             : {}),
         },
+        // The histogram, when asked for: same query + categorical filters,
+        // but WITHOUT the year range (see withYearDistribution above).
+        ...(args.withYearDistribution
+          ? [
+              {
+                collection,
+                q,
+                query_by: ctx.queryBy,
+                ...(exact ? EXACT_MODE_PARAMS : {}),
+                filter_by: filterByWithoutYears || undefined,
+                facet_by: 'pub_year',
+                // pub_year spans the whole corpus; 200 buckets is comfortably
+                // above the distinct-year count, so no year is dropped.
+                max_facet_values: 200,
+                per_page: 0,
+              },
+            ]
+          : []),
       ],
     });
 
@@ -248,72 +306,14 @@ export class TypesenseClient {
       signal: this.searchAbort.next(),
       buildBody,
       pick: (raw) => (raw as MultiSearchEnvelope).results?.[0],
-    });
-  }
-
-  /**
-   * Document count per `pub_year` for the year-distribution histogram drawn
-   * under the date slider.
-   *
-   * Scoped to the CURRENT query + categorical filters, but deliberately NOT
-   * the year range itself — so the bars show the full span and reveal where
-   * results cluster, instead of collapsing to the selected window. Dragging
-   * the slider therefore needs no refetch (the caller re-runs this only when
-   * the query or a non-year filter changes); the bars just repaint which
-   * years fall inside the handles.
-   *
-   * Mirrors search()'s exact-mode handling so the distribution matches the
-   * set a quoted / -excluded query would return. Stopwords are omitted (like
-   * countAcross) so a missing `fr_default` set can't 404 the histogram — it's
-   * an approximate visual, not a tallied count. Counts only (per_page:0).
-   */
-  async yearDistribution(args: {
-    q: string;
-    activeFilters?: ActiveFilters;
-  }): Promise<YearBucket[]> {
-    // includeYearRange:false is the whole point — see the docblock.
-    const { key, collection, q, filterBy, queryBy, exact } = await this.resolveContext({
-      ...args,
-      includeYearRange: false,
-    });
-
-    const body = {
-      searches: [
-        {
-          collection,
-          q,
-          query_by: queryBy,
-          ...(exact ? EXACT_MODE_PARAMS : {}),
-          filter_by: filterBy || undefined,
-          facet_by: 'pub_year',
-          // pub_year spans the whole corpus; 200 buckets is comfortably above
-          // the distinct-year count, so no year is dropped from the histogram.
-          max_facet_values: 200,
-          per_page: 0,
-        },
-      ],
-    };
-
-    const json = await postJson<MultiSearchEnvelope>(
-      this.bootstrap.endpoints.search,
-      key.key,
-      body,
-      'Year histogram',
-      this.yearAbort.next(),
-    );
-    const first = json.results?.[0];
-    if (!first) {
-      throw new Error('Year histogram response missing results[0]');
-    }
-    const err = perSearchError(first);
-    if (err) {
-      throw new Error(`Year histogram HTTP ${err.code}: ${err.error}`);
-    }
-    const fc = (first as IwacSearchResponse).facet_counts?.find((f) => f.field_name === 'pub_year');
-    return (fc?.counts ?? [])
-      .map((c) => ({ year: Number(c.value), count: c.count }))
-      .filter((b) => Number.isFinite(b.year) && b.count > 0)
-      .sort((a, b) => a.year - b.year);
+      // Keep the raw envelope so the histogram sub-search can be read off it.
+      onRaw: (raw) => {
+        lastEnvelope = raw as MultiSearchEnvelope;
+      },
+    }).then((response) => ({
+      response,
+      years: args.withYearDistribution ? readYearBuckets(lastEnvelope?.results?.[1]) : undefined,
+    }));
   }
 
   /**
@@ -734,6 +734,8 @@ export class TypesenseClient {
     signal?: AbortSignal;
     buildBody: (includeStopwords: boolean) => object;
     pick?: (raw: unknown) => IwacSearchResponse | TypesensePerSearchError | undefined;
+    /** Called with the full envelope of the attempt that succeeded. */
+    onRaw?: (raw: unknown) => void;
   }): Promise<IwacSearchResponse> {
     const pick =
       opts.pick ??
@@ -763,6 +765,7 @@ export class TypesenseClient {
         throw e;
       }
 
+      opts.onRaw?.(raw);
       const payload = pick(raw);
       const err = perSearchError(payload);
       if (err && includeStopwords && isStopwordError(err.error)) {

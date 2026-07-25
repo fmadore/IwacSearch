@@ -72,9 +72,9 @@ describe('stopword recovery', () => {
     const { sent } = mockServer([{ results: [STOPWORD_ERROR] }, { results: [HIT_PAGE] }]);
     vi.spyOn(console, 'warn').mockImplementation(() => {});
 
-    const result = await new TypesenseClient(bootstrap()).search({ q: 'ramadan' });
+    const { response } = await new TypesenseClient(bootstrap()).search({ q: 'ramadan' });
 
-    expect(result.found).toBe(0);
+    expect(response.found).toBe(0);
     expect(sent).toHaveLength(2);
     // First attempt asks for stopwords; the retry drops the field entirely
     // (not just empties it — Typesense 404s on an unknown set name).
@@ -188,19 +188,69 @@ describe('shared request preamble', () => {
   });
 
   it('omits the year range from the histogram so the bars keep the full span', async () => {
-    // Dragging the slider must repaint which bars are highlighted, not
-    // collapse the chart to the selected window.
-    const { sent } = mockServer([{ results: [{ ...HIT_PAGE, facet_counts: [] }] }]);
+    // The histogram rides along as a SECOND sub-search of the same request —
+    // one POST, not two — and must NOT inherit the year filter: dragging the
+    // slider repaints which bars are highlighted, it does not collapse the
+    // chart to the selected window.
+    const { sent } = mockServer([{ results: [HIT_PAGE, { ...HIT_PAGE, facet_counts: [] }] }]);
 
-    await new TypesenseClient(bootstrap({ locked_filters: 'type_s:=article' })).yearDistribution({
+    await new TypesenseClient(bootstrap({ locked_filters: 'type_s:=article' })).search({
       q: 'x',
       activeFilters: { country_ss: ['Niger'] },
+      yearRange: { from: 1990, to: 1999 },
+      withYearDistribution: true,
     });
 
-    const search = (sent[0].searches as Sent[])[0];
-    expect(search.filter_by).toBe('type_s:=article && country_ss:=[`Niger`]');
-    expect(search.filter_by).not.toContain('pub_year');
-    expect(search.facet_by).toBe('pub_year');
-    expect(search.per_page).toBe(0);
+    const [results, histogram] = sent[0].searches as Sent[];
+    expect(sent).toHaveLength(1); // ONE request carries both
+    expect(results.filter_by).toContain('pub_year:>=1990');
+    expect(histogram.filter_by).toBe('type_s:=article && country_ss:=[`Niger`]');
+    expect(histogram.filter_by).not.toContain('pub_year');
+    expect(histogram.facet_by).toBe('pub_year');
+    expect(histogram.per_page).toBe(0);
+  });
+
+  it('sends no histogram sub-search when the caller does not ask', async () => {
+    // Paging and re-sorting reuse the bars already drawn, so they must not
+    // make Typesense recompute a facet nobody will look at.
+    const { sent } = mockServer([{ results: [HIT_PAGE] }]);
+
+    await new TypesenseClient(bootstrap()).search({ q: 'x', page: 3 });
+
+    expect(sent[0].searches as Sent[]).toHaveLength(1);
+  });
+
+  it('returns the year buckets ascending, dropping empty and non-numeric ones', async () => {
+    const { sent: _sent } = mockServer([
+      {
+        results: [
+          HIT_PAGE,
+          {
+            ...HIT_PAGE,
+            facet_counts: [
+              {
+                field_name: 'pub_year',
+                counts: [
+                  { value: '1994', count: 7 },
+                  { value: '1980', count: 2 },
+                  { value: '1999', count: 0 },
+                  { value: 'n/a', count: 5 },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+    ]);
+
+    const { years } = await new TypesenseClient(bootstrap()).search({
+      q: 'x',
+      withYearDistribution: true,
+    });
+
+    expect(years).toEqual([
+      { year: 1980, count: 2 },
+      { year: 1994, count: 7 },
+    ]);
   });
 });

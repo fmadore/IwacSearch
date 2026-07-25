@@ -168,11 +168,14 @@
   let isLoading = $state(false);
   let error = $state<string | null>(null);
 
-  // Year-distribution histogram data for the date slider. Fetched separately
-  // from the results (see the effect below) because it must ignore the year
-  // range to show the full span; empty until the first fetch resolves, and on
-  // any surface without a facet panel.
+  // Year-distribution histogram data for the date slider. Computed as a
+  // second sub-search of the main request (one POST, not two) and only when
+  // stale — see the search effect. Empty until the first response resolves,
+  // and on any surface without a facet panel.
   let yearDistribution = $state<YearBucket[]>([]);
+  // Query+filters signature the current bars were computed for. Plain `let`:
+  // the search effect reads it without wanting a reactive dependency.
+  let lastHistogramKey: string | null = null;
 
   // "Did you mean" candidates for a zero-result query: entity suggestions
   // fetched through the typo-tolerant suggest path (facet_query + the alias
@@ -291,6 +294,13 @@
       return;
     }
 
+    // The histogram depends on the query + categorical filters ONLY, so ask
+    // for it as a second sub-search of THIS request just when that pair has
+    // actually changed. Paging or re-sorting reuses the bars already drawn,
+    // which is what the separate effect used to achieve with a second POST.
+    const histogramKey = bootstrap.mode === 'full' ? `${q}\u0000${JSON.stringify(f)}` : null;
+    const needHistogram = histogramKey !== null && histogramKey !== lastHistogramKey;
+
     isLoading = true;
     error = null;
     didYouMean = [];
@@ -302,9 +312,14 @@
         activeFilters: f,
         yearRange: y,
         facetBy,
+        withYearDistribution: needHistogram,
       })
-      .then((r) => {
+      .then(({ response: r, years }) => {
         response = r;
+        if (years !== undefined) {
+          yearDistribution = years;
+          lastHistogramKey = histogramKey;
+        }
         if (q.trim() !== '') {
           if (r.found > 0) {
             // Only fruitful queries enter the recent-searches history, so
@@ -345,28 +360,6 @@
         didYouMean = [];
       });
   }
-
-  // Year-distribution histogram. Tracks ONLY the query + categorical filters
-  // — not page, sort, or the year range — because the bars show the full span
-  // regardless of the selected window (dragging the slider just repaints which
-  // bars are highlighted, no refetch). One cheap counts-only request; only the
-  // 'full' mode renders the slider, so other modes skip it. Failures degrade
-  // to no bars (the slider still works).
-  $effect(() => {
-    if (bootstrap.mode !== 'full') return;
-    const q = query;
-    const f = filters;
-    client
-      .yearDistribution({ q, activeFilters: f })
-      .then((d) => {
-        yearDistribution = d;
-      })
-      .catch((e: unknown) => {
-        if (isAbortError(e)) return; // superseded — newer histogram in flight
-        console.warn('[iwac-search] year distribution failed', e);
-        yearDistribution = [];
-      });
-  });
 
   // Map data: when the Map view is active, fetch every geo-tagged entity
   // matching the current query + filters (year range included — unlike the
