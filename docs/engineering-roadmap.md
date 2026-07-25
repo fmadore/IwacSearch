@@ -135,7 +135,11 @@ Two findings from setting it up, so the next person doesn't rediscover them:
   which Omeka S 4 ships, declares `php ~8.1 || ~8.2 || ~8.3` and so fails to
   install on the 8.4 leg of the CI matrix. Its one interface is stubbed.
 
-## Phase 2 — Known behavioural gaps (each small, verify on live stack)
+## Phase 2 — Known behavioural gaps (done, except one product call)
+
+Everything here is implemented; the surviving item is a product decision,
+not an engineering one, and the two done items still want a pass on the
+live stack (noted in the README verification checklist).
 
 - **Export and map fetches don't apply exact mode, but the live search
   does.** Surfaced while extracting `resolveContext()`: `search()` and
@@ -160,7 +164,7 @@ Two findings from setting it up, so the next person doesn't rediscover them:
   caching the parent key is keyed by a hash of the scope, so changing the
   config re-mints automatically and reverting it finds the old key again.
   `TypesenseSearchKeyProvider::TIGHTENED_COLLECTION_SCOPE` holds the
-  intended value — both aliases *and* the `iwac_v*` / `iwac_index_v*`
+  intended value — both aliases _and_ the `iwac_v*` / `iwac_index_v*`
   prefixes, which makes the alias-vs-resolved-name question moot while
   still excluding the analytics collections (visitor query logs).
   Remaining: try it on the live stack, then delete the wide-scope key in
@@ -182,7 +186,7 @@ Two findings from setting it up, so the next person doesn't rediscover them:
   merged list), but the last page now carries a "refine your query" hint
   instead of just ending.
 
-## Phase 3 — Request-count reductions (medium effort, measurable wins)
+## Phase 3 — Request-count reductions (done)
 
 - **Fold the year histogram into the main search** as a second
   `multi_search` sub-search (`per_page: 0`, `facet_by: pub_year`,
@@ -206,7 +210,10 @@ Two findings from setting it up, so the next person doesn't rediscover them:
   snapshot when mounting with a query" rule moved into `App` where the
   initial state is actually known.
 
-## Phase 4 — Mechanical UI dedupe (needs visual QA, zero behaviour change)
+## Phase 4 — Mechanical UI dedupe (done; still wants visual QA)
+
+Zero intended behaviour change, but the chip and card work touches every
+result row — walk a search page in both layouts before tagging a release.
 
 - **`FilterChip.svelte`** — the removable-chip button markup + ~40 lines
   of CSS are triplicated across `FacetPanel`, `ResultSummary`,
