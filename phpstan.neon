@@ -1,0 +1,71 @@
+# Static analysis for the PHP side.
+#
+# ⚠ ADVISORY, NOT YET A GATE. This configuration has never been executed —
+# the environment it was written in could not download PHPStan (its dist
+# comes from GitHub, which that sandbox's proxy blocks). The CI step that
+# runs it is therefore marked `continue-on-error: true`.
+#
+# To promote it to a real gate:
+#   1. composer install
+#   2. vendor/bin/phpstan analyse
+#   3. Fix what it finds, or lower `level` until it is green, or add
+#      narrowly-scoped ignoreErrors entries with a comment each.
+#   4. Drop `continue-on-error` from the phpstan step in ci.yml.
+#
+# A red gate nobody can act on is worse than no gate — hence the flag, and
+# hence not claiming a level the code has not actually been held to.
+#
+# Omeka S is an application, not a Packagist library, and Omeka pins its own
+# Laminas versions, so both are provided as stubs rather than dev
+# dependencies: analysing against a DIFFERENT Laminas version than production
+# runs is precisely the failure a type gate exists to prevent. The two stub
+# files are also, deliberately, a readable map of this module's entire
+# framework coupling.
+
+parameters:
+    level: 6
+
+    paths:
+        - src
+        - Module.php
+        - config
+        - tests/php
+
+    scanFiles:
+        - tools/phpstan/omeka.stub.php
+        - tools/phpstan/framework.stub.php
+
+    # cli/ is excluded: those scripts run outside the Omeka bootstrap and
+    # build their own container/connection from ini files, so they are
+    # covered by `php -l` in CI and exercised by hand on the live stack.
+    excludePaths:
+        - cli/*
+
+    treatPhpDocTypesAsCertain: false
+
+    ignoreErrors:
+        # The Typesense PHP client exposes its resources as dynamic __get
+        # properties (`$client->stopwords`, `->curationSets`, `->synonymSets`,
+        # `->analytics`), which no amount of stubbing can type. The call sites
+        # already carry `@phpstan-ignore-next-line` markers; this keeps the
+        # message actionable if one is removed.
+        -
+            identifier: property.notFound
+            path: src/Indexer/*Sync.php
+
+        # Laminas controllers resolve plugins through __call (`$this->url()`,
+        # `$this->messenger()`, `$this->jobDispatcher()`, `$this->getForm()`).
+        # Omeka registers its own on top, so an exhaustive stub would be a
+        # second copy of Omeka's plugin manager.
+        -
+            identifier: method.notFound
+            path: src/Controller/*
+
+        # View helpers are called on PhpRenderer via __call by design
+        # (`$view->basePath()`, `$view->iwacLocale()`, `$view->assetUrl()`).
+        -
+            identifier: method.notFound
+            paths:
+                - src/Asset/SvelteAssets.php
+                - src/View/Helper/*
+                - src/Site/BlockLayout/*

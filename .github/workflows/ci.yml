@@ -1,9 +1,10 @@
-# CI: lint, type-check, and build the Svelte client on every PR + push to main.
+# CI: lint, type-check, test and build both sides on every PR + push to main.
 #
-# We deliberately do NOT run PHP integration tests here yet — the indexer
-# requires a live Typesense instance. Unit tests for the pure seams (the
-# mappers, CountryResolver, FacetCatalog, PresetCatalog) are the next step;
-# see docs/engineering-roadmap.md.
+# Still NO integration tests: the indexer needs a live Typesense and a real
+# Omeka database. What the unit suites cover is the pure seams — the URL
+# codec, query builders and sanitiser on the client; the mappers,
+# CollectionOps' alias guard, and the catalogues on the PHP side. Those are
+# where the behaviour lives and where it has silently regressed before.
 
 name: CI
 
@@ -41,6 +42,9 @@ jobs:
       - name: Type-check (svelte-check)
         run: npm run check
 
+      - name: Unit tests (vitest)
+        run: npm test
+
       - name: Build
         run: npm run build
 
@@ -58,7 +62,7 @@ jobs:
             || (echo '::error::asset/dist is stale — run `npm run build` and commit the result' && exit 1)
 
   php:
-    name: PHP module (syntax check)
+    name: PHP module (syntax + unit tests)
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -82,6 +86,18 @@ jobs:
 
       - name: PHP syntax check (lint pass)
         run: |
-          find Module.php config cli src view \( -name '*.php' -o -name '*.phtml' \) -print0 \
+          find Module.php config cli src view tests \( -name '*.php' -o -name '*.phtml' \) -print0 \
             | xargs -0 -n1 php -l > /tmp/php-lint.log 2>&1 \
             || (cat /tmp/php-lint.log && exit 1)
+
+      - name: Unit tests (phpunit)
+        run: vendor/bin/phpunit
+
+      # ADVISORY until someone runs it locally and fixes what it finds — see
+      # the header of phpstan.neon. The config and the Omeka/Laminas stubs it
+      # needs are committed, but the analysis has never been executed, so
+      # failing the build on it would be gating on an unknown. Read the step's
+      # output, get it green, then delete `continue-on-error` here.
+      - name: Static analysis (phpstan) — advisory
+        continue-on-error: true
+        run: vendor/bin/phpstan analyse --no-progress

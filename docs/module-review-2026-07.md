@@ -4,8 +4,11 @@
 > the same branch as this document; see the "Done" table in
 > [engineering-roadmap.md](engineering-roadmap.md) for the per-item landing
 > record. The findings are kept here in full because they explain _why_ the
-> code now looks the way it does. Section D (test harness, static analysis)
-> remains open and is tracked in the roadmap's Phase 1.
+> code now looks the way it does.
+>
+> Section D followed: the **test harnesses are done and gating** (82 Vitest +
+> 139 PHPUnit cases), and **PHPStan is configured but never executed** — see
+> the roadmap's Phase 1 for the state and the three steps left to finish it.
 
 A read-through of the whole module (PHP + Svelte client + build wiring)
 looking for correctness bugs, duplication, modularity seams, and
@@ -363,27 +366,46 @@ extraction when that file is next open.
 
 ### D1. Tests: the two bugs above are exactly what the missing tests cover
 
-The roadmap’s Phase 1 lists `urlState` round-trips and
-`CollectionOps::promote()` among the first targets. A1 is a `readUrlState`
-defaulting bug — the very first assertion anyone would write. Worth
-promoting Phase 1 from “next up” to “blocking the next behavioural change”,
-and starting with:
+**Done.** A1 was a `readUrlState` defaulting bug — the very first assertion
+anyone would write, which is the argument for the harness in one line. Both
+suites now gate CI:
 
-1. `readUrlState` / `syncToUrl` round-trip incl. the default-sort fallback (A1);
-2. `CollectionOps::promote()` health guard (needs C3’s injection);
-3. `AbstractMapper` derivations over fixture rows (needs B1’s value object —
-   the two refactors reinforce each other).
+- **Vitest** (`npm test`) — 82 cases over the URL codec (including the
+  surface-default-sort round trip A1 got wrong), the query builders, the
+  highlight sanitiser, and the `filterState` composable.
+- **PHPUnit** (`vendor/bin/phpunit`) — 139 cases over
+  `CollectionOps::promote()` (the alias-swap health guard and orphan sweep,
+  against an in-memory Typesense fake), the six mappers' derivations,
+  `PropertyValues`, `CountryResolver`, `SchemaLoader`, `EntityOccurrences`,
+  `IndexEntityMapper`, and the catalogues + bootstrap builder.
+
+Neither suite needs Typesense, MySQL or an Omeka bootstrap — which is the
+payoff for the seams sections B and C extracted.
+
+One of the sanitiser cases failed on first run and the TEST was wrong, not
+the code: `sanitizeHighlight` restores a bare closing `</mark>` even when the
+opening tag stayed escaped for carrying attributes. That is correct (an
+unmatched closing tag is inert); the expectation was corrected.
 
 ### D2. Static analysis
 
-Still none, and the codebase is unusually well-annotated (`@param
-array{...}` shapes everywhere) — PHPStan would get real value from
-day one, and would have flagged A4’s stale `MapperInterface` shape and the
-`@phpstan-ignore-next-line` markers currently papering over the Typesense
-client’s dynamic accessors. The roadmap’s stated blocker (needs Omeka in
-the dev deps or a stub layer) is real; a `phpstan-stubs/` directory with
-the ~10 Omeka classes actually referenced is a smaller lift than pulling
-Omeka into `require-dev`.
+**Configured, not verified.** `phpstan.neon` and the Omeka + Laminas stub
+files under `tools/phpstan/` are committed and CI runs the analysis, but with
+`continue-on-error: true` — the analysis has **never actually been
+executed**, so gating on it would be gating on an unknown. Three steps to
+finish: run it, fix or tune until green, delete the flag.
+
+Two things learned while wiring it, recorded so they aren't rediscovered:
+
+- Omeka S is an application, not a Packagist library, and Omeka pins its own
+  Laminas versions — so both are **stubbed rather than dev-dependencies**. A
+  `require-dev` Laminas would have PHPStan approving code against signatures
+  that differ from production, which is the failure a type gate exists to
+  prevent. The stub files double as a readable map of the module's whole
+  framework coupling.
+- `laminas/laminas-log` 2.17 (the version Omeka S 4 ships) declares
+  `php ~8.1 || ~8.2 || ~8.3`, so it cannot be installed on the 8.4 leg of the
+  CI matrix at all. Its one interface is stubbed.
 
 ### D3. What is genuinely good here (don’t regress it)
 

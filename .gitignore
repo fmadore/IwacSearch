@@ -1,10 +1,13 @@
 # PHP
 vendor/
 composer.lock
+.phpunit.cache/
+.phpunit.result.cache
 
 # Node / Svelte build
 node_modules/
 .svelte-kit/
+coverage/
 
 # Editor / OS
 .idea/

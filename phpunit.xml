@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Unit tests for the module's pure seams — the code that needs neither
+  Typesense nor MySQL nor an Omeka bootstrap.
+
+  Deliberately NOT covered: OmekaSourceReader (its whole job is SQL, and
+  Doctrine DBAL is an Omeka-core dependency this module doesn't ship), the
+  controllers and the block layout (they extend Laminas/Omeka base classes
+  that aren't installable standalone), and the Job classes (thin wrappers
+  over an AbstractJob we don't have). Those seams are exercised by the
+  stack in IWAC-docker; what's here is what can be pinned honestly and
+  fast, which is also where the behaviour actually lives.
+-->
+<phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:noNamespaceSchemaLocation="vendor/phpunit/phpunit/phpunit.xsd"
+         bootstrap="tests/php/bootstrap.php"
+         colors="true"
+         cacheDirectory=".phpunit.cache"
+         executionOrder="random"
+         failOnRisky="true"
+         failOnWarning="true"
+         beStrictAboutOutputDuringTests="true"
+         displayDetailsOnTestsThatTriggerWarnings="true"
+         displayDetailsOnTestsThatTriggerErrors="true">
+    <testsuites>
+        <testsuite name="IwacSearch">
+            <directory>tests/php</directory>
+        </testsuite>
+    </testsuites>
+    <source>
+        <include>
+            <directory>src</directory>
+        </include>
+    </source>
+</phpunit>
