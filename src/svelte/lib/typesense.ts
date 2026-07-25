@@ -95,6 +95,61 @@ const MAP_INCLUDE_FIELDS = [
 ].join(',');
 
 /**
+ * Everything a request needs to know about "what is being searched", derived
+ * once from the surface bootstrap + the caller's arguments.
+ *
+ * Five methods used to repeat this key→collection→filter→browse-mode→query_by
+ * sequence verbatim, and had already drifted: `yearDistribution` deliberately
+ * omits the year range from filter_by (the histogram must show the full span),
+ * while `searchFacetValues` and `fetchForExport` do not apply exact mode. Both
+ * variations are now explicit parameters rather than accidents of copying.
+ */
+/**
+ * Does this message mean the server has no `fr_default` stopword set?
+ * Typesense phrases it the same way at the HTTP layer and inside a
+ * per-search error, which is why one predicate covers both.
+ */
+function isStopwordError(message: string): boolean {
+  return /stopword set/i.test(message);
+}
+
+/** What search() returns: the page of results, plus the histogram if asked. */
+export interface SearchOutcome {
+  response: IwacSearchResponse;
+  /** Present only when `withYearDistribution` was requested. */
+  years?: YearBucket[];
+}
+
+/**
+ * Pull the `pub_year` facet out of a counts-only sub-search into ascending
+ * year buckets. Empty (not an error) when the sub-search is absent or the
+ * facet came back empty — the slider still works without bars.
+ */
+function readYearBuckets(result: unknown): YearBucket[] {
+  const counts = (result as IwacSearchResponse | undefined)?.facet_counts?.find(
+    (f) => f.field_name === 'pub_year',
+  );
+  return (counts?.counts ?? [])
+    .map((c) => ({ year: Number(c.value), count: c.count }))
+    .filter((b) => Number.isFinite(b.year) && b.count > 0)
+    .sort((a, b) => a.year - b.year);
+}
+
+interface SearchContext {
+  key: ScopedKeyResponse;
+  collection: string;
+  filterBy: string;
+  /** Empty query → Typesense's `*` wildcard. */
+  isBrowse: boolean;
+  q: string;
+  /** Already exact-adjusted when the caller asked for it. */
+  queryBy: string;
+  highlightFields: string;
+  sortBy: string;
+  exact: boolean;
+}
+
+/**
  * Thin wrapper over the Typesense REST API for the public client.
  *
  * Why not the official typesense-js package: it bundles ~50 KB of
@@ -107,14 +162,13 @@ const MAP_INCLUDE_FIELDS = [
  */
 export class TypesenseClient {
   /**
-   * Per-channel abort slots: a new search/suggest/histogram/union call
-   * aborts its still-in-flight predecessor, so a fast typist can't get
+   * Per-channel abort slots: a new search/suggest/union call aborts its
+   * still-in-flight predecessor, so a fast typist can't get
    * out-of-order responses (or pay for their bandwidth). Callers swallow
    * the resulting AbortError via transport.isAbortError().
    */
   private readonly searchAbort = new AbortSlot();
   private readonly suggestAbort = new AbortSlot();
-  private readonly yearAbort = new AbortSlot();
   private readonly unionAbort = new AbortSlot();
 
   constructor(private readonly bootstrap: IwacBootstrap) {}
@@ -149,40 +203,30 @@ export class TypesenseClient {
      * on a non-prominent facet still shows its current values in the UI.
      */
     facetBy?: string[];
-  }): Promise<IwacSearchResponse> {
-    const key = await this.getKey();
-    const collection = this.bootstrap.collection_alias ?? key.collection;
+    /**
+     * Also compute the year histogram, as a SECOND sub-search in the same
+     * multi_search body — one POST instead of two.
+     *
+     * The caller opts in only when the histogram is actually stale, because
+     * the bars depend on the query + categorical filters ONLY (never page,
+     * sort, or the year range itself — the chart must show the full span so
+     * dragging the slider just repaints which bars are highlighted). Passing
+     * it on a mere page change would make Typesense recompute a facet nobody
+     * is going to look at.
+     */
+    withYearDistribution?: boolean;
+  }): Promise<SearchOutcome> {
+    const ctx = await this.resolveContext(args);
+    const { collection, q, filterBy, isBrowse, exact } = ctx;
 
-    const filterBy = combineFilters(
-      this.bootstrap.locked_filters,
-      buildFilterBy(args.activeFilters ?? {}),
-      buildYearRangeFilter(args.yearRange ?? null),
-    );
+    let lastEnvelope: MultiSearchEnvelope | undefined;
+
+    // The histogram sub-search needs the same filter MINUS the year range.
+    const filterByWithoutYears = args.withYearDistribution
+      ? (await this.resolveContext({ ...args, includeYearRange: false })).filterBy
+      : '';
 
     const facets = args.facetBy ?? this.bootstrap.prominent_facets;
-
-    // Browse mode: empty query becomes Typesense's wildcard `*`. Text-match
-    // scoring is meaningless without a query, so fall back to date:desc
-    // (newest first) unless the caller explicitly set a sort.
-    const isBrowse = !args.q.trim();
-    const q = isBrowse ? '*' : args.q;
-    // Per-surface field sets. The entity collection lacks ocr_text/abstract/
-    // embedding, so the index browse page passes its own query_by /
-    // highlight_fields; content surfaces fall back to the full set.
-    const queryBy = this.bootstrap.query_by ?? CONTENT_QUERY_BY_FALLBACK;
-    const highlightFields = this.bootstrap.highlight_fields ?? CONTENT_HIGHLIGHT_FALLBACK;
-    const sortByParam = resolveSortBy(args.sortBy, isBrowse, this.bootstrap.default_sort);
-
-    // Exact mode — the user typed a "quoted phrase" or a -excluded term, so
-    // they mean it literally. Switch off the relevance fuzz that's helpful
-    // for loose queries but defeats an exact match:
-    //   - drop `embedding` from query_by so no semantically-similar (but
-    //     non-matching) documents get blended in by hybrid rank-fusion;
-    //   - EXACT_MODE_PARAMS → no fuzzy tokens, every token must be present;
-    //   - stopwords skipped (below) so "en"/"de" inside a phrase survive.
-    // Browse mode (q=*) is never exact. See isExactQuery().
-    const exact = !isBrowse && isExactQuery(q);
-    const queryByEffective = exact ? withoutField(queryBy, 'embedding') : queryBy;
 
     // The body is built as a function so the stopword-recovery retry can
     // re-issue the request without the `stopwords` field.
@@ -196,7 +240,7 @@ export class TypesenseClient {
           // collection uses only title + aliases. Typesense ignores
           // query_by when q=* so browse mode drops straight through. Exact
           // queries drop `embedding` (queryByEffective) for literal matching.
-          query_by: queryByEffective,
+          query_by: ctx.queryBy,
           // Stopwords keep "le", "la", "des" etc. from polluting matches.
           // Conditionally included so the recovery retry can drop it — and
           // never applied to an exact query, so a quoted phrase keeps its
@@ -205,10 +249,10 @@ export class TypesenseClient {
           // Strict matching for an exact query (see `exact` above).
           ...(exact ? EXACT_MODE_PARAMS : {}),
           filter_by: filterBy || undefined,
-          sort_by: sortByParam,
+          sort_by: ctx.sortBy,
           page: args.page ?? 1,
           per_page: args.perPage ?? this.bootstrap.results_per_page,
-          highlight_fields: highlightFields,
+          highlight_fields: ctx.highlightFields,
           highlight_full_fields: 'title_txt',
           snippet_threshold: 30,
           highlight_affix_num_tokens: 8,
@@ -233,120 +277,43 @@ export class TypesenseClient {
               }
             : {}),
         },
+        // The histogram, when asked for: same query + categorical filters,
+        // but WITHOUT the year range (see withYearDistribution above).
+        ...(args.withYearDistribution
+          ? [
+              {
+                collection,
+                q,
+                query_by: ctx.queryBy,
+                ...(exact ? EXACT_MODE_PARAMS : {}),
+                filter_by: filterByWithoutYears || undefined,
+                facet_by: 'pub_year',
+                // pub_year spans the whole corpus; 200 buckets is comfortably
+                // above the distinct-year count, so no year is dropped.
+                max_facet_values: 200,
+                per_page: 0,
+              },
+            ]
+          : []),
       ],
     });
 
-    // A newer search supersedes any in-flight one.
-    const signal = this.searchAbort.next();
-
-    // Recovery path for a missing stopword set on the Typesense server:
-    // it surfaces either as an HTTP 404 at the multi_search wrapper or as
-    // HTTP 200 with `{code: 404, error}` inside results[0]. Either way,
-    // drop the `stopwords` field and retry ONCE — stopwords are an
-    // enhancement, not a correctness requirement. Operator should run
-    // `discovery:reindex` (or cli/stopwords-sync.php) to restore the set.
-    let lastMessage = 'Search failed';
-    for (let attempt = 0; attempt < 2; attempt++) {
-      const includeStopwords = attempt === 0;
-      let envelope: MultiSearchEnvelope;
-      try {
-        envelope = await postJson<MultiSearchEnvelope>(
-          this.bootstrap.endpoints.search,
-          key.key,
-          buildBody(includeStopwords),
-          'Search',
-          signal,
-        );
-      } catch (e) {
-        const message = e instanceof Error ? e.message : String(e);
-        if (includeStopwords && /stopword set/i.test(message)) {
-          this.warnStopwords();
-          lastMessage = message;
-          continue;
-        }
-        throw e;
-      }
-      const err = perSearchError(envelope.results?.[0]);
-      if (err && includeStopwords && /stopword set/i.test(err.error)) {
-        this.warnStopwords();
-        lastMessage = `Search HTTP ${err.code}: ${err.error}`;
-        continue;
-      }
-      return validateSearchResult('Search', envelope.results?.[0]);
-    }
-    throw new Error(lastMessage);
-  }
-
-  /**
-   * Document count per `pub_year` for the year-distribution histogram drawn
-   * under the date slider.
-   *
-   * Scoped to the CURRENT query + categorical filters, but deliberately NOT
-   * the year range itself — so the bars show the full span and reveal where
-   * results cluster, instead of collapsing to the selected window. Dragging
-   * the slider therefore needs no refetch (the caller re-runs this only when
-   * the query or a non-year filter changes); the bars just repaint which
-   * years fall inside the handles.
-   *
-   * Mirrors search()'s exact-mode handling so the distribution matches the
-   * set a quoted / -excluded query would return. Stopwords are omitted (like
-   * countAcross) so a missing `fr_default` set can't 404 the histogram — it's
-   * an approximate visual, not a tallied count. Counts only (per_page:0).
-   */
-  async yearDistribution(args: {
-    q: string;
-    activeFilters?: ActiveFilters;
-  }): Promise<YearBucket[]> {
-    const key = await this.getKey();
-    const collection = this.bootstrap.collection_alias ?? key.collection;
-    // No buildYearRangeFilter here — that's the whole point (see above).
-    const filterBy = combineFilters(
-      this.bootstrap.locked_filters,
-      buildFilterBy(args.activeFilters ?? {}),
-    );
-    const isBrowse = !args.q.trim();
-    const q = isBrowse ? '*' : args.q;
-    const exact = !isBrowse && isExactQuery(q);
-    const baseQueryBy = this.bootstrap.query_by ?? CONTENT_QUERY_BY_FALLBACK;
-    const queryBy = exact ? withoutField(baseQueryBy, 'embedding') : baseQueryBy;
-
-    const body = {
-      searches: [
-        {
-          collection,
-          q,
-          query_by: queryBy,
-          ...(exact ? EXACT_MODE_PARAMS : {}),
-          filter_by: filterBy || undefined,
-          facet_by: 'pub_year',
-          // pub_year spans the whole corpus; 200 buckets is comfortably above
-          // the distinct-year count, so no year is dropped from the histogram.
-          max_facet_values: 200,
-          per_page: 0,
-        },
-      ],
-    };
-
-    const json = await postJson<MultiSearchEnvelope>(
-      this.bootstrap.endpoints.search,
-      key.key,
-      body,
-      'Year histogram',
-      this.yearAbort.next(),
-    );
-    const first = json.results?.[0];
-    if (!first) {
-      throw new Error('Year histogram response missing results[0]');
-    }
-    const err = perSearchError(first);
-    if (err) {
-      throw new Error(`Year histogram HTTP ${err.code}: ${err.error}`);
-    }
-    const fc = (first as IwacSearchResponse).facet_counts?.find((f) => f.field_name === 'pub_year');
-    return (fc?.counts ?? [])
-      .map((c) => ({ year: Number(c.value), count: c.count }))
-      .filter((b) => Number.isFinite(b.year) && b.count > 0)
-      .sort((a, b) => a.year - b.year);
+    return this.withStopwordRetry({
+      label: 'Search',
+      url: this.bootstrap.endpoints.search,
+      key: ctx.key.key,
+      // A newer search supersedes any in-flight one.
+      signal: this.searchAbort.next(),
+      buildBody,
+      pick: (raw) => (raw as MultiSearchEnvelope).results?.[0],
+      // Keep the raw envelope so the histogram sub-search can be read off it.
+      onRaw: (raw) => {
+        lastEnvelope = raw as MultiSearchEnvelope;
+      },
+    }).then((response) => ({
+      response,
+      years: args.withYearDistribution ? readYearBuckets(lastEnvelope?.results?.[1]) : undefined,
+    }));
   }
 
   /**
@@ -373,16 +340,14 @@ export class TypesenseClient {
     const text = args.query.trim();
     if (!text) return [];
 
-    const key = await this.getKey();
-    const collection = this.bootstrap.collection_alias ?? key.collection;
-    const filterBy = combineFilters(
-      this.bootstrap.locked_filters,
-      buildFilterBy(args.activeFilters ?? {}),
-      buildYearRangeFilter(args.yearRange ?? null),
-    );
-    const isBrowse = !args.q.trim();
-    const q = isBrowse ? '*' : args.q;
-    const queryBy = this.bootstrap.query_by ?? CONTENT_QUERY_BY_FALLBACK;
+    // applyExact:false — a facet lookup is a value-name search inside the
+    // current scope, and narrowing the scope's own query to strict keyword
+    // mode would change which values are offered. Kept as it has always
+    // behaved; see the note in docs/engineering-roadmap.md.
+    const { key, collection, q, filterBy, queryBy } = await this.resolveContext({
+      ...args,
+      applyExact: false,
+    });
 
     const body = {
       searches: [
@@ -468,17 +433,13 @@ export class TypesenseClient {
     activeFilters?: ActiveFilters;
     yearRange?: YearRange | null;
   }): Promise<{ docs: IwacDoc[]; found: number }> {
-    const key = await this.getKey();
-    const collection = this.bootstrap.collection_alias ?? key.collection;
-    const filterBy = combineFilters(
-      this.bootstrap.locked_filters,
-      buildFilterBy(args.activeFilters ?? {}),
-      buildYearRangeFilter(args.yearRange ?? null),
-    );
-    const isBrowse = !args.q.trim();
-    const q = isBrowse ? '*' : args.q;
-    const queryBy = this.bootstrap.query_by ?? CONTENT_QUERY_BY_FALLBACK;
-    const sortByParam = resolveSortBy(args.sortBy, isBrowse, this.bootstrap.default_sort);
+    // applyExact:false preserves the behaviour this has always had — see the
+    // note in docs/engineering-roadmap.md, which flags it as a real (separate)
+    // question rather than something to change inside a refactor.
+    const { key, collection, q, filterBy, queryBy, sortBy } = await this.resolveContext({
+      ...args,
+      applyExact: false,
+    });
 
     const docs: IwacDoc[] = [];
     let found = 0;
@@ -497,7 +458,7 @@ export class TypesenseClient {
             query_by: queryBy,
             ...(useStopwords ? { stopwords: 'fr_default' } : {}),
             filter_by: filterBy || undefined,
-            sort_by: sortByParam,
+            sort_by: sortBy,
             page,
             per_page: 250,
             include_fields: EXPORT_INCLUDE_FIELDS,
@@ -513,7 +474,7 @@ export class TypesenseClient {
       );
       const first = json.results?.[0];
       const err = perSearchError(first);
-      if (err && useStopwords && /stopword set/i.test(err.error)) {
+      if (err && useStopwords && isStopwordError(err.error)) {
         useStopwords = false;
         page--; // retry this page without stopwords
         continue;
@@ -540,17 +501,11 @@ export class TypesenseClient {
     activeFilters?: ActiveFilters;
     yearRange?: YearRange | null;
   }): Promise<IwacDoc[]> {
-    const key = await this.getKey();
-    const collection = this.bootstrap.collection_alias ?? key.collection;
-    const filterBy = combineFilters(
-      'has_coords:=true',
-      this.bootstrap.locked_filters,
-      buildFilterBy(args.activeFilters ?? {}),
-      buildYearRangeFilter(args.yearRange ?? null),
-    );
-    const isBrowse = !args.q.trim();
-    const q = isBrowse ? '*' : args.q;
-    const queryBy = this.bootstrap.query_by ?? CONTENT_QUERY_BY_FALLBACK;
+    // applyExact:false — same as the export path (see the roadmap note).
+    const ctx = await this.resolveContext({ ...args, applyExact: false });
+    const { key, collection, q, queryBy, isBrowse } = ctx;
+    // Markers only exist for entities that parsed a geopoint.
+    const filterBy = combineFilters('has_coords:=true', ctx.filterBy);
 
     const docs: IwacDoc[] = [];
     const pages = Math.ceil(MAP_MAX_HITS / 250);
@@ -637,39 +592,15 @@ export class TypesenseClient {
     url.searchParams.set('page', String(args.page ?? 1));
     url.searchParams.set('per_page', String(args.perPage ?? this.bootstrap.results_per_page));
 
-    const signal = this.unionAbort.next();
-
-    let lastMessage = 'Everything search failed';
-    for (let attempt = 0; attempt < 2; attempt++) {
-      const includeStopwords = attempt === 0;
-      let response: IwacSearchResponse | TypesensePerSearchError;
-      try {
-        // Union mode returns ONE merged result object, not {results: [...]}.
-        response = await postJson<IwacSearchResponse | TypesensePerSearchError>(
-          url.toString(),
-          key.key,
-          buildBody(includeStopwords),
-          'Everything',
-          signal,
-        );
-      } catch (e) {
-        const message = e instanceof Error ? e.message : String(e);
-        if (includeStopwords && /stopword set/i.test(message)) {
-          this.warnStopwords();
-          lastMessage = message;
-          continue;
-        }
-        throw e;
-      }
-      const err = perSearchError(response);
-      if (err && includeStopwords && /stopword set/i.test(err.error)) {
-        this.warnStopwords();
-        lastMessage = `Everything HTTP ${err.code}: ${err.error}`;
-        continue;
-      }
-      return validateSearchResult('Everything', response);
-    }
-    throw new Error(lastMessage);
+    // Union mode returns ONE merged result object, not {results: [...]},
+    // so the payload IS the response — no `pick` needed.
+    return this.withStopwordRetry({
+      label: 'Everything',
+      url: url.toString(),
+      key: key.key,
+      signal: this.unionAbort.next(),
+      buildBody,
+    });
   }
 
   /**
@@ -722,6 +653,129 @@ export class TypesenseClient {
     console.warn(
       '[iwac-search] Typesense stopword set missing; retrying without stopwords. Run discovery:reindex (or cli/stopwords-sync.php) to provision.',
     );
+  }
+
+  /**
+   * Resolve the shared request context. See {@link SearchContext}.
+   *
+   * @param includeYearRange  false only for the year histogram, which must
+   *   show the full span regardless of the selected window.
+   * @param applyExact  whether a quoted / -excluded query switches to strict
+   *   keyword matching (drop `embedding`, no typo tolerance, no stopwords).
+   */
+  private async resolveContext(args: {
+    q: string;
+    activeFilters?: ActiveFilters;
+    yearRange?: YearRange | null;
+    sortBy?: string;
+    includeYearRange?: boolean;
+    applyExact?: boolean;
+  }): Promise<SearchContext> {
+    const key = await this.getKey();
+    const collection = this.bootstrap.collection_alias ?? key.collection;
+
+    const filterBy = combineFilters(
+      this.bootstrap.locked_filters,
+      buildFilterBy(args.activeFilters ?? {}),
+      (args.includeYearRange ?? true) ? buildYearRangeFilter(args.yearRange ?? null) : '',
+    );
+
+    // Browse mode: empty query becomes Typesense's wildcard `*`. Text-match
+    // scoring is meaningless without a query, so resolveSortBy falls back to
+    // date:desc unless the surface configured its own default.
+    const isBrowse = !args.q.trim();
+    const q = isBrowse ? '*' : args.q;
+
+    // Per-surface field sets. The entity collection lacks ocr_text / abstract
+    // / embedding, so the index surfaces pass their own query_by and
+    // highlight_fields; content surfaces fall back to the full set.
+    const baseQueryBy = this.bootstrap.query_by ?? CONTENT_QUERY_BY_FALLBACK;
+
+    // Exact mode — the user typed a "quoted phrase" or a -excluded term, so
+    // they mean it literally. Drop `embedding` so no semantically-similar
+    // (but non-matching) document is blended in by hybrid rank-fusion; the
+    // caller adds EXACT_MODE_PARAMS and skips stopwords. Browse mode is
+    // never exact. See isExactQuery().
+    const exact = (args.applyExact ?? true) && !isBrowse && isExactQuery(q);
+
+    return {
+      key,
+      collection,
+      filterBy,
+      isBrowse,
+      q,
+      queryBy: exact ? withoutField(baseQueryBy, 'embedding') : baseQueryBy,
+      highlightFields: this.bootstrap.highlight_fields ?? CONTENT_HIGHLIGHT_FALLBACK,
+      sortBy: resolveSortBy(args.sortBy, isBrowse, this.bootstrap.default_sort),
+      exact,
+    };
+  }
+
+  /**
+   * POST a search body, retrying ONCE without the `stopwords` field when the
+   * server reports the set missing.
+   *
+   * Typesense surfaces that failure two ways — an HTTP 404 at the wrapper, or
+   * HTTP 200 with `{code: 404, error}` in the payload — so both paths funnel
+   * through the same retry. Stopwords are an enhancement (filtering "le",
+   * "la", "des" out of matches), never a correctness requirement, so degrading
+   * beats failing the search. The operator should run `discovery:reindex` (or
+   * cli/stopwords-sync.php) to restore the set.
+   *
+   * `pick` pulls the per-search payload out of whatever shape the endpoint
+   * returned: plain multi_search nests it under `results[0]`, union mode
+   * returns ONE merged object.
+   */
+  private async withStopwordRetry(opts: {
+    label: string;
+    url: string;
+    /** The scoped key value (context.key.key). */
+    key: string;
+    signal?: AbortSignal;
+    buildBody: (includeStopwords: boolean) => object;
+    pick?: (raw: unknown) => IwacSearchResponse | TypesensePerSearchError | undefined;
+    /** Called with the full envelope of the attempt that succeeded. */
+    onRaw?: (raw: unknown) => void;
+  }): Promise<IwacSearchResponse> {
+    const pick =
+      opts.pick ??
+      ((raw: unknown) => raw as IwacSearchResponse | TypesensePerSearchError | undefined);
+    let lastMessage = `${opts.label} failed`;
+
+    // Two attempts max: the retry drops `stopwords`, so a stopword error
+    // cannot recur on the second pass.
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const includeStopwords = attempt === 0;
+      let raw: unknown;
+      try {
+        raw = await postJson<unknown>(
+          opts.url,
+          opts.key,
+          opts.buildBody(includeStopwords),
+          opts.label,
+          opts.signal,
+        );
+      } catch (e) {
+        const message = e instanceof Error ? e.message : String(e);
+        if (includeStopwords && isStopwordError(message)) {
+          this.warnStopwords();
+          lastMessage = message;
+          continue;
+        }
+        throw e;
+      }
+
+      opts.onRaw?.(raw);
+      const payload = pick(raw);
+      const err = perSearchError(payload);
+      if (err && includeStopwords && isStopwordError(err.error)) {
+        this.warnStopwords();
+        lastMessage = `${opts.label} HTTP ${err.code}: ${err.error}`;
+        continue;
+      }
+      return validateSearchResult(opts.label, payload);
+    }
+    throw new Error(lastMessage);
   }
 
   /**

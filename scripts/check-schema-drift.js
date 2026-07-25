@@ -205,26 +205,47 @@ try {
   const catalogKeys = parseFacetCatalog(read('src/Browse/FacetCatalog.php'));
   const labels = parseFacetLabels(read('src/svelte/lib/i18n.ts'));
 
-  const facetIn = (name) => {
-    const c = contentFields.get(name);
-    const i = indexFields.get(name);
-    if (!c && !i) return 'missing';
-    return (c && c.facet) || (i && i.facet) ? 'facet' : 'not-facet';
-  };
+  // PER-SCHEMA, not OR-ed across the two. A key is checked against every
+  // schema that DECLARES it: `country_ss` and `pub_year` exist in both
+  // collections, and OR-ing meant losing `facet: true` in one of them stayed
+  // green while that surface's facet panel quietly broke. A key declared in
+  // only one schema is only checked there — that is the normal case, not a
+  // problem (ocr_text is content-only, entity_type_s is index-only).
+  const schemas = [
+    { label: 'data/schema.yaml', fields: contentFields },
+    { label: 'data/schema-index.yaml', fields: indexFields },
+  ];
 
   for (const key of catalogKeys) {
-    const status = facetIn(key);
-    if (status === 'missing') {
+    const declaredIn = schemas.filter((s) => s.fields.has(key));
+
+    if (declaredIn.length === 0) {
       fail(`FacetCatalog key '${key}' is not declared in either schema YAML.`);
-    } else if (status === 'not-facet') {
-      fail(`FacetCatalog key '${key}' is in the schema but not facet: true.`);
     }
+    for (const schema of declaredIn) {
+      if (!schema.fields.get(key).facet) {
+        fail(
+          `FacetCatalog key '${key}' is declared in ${schema.label} but not facet: true there` +
+            (declaredIn.length > 1
+              ? ` (it IS a facet in the other schema — the panel on this collection's surface will break).`
+              : '.'),
+        );
+      }
+    }
+
     const locales = labels.get(key);
     for (const locale of ['fr', 'en']) {
       if (!locales || !locales.has(locale)) {
         fail(`FacetCatalog key '${key}' has no '${locale}' label in i18n.ts FACET_LABELS.`);
       }
     }
+  }
+
+  // Informational: which catalog keys live in both collections. These are the
+  // ones the per-schema check above earns its keep on.
+  const shared = catalogKeys.filter((k) => contentFields.has(k) && indexFields.has(k));
+  if (shared.length > 0) {
+    console.log(`ℹ catalog keys declared in BOTH schemas (checked per file): ${shared.join(', ')}`);
   }
 
   // Informational: facet fields the admin picker deliberately doesn't offer.

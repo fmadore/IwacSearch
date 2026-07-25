@@ -135,25 +135,58 @@ Two findings from setting it up, so the next person doesn't rediscover them:
   which Omeka S 4 ships, declares `php ~8.1 || ~8.2 || ~8.3` and so fails to
   install on the 8.4 leg of the CI matrix. Its one interface is stubbed.
 
-## Phase 2 — Known behavioural gaps (each small, verify on live stack)
+## Phase 2 — Known behavioural gaps (done, except one product call)
 
-- **Tighten the search-only parent key scope** from `collections: ['*']`
-  to the two aliases. Blocked on verifying (live container) whether
-  Typesense matches key scopes against the requested alias name or the
-  resolved collection name — same caveat as the analytics rules in
-  ROADMAP.md. When done: bump `TypesenseSearchKeyProvider::SETTINGS_KEY`
-  so cached wide-scope keys are re-minted, and delete the old key in
-  Typesense.
-- **Edits during a bulk reindex are lost at the swap** (documented in
-  `IncrementalIndexer`'s header): upserts go through the alias → the
-  outgoing collection. Fix shape: record a start watermark, collect item
-  ids saved during the build (or query `resource.modified`), re-run
-  `reindexItems()` against the new collection after the swap.
-- **Union-tab deep pagination cap** — `FederatedApp` clamps the union
-  list to 50 pages; fine for a merged relevance list, but worth a
-  "refine your query" hint at the cap.
+Everything here is implemented; the surviving item is a product decision,
+not an engineering one, and the two done items still want a pass on the
+live stack (noted in the README verification checklist).
 
-## Phase 3 — Request-count reductions (medium effort, measurable wins)
+- **Export and map fetches don't apply exact mode, but the live search
+  does.** Surfaced while extracting `resolveContext()`: `search()` and
+  `yearDistribution()` switch a quoted / `-excluded` query to strict
+  keyword matching (drop `embedding`, no typo tolerance), while
+  `fetchForExport()`, `fetchForMap()` and `searchFacetValues()` do not. So
+  exporting the results of `"radicalisation en Côte d'Ivoire"` can include
+  semantically-similar documents the user never saw on screen. The
+  refactor preserved the existing behaviour deliberately — changing what
+  an export contains is a product decision, not a cleanup — and the call
+  sites now say `applyExact: false` explicitly instead of diverging by
+  omission. Decide whether export/map should mirror the live set (probably
+  yes for export; the map's `frequency:desc` browse ordering makes it less
+  clear-cut).
+
+- ~~**Tighten the search-only parent key scope** from `collections: ['*']`
+  to the two aliases.~~ **Unblocked, one config line away.** The blocker
+  was never really the Typesense semantics (does a key scope match the
+  requested alias or the resolved collection?) — it was that answering it
+  required a code deploy per attempt. The scope is now
+  `iwac_search.public_search_key.collections`, and the settings slot
+  caching the parent key is keyed by a hash of the scope, so changing the
+  config re-mints automatically and reverting it finds the old key again.
+  `TypesenseSearchKeyProvider::TIGHTENED_COLLECTION_SCOPE` holds the
+  intended value — both aliases _and_ the `iwac_v*` / `iwac_index_v*`
+  prefixes, which makes the alias-vs-resolved-name question moot while
+  still excluding the analytics collections (visitor query logs).
+  Remaining: try it on the live stack, then delete the wide-scope key in
+  Typesense. Default stays `['*']` until someone does.
+- ~~**Edits during a bulk reindex are lost at the swap**~~ — fixed.
+  `ReindexOrchestrator` takes a watermark from the DATABASE's clock (not
+  PHP's — a php/mysql container skew would drop the very edits the
+  watermark exists to catch) before the content pass, then replays every
+  item created or modified since, into the new collection by name, right
+  after the swap. Reported as `catch_up` in the reindex stats; non-fatal,
+  since the reindex itself has already succeeded by then.
+  **Residue:** an item DELETED mid-build after its page was streamed still
+  survives as a stale document — its row is gone, so no timestamp query
+  can find it. Closing that needs dual-writing deletes into the in-flight
+  collection (cross-process state: the indexer would have to know a
+  reindex is running). Self-heals on the next reindex.
+- ~~**Union-tab deep pagination cap**~~ — done. `FederatedApp` still
+  clamps the union list to 50 pages (Typesense won't page deeper on a
+  merged list), but the last page now carries a "refine your query" hint
+  instead of just ending.
+
+## Phase 3 — Request-count reductions (done)
 
 - **Fold the year histogram into the main search** as a second
   `multi_search` sub-search (`per_page: 0`, `facet_by: pub_year`,
@@ -166,14 +199,21 @@ Two findings from setting it up, so the next person doesn't rediscover them:
 - **Cache the empty-query SSR snapshot** (APCu or filesystem, 30–60 s,
   keyed on a hash of the bootstrap search params) — it's identical for
   every anonymous visitor of `/search` and the federated landing.
-- **Pass `query` to `App` as a reactive prop on the federated page**
-  instead of `{#key}`-remounting per committed query — remounts still
-  refetch everything and lose facet expand/scroll state (the token
-  re-mint half is already fixed). Requires `App` to react to
-  `initial_query` changes post-mount; touchy, do it with the Vitest
-  harness from Phase 1 in place.
+- ~~**Pass `query` to `App` as a reactive prop on the federated page**~~ —
+  done. `App` takes a `sharedQuery` prop and adopts it in place (guarded
+  by the last value ADOPTED, so a query edited inside the App isn't
+  snapped back), and `{#key}` now covers only the tab — a genuinely
+  different collection, facets and sort vocabulary. Typing a new query
+  keeps facet expand state, view mode and scroll position instead of
+  rebuilding the tab. The `initial_query` bootstrap field is gone: a
+  live prop replaces a mount-time seed, and the "don't flash the browse
+  snapshot when mounting with a query" rule moved into `App` where the
+  initial state is actually known.
 
-## Phase 4 — Mechanical UI dedupe (needs visual QA, zero behaviour change)
+## Phase 4 — Mechanical UI dedupe (done; still wants visual QA)
+
+Zero intended behaviour change, but the chip and card work touches every
+result row — walk a search page in both layouts before tagging a release.
 
 - **`FilterChip.svelte`** — the removable-chip button markup + ~40 lines
   of CSS are triplicated across `FacetPanel`, `ResultSummary`,
@@ -192,21 +232,32 @@ Two findings from setting it up, so the next person doesn't rediscover them:
   retry/preamble halves stay open deliberately: they restructure the
   request path of the module's most critical file, which wants the Vitest
   harness from Phase 1 in place first.)
-- **`ResultItem` list/gallery split** — already tracked in ROADMAP.md;
-  same batch.
+- ~~**`ResultItem` list/gallery split**~~ — done as a derivations
+  extraction (`lib/resultCard.ts` + `lib/resultCard.svelte.ts`, 19 new
+  Vitest cases) rather than a component split; see ROADMAP.md for why the
+  two layouts stayed one file.
 
-## Phase 5 — Schema/data hygiene
+## Phase 5 — Schema/data hygiene (done)
 
-- **Make the drift check per-schema instead of OR-ing**: a catalog key
-  currently passes if it's `facet: true` in _either_ YAML, so a facet
-  flag lost in one collection stays green while that surface's panel
-  breaks. Flag `declared-but-not-facet` per file for keys both schemas
-  declare (`country_ss`, `pub_year`).
-- **Document the deliberate `title_txt` stemming asymmetry** (content
-  schema stems, entity schema doesn't — proper nouns) with a comment in
-  `schema-index.yaml` so it stops looking like drift.
-- **Consider generating the shared field blocks** of the two YAMLs from
-  one source if they diverge again.
+- **The drift check is per-schema now, not OR-ed.** A catalog key is
+  validated against every schema that DECLARES it, so losing `facet: true`
+  in one collection while the other keeps it is a failure instead of
+  silently green. Only `country_ss` is currently declared in both, and the
+  check prints that list so the coverage stays visible. (Verified by
+  dropping the flag from the entity schema alone: red, as intended.)
+- **The `title_txt` stemming asymmetry is documented** in
+  `schema-index.yaml` where someone comparing the two files will actually
+  see it. Content titles are prose and stem; entity titles are proper nouns
+  and must not — a French stemmer would conflate "Tijaniyya"/"Tijaniyyas"
+  and chew the tail off "Bamako". Alias reconciliation on that collection
+  is entity_aliases_txt + the synonym set's job, not the stemmer's.
+- **Generating the shared field blocks from one source: decided against.**
+  The two schemas share 11 fields, nearly all trivial (`id`, `title`,
+  `is_public`, `omeka_url`, …), and the one interesting shared field —
+  `title_txt` — is deliberately DIFFERENT between them. A generator would
+  add a build step, obscure that asymmetry, and defend against a failure
+  the per-schema drift check now catches directly. Revisit only if the
+  shared surface grows well beyond its current size.
 
 ## Notes for future sessions
 

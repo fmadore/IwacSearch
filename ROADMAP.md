@@ -66,11 +66,15 @@ expect the optional field to just work.
   licensing question: answers would be synthesised from
   licensing-restricted OCR that visitors cannot read in full. Revisit
   deliberately, not as a code task.
-- **`ResultItem.svelte` file split (list/gallery variants)** — the 1,000-line
-  component would read better as `ResultItemList` + `ResultItemGallery`
-  over a shared derivations module. Deferred in 3.6.0 (high-churn, zero
-  behaviour change) in favour of the smaller shape-detection change the
-  union tab needed; do it when a feature next touches the card layouts.
+- ~~**`ResultItem.svelte` file split (list/gallery variants)**~~ — done, but
+  NOT as two components. The derivations moved to `lib/resultCard.ts`
+  (pure rules: which highlight wins, how a citation punctuates, when a date
+  is only a year — now unit-tested) plus `lib/resultCard.svelte.ts` (the
+  reactive wiring), taking the component from ~1,000 to ~800 lines, of
+  which ~500 is CSS. Splitting the LAYOUTS was examined and rejected: they
+  differ by 7 CSS rules out of ~65, so two components would either
+  duplicate ~450 lines of scoped CSS or push it into a global stylesheet —
+  real risk to separate files that mostly agree.
 - **typesense-php filter-escape helper** — v6.1.0 (RC as of mid-2026) ships
   an official `escape filter string values` helper. The module hand-builds
   `filter_by` strings in PHP and TS today (values are backtick-wrapped

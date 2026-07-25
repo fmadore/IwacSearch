@@ -41,8 +41,17 @@ fields:
   # ── Display + sort + FTS ──────────────────────────────────────────────
   # No locale on the FTS fields: the default pipeline folds diacritics at
   # index + query time (accent-insensitive search) — see schema.yaml.
+  #
+  # DELIBERATE ASYMMETRY, not drift: content's title_txt carries
+  # `stem: true`, this one does NOT. Entity titles are proper nouns —
+  # people, places, organisations — and a French stemmer mangles them
+  # ("Tijaniyya" and "Tijaniyyas" are not the same entity, while "Bamako"
+  # risks losing its tail to a plural rule). Content titles are prose and
+  # genuinely benefit from stemming. Alias reconciliation on this
+  # collection is handled by entity_aliases_txt and the global synonym
+  # set, not by stemming.
   - { name: title,     type: string, sort: true }               # entity name (A–Z sort)
-  - { name: title_txt, type: string }                           # FTS, accent-folded
+  - { name: title_txt, type: string }                           # FTS, accent-folded, NOT stemmed (see above)
   # Alternative spellings ("RCI" → "Radio Côte d'Ivoire"), FTS only.
   - { name: entity_aliases_txt, type: "string[]", facet: false, optional: true }
   - { name: description, type: string, optional: true }

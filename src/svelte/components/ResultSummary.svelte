@@ -17,6 +17,7 @@
   import type { ActiveFilters, YearRange } from '../lib/types';
   import { sortOptions, useI18n } from '../lib/i18n';
   import { deriveActiveChips, type ActiveFilterChip } from '../lib/filterChips';
+  import FilterChip from './FilterChip.svelte';
 
   interface Props {
     found: number;
@@ -59,16 +60,7 @@
       <ul class="iwac-summary__chips">
         {#each chips as chip (chip.field + '|' + chip.value)}
           <li>
-            <button
-              type="button"
-              class="iwac-summary__chip"
-              onclick={() => onRemoveChip(chip)}
-              aria-label={t('remove_filter', { label: chip.label, value: chip.displayValue })}
-            >
-              <span class="iwac-summary__chip-field">{chip.label}:</span>
-              <span class="iwac-summary__chip-value">{chip.displayValue}</span>
-              <span class="iwac-summary__chip-x" aria-hidden="true">×</span>
-            </button>
+            <FilterChip {chip} onRemove={onRemoveChip} />
           </li>
         {/each}
       </ul>
@@ -130,59 +122,11 @@
     font-weight: 500;
   }
 
-  .iwac-summary__chips {
-    list-style: none;
-    margin: 0;
-    padding: 0;
-    display: inline-flex;
-    flex-wrap: wrap;
-    gap: var(--space-xs, 0.25rem);
-  }
   /*
    * Removable scope chip — outlined in primary (current state), value in ink.
    * Same vocabulary as the FacetPanel chips so the two read as one system. The
    * IWAC theme paints every <button>; resets keep this an outline, not a pill.
    */
-  .iwac-summary__chip {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--space-xs, 0.25rem);
-    padding: 0.2rem 0.55rem;
-    background: transparent;
-    border: 1px solid var(--primary, #ce4115);
-    border-radius: var(--radius-full, 9999px);
-    box-shadow: none;
-    cursor: pointer;
-    font: inherit;
-    font-size: var(--text-xs, 0.8125rem);
-    color: var(--ink, #13161c);
-    line-height: 1.4;
-    transition:
-      background var(--transition-fast, 150ms ease),
-      color var(--transition-fast, 150ms ease);
-  }
-  .iwac-summary__chip:hover {
-    background: color-mix(in oklab, var(--primary, #ce4115) 10%, transparent);
-    color: var(--ink-strong, var(--ink, #13161c));
-    box-shadow: none;
-    transform: none;
-  }
-  .iwac-summary__chip:focus-visible {
-    outline: none;
-    box-shadow: var(--ring-focus, 0 0 0 3px rgba(0, 0, 0, 0.1));
-  }
-  .iwac-summary__chip-field {
-    color: var(--muted, #66696e);
-    font-weight: 500;
-  }
-  .iwac-summary__chip-value {
-    font-weight: 600;
-  }
-  .iwac-summary__chip-x {
-    color: var(--muted, #66696e);
-    font-size: var(--text-sm, 0.9375rem);
-    line-height: 1;
-  }
 
   .iwac-summary__clear {
     background: none;

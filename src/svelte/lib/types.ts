@@ -14,12 +14,6 @@ export interface IwacBootstrap {
    */
   card?: 'content' | 'entity';
   /**
-   * Initial query string. Set by the federated page so a reused App seeds
-   * with the shared query; absent on standalone surfaces (which read the
-   * query from the URL or start empty).
-   */
-  initial_query?: string;
-  /**
    * Initial facet selections. Set by the federated page when a chip on the
    * union "All" tab hands off to a per-collection tab (so the clicked
    * filter survives the tab switch); absent everywhere else.

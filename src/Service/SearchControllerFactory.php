@@ -39,10 +39,20 @@ class SearchControllerFactory implements FactoryInterface
         // Lazy TypesenseClient (see TypesenseClientLazy docblock) so a
         // missing Docker secret surfaces inside tokenAction's 503 path
         // instead of as a 500 HTML page before the action even runs.
+        // Collection scope of the search-only parent key. Deliberately read
+        // from config rather than hardcoded: the safe-by-default value is
+        // wide, and tightening it is an operator decision that must be
+        // reversible without a deploy (the provider re-mints when the scope
+        // changes). A malformed value falls back to the default rather than
+        // minting a key nobody can search with.
+        $scope = $config['public_search_key']['collections'] ?? null;
+        $scope = is_array($scope) && $scope !== [] ? array_values(array_map('strval', $scope)) : null;
+
         $keyProvider = new TypesenseSearchKeyProvider(
-            clientFactory: TypesenseClientLazy::fromContainer($container),
-            settings:      $container->get('Omeka\Settings'),
-            logger:        $logger
+            clientFactory:   TypesenseClientLazy::fromContainer($container),
+            settings:        $container->get('Omeka\Settings'),
+            logger:          $logger,
+            collectionScope: $scope ?? TypesenseSearchKeyProvider::DEFAULT_COLLECTION_SCOPE
         );
 
         return new SearchController(

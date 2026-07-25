@@ -70,9 +70,18 @@
      * surfaces (/search, page blocks) default to true.
      */
     showSearchBox?: boolean;
+    /**
+     * Query owned by a parent surface (the federated page's shared search
+     * box). LIVE, not a seed: changing it re-runs the search in place, so
+     * switching queries keeps the facet panel's expand state, the view mode
+     * and the scroll position — remounting the whole tab to change one
+     * string threw all of that away. Undefined on surfaces that own their
+     * own query (standalone /search, page blocks).
+     */
+    sharedQuery?: string;
   }
 
-  const { bootstrap, showSearchBox = true }: Props = $props();
+  const { bootstrap, showSearchBox = true, sharedQuery }: Props = $props();
 
   // Provide the locale + translator to the whole component subtree. Read
   // once at init from the server-detected bootstrap locale (defaults to
@@ -117,10 +126,10 @@
   const initial: SearchState = syncUrl
     ? readUrlState(window.location.href, urlPrefix, defaultSort)
     : {
-        // initial_query / initial_filters are set by the federated page so
-        // the tab seeds with the shared query (and any filter handed off
-        // from the union tab); empty on page blocks.
-        q: bootstrap.initial_query ?? '',
+        // sharedQuery is the federated page's live query; initial_filters is
+        // the filter handed off from a union-tab chip. Both absent on page
+        // blocks, which start empty.
+        q: sharedQuery ?? '',
         page: 1,
         sort: defaultSort,
         filters: bootstrap.initial_filters ?? {},
@@ -131,6 +140,20 @@
   let query = $state(initial.q);
   let page = $state(initial.page);
   let sort = $state(initial.sort);
+
+  // Adopt the parent's query whenever it changes. Guarded by the last value
+  // ADOPTED (not by comparing to `query`), so a query the user then edits
+  // inside this App — possible on a surface that shows its own box — isn't
+  // snapped back by an unrelated re-run of this effect. The first run is a
+  // no-op: `initial.q` already is the shared query.
+  let adoptedQuery = initial.q;
+  $effect(() => {
+    const next = sharedQuery;
+    if (next === undefined || next === adoptedQuery) return;
+    adoptedQuery = next;
+    query = next;
+    page = 1;
+  });
 
   // Categorical facet selections + the year range. The composable owns the
   // mutation rules (drop empty keys, replace-don't-mutate) and resets the
@@ -163,16 +186,19 @@
   // malformed bootstraps that would otherwise crash ResultsList on its
   // first render with `Cannot read properties of undefined (reading 'length')`.
   // svelte-ignore state_referenced_locally
-  const initialResponse = deriveInitialResponse(bootstrap);
+  const initialResponse = initial.q === '' ? deriveInitialResponse(bootstrap) : null;
   let response = $state<IwacSearchResponse | null>(initialResponse);
   let isLoading = $state(false);
   let error = $state<string | null>(null);
 
-  // Year-distribution histogram data for the date slider. Fetched separately
-  // from the results (see the effect below) because it must ignore the year
-  // range to show the full span; empty until the first fetch resolves, and on
-  // any surface without a facet panel.
+  // Year-distribution histogram data for the date slider. Computed as a
+  // second sub-search of the main request (one POST, not two) and only when
+  // stale — see the search effect. Empty until the first response resolves,
+  // and on any surface without a facet panel.
   let yearDistribution = $state<YearBucket[]>([]);
+  // Query+filters signature the current bars were computed for. Plain `let`:
+  // the search effect reads it without wanting a reactive dependency.
+  let lastHistogramKey: string | null = null;
 
   // "Did you mean" candidates for a zero-result query: entity suggestions
   // fetched through the typo-tolerant suggest path (facet_query + the alias
@@ -291,6 +317,13 @@
       return;
     }
 
+    // The histogram depends on the query + categorical filters ONLY, so ask
+    // for it as a second sub-search of THIS request just when that pair has
+    // actually changed. Paging or re-sorting reuses the bars already drawn,
+    // which is what the separate effect used to achieve with a second POST.
+    const histogramKey = bootstrap.mode === 'full' ? `${q}\u0000${JSON.stringify(f)}` : null;
+    const needHistogram = histogramKey !== null && histogramKey !== lastHistogramKey;
+
     isLoading = true;
     error = null;
     didYouMean = [];
@@ -302,9 +335,14 @@
         activeFilters: f,
         yearRange: y,
         facetBy,
+        withYearDistribution: needHistogram,
       })
-      .then((r) => {
+      .then(({ response: r, years }) => {
         response = r;
+        if (years !== undefined) {
+          yearDistribution = years;
+          lastHistogramKey = histogramKey;
+        }
         if (q.trim() !== '') {
           if (r.found > 0) {
             // Only fruitful queries enter the recent-searches history, so
@@ -345,28 +383,6 @@
         didYouMean = [];
       });
   }
-
-  // Year-distribution histogram. Tracks ONLY the query + categorical filters
-  // — not page, sort, or the year range — because the bars show the full span
-  // regardless of the selected window (dragging the slider just repaints which
-  // bars are highlighted, no refetch). One cheap counts-only request; only the
-  // 'full' mode renders the slider, so other modes skip it. Failures degrade
-  // to no bars (the slider still works).
-  $effect(() => {
-    if (bootstrap.mode !== 'full') return;
-    const q = query;
-    const f = filters;
-    client
-      .yearDistribution({ q, activeFilters: f })
-      .then((d) => {
-        yearDistribution = d;
-      })
-      .catch((e: unknown) => {
-        if (isAbortError(e)) return; // superseded — newer histogram in flight
-        console.warn('[iwac-search] year distribution failed', e);
-        yearDistribution = [];
-      });
-  });
 
   // Map data: when the Map view is active, fetch every geo-tagged entity
   // matching the current query + filters (year range included — unlike the
@@ -519,6 +535,11 @@
    * with `Cannot read properties of undefined (reading 'length')`.
    * Pulled out of the script body so the read of `bootstrap.initial_response`
    * doesn't trigger Svelte's `state_referenced_locally` warning.
+   *
+   * Only consulted when the surface starts with an empty query: every
+   * snapshot the server emits is the default browse page, so mounting with
+   * a query (a federated tab, a deep link) would flash all-of-corpus for
+   * one frame before the real results land.
    */
   function deriveInitialResponse(bs: IwacBootstrap): IwacSearchResponse | null {
     return bs.initial_response && Array.isArray(bs.initial_response.hits)

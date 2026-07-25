@@ -52,7 +52,10 @@ final class InitialResponseRenderer
         /** @var Closure(): TypesenseClient */
         private readonly Closure $clientFactory,
         private readonly LoggerInterface $logger = new NullLogger(),
-        private readonly string $defaultCollection = 'iwac_current'
+        private readonly string $defaultCollection = 'iwac_current',
+        // Short-lived, shared across visitors — safe because every snapshot
+        // is public-only by construction. See SnapshotCache.
+        private readonly ?SnapshotCacheInterface $cache = null,
     ) {
     }
 
@@ -72,6 +75,67 @@ final class InitialResponseRenderer
      * @return array<string, mixed>|null
      */
     public function render(array $bootstrap): ?array
+    {
+        $results = $this->renderMany([$bootstrap]);
+        return $results[0];
+    }
+
+    /**
+     * SSR several surfaces in ONE Typesense round trip.
+     *
+     * The federated page needs both tabs pre-rendered, and used to call
+     * render() twice — two sequential HTTP round trips inside a single PHP
+     * dispatch, where multi_search was built to take a list. Returns one
+     * entry per input bootstrap, in order, each either the response array or
+     * null (that surface falls back to the client-side fetch).
+     *
+     * A per-search error nulls only ITS OWN entry: one tab failing to
+     * pre-render must not cost the other tab its snapshot.
+     *
+     * @param  list<array<string, mixed>> $bootstraps
+     * @return list<array<string, mixed>|null>
+     */
+    public function renderMany(array $bootstraps): array
+    {
+        if ($bootstraps === []) {
+            return [];
+        }
+
+        $searches = array_map(fn(array $b): array => $this->buildSearch($b), $bootstraps);
+        $collections = array_map(
+            fn(array $b): string => (string) ($b['collection_alias'] ?? $this->defaultCollection),
+            $bootstraps
+        );
+        $body = ['searches' => array_values($searches)];
+
+        // Every anonymous visitor of a landing page produces the identical
+        // request, so the burst collapses to one Typesense round trip per TTL.
+        $cacheKey = $this->cache?->key($body);
+        if ($cacheKey !== null) {
+            $hit = $this->cache?->get($cacheKey);
+            if ($hit !== null) {
+                return $hit;
+            }
+        }
+
+        $results = $this->performSearches($body, $collections);
+
+        // Only cache a fully successful render: storing a null would pin a
+        // transient Typesense blip in front of every visitor for the whole TTL.
+        if ($cacheKey !== null && !in_array(null, $results, true)) {
+            $this->cache?->set($cacheKey, $results);
+        }
+
+        return $results;
+    }
+
+    /**
+     * One surface's multi_search sub-search body.
+     *
+     * @param  array<string, mixed> $bootstrap
+     * @return array<string, mixed>
+     */
+    private function buildSearch(array $bootstrap): array
     {
         $collection    = (string) ($bootstrap['collection_alias'] ?? $this->defaultCollection);
         $lockedFilters = (string) ($bootstrap['locked_filters'] ?? '');
@@ -106,8 +170,7 @@ final class InitialResponseRenderer
 
         $filterBy = $this->applyPublicConstraints($lockedFilters);
 
-        $body = [
-            'searches' => [[
+        $search = [
                 'collection'            => $collection,
                 'q'                     => $q,
                 'query_by'              => $queryBy,
@@ -138,15 +201,10 @@ final class InitialResponseRenderer
                 // No limit_hits — the live client pages through all matches
                 // (Typesense default is uncapped); the SSR only renders page 1,
                 // so this just keeps the two request shapes consistent.
-            ]],
         ];
-        // Remove null keys that Typesense rejects.
-        $body['searches'][0] = array_filter(
-            $body['searches'][0],
-            static fn ($v): bool => $v !== null
-        );
 
-        return $this->performFirstSearch($body, $collection);
+        // Remove null keys that Typesense rejects.
+        return array_filter($search, static fn($v): bool => $v !== null);
     }
 
     /**
@@ -164,73 +222,151 @@ final class InitialResponseRenderer
      * @return array<string, mixed>|null results[0] on success, null = let
      *   the client fall back to its own scoped-key fetch.
      */
-    private function performFirstSearch(array $body, string $collection): ?array
+    /**
+     * Run the multi_search and validate each result independently, retrying
+     * ONCE without `stopwords` when the server reports the set missing.
+     *
+     * Typesense surfaces that two ways — an HTTP-level throw, or HTTP 200
+     * with the error embedded in a result — so both funnel through the same
+     * retry. Stopwords are an enhancement (filtering "le", "la", "des" out of
+     * matches), never a correctness requirement, so degrading gracefully
+     * beats a blank SSR. The operator should provision the set via
+     * `discovery:reindex` or `cli/stopwords-sync.php`.
+     *
+     * A transport failure nulls EVERY entry (nothing came back); a per-search
+     * problem nulls only its own, so one bad surface can't cost a sibling its
+     * snapshot.
+     *
+     * @param  array{searches: list<array<string, mixed>>} $body
+     * @param  list<string> $collections  One collection name per sub-search, for logging.
+     * @return list<array<string, mixed>|null>
+     */
+    private function performSearches(array $body, array $collections): array
     {
-        // Two attempts max: the retry drops `stopwords`, so a stopword
-        // error cannot recur on the second pass.
+        $count = count($body['searches']);
+        $none  = array_fill(0, $count, null);
+
+        // Two attempts max: the retry drops `stopwords` from every
+        // sub-search, so a stopword error cannot recur on the second pass.
         for ($attempt = 0; $attempt < 2; $attempt++) {
-            $canRetry = $attempt === 0 && isset($body['searches'][0]['stopwords']);
+            $canRetry = $attempt === 0 && $this->usesStopwords($body);
 
             try {
                 $response = ($this->clientFactory)()->multiSearch->perform($body);
             } catch (Throwable $e) {
                 if ($canRetry && $this->isStopwordError($e->getMessage())) {
                     $this->logStopwordRetry($e->getMessage());
-                    unset($body['searches'][0]['stopwords']);
+                    $body = $this->withoutStopwords($body);
                     continue;
                 }
-                // Never fail the page render because Typesense is flaky.
-                // The Svelte client will still try on its own and surface
-                // a concrete error via /discovery/token if the problem
-                // persists.
-                $this->logger->warning('IwacSearch SSR: Typesense multi_search failed, falling back to client-side fetch', [
-                    'error'      => $e->getMessage(),
-                    'collection' => $collection,
-                ]);
-                return null;
+                // Never fail the page render because Typesense is flaky. The
+                // Svelte client will still try on its own and surface a
+                // concrete error via /discovery/token if it persists.
+                $this->logger->warning(
+                    'IwacSearch SSR: Typesense multi_search failed, falling back to client-side fetch',
+                    ['error' => $e->getMessage(), 'collections' => $collections]
+                );
+                return $none;
             }
 
-            $first = $response['results'][0] ?? null;
-            if (!is_array($first)) {
+            $results = is_array($response['results'] ?? null) ? $response['results'] : null;
+            if ($results === null) {
                 $this->logger->warning('IwacSearch SSR: unexpected Typesense response shape', [
                     'keys' => is_array($response) ? array_keys($response) : 'non-array',
                 ]);
-                return null;
+                return $none;
             }
 
-            // Per-search errors ride inside the results array (HTTP 200
-            // but `error` set). A stopword error here gets the same
-            // one-shot retry; anything else is a soft-fallback — let the
-            // client retry, don't SSR the error.
-            $error = $first['error'] ?? null;
-            if (is_string($error) && $canRetry && $this->isStopwordError($error)) {
-                $this->logStopwordRetry($error);
-                unset($body['searches'][0]['stopwords']);
-                continue;
-            }
-            if ($error !== null) {
-                $this->logger->warning('IwacSearch SSR: Typesense returned per-search error', [
-                    'error' => (string) $error,
-                ]);
-                return null;
+            // A stopword error in ANY sub-search retries the whole body —
+            // they all carry the same set, so they would all fail the same way.
+            if ($canRetry) {
+                foreach ($results as $result) {
+                    $error = is_array($result) ? ($result['error'] ?? null) : null;
+                    if (is_string($error) && $this->isStopwordError($error)) {
+                        $this->logStopwordRetry($error);
+                        $body = $this->withoutStopwords($body);
+                        continue 2;
+                    }
+                }
             }
 
-            // Belt-and-suspenders: any well-formed success response has a
-            // `hits` array. If it's missing (unknown future error shape, or
-            // a typesense-php upgrade that changes the contract), fall back
-            // to the client-side fetch path rather than emitting a half-baked
-            // initial_response that crashes the Svelte client mid-render
-            // with `Cannot read properties of undefined (reading 'length')`.
-            if (!isset($first['hits']) || !is_array($first['hits'])) {
-                $this->logger->warning('IwacSearch SSR: Typesense response missing hits[]', [
-                    'keys' => array_keys($first),
-                ]);
-                return null;
+            $out = [];
+            for ($i = 0; $i < $count; $i++) {
+                $out[] = $this->validateResult($results[$i] ?? null, $collections[$i] ?? '');
             }
-
-            return $first;
+            return $out;
         }
-        return null;
+        return $none;
+    }
+
+    /**
+     * One sub-search result, or null if it can't be handed to the client.
+     *
+     * @param  mixed $result
+     * @return array<string, mixed>|null
+     */
+    private function validateResult(mixed $result, string $collection): ?array
+    {
+        if (!is_array($result)) {
+            $this->logger->warning('IwacSearch SSR: missing result for a sub-search', [
+                'collection' => $collection,
+            ]);
+            return null;
+        }
+
+        // Per-search errors ride inside the results array (HTTP 200 but
+        // `error` set). Anything not stopword-related is a soft fallback —
+        // let the client retry, don't SSR the error.
+        $error = $result['error'] ?? null;
+        if ($error !== null) {
+            $this->logger->warning('IwacSearch SSR: Typesense returned per-search error', [
+                'error'      => (string) $error,
+                'collection' => $collection,
+            ]);
+            return null;
+        }
+
+        // Belt-and-suspenders: any well-formed success response has a `hits`
+        // array. If it's missing (unknown future error shape, or a
+        // typesense-php upgrade that changes the contract), fall back to the
+        // client-side fetch rather than emitting a half-baked
+        // initial_response that crashes the Svelte client mid-render with
+        // `Cannot read properties of undefined (reading 'length')`.
+        if (!isset($result['hits']) || !is_array($result['hits'])) {
+            $this->logger->warning('IwacSearch SSR: Typesense response missing hits[]', [
+                'keys'       => array_keys($result),
+                'collection' => $collection,
+            ]);
+            return null;
+        }
+
+        return $result;
+    }
+
+    /**
+     * @param  array{searches: list<array<string, mixed>>} $body
+     */
+    private function usesStopwords(array $body): bool
+    {
+        foreach ($body['searches'] as $search) {
+            if (isset($search['stopwords'])) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * @param  array{searches: list<array<string, mixed>>} $body
+     * @return array{searches: list<array<string, mixed>>}
+     */
+    private function withoutStopwords(array $body): array
+    {
+        foreach ($body['searches'] as $i => $search) {
+            unset($search['stopwords']);
+            $body['searches'][$i] = $search;
+        }
+        return $body;
     }
 
     private function isStopwordError(string $message): bool

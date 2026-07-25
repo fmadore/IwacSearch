@@ -1,15 +1,7 @@
 <script lang="ts">
   import type { ActiveFilters, IwacHit, ViewMode } from '../lib/types';
-  import {
-    countryLabel,
-    entityTypeLabel,
-    facetLabel,
-    typeLabel as typeLabelFor,
-    useI18n,
-  } from '../lib/i18n';
-  import { sanitizeHighlight } from '../lib/sanitize';
-  import { sizedThumbnail } from '../lib/thumbnail';
-  import { parseMentionsByYear, densifyByYear } from '../lib/sparkline';
+  import { facetLabel, useI18n } from '../lib/i18n';
+  import { CHIP_ICONS, createResultCard, type CardChip } from '../lib/resultCard.svelte';
   import Icon from './Icon.svelte';
   import Sparkline from './Sparkline.svelte';
 
@@ -48,6 +40,16 @@
    * Snippet sanitisation: Typesense returns highlighted HTML with <mark> tags.
    * We HTML-escape the snippet client-side and only reinstate literal
    * <mark>/</mark> — see lib/sanitize.ts.
+   *
+   * WHAT LIVES WHERE: every hit → display-field derivation (which highlight
+   * becomes the snippet, how a citation line is assembled, when a date is
+   * only a year) is in lib/resultCard.svelte.ts, where the pure parts are
+   * unit-tested. This file owns the two layouts, the CSS both share, and the
+   * facet-toggle interaction. The layouts stayed ONE component on purpose:
+   * they differ by ~7 CSS rules out of ~65 and by which shared snippets they
+   * render, so splitting them would either duplicate the other ~450 lines of
+   * scoped CSS or push it into a global stylesheet — paying real risk to
+   * separate files that mostly agree.
    */
 
   interface Props {
@@ -74,11 +76,13 @@
     layout = 'list',
   }: Props = $props();
 
-  const { locale, card, t } = useI18n();
+  const { locale, t } = useI18n();
 
-  /** A clickable card badge: a facet field + its raw filter value + display. */
-  type FilterChip = { field: string; value: string; display: string };
+  // Every displayed field, derived once from the hit (see the module's
+  // docblock). Passed a thunk so the derivations track the props.
+  const cardData = createResultCard(() => ({ hit, hideCountry }));
 
+  // ── Interaction: a card badge is a facet toggle ──────────────────────
   function isActive(field: string, value: string): boolean {
     return activeFilters[field]?.includes(value) ?? false;
   }
@@ -86,212 +90,16 @@
     onFacetToggle(field, value, !isActive(field, value));
   }
   /** aria-label that announces what clicking the chip will do. */
-  function chipAria(chip: FilterChip): string {
+  function chipAria(chip: CardChip): string {
     const label = facetLabel(chip.field, locale);
     return isActive(chip.field, chip.value)
       ? t('remove_filter', { label, value: chip.display })
       : t('add_filter', { label, value: chip.display });
   }
-
-  const doc = $derived(hit.document);
-  const title = $derived(doc.title || t('untitled', { id: doc.id }));
-  // References are cited by year; their pub_date is commonly a Jan-1 epoch, so
-  // show the year (not a misleading "1 janvier 2016"). Everything else keeps its
-  // precise date.
-  const dateLabel = $derived(formatDate(doc.date, doc.pub_year, doc.type_s === 'reference'));
-  const typeKey = $derived(doc.type_s ?? '');
-  const typeLabel = $derived(typeKey ? typeLabelFor(typeKey, locale) : '');
-
-  // Thumbnail derivative per layout: list rows take `medium`, gallery tiles take
-  // `large` (the 200px `medium` would upscale at tile size). Falls back to the
-  // stored URL unchanged when it isn't a recognised Omeka derivative path.
-  const listThumb = $derived(sizedThumbnail(doc.thumbnail_url, 'medium'));
-  const galleryThumb = $derived(sizedThumbnail(doc.thumbnail_url, 'large'));
-
-  // Type badge → a clickable facet. References surface their publication type
-  // (reference_type_ss) so the badge reads "Chapitre" / "Article de revue…";
-  // every other subset shows its type_s label. null when neither is known.
-  const isReference = $derived(typeKey === 'reference');
-  const referenceType = $derived(doc.reference_type_ss?.[0] ?? '');
-  const typeChip = $derived.by<FilterChip | null>(() => {
-    if (isReference && referenceType) {
-      return { field: 'reference_type_ss', value: referenceType, display: referenceType };
-    }
-    if (typeKey && typeLabel) {
-      return { field: 'type_s', value: typeKey, display: typeLabel };
-    }
-    return null;
-  });
-  // Tint attribute for the badge: references get their own scholarly tint;
-  // everything else keys off the type_s value.
-  const typeTint = $derived(typeChip?.field === 'reference_type_ss' ? 'reference' : typeKey);
-
-  // ── Entity (index) card variant ──────────────────────────────────────
-  // Context-driven on the entity index surface; shape-driven as a fallback
-  // so MIXED hit lists (the federated "All" union tab) render entity docs
-  // as entity cards — entity docs always carry entity_type_s, content docs
-  // never do.
-  const isEntity = $derived(card === 'entity' || doc.entity_type_s != null);
-  const entityType = $derived(doc.entity_type_s ? entityTypeLabel(doc.entity_type_s, locale) : '');
-  const entityTypeChip = $derived.by<FilterChip | null>(() =>
-    doc.entity_type_s
-      ? { field: 'entity_type_s', value: doc.entity_type_s, display: entityType }
-      : null,
-  );
-  const frequency = $derived(typeof doc.frequency === 'number' ? doc.frequency : null);
-  const mentionsLabel = $derived(
-    frequency != null
-      ? t(frequency === 1 ? 'mention_one' : 'mention_other', { n: frequency.toLocaleString() })
-      : '',
-  );
-  // The bare "mention(s)" word for the split number + label metric (the number
-  // is rendered separately as a display numeral). t() with an empty n yields
-  // " mentions" → trimmed.
-  const mentionsWord = $derived(
-    frequency != null ? t(frequency === 1 ? 'mention_one' : 'mention_other', { n: '' }).trim() : '',
-  );
-  // Per-year mentions series for the sparkline (design review §03B). Empty until
-  // the entity collection is rebuilt with mentions_by_year_s, so the card simply
-  // omits the sparkline when the data isn't there.
-  const mentionsSeries = $derived(densifyByYear(parseMentionsByYear(doc.mentions_by_year_s)));
-  const yearRange = $derived.by(() => {
-    const a = doc.first_year;
-    const b = doc.last_year;
-    if (a && b) return a === b ? String(a) : `${a} – ${b}`;
-    return a ? String(a) : b ? String(b) : '';
-  });
-  const entityCountryChips = $derived.by<FilterChip[]>(() =>
-    hideCountry
-      ? []
-      : (doc.country_ss ?? []).map((c) => ({
-          field: 'country_ss',
-          value: c,
-          display: countryLabel(c, locale),
-        })),
-  );
-  // Entity category (dcterms:isPartOf) — organisation kind for organisations.
-  const entityPartOfChips = $derived.by<FilterChip[]>(() =>
-    (doc.is_part_of_ss ?? []).map((v) => ({ field: 'is_part_of_ss', value: v, display: v })),
-  );
-  // Compact source line: Newspaper · Country, each a clickable filter.
-  const sourceChips = $derived.by<FilterChip[]>(() => {
-    const out: FilterChip[] = [];
-    if (doc.newspaper_ss?.[0]) {
-      out.push({ field: 'newspaper_ss', value: doc.newspaper_ss[0], display: doc.newspaper_ss[0] });
-    }
-    if (!hideCountry && doc.country_ss?.[0]) {
-      out.push({
-        field: 'country_ss',
-        value: doc.country_ss[0],
-        display: countryLabel(doc.country_ss[0], locale),
-      });
-    }
-    return out;
-  });
-
-  // Body snippet: the OCR match first (most contextual), else the abstract
-  // match. The title is highlighted in place (titleMarkup below).
-  const rawSnippet = $derived(
-    hit.highlights?.find((h) => h.field === 'ocr_text')?.snippet ??
-      hit.highlights?.find((h) => h.field === 'abstract')?.snippet ??
-      '',
-  );
-  const snippet = $derived(sanitizeHighlight(rawSnippet));
-
-  // Title with the query match marked. highlight_full_fields covers title_txt,
-  // so `value` carries the COMPLETE title. Empty (→ plain title) when no match.
-  const titleMarkup = $derived.by(() => {
-    const h = hit.highlights?.find((x) => x.field === 'title_txt');
-    const s = h?.value ?? h?.snippet ?? '';
-    return s.includes('<mark>') ? sanitizeHighlight(s) : '';
-  });
-
-  // ── Match attribution: WHY is this hit shown? ───────────────────────
-  // Surface metadata-channel matches (subject, spatial, author, journal, alias…)
-  // that aren't visible in the title/body as a small "Matched in" line.
-  const VISIBLE_MATCH_FIELDS = ['title_txt', 'ocr_text', 'abstract'];
-
-  type MatchedIn = { field: string; label: string; snippet: string };
-  const matchedIn = $derived.by<MatchedIn[]>(() => {
-    const out: MatchedIn[] = [];
-    for (const h of hit.highlights ?? []) {
-      if (VISIBLE_MATCH_FIELDS.includes(h.field)) continue;
-      if (out.some((m) => m.field === h.field)) continue;
-      const raw = h.snippet ?? h.snippets?.[0] ?? '';
-      if (!raw.includes('<mark>')) continue;
-      out.push({
-        field: h.field,
-        label: facetLabel(h.field, locale),
-        snippet: sanitizeHighlight(raw),
-      });
-    }
-    return out.slice(0, 3);
-  });
-
-  // Source-line chip icons — same Bootstrap Icons set the IWAC theme uses.
-  const CHIP_ICONS: Record<string, 'newspaper' | 'globe'> = {
-    newspaper_ss: 'newspaper',
-    country_ss: 'globe',
-  };
-  // Citation icon: journal page for periodical pieces, book covers the rest.
-  const citationIcon = $derived(
-    referenceType === 'Article de revue' || referenceType === 'Compte rendu'
-      ? ('journal' as const)
-      : ('book' as const),
-  );
-  const abstract = $derived((doc.abstract ?? '').trim());
-  // Author byline — essential for references, informative for signed articles.
-  const authors = $derived(doc.creator_ss ?? []);
-
-  // Bibliographic source line for references — built per reference type.
-  const citation = $derived.by(() => buildCitation(doc));
-  const itemUrl = $derived(doc.omeka_url || `/s/afrique_ouest/item/${doc.id}`);
-
-  function buildCitation(d: IwacHit['document']): string {
-    const rt = d.reference_type_ss?.[0] ?? '';
-    const pub = (d.publisher_s ?? '').trim();
-    const book = (d.book_title_s ?? '').trim();
-    const vol = (d.volume_s ?? '').trim();
-    const iss = (d.issue_s ?? '').trim();
-    const pages = (d.pages_s ?? '').trim();
-    const edition = (d.edition_s ?? '').trim();
-    const editors = (d.editor_ss ?? []).join(', ');
-    const volIss = vol && iss ? `${vol}(${iss})` : vol || (iss ? `(${iss})` : '');
-
-    if (rt === 'Chapitre') {
-      let s = book;
-      if (editors) s += ` (${t('cite_eds')} ${editors})`;
-      if (pages) s += `${s ? ', ' : ''}${pages}`;
-      if (pub) s += `${s ? ' — ' : ''}${pub}`;
-      return s.trim();
-    }
-    if (rt === 'Article de revue' || rt === 'Compte rendu') {
-      let s = pub;
-      if (volIss) s += `${s ? ' ' : ''}${volIss}`;
-      if (pages) s += `${s ? ', ' : ''}${pages}`;
-      return s.trim();
-    }
-    return [book, pub, edition].filter(Boolean).join(' — ');
-  }
-
-  function formatDate(epoch?: number, year?: number, yearOnly = false): string {
-    if (!yearOnly && epoch && epoch > 0) {
-      try {
-        return new Date(epoch * 1000).toLocaleDateString(locale, {
-          year: 'numeric',
-          month: 'long',
-          day: 'numeric',
-        });
-      } catch {
-        // fallthrough
-      }
-    }
-    return year ? String(year) : '';
-  }
 </script>
 
 <!-- A source/country chip rendered as a facet toggle button. -->
-{#snippet filterChip(chip: FilterChip)}
+{#snippet filterChip(chip: CardChip)}
   <li>
     <button
       type="button"
@@ -309,64 +117,70 @@
 
 <!-- Leading type badge (content type chip, or entity-type chip on the index). -->
 {#snippet typeBadge()}
-  {#if isEntity}
-    {#if entityTypeChip}
+  <!-- {@const} binds the chip once so it narrows: reading it off cardData
+       twice is two getter calls, which TypeScript can't prove are the same
+       non-null value. -->
+  {#if cardData.isEntity}
+    {@const chip = cardData.entityTypeChip}
+    {#if chip}
       <button
         type="button"
         class="iwac-card__type iwac-card__type--filter"
-        class:is-active={isActive(entityTypeChip.field, entityTypeChip.value)}
-        data-entity-type={doc.entity_type_s}
-        aria-pressed={isActive(entityTypeChip.field, entityTypeChip.value)}
-        aria-label={chipAria(entityTypeChip)}
-        onclick={() => toggle(entityTypeChip.field, entityTypeChip.value)}
-        >{entityTypeChip.display}</button
+        class:is-active={isActive(chip.field, chip.value)}
+        data-entity-type={cardData.doc.entity_type_s}
+        aria-pressed={isActive(chip.field, chip.value)}
+        aria-label={chipAria(chip)}
+        onclick={() => toggle(chip.field, chip.value)}>{chip.display}</button
       >
     {/if}
-  {:else if typeChip}
-    <button
-      type="button"
-      class="iwac-card__type iwac-card__type--filter"
-      class:is-active={isActive(typeChip.field, typeChip.value)}
-      data-type={typeTint}
-      aria-pressed={isActive(typeChip.field, typeChip.value)}
-      aria-label={chipAria(typeChip)}
-      onclick={() => toggle(typeChip.field, typeChip.value)}>{typeChip.display}</button
-    >
+  {:else}
+    {@const chip = cardData.typeChip}
+    {#if chip}
+      <button
+        type="button"
+        class="iwac-card__type iwac-card__type--filter"
+        class:is-active={isActive(chip.field, chip.value)}
+        data-type={cardData.typeTint}
+        aria-pressed={isActive(chip.field, chip.value)}
+        aria-label={chipAria(chip)}
+        onclick={() => toggle(chip.field, chip.value)}>{chip.display}</button
+      >
+    {/if}
   {/if}
 {/snippet}
 
 <!-- Dateline eyebrow date (content: precise date; entity: mention year span). -->
 {#snippet eyebrowDate()}
-  {#if isEntity}
-    {#if yearRange}<time class="iwac-card__eyebrow">{yearRange}</time>{/if}
-  {:else if dateLabel}<time class="iwac-card__eyebrow">{dateLabel}</time>{/if}
+  {#if cardData.isEntity}
+    {#if cardData.yearRange}<time class="iwac-card__eyebrow">{cardData.yearRange}</time>{/if}
+  {:else if cardData.dateLabel}<time class="iwac-card__eyebrow">{cardData.dateLabel}</time>{/if}
 {/snippet}
 
 <!-- Title link, with the query match highlighted in place when present. -->
 {#snippet titleLink()}
-  {#if titleMarkup}
+  {#if cardData.titleMarkup}
     <!-- sanitizeHighlight escaped everything but literal mark tags -->
     <!-- eslint-disable-next-line svelte/no-at-html-tags -->
-    <a href={itemUrl}>{@html titleMarkup}</a>
+    <a href={cardData.itemUrl}>{@html cardData.titleMarkup}</a>
   {:else}
-    <a href={itemUrl}>{title}</a>
+    <a href={cardData.itemUrl}>{cardData.title}</a>
   {/if}
 {/snippet}
 
 <article
   class="iwac-card iwac-card--{layout}"
-  class:iwac-card--no-thumb={layout === 'list' && !listThumb}
+  class:iwac-card--no-thumb={layout === 'list' && !cardData.listThumb}
 >
   {#if layout === 'gallery'}
     <!-- ── Gallery tile: image-forward, compact metadata below ── -->
     <a
       class="iwac-card__thumb iwac-card__thumb--gallery"
-      href={itemUrl}
+      href={cardData.itemUrl}
       aria-hidden="true"
       tabindex="-1"
     >
-      {#if galleryThumb}
-        <img src={galleryThumb} alt="" loading="lazy" />
+      {#if cardData.galleryThumb}
+        <img src={cardData.galleryThumb} alt="" loading="lazy" />
       {:else}
         <span class="iwac-card__thumb-ph" aria-hidden="true"><Icon name="image" /></span>
       {/if}
@@ -374,11 +188,13 @@
     <div class="iwac-card__body iwac-card__body--gallery">
       <header class="iwac-card__head">{@render typeBadge()}{@render eyebrowDate()}</header>
       <h3 class="iwac-card__title iwac-card__title--gallery">{@render titleLink()}</h3>
-      {#if isEntity}
-        {#if mentionsLabel}<p class="iwac-card__gallery-meta">{mentionsLabel}</p>{/if}
-      {:else if sourceChips.length > 0}
+      {#if cardData.isEntity}
+        {#if cardData.mentionsLabel}<p class="iwac-card__gallery-meta">
+            {cardData.mentionsLabel}
+          </p>{/if}
+      {:else if cardData.sourceChips.length > 0}
         <ul class="iwac-card__source" aria-label={t('source')}>
-          {#each sourceChips as chip (chip.field + '|' + chip.value)}
+          {#each cardData.sourceChips as chip (chip.field + '|' + chip.value)}
             {@render filterChip(chip)}
           {/each}
         </ul>
@@ -386,46 +202,46 @@
     </div>
   {:else}
     <!-- ── List ledger row ── -->
-    {#if listThumb}
-      <a class="iwac-card__thumb" href={itemUrl} aria-hidden="true" tabindex="-1">
-        <img src={listThumb} alt="" loading="lazy" />
+    {#if cardData.listThumb}
+      <a class="iwac-card__thumb" href={cardData.itemUrl} aria-hidden="true" tabindex="-1">
+        <img src={cardData.listThumb} alt="" loading="lazy" />
       </a>
     {/if}
 
     <div class="iwac-card__body">
-      {#if isEntity}
+      {#if cardData.isEntity}
         <!-- Index/authority entity card: year-span eyebrow, type badge,
              occurrence metric + sparkline + countries. No body text. -->
         <header class="iwac-card__head">{@render typeBadge()}{@render eyebrowDate()}</header>
 
         <h3 class="iwac-card__title">{@render titleLink()}</h3>
 
-        {#if frequency != null || mentionsSeries.length >= 2}
+        {#if cardData.frequency != null || cardData.mentionsSeries.length >= 2}
           <div class="iwac-card__metrics">
-            {#if frequency != null}
+            {#if cardData.frequency != null}
               <span class="iwac-card__mentions">
-                <span class="iwac-card__mentions-n">{frequency.toLocaleString()}</span>
-                <span class="iwac-card__mentions-label">{mentionsWord}</span>
+                <span class="iwac-card__mentions-n">{cardData.frequency.toLocaleString()}</span>
+                <span class="iwac-card__mentions-label">{cardData.mentionsWord}</span>
               </span>
             {/if}
-            {#if mentionsSeries.length >= 2}
+            {#if cardData.mentionsSeries.length >= 2}
               <span
                 class="iwac-card__spark"
-                data-entity-type={doc.entity_type_s}
+                data-entity-type={cardData.doc.entity_type_s}
                 title={t('mentions_trend')}
               >
-                <Sparkline values={mentionsSeries} />
+                <Sparkline values={cardData.mentionsSeries} />
               </span>
             {/if}
           </div>
         {/if}
 
-        {#if entityPartOfChips.length > 0 || entityCountryChips.length > 0}
+        {#if cardData.entityPartOfChips.length > 0 || cardData.entityCountryChips.length > 0}
           <ul class="iwac-card__source" aria-label={t('source')}>
-            {#each entityPartOfChips as chip (chip.field + '|' + chip.value)}
+            {#each cardData.entityPartOfChips as chip (chip.field + '|' + chip.value)}
               {@render filterChip(chip)}
             {/each}
-            {#each entityCountryChips as chip (chip.field + '|' + chip.value)}
+            {#each cardData.entityCountryChips as chip (chip.field + '|' + chip.value)}
               {@render filterChip(chip)}
             {/each}
           </ul>
@@ -435,51 +251,55 @@
 
         <h3 class="iwac-card__title">{@render titleLink()}</h3>
 
-        {#if authors.length > 0}
+        {#if cardData.authors.length > 0}
           <p class="iwac-card__byline">
             <span class="iwac-card__meta-icon" aria-hidden="true"><Icon name="person" /></span
-            >{#each authors as author, i (author)}<button
+            >{#each cardData.authors as author, i (author)}<button
                 type="button"
                 class="iwac-card__author"
                 class:is-active={isActive('creator_ss', author)}
                 aria-pressed={isActive('creator_ss', author)}
                 aria-label={chipAria({ field: 'creator_ss', value: author, display: author })}
                 onclick={() => toggle('creator_ss', author)}>{author}</button
-              >{#if i < authors.length - 1}<span class="iwac-card__byline-sep"></span>{/if}{/each}
-          </p>
-        {/if}
-
-        {#if citation}
-          <p class="iwac-card__citation">
-            <span class="iwac-card__meta-icon" aria-hidden="true"><Icon name={citationIcon} /></span
-            >{citation}
-          </p>
-        {/if}
-
-        {#if snippet}
-          <!-- snippet was HTML-escaped client-side; only literal mark tags survive -->
-          <!-- eslint-disable-next-line svelte/no-at-html-tags -->
-          <p class="iwac-card__snippet">{@html snippet}</p>
-        {:else if abstract}
-          <p class="iwac-card__snippet iwac-card__snippet--abstract">{abstract}</p>
-        {/if}
-
-        {#if matchedIn.length > 0}
-          <p class="iwac-card__matched">
-            <span class="iwac-card__matched-label">{t('matched_in')}</span>
-            {#each matchedIn as m, i (m.field)}<span class="iwac-card__matched-item"
-                ><span class="iwac-card__matched-field">{m.label}</span
-                ><!-- eslint-disable-next-line svelte/no-at-html-tags --><span
-                  class="iwac-card__matched-value">{@html m.snippet}</span
-                ></span
-              >{#if i < matchedIn.length - 1}<span class="iwac-card__matched-sep"
+              >{#if i < cardData.authors.length - 1}<span class="iwac-card__byline-sep"
                 ></span>{/if}{/each}
           </p>
         {/if}
 
-        {#if sourceChips.length > 0}
+        {#if cardData.citation}
+          <p class="iwac-card__citation">
+            <span class="iwac-card__meta-icon" aria-hidden="true"
+              ><Icon name={cardData.citationIcon} /></span
+            >{cardData.citation}
+          </p>
+        {/if}
+
+        {#if cardData.snippet}
+          <!-- cardData.snippet was HTML-escaped client-side; only literal mark tags survive -->
+          <!-- eslint-disable-next-line svelte/no-at-html-tags -->
+          <p class="iwac-card__snippet">{@html cardData.snippet}</p>
+        {:else if cardData.abstract}
+          <p class="iwac-card__snippet iwac-card__snippet--cardData.abstract">
+            {cardData.abstract}
+          </p>
+        {/if}
+
+        {#if cardData.matchedIn.length > 0}
+          <p class="iwac-card__matched">
+            <span class="iwac-card__matched-label">{t('matched_in')}</span>
+            {#each cardData.matchedIn as m, i (m.field)}<span class="iwac-card__matched-item"
+                ><span class="iwac-card__matched-field">{m.label}</span
+                ><!-- eslint-disable-next-line svelte/no-at-html-tags --><span
+                  class="iwac-card__matched-value">{@html m.snippet}</span
+                ></span
+              >{#if i < cardData.matchedIn.length - 1}<span class="iwac-card__matched-sep"
+                ></span>{/if}{/each}
+          </p>
+        {/if}
+
+        {#if cardData.sourceChips.length > 0}
           <ul class="iwac-card__source" aria-label={t('source')}>
-            {#each sourceChips as chip (chip.field + '|' + chip.value)}
+            {#each cardData.sourceChips as chip (chip.field + '|' + chip.value)}
               {@render filterChip(chip)}
             {/each}
           </ul>

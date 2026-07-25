@@ -11,6 +11,7 @@
   import App from '../App.svelte';
   import ResultItem from './ResultItem.svelte';
   import Pagination from './Pagination.svelte';
+  import SearchInput from './SearchInput.svelte';
 
   /**
    * The federated "search everything" page. One instance per page.
@@ -72,7 +73,6 @@
   let activeTab = $state<TabId>(readTabFromUrl());
   let counts = $state<Record<string, number | null>>({});
   let countsReady = $state(false);
-  let inputTimer: number | null = null;
 
   // Filter handed off from a union-tab chip to a per-collection tab.
   let seed = $state<{ tab: TabId; filters: ActiveFilters } | null>(null);
@@ -160,9 +160,21 @@
       });
   });
 
-  const unionTotalPages = $derived(
-    unionResponse ? Math.max(1, Math.min(50, Math.ceil(unionResponse.found / unionPerPage))) : 1,
+  /**
+   * The merged ranking is capped rather than fully pageable. Deep paging a
+   * union has no stable meaning — the interleaving of two collections shifts
+   * as scores tighten — and nobody reads to page 51 of a relevance list. The
+   * per-collection tabs page through everything, which is where a user who
+   * genuinely wants the tail should be.
+   */
+  const UNION_MAX_PAGES = 50;
+
+  const unionNaturalPages = $derived(
+    unionResponse ? Math.max(1, Math.ceil(unionResponse.found / unionPerPage)) : 1,
   );
+  const unionTotalPages = $derived(Math.min(UNION_MAX_PAGES, unionNaturalPages));
+  /** True when the cap is actually hiding pages, not merely equal to them. */
+  const unionCapped = $derived(unionNaturalPages > UNION_MAX_PAGES);
 
   /**
    * A chip clicked on a union card hands off to the right per-collection
@@ -218,24 +230,17 @@
     return () => window.removeEventListener('popstate', onPop);
   });
 
-  function onInput(e: Event): void {
-    inputValue = (e.target as HTMLInputElement).value;
-    if (inputTimer !== null) clearTimeout(inputTimer);
-    inputTimer = window.setTimeout(() => {
-      inputTimer = null;
-      seed = null; // a fresh query clears any handed-off filter
-      query = inputValue.trim();
-    }, 250);
-  }
-
-  function clearQuery(): void {
-    if (inputTimer !== null) {
-      clearTimeout(inputTimer);
-      inputTimer = null;
-    }
-    inputValue = '';
+  /**
+   * SearchInput owns the debounce and the clear button, and calls this for
+   * both — so committing a typed query and clearing it are the same path.
+   */
+  function commitQuery(next: string): void {
+    inputValue = next;
+    // Stop re-seeding the hand-off on a later tab switch. A filter already
+    // applied inside the mounted tab stays applied — same as typing a new
+    // query on /search, where filters are the scope you search WITHIN.
     seed = null;
-    query = '';
+    query = next.trim();
   }
 
   function selectTab(id: TabId): void {
@@ -293,45 +298,31 @@
     return typeof n === 'number' ? n.toLocaleString() : '';
   }
 
-  // The active tab's full per-collection bootstrap, seeded with the shared
-  // query (+ any union-chip filter hand-off). The {#key} below re-mounts App
-  // when the tab or query changes so it re-seeds cleanly (App reads
-  // initial_query/initial_filters once at init).
+  /**
+   * The active tab's per-collection bootstrap, plus any union-chip filter
+   * hand-off. Deliberately does NOT depend on `query` — that arrives as a
+   * live prop (App's `sharedQuery`), so typing a new query updates the
+   * mounted tab in place. Only a TAB switch remounts (see the {#key}
+   * below), which is honest: it's a different collection, different facets,
+   * different sort vocabulary.
+   */
   const activeBootstrap = $derived.by<IwacBootstrap>(() => {
     const base = tabs.find((tab) => tab.id === activeTab)?.bootstrap ?? tabs[0].bootstrap;
     return {
       ...base,
-      initial_query: query,
       initial_filters: seed?.tab === activeTab ? seed.filters : undefined,
-      // The SSR'd first page is for the empty-query landing only; a typed
-      // query must fetch fresh rather than flash the all-content snapshot.
-      initial_response: query === '' ? base.initial_response : undefined,
     };
   });
 </script>
 
 <div class="iwac-fed">
   <div class="iwac-fed__search" role="search">
-    <input
-      name="q"
-      class="iwac-fed__input"
-      type="search"
-      autocomplete="off"
-      spellcheck="false"
-      inputmode="search"
-      aria-label={t('search_everything')}
-      placeholder={t('search_everything')}
+    <SearchInput
       value={inputValue}
-      oninput={onInput}
+      placeholder={t('search_everything')}
+      ariaLabel={t('search_everything')}
+      onChange={commitQuery}
     />
-    {#if inputValue !== ''}
-      <button
-        type="button"
-        class="iwac-fed__clear"
-        aria-label={t('clear_search')}
-        onclick={clearQuery}>×</button
-      >
-    {/if}
   </div>
 
   <!-- Focus lives on the tab buttons (roving tabindex); the tablist itself
@@ -404,12 +395,17 @@
                 onPageChange={(next) => (unionPage = next)}
               />
             {/if}
+            {#if unionCapped && unionPage >= unionTotalPages}
+              <!-- Only at the cap: saying this up front would read as a
+                   limitation on a list most people never page through. -->
+              <p class="iwac-fed__cap" role="status">{t('union_cap_hint')}</p>
+            {/if}
           {/if}
         {/if}
       </div>
     {:else}
-      {#key activeTab + '::' + query}
-        <App bootstrap={activeBootstrap} showSearchBox={false} />
+      {#key activeTab}
+        <App bootstrap={activeBootstrap} showSearchBox={false} sharedQuery={query} />
       {/key}
     {/if}
   </div>
@@ -423,60 +419,28 @@
     color: var(--ink, #13161c);
   }
 
-  /* Shared query box. */
+  /*
+   * Shared query box. The field itself is SearchInput (same component the
+   * per-tab surfaces use), so this only owns the measure — everything
+   * inside, including the clear button, is the component's.
+   */
   .iwac-fed__search {
-    position: relative;
-    display: flex;
-    align-items: center;
     max-width: var(--measure-narrow, 36rem);
   }
-  .iwac-fed__input {
+  .iwac-fed__search :global(.iwac-input) {
     width: 100%;
-    height: var(--size-control-lg, 2.75rem);
-    padding-inline: var(--space-md, 1rem) var(--space-2xl, 3rem);
-    margin: 0;
-    font: inherit;
-    font-size: var(--text-base, 1.0625rem);
-    color: var(--ink, #13161c);
-    background: var(--surface, #fdfcfb);
-    border: 1px solid var(--border, #ced1d6);
-    border-radius: var(--radius-md, 0.5rem);
   }
-  .iwac-fed__input:focus-visible {
-    outline: none;
-    border-color: var(--primary, #ce4115);
-    box-shadow: var(--ring-focus, 0 0 0 3px rgba(0, 0, 0, 0.1));
-  }
-  .iwac-fed__input::-webkit-search-cancel-button {
-    -webkit-appearance: none;
-    appearance: none;
-    display: none;
-  }
-  .iwac-fed__clear {
-    position: absolute;
-    inset-inline-end: var(--space-sm, 0.5rem);
-    top: 50%;
-    transform: translateY(-50%);
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 2rem;
-    height: 2rem;
-    min-width: 0;
-    margin: 0;
-    padding: 0;
-    border: 0;
-    background: transparent;
-    box-shadow: none;
+
+  /*
+   * End-of-merged-list note. Quiet — it is guidance at a boundary, not a
+   * warning: the answer is almost always to narrow the query or switch to a
+   * per-collection tab, both of which are one click away.
+   */
+  .iwac-fed__cap {
+    margin: var(--space-md, 1rem) 0 0;
     color: var(--muted, #66696e);
-    font-size: 1.25rem;
-    line-height: 1;
-    cursor: pointer;
-    border-radius: var(--radius-full, 9999px);
-  }
-  .iwac-fed__clear:hover {
-    background: color-mix(in oklab, currentColor 14%, transparent);
-    color: var(--ink, #13161c);
+    font-size: var(--text-sm, 0.9375rem);
+    text-align: center;
   }
 
   /* Type tabs. */

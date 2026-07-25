@@ -31,10 +31,13 @@ use Throwable;
  * year span / countries). Those are corpus-wide reverse scans, refreshed by
  * the bulk reindex; letting them drift slightly between rebuilds is fine.
  *
- * Known gap: upserts go through the alias, so an edit made WHILE a bulk
- * reindex is running lands in the outgoing collection and is discarded at
- * the alias swap if the item's page had already been streamed. The next
- * save (or bulk reindex) heals it.
+ * Interaction with the bulk reindex: upserts go through the alias, so an edit
+ * made WHILE a reindex is running lands in the OUTGOING collection and would
+ * be discarded at the swap. ReindexOrchestrator::catchUpEdits() replays those
+ * edits into the new collection immediately after the swap, using this class
+ * against the new collection by name. DELETES made mid-build are still lost
+ * (the row is gone, so nothing can find it afterwards) — see that method for
+ * why that residue is accepted.
  *
  * Resilience: every operation is wrapped in try/catch. A failed Typesense
  * call logs and swallows the error — it MUST NOT block the Omeka save the

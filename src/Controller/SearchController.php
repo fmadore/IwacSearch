@@ -178,11 +178,14 @@ class SearchController extends AbstractActionController
         );
 
         if ($query === '') {
-            $contentSsr = $this->initialRenderer->render($contentTab);
+            // Both tabs in ONE Typesense round trip — multi_search takes a
+            // list, and rendering them separately meant two sequential HTTP
+            // calls inside a single PHP dispatch. Either entry can come back
+            // null independently; that tab just falls back to its own fetch.
+            [$contentSsr, $entitySsr] = $this->initialRenderer->renderMany([$contentTab, $entityTab]);
             if ($contentSsr !== null) {
                 $contentTab['initial_response'] = $contentSsr;
             }
-            $entitySsr = $this->initialRenderer->render($entityTab);
             if ($entitySsr !== null) {
                 $entityTab['initial_response'] = $entitySsr;
             }

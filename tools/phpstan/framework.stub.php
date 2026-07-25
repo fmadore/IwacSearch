@@ -373,6 +373,15 @@ namespace Doctrine\DBAL {
         public function fetchAllAssociative(): array
         {
         }
+
+        /** @return list<mixed> */
+        public function fetchFirstColumn(): array
+        {
+        }
+
+        public function fetchOne(): mixed
+        {
+        }
     }
 
     enum ArrayParameterType: int
