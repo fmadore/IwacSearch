@@ -649,9 +649,9 @@
       <div class="iwac-search__results" aria-busy={isLoading}>
         {#if response}
           <!-- Result controls. On desktop one row: view toggle (left), then
-               copy-link + export + sort (right). On a phone two rows: [view ·
-               filters · actions] then a full-width sort, so the bar reads as a
-               tidy unit instead of three cramped stacked rows. -->
+               copy-link + export + sort (right). On a phone the bar wraps —
+               [view] / [filters · actions] — above a full-width sort, so the
+               controls stay legible instead of clipping the view toggle. -->
           <div class="iwac-search__controls" bind:this={resultsAnchor}>
             <div class="iwac-search__controls-bar">
               {#if view.supportsToggle}
@@ -928,7 +928,7 @@
     }
 
     /*
-     * Two tidy rows on a phone: [view · filters · actions] on top, then a
+     * Tidy rows on a phone: [view · filters · actions] on top, then a
      * full-width sort row. Stacking the controls (column) bounds the sort row
      * to the viewport so its <select> can't overflow.
      */
@@ -939,6 +939,15 @@
     }
     .iwac-search__controls-bar {
       width: 100%;
+      /*
+       * Wrap rather than squeeze. With Export present (results > 0) the four
+       * labelled controls need ~566px but a phone offers ~418px, and the only
+       * shrinkable child was the view toggle — which clips instead of
+       * ellipsising. Wrapping drops the actions onto their own row, so the
+       * bar stays honest at any width and in any locale (the French labels
+       * are the widest, but nothing here depends on their length).
+       */
+      flex-wrap: wrap;
     }
     .iwac-search__controls :global(.iwac-sort) {
       display: flex;

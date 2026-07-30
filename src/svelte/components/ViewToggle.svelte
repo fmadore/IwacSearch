@@ -50,6 +50,14 @@
     border: 1px solid var(--border, #ced1d6);
     border-radius: var(--radius-md, 0.5rem);
     overflow: hidden;
+    /*
+     * Never shrink. `overflow: hidden` rounds the segment corners, so a flex
+     * parent squeezing this control doesn't ellipsise it — it CLIPS it, and
+     * silently: on a phone the Gallery segment vanished outright and "Liste"
+     * was cut to "Lis". The control is sized by its content; a cramped row
+     * has to wrap instead.
+     */
+    flex-shrink: 0;
   }
   .iwac-view__btn {
     display: inline-flex;

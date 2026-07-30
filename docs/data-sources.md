@@ -96,11 +96,29 @@ target's `dcterms:alternative`; `entity_ids` are the linked `o:id`s.
 
 `country_ss` is not an Omeka property. `CountryResolver` derives it:
 
-- **articles / publications / audiovisual** — from the newspaper/publisher name
+- **articles / publications** — from the newspaper/publisher name
   (`dcterms:publisher`, a literal) via `data/newspaper-countries.json` (ported
   from the HF `country_mapper`).
 - **references / documents** — from membership in a per-country item set
   (Références / Documents divers).
+- **audiovisual** — from a place heading naming a country (`dcterms:spatial`
+  against `IwacInstance::COUNTRY_PLACE_NAMES`). Recordings have neither
+  signal above: 44 of the 47 carry the producer "Daarul Hadeethis Salafiyyah"
+  rather than a newspaper, and they sit in topical sets ("Enregistrements
+  audio", "Collection de sermons islamiques sur vidéo"), not per-country ones.
+
+The place path is **audiovisual-only** on purpose. Press items routinely
+mention neighbouring countries in `dcterms:spatial`, and reading country from
+there would file a Burkinabè article under Nigeria; the newspaper remains
+their single country signal.
+
+Watch the spelling: the place authority is `Nigéria` but the facet value —
+and so the preset locked filter — is `Nigeria`. `COUNTRY_PLACE_NAMES` does
+that translation on the way in. Emitting the accented form would index the
+recordings under a country nothing filters on, which is precisely how
+`/browse/nigeria` came to be empty: audiovisual resolved to no country at
+all, and country presets exclude references, which were the only other
+Nigerian material.
 
 ### Sentiment — categorical labels resolved to scores
 

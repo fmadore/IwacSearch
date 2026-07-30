@@ -1,5 +1,5 @@
 {
-  "_comment": "Newspaper (dcterms:publisher literal) -> country_ss value. Ported from the IWAC-Hugging-Face country_mapper (see iwac-data skill references/countries-newspapers.md). Country values are the ACCENTED display form that matches Browse/Countries::ALL and the content country_ss facet exactly. Consumed by CountryResolver during the bulk reindex. Nigeria outlets are not enumerated upstream (Nigeria is almost entirely audiovisual); fill from country_mapper.py before cutover if article coverage grows.",
+  "_comment": "Newspaper (dcterms:publisher literal) -> country_ss value. Ported from the IWAC-Hugging-Face country_mapper (see iwac-data skill references/countries-newspapers.md). Country values are the ACCENTED display form that matches Browse/Countries::ALL and the content country_ss facet exactly. Consumed by CountryResolver during the bulk reindex. Nigeria outlets are not enumerated upstream (Nigeria is almost entirely audiovisual); fill from country_mapper.py before cutover if article coverage grows. Audiovisual no longer depends on this file for its country: recordings carry a producer rather than a newspaper, so AudiovisualMapper falls back to the place heading via IwacInstance::COUNTRY_PLACE_NAMES (see docs/data-sources.md).",
   "24 Heures au Bénin": "Bénin",
   "Agence Bénin Presse": "Bénin",
   "ASSALAM": "Bénin",

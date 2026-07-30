@@ -360,6 +360,67 @@ final class MapperTest extends TestCase
         self::assertSame(['Burkina Faso'], $doc['country_ss']);
     }
 
+    public function testAudiovisualFallsBackToItsPlaceHeading(): void
+    {
+        // The regression this guards: recordings carry a producer, not a
+        // newspaper, and sit in topical sets, so both the publisher and the
+        // item-set paths resolve nothing. Without the place fallback every
+        // Nigerian recording indexed with no country_ss and /browse/nigeria
+        // came back empty (country presets exclude references, which were
+        // the only other Nigerian material).
+        $doc = $this->registry->get('audiovisual')->map(
+            self::item(['class' => IwacInstance::CLASS_AUDIOVISUAL]),
+            self::values([
+                'dcterms:publisher' => [['value' => 'Daarul Hadeethis Salafiyyah']],
+                'dcterms:spatial' => [['title' => 'Zaria'], ['title' => 'Nigéria']],
+            ]),
+            null
+        );
+
+        self::assertSame(['Nigeria'], $doc['country_ss']);
+    }
+
+    public function testAudiovisualWithNoCountryPlaceStaysUncountried(): void
+    {
+        $doc = $this->registry->get('audiovisual')->map(
+            self::item(['class' => IwacInstance::CLASS_AUDIOVISUAL]),
+            self::values(['dcterms:spatial' => [['title' => 'Zaria']]]),
+            null
+        );
+
+        self::assertArrayNotHasKey('country_ss', $doc);
+    }
+
+    public function testThePlaceFallbackIsAudiovisualOnly(): void
+    {
+        // An article merely MENTIONING a neighbouring country must not
+        // acquire its flag — the press subsets keep the newspaper as their
+        // single country signal.
+        $doc = $this->registry->get('articles')->map(
+            self::item(),
+            self::values(['dcterms:spatial' => [['title' => 'Nigéria']]]),
+            null
+        );
+
+        self::assertArrayNotHasKey('country_ss', $doc);
+    }
+
+    public function testTheNewspaperDerivationWinsOverThePlaceFallback(): void
+    {
+        // Radio Oméga is Burkinabè; if a recording's producer IS in the map,
+        // that beats a place heading naming somewhere else.
+        $doc = $this->registry->get('audiovisual')->map(
+            self::item(['class' => IwacInstance::CLASS_AUDIOVISUAL]),
+            self::values([
+                'dcterms:publisher' => [['value' => 'La Nation']], // Bénin
+                'dcterms:spatial' => [['title' => 'Nigéria']],
+            ]),
+            null
+        );
+
+        self::assertSame(['Bénin'], $doc['country_ss']);
+    }
+
     public function testTheNewspaperDerivationWinsOverTheItemSetFallback(): void
     {
         $doc = $this->registry->get('documents')->map(

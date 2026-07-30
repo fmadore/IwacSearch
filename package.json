@@ -1,7 +1,7 @@
 {
   "name": "iwac-search-client",
-  "version": "3.6.1",
-  "description": "Svelte client for the IwacSearch Omeka S module \u2014 public discovery surface backed by Typesense.",
+  "version": "3.6.2",
+  "description": "Svelte client for the IwacSearch Omeka S module — public discovery surface backed by Typesense.",
   "private": true,
   "type": "module",
   "engines": {

@@ -11,10 +11,16 @@ use IwacSearch\Indexer\PropertyValues;
  * primarily Nigerian. No OCR, no sentiment: identity + facets + entities +
  * date + AI summary.
  *
- * Note: most AV is Nigerian, and Nigerian outlets aren't in the
- * newspaper→country map (Nigeria is barely present in the press subsets
- * upstream), so country_ss is often empty here — matching the sparse country
- * coverage of the published audiovisual dataset.
+ * Country needs its own fallback here. Recordings carry a producer rather
+ * than a newspaper ("Daarul Hadeethis Salafiyyah" for 44 of the 47), and
+ * Nigerian outlets are absent from the newspaper→country map, so the
+ * publisher path resolves nothing; nor do the topical sets they sit in
+ * ("Enregistrements audio", "Collection de sermons islamiques sur vidéo")
+ * appear in the per-country set families. Their `dcterms:spatial` DOES name
+ * the country (45 of 47 are catalogued under the "Nigéria" place authority),
+ * so that is the signal we read. Without it every Nigerian recording indexed
+ * with no country_ss at all and the whole /browse/nigeria scope came back
+ * empty, since per-country references are excluded from country presets.
  */
 final class AudiovisualMapper extends AbstractMapper
 {
@@ -46,6 +52,15 @@ final class AudiovisualMapper extends AbstractMapper
         $doc = $this->buildBase($item, $values, $thumbnailUrl);
 
         $this->addCommonFacets($doc, $values);
+        // Recordings have no newspaper and no per-country set; the place
+        // heading is the only country signal (see the class docblock).
+        if (!isset($doc['country_ss'])) {
+            $this->maybeAddList(
+                $doc,
+                'country_ss',
+                $this->countries->forPlaces($values->displays('dcterms:spatial'))
+            );
+        }
         $this->addAuthorityEntities($doc, $values);
         $this->addDateFields($doc, $values);
         $this->addDescription($doc, $values);

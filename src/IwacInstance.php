@@ -141,6 +141,37 @@ final class IwacInstance
     ];
 
     // ────────────────────────────────────────────────────────────────────
+    // Place authorities that name a country
+    // ────────────────────────────────────────────────────────────────────
+
+    /**
+     * Place-authority title (as catalogued in `dcterms:spatial`) → the
+     * `country_ss` facet value. The last-resort country signal, for subsets
+     * with neither a newspaper nor a per-country item set — audiovisual,
+     * whose 45 Nigerian recordings sit in topical sets ("Collection de
+     * sermons islamiques sur vidéo") and name their country only here.
+     *
+     * The keys are the FRENCH place headings and the values the facet
+     * spelling, so this table is also where the two disagree: the place
+     * authority is `Nigéria`, the facet value is `Nigeria`. Both spellings
+     * are listed because a heading may be recatalogued either way; matching
+     * is lowercased but NOT accent-folded, so each form must be explicit.
+     *
+     * @var array<string, string>
+     */
+    public const COUNTRY_PLACE_NAMES = [
+        'Bénin'         => 'Bénin',
+        'Benin'         => 'Bénin',
+        'Burkina Faso'  => 'Burkina Faso',
+        "Côte d'Ivoire" => "Côte d'Ivoire",
+        "Cote d'Ivoire" => "Côte d'Ivoire",
+        'Niger'         => 'Niger',
+        'Nigéria'       => 'Nigeria',
+        'Nigeria'       => 'Nigeria',
+        'Togo'          => 'Togo',
+    ];
+
+    // ────────────────────────────────────────────────────────────────────
     // Public site
     // ────────────────────────────────────────────────────────────────────
 

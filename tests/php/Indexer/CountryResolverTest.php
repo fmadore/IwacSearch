@@ -60,6 +60,71 @@ final class CountryResolverTest extends TestCase
         self::assertSame(['Togo'], $this->resolver()->forItemSets([2227]));
     }
 
+    public function testPlaceHeadingsResolveForSubsetsWithNeitherSignal(): void
+    {
+        // Audiovisual carries a producer rather than a newspaper and sits in
+        // topical sets, so the place authority is its only country signal.
+        self::assertSame(['Nigeria'], $this->resolver()->forPlaces(['Nigéria']));
+        self::assertSame(['Togo'], $this->resolver()->forPlaces(['Togo']));
+    }
+
+    public function testTheAccentedPlaceHeadingResolvesToTheUnaccentedFacetValue(): void
+    {
+        // The place authority is "Nigéria"; the country_ss facet — and the
+        // preset locked filter — is "Nigeria". Emitting the accented form
+        // would index the recordings under a country nothing filters on.
+        self::assertSame(['Nigeria'], $this->resolver()->forPlaces(['Nigéria']));
+        self::assertNotSame(['Nigéria'], $this->resolver()->forPlaces(['Nigéria']));
+    }
+
+    public function testCityHeadingsNameNoCountry(): void
+    {
+        // "Zaria" accompanies "Nigéria" on 43 recordings; only the country
+        // heading may set the facet, so a city-only item stays uncountried
+        // rather than being guessed at.
+        self::assertSame([], $this->resolver()->forPlaces(['Zaria', 'Yola']));
+        self::assertSame([], $this->resolver()->forPlaces([]));
+    }
+
+    public function testPlacesOutsideTheCollectionYieldNothing(): void
+    {
+        self::assertSame([], $this->resolver()->forPlaces(['Mali', 'France']));
+    }
+
+    public function testSeveralPlaceHeadingsDedupeToTheirDistinctCountries(): void
+    {
+        self::assertSame(
+            ['Nigeria'],
+            $this->resolver()->forPlaces(['Zaria', 'Nigéria', 'Nigeria'])
+        );
+    }
+
+    public function testThePlaceLookupIsCaseAndWhitespaceInsensitive(): void
+    {
+        self::assertSame(['Nigeria'], $this->resolver()->forPlaces([' NIGÉRIA ']));
+    }
+
+    public function testEveryPlaceNameResolvesToACountryThePresetsAlsoKnow(): void
+    {
+        // Same contract as the item-set table: a country_ss value no country
+        // scope filters on makes the item unreachable by browsing.
+        $presetCountries = array_map(
+            static fn(\IwacSearch\Search\Preset $p): string => $p->label,
+            array_filter(
+                \IwacSearch\Search\PresetCatalog::all(),
+                static fn(\IwacSearch\Search\Preset $p): bool => isset($p->redirectQuery['f.country_ss'])
+            )
+        );
+
+        foreach (array_unique(IwacInstance::COUNTRY_PLACE_NAMES) as $country) {
+            self::assertContains(
+                $country,
+                $presetCountries,
+                "place-name country '{$country}' has no matching country preset"
+            );
+        }
+    }
+
     public function testUnrelatedItemSetsResolveToNothing(): void
     {
         self::assertSame([], $this->resolver()->forItemSets([999999]));

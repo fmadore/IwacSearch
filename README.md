@@ -36,6 +36,8 @@ The admin surface is the **maintenance page** (`/admin/iwac-search/maintenance`)
 Changes below this line are **not yet verified on the live site**. Tick
 as you confirm; remove rows once they've been through a full cycle.
 
+- [ ] **3.6.2 REINDEX REQUIRED**: audiovisual now derives `country_ss` from its place heading (`dcterms:spatial` → `IwacInstance::COUNTRY_PLACE_NAMES`), so the recordings only gain a country on rebuild. After the reindex, `/browse/nigeria` must show ~45 audiovisual items — it returned nothing at all before, because the recordings resolved to no country and country presets exclude references.
+- [ ] **3.6.2 mobile toolbar**: on a phone (~450px wide), open a country page **with results**. The Liste/Galerie toggle must render in full — previously the actions row refused to shrink or wrap, so the toggle was clipped mid-word ("Lis", Galerie gone). It wraps to a second row when Export is present and stays on one row when it isn't.
 - [ ] **3.6.0 REINDEX FIRST**: after deploying, run the bulk reindex before anything else — the entity schema bumped to `iwac_index_v3` (geopoints) and the content collection only links `iwac_synonyms` on rebuild. See [ROADMAP.md](ROADMAP.md) for the ordered checklist.
 - [ ] **3.6.0 synonyms**: after the reindex, search `sheikh` — results containing only `cheikh` must match (and vice versa). Then edit `data/synonyms-fr.json`, hit the admin **Sync synonyms** button, and confirm the change is live WITHOUT a reindex.
 - [ ] **3.6.0 union "All" tab**: open `/search/everything?q=ramadan`. The **Tout/All** tab is active by default and shows ONE merged list mixing articles and entities, relevance-ranked, with pagination. Clicking an entity card's type chip hands off to the Entities tab pre-filtered.
