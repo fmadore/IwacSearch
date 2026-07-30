@@ -1,0 +1,26 @@
+# Line endings are LF in the repo AND in the working tree, on every platform.
+#
+# Without this, a Windows checkout with core.autocrlf=true converts to CRLF on
+# the way out, which puts the working tree at odds with Prettier's
+# `endOfLine: "lf"` (.prettierrc.json): `npm run lint` then fails on every
+# file in the repo, including ones nobody touched, and the only way to make it
+# pass is to reformat the whole tree. `eol=lf` overrides core.autocrlf per
+# repository, so the guard stays meaningful and contributors don't need
+# matching global git config.
+#
+# `text=auto` still lets git detect and skip binaries; the repo currently
+# tracks none, but the explicit rules below keep that true if any land.
+* text=auto eol=lf
+
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.gif  binary
+*.webp binary
+*.ico  binary
+*.pdf  binary
+*.zip  binary
+*.woff  binary
+*.woff2 binary
+*.ttf  binary
+*.eot  binary
