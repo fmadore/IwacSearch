@@ -67,8 +67,9 @@ jobs:
     strategy:
       matrix:
         # 8.2 = composer.json floor (production containers may lag);
-        # 8.4 = current.
-        php-version: ['8.2', '8.4']
+        # 8.4 = intermediate;
+        # 8.5 = the live server's runtime — the leg that must stay green.
+        php-version: ['8.2', '8.4', '8.5']
     steps:
       - uses: actions/checkout@v7
 
