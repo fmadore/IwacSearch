@@ -3,7 +3,6 @@ declare(strict_types=1);
 
 namespace IwacSearch\Indexer;
 
-use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
 use Generator;
 use Omeka\Entity\Item;
@@ -27,6 +26,15 @@ use Omeka\Entity\Item;
  *   value(resource_id, property_id, value, uri, value_resource_id)
  *   property(id, vocabulary_id, local_name) · vocabulary(id, prefix)
  *   item_item_set(item_id, item_set_id) · media(item_id, storage_id, …)
+ *
+ * DBAL VERSION NOTE — array parameters bind through the legacy
+ * `Connection::PARAM_INT_ARRAY` / `PARAM_STR_ARRAY` constants, NOT
+ * `Doctrine\DBAL\ArrayParameterType`. The latter only exists from DBAL 3.6,
+ * and Omeka S 4.x pins `doctrine/dbal ^2.13.8` — so the modern spelling is a
+ * fatal "class not found" on every Omeka install. The two spellings resolve to
+ * the same ints (101 / 102) and the legacy constants still work on DBAL 3.x,
+ * so this is the portable choice. Do not "modernise" it without first checking
+ * what Omeka core's vendor/ actually ships.
  */
 final class OmekaSourceReader
 {
@@ -72,7 +80,7 @@ final class OmekaSourceReader
         }
 
         // The one place that still inlines ids rather than binding an
-        // ArrayParameterType list (every other query here binds): the class and
+        // array-parameter list (every other query here binds): the class and
         // item-set lists are LOOP-INVARIANT, so inlining them keeps :rt and
         // :lastId the only bound params and the keyset page a single stable
         // prepared statement re-executed per page. Both are cast through
@@ -140,7 +148,7 @@ final class OmekaSourceReader
             'SELECT id, title, is_public, resource_class_id FROM resource'
             . ' WHERE resource_type = :rt AND id IN (:ids)',
             ['rt' => Item::class, 'ids' => $ids],
-            ['ids' => ArrayParameterType::INTEGER],
+            ['ids' => Connection::PARAM_INT_ARRAY],
         )->fetchAllAssociative();
         if ($rows === []) {
             return [];
@@ -240,7 +248,7 @@ final class OmekaSourceReader
             . ' ORDER BY v.resource_id ASC, v.id ASC';
 
         $params = ['ids' => $ids, 'terms' => $terms];
-        $types  = ['ids' => ArrayParameterType::INTEGER, 'terms' => ArrayParameterType::STRING];
+        $types  = ['ids' => Connection::PARAM_INT_ARRAY, 'terms' => Connection::PARAM_STR_ARRAY];
 
         $out = [];
         foreach ($this->connection->executeQuery($sql, $params, $types)->fetchAllAssociative() as $row) {
@@ -271,7 +279,7 @@ final class OmekaSourceReader
         $sql = 'SELECT item_id AS iid, item_set_id AS sid FROM item_item_set WHERE item_id IN (:ids)';
         $out = [];
         $rows = $this->connection
-            ->executeQuery($sql, ['ids' => $ids], ['ids' => ArrayParameterType::INTEGER])
+            ->executeQuery($sql, ['ids' => $ids], ['ids' => Connection::PARAM_INT_ARRAY])
             ->fetchAllAssociative();
         foreach ($rows as $row) {
             $out[(int) $row['iid']][] = (int) $row['sid'];
@@ -298,7 +306,7 @@ final class OmekaSourceReader
 
         $out = [];
         $rows = $this->connection
-            ->executeQuery($sql, ['ids' => $ids], ['ids' => ArrayParameterType::INTEGER])
+            ->executeQuery($sql, ['ids' => $ids], ['ids' => Connection::PARAM_INT_ARRAY])
             ->fetchAllAssociative();
         foreach ($rows as $row) {
             $iid = (int) $row['iid'];

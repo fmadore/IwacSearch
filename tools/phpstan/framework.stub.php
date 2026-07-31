@@ -342,6 +342,17 @@ namespace Doctrine\DBAL {
     class Connection
     {
         /**
+         * Array-parameter markers, copied from DBAL 2.13.9 — the version Omeka
+         * S 4.x pins (`doctrine/dbal ^2.13.8`). Do NOT stub
+         * `Doctrine\DBAL\ArrayParameterType` here: it lands in DBAL 3.6 and
+         * does not exist at runtime on any Omeka install, so stubbing it makes
+         * PHPStan bless code that fatals. See OmekaSourceReader's version note.
+         */
+        public const ARRAY_PARAM_OFFSET = 100;
+        public const PARAM_INT_ARRAY = 101;
+        public const PARAM_STR_ARRAY = 102;
+
+        /**
          * @param array<int|string, mixed> $params
          * @param array<int|string, mixed> $types
          */
@@ -382,14 +393,6 @@ namespace Doctrine\DBAL {
         public function fetchOne(): mixed
         {
         }
-    }
-
-    enum ArrayParameterType: int
-    {
-        case INTEGER = 1;
-        case STRING = 2;
-        case ASCII = 3;
-        case BINARY = 4;
     }
 
     class DriverManager
