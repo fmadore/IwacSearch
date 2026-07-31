@@ -7,7 +7,7 @@ infrastructure decision, or block on work in another repo.
 Engineering-side deferrals (tests, static analysis, refactors, request
 reductions) live in [docs/engineering-roadmap.md](docs/engineering-roadmap.md).
 
-## 3.6.0 / 3.7.0 deployment prerequisites (do these in order)
+## 3.6.0 / 3.7.0 / 3.8.0 deployment prerequisites (do these in order)
 
 1. **Copy the module + `composer install --no-dev`** in the php container
    (unchanged from previous releases).
@@ -24,6 +24,10 @@ reductions) live in [docs/engineering-roadmap.md](docs/engineering-roadmap.md).
      dataset). Typesense cannot rename a field in place, so **the Sentiment
      facet group stays empty until the rebuild** — the fields exist in the
      new schema but no live collection carries them yet.
+   - 3.8.0 bumps the CONTENT schema again (`iwac_v4` → `iwac_v5`) to add the
+     searchable/stemmed `toc_txt` field and include publication tables of
+     contents in document embeddings. The same rebuild also fills publication
+     card excerpts and the new `dcterms:description` fallbacks.
 
    Content search itself keeps working on the old collection throughout —
    the alias only swaps on success.

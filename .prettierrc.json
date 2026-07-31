@@ -14,6 +14,5 @@
   "useTabs": false,
   "endOfLine": "lf",
   "svelteSortOrder": "options-scripts-markup-styles",
-  "svelteStrictMode": false,
   "svelteIndentScriptAndStyle": true
 }

@@ -25,7 +25,8 @@ use Typesense\Client as TypesenseClient;
  * Trade-offs that drove the design:
  *
  *  1. **Admin key, never browser-reachable.** The public scoped key
- *     carries `filter_by:is_public:=true` and `exclude_fields:ocr_text`
+ *     carries `filter_by:is_public:=true` and
+ *     `exclude_fields:ocr_text,toc_txt`
  *     as hard constraints. The SSR path must impose the same constraints
  *     explicitly (see `applyPublicConstraints()`), because the admin key
  *     bypasses them.
@@ -182,10 +183,10 @@ final class InitialResponseRenderer
                 'sort_by'               => $sort,
                 'page'                  => 1,
                 'per_page'              => max(1, min(50, $perPage)),
-                // Drop OCR from the payload — same hard rule the scoped
-                // key enforces for the live client. Keeps the inlined
-                // JSON lean and avoids leaking OCR fulltext into the HTML.
-                'exclude_fields'        => 'ocr_text,embedding',
+                // Drop full body fields from the payload — same hard rule
+                // the scoped key enforces for the live client. Highlights
+                // still ship, but the inlined JSON stays lean.
+                'exclude_fields'        => 'ocr_text,toc_txt,embedding',
                 'highlight_fields'      => 'title_txt',
                 'highlight_full_fields' => 'title_txt',
                 'snippet_threshold'     => 30,

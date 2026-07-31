@@ -97,6 +97,28 @@ final class PropertyValues
         return array_values(array_unique($out));
     }
 
+    /**
+     * Public literal values only. Use this for text that will be copied into
+     * public result documents; unlike OCR, these fields have no deliberate
+     * restricted-snippet exception.
+     *
+     * @return list<string>
+     */
+    public function publicLiterals(string $term): array
+    {
+        $out = [];
+        foreach ($this->byTerm[$term] ?? [] as $v) {
+            if (!$v['vpub']) {
+                continue;
+            }
+            $s = trim((string) ($v['value'] ?? ''));
+            if ($s !== '') {
+                $out[] = $s;
+            }
+        }
+        return array_values(array_unique($out));
+    }
+
     /** First literal (@value) only, or ''. */
     public function firstLiteral(string $term): string
     {
@@ -107,6 +129,12 @@ final class PropertyValues
             }
         }
         return '';
+    }
+
+    /** First public literal (@value) only, or ''. */
+    public function firstPublicLiteral(string $term): string
+    {
+        return $this->publicLiterals($term)[0] ?? '';
     }
 
     /**

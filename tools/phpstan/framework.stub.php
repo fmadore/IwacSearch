@@ -133,6 +133,15 @@ namespace Laminas\Mvc\Controller\Plugin {
     }
 }
 
+namespace Psr\Container {
+    interface ContainerInterface
+    {
+        public function get(string $id);
+
+        public function has(string $id): bool;
+    }
+}
+
 namespace Laminas\ServiceManager {
     interface ServiceLocatorInterface extends \Psr\Container\ContainerInterface
     {

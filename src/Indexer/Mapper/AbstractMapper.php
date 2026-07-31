@@ -36,7 +36,10 @@ abstract class AbstractMapper implements MapperInterface
     ];
 
     protected const BODY_TERMS = ['bibo:content'];
-    protected const DESCRIPTION_TERMS = ['bibo:shortDescription'];
+    protected const DESCRIPTION_TERMS = [
+        'bibo:shortDescription',
+        'dcterms:description',
+    ];
     protected const SENTIMENT_TERMS = [
         'iwac:geminiCentralite', 'iwac:geminiPolarite', 'iwac:geminiSubjectiviteScore',
         'iwac:chatgptCentralite', 'iwac:chatgptPolarite', 'iwac:chatgptSubjectiviteScore',
@@ -260,13 +263,20 @@ abstract class AbstractMapper implements MapperInterface
     }
 
     /**
-     * Public-safe display body from the AI summary (bibo:shortDescription).
+     * Public-safe display body. Prefer the curated AI summary, then fall back
+     * to the resource's ordinary Dublin Core description. The fallback gives
+     * sparse non-press records (notably photographs and audiovisual items) a
+     * useful card body without changing the article/document preference.
      *
      * @param array<string, mixed> $doc
      */
     protected function addDescription(array &$doc, PropertyValues $values): void
     {
-        $this->maybeAdd($doc, 'abstract', $values->firstLiteral('bibo:shortDescription'));
+        $description = $values->firstPublicLiteral('bibo:shortDescription');
+        if ($description === '') {
+            $description = $values->firstPublicLiteral('dcterms:description');
+        }
+        $this->maybeAdd($doc, 'abstract', $description);
     }
 
     /**

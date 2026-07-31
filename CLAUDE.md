@@ -26,7 +26,7 @@ provides the Typesense container, nginx `/search-api/` proxy, and backups.
   the field→property map.
 
 - **OCR privacy is enforced by scoped keys, not frontend discipline.**
-  The public scoped key carries `exclude_fields: ocr_text` AND
+  The public scoped key carries `exclude_fields: ocr_text,toc_txt` AND
   `filter_by: is_public:=true`, hardcoded in
   `TypesenseSearchKeyProvider::mintPublicScopedKey()` (the single source
   of truth — deliberately NOT config-driven). Both are belt-and-suspenders

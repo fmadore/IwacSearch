@@ -36,7 +36,7 @@ export interface MatchedIn {
  * Highlight fields already visible in the card body — a match there needs no
  * "matched in" attribution, because the user can see it.
  */
-const VISIBLE_MATCH_FIELDS = ['title_txt', 'ocr_text', 'abstract'];
+const VISIBLE_MATCH_FIELDS = ['title_txt', 'ocr_text', 'toc_txt', 'abstract'];
 
 /** Source-line chip icons — the Bootstrap Icons set the IWAC theme uses. */
 export const CHIP_ICONS: Record<string, 'newspaper' | 'globe'> = {
@@ -45,14 +45,15 @@ export const CHIP_ICONS: Record<string, 'newspaper' | 'globe'> = {
 };
 
 /**
- * Body snippet: the OCR match first (most contextual), else the abstract
- * match. Empty when neither matched — the caller falls back to the plain
- * abstract. Sanitised: escaped client-side, with only literal <mark> tags
- * reinstated (see lib/sanitize.ts).
+ * Body snippet: the OCR match first (most contextual), then the publication
+ * table of contents, else the abstract match. Empty when none matched — the
+ * caller falls back to the plain abstract. Sanitised: escaped client-side,
+ * with only literal <mark> tags reinstated (see lib/sanitize.ts).
  */
 export function pickSnippet(hit: IwacHit): string {
   const raw =
     hit.highlights?.find((h) => h.field === 'ocr_text')?.snippet ??
+    hit.highlights?.find((h) => h.field === 'toc_txt')?.snippet ??
     hit.highlights?.find((h) => h.field === 'abstract')?.snippet ??
     '';
   return sanitizeHighlight(raw);

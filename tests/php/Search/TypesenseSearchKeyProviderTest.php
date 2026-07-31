@@ -85,7 +85,7 @@ final class TypesenseSearchKeyProviderTest extends TestCase
 
         $params = $this->signed->entries[0]['params'];
         self::assertSame('is_public:=true', $params['filter_by']);
-        self::assertSame('ocr_text', $params['exclude_fields']);
+        self::assertSame('ocr_text,toc_txt', $params['exclude_fields']);
     }
 
     public function testScopedKeyExpires(): void

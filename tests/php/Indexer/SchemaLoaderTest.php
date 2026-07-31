@@ -40,6 +40,23 @@ final class SchemaLoaderTest extends TestCase
         self::assertContains('iwac_diversity', $schema['curation_sets'] ?? []);
     }
 
+    public function testContentV5IndexesPublicationTablesOfContents(): void
+    {
+        $schema = (new SchemaLoader(self::CONTENT))->load();
+        /** @var array<string, array<string, mixed>> $fields */
+        $fields = array_column($schema['fields'], null, 'name');
+        /** @var array{type:string,stem:bool,optional:bool} $toc */
+        $toc = $fields['toc_txt'];
+        /** @var array{embed:array{from:list<string>}} $embedding */
+        $embedding = $fields['embedding'];
+
+        self::assertSame('iwac_v5', $schema['name']);
+        self::assertSame('string', $toc['type']);
+        self::assertTrue($toc['stem']);
+        self::assertTrue($toc['optional']);
+        self::assertContains('toc_txt', $embedding['embed']['from']);
+    }
+
     public function testTheReindexNameIsTheBaseNamePlusAUtcTimestamp(): void
     {
         $schema = (new SchemaLoader(self::CONTENT))->loadForReindex();

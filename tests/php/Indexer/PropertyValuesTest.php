@@ -67,6 +67,21 @@ final class PropertyValuesTest extends TestCase
         self::assertSame(['A literal'], $v->literals('dcterms:alternative'));
     }
 
+    public function testPublicLiteralsExcludePrivateValues(): void
+    {
+        $v = PropertyValues::fromRows(['dcterms:description' => [
+            self::row(['value' => 'private note', 'vpub' => false]),
+            self::row(['value' => 'public description']),
+        ]]);
+
+        self::assertSame(
+            ['private note', 'public description'],
+            $v->literals('dcterms:description')
+        );
+        self::assertSame(['public description'], $v->publicLiterals('dcterms:description'));
+        self::assertSame('public description', $v->firstPublicLiteral('dcterms:description'));
+    }
+
     public function testFirstScalarFallsBackToTheUriButFirstLiteralDoesNot(): void
     {
         // dcterms:identifier is catalogued both ways; a URI identifier must
@@ -119,10 +134,12 @@ final class PropertyValuesTest extends TestCase
 
         self::assertSame([], $v->displays('dcterms:subject'));
         self::assertSame([], $v->literals('dcterms:subject'));
+        self::assertSame([], $v->publicLiterals('dcterms:subject'));
         self::assertSame([], $v->linkedIds('dcterms:subject'));
         self::assertSame([], $v->rows('dcterms:subject'));
         self::assertSame('', $v->firstDisplay('dcterms:subject'));
         self::assertSame('', $v->firstLiteral('dcterms:subject'));
+        self::assertSame('', $v->firstPublicLiteral('dcterms:subject'));
         self::assertSame('', $v->firstScalar('dcterms:subject'));
         self::assertFalse($v->has('dcterms:subject'));
     }

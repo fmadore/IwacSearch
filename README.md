@@ -14,28 +14,40 @@ on Omeka.
 
 The admin surface is the **maintenance page** (`/admin/iwac-search/maintenance`): live Typesense status panel, bulk-reindex / stopwords-sync / synonyms-sync / provision-analytics buttons (each dispatched as an Omeka background job), and the search-analytics digest. Editors + site-admins + global-admins have access via ACL rules in `Module::onBootstrap`. The earlier browse-config CRUD UI was retired — see "Retired: the curated browse-config system" below.
 
-| Milestone  |   Status   | Highlights                                                                         |
-| ---------- | :--------: | ---------------------------------------------------------------------------------- |
-| M0         |  ✅ done   | Schema, Omeka-MySQL indexer pipeline, stopwords, atomic alias swap                 |
-| M1         |  ✅ done   | `/search`, `/discovery/token`, page block, Svelte 5 client, alias-spelling search  |
-| M2         |  ✅ done   | Facet panel, year range slider, URL state, sort, hybrid keyword+vector search      |
-| M3         |  ✅ done   | `iwac_browse_config` table + 6 auto-seeded country pages (retired — now presets)   |
-| M3.5       |  ✅ done   | Admin CRUD UI (retired with M3 — superseded by PresetCatalog + page blocks)        |
-| Public SSR |  ✅ done   | PHP-side Typesense call inlines first page + facets into every public surface      |
-| M4         |  ✅ done   | Full incremental sync: item create/update/delete + batch ops + media + item sets   |
-| M5         |  ✅ done   | Typeahead dropdown — prefix search, keyboard nav, click-to-navigate                |
-| M6         | 🟡 partial | Mobile filter drawer + result count + empty-state polish; cutover still planned    |
-| 3.6.0      |  ✅ done   | Synonym set, search analytics, federated union "All" tab, entity Map view, UX wins |
+| Milestone  |   Status   | Highlights                                                                          |
+| ---------- | :--------: | ----------------------------------------------------------------------------------- |
+| M0         |  ✅ done   | Schema, Omeka-MySQL indexer pipeline, stopwords, atomic alias swap                  |
+| M1         |  ✅ done   | `/search`, `/discovery/token`, page block, Svelte 5 client, alias-spelling search   |
+| M2         |  ✅ done   | Facet panel, year range slider, URL state, sort, hybrid keyword+vector search       |
+| M3         |  ✅ done   | `iwac_browse_config` table + 6 auto-seeded country pages (retired — now presets)    |
+| M3.5       |  ✅ done   | Admin CRUD UI (retired with M3 — superseded by PresetCatalog + page blocks)         |
+| Public SSR |  ✅ done   | PHP-side Typesense call inlines first page + facets into every public surface       |
+| M4         |  ✅ done   | Full incremental sync: item create/update/delete + batch ops + media + item sets    |
+| M5         |  ✅ done   | Typeahead dropdown — prefix search, keyboard nav, click-to-navigate                 |
+| M6         | 🟡 partial | Mobile filter drawer + result count + empty-state polish; cutover still planned     |
+| 3.6.0      |  ✅ done   | Synonym set, search analytics, federated union "All" tab, entity Map view, UX wins  |
+| 3.8.0      |  ✅ done   | Publication ToC search, non-press card bodies, export hardening, checkbox alignment |
 
 **M4 coverage (complete as of 3.6.0):** every Omeka write path that affects the index now re-maps in the same request. Item create / update / delete were already wired; 3.6.0 adds the paths that silently bypassed them: **batch operations** (Omeka's batchCreate/batchUpdate/batchDelete hydrate entities directly and never fire the per-item events — privacy-relevant, since a batch visibility flip must reach the `is_public` filter promptly), **direct media edits** (thumbnail / IIIF presence derive from the item's primary media), and **item-set deletion** (membership drives `country_ss` on references / documents / photographs; members are captured at `api.delete.pre` and re-mapped after, capped + logged for very large sets). Entity-collection occurrence aggregates still refresh on the bulk reindex by design.
 
 **3.6.0 highlights:** `iwac_synonyms` global synonym set (Arabic-transliteration variants — cheikh/sheikh/shaykh, Tidjaniyya/Tijaniyya, charia/sharia… — curated in `data/synonyms-fr.json`, search-time expansion, admin sync button); Typesense search-analytics provisioning + admin digest of top / zero-result queries (server flags pending — see [ROADMAP.md](ROADMAP.md)); a merged **All** tab on `/search/everything` (Typesense v30 union search, one relevance ranking across content + entities); a **Map view** on the entity index (geopoints from curated coordinates, MapLibre + CARTO basemap, clustered markers); plus recent-searches in the typeahead, a `/` focus shortcut, a copy-link button, request cancellation on fast typing, and a "did you mean" recovery on zero-result queries.
+
+**3.8.0 highlights:** publication `dcterms:tableOfContents` values are indexed
+as one searchable `toc_txt` blob, included in semantic embeddings, and exposed
+as bounded card excerpts; sparse photograph/audiovisual cards fall back to
+`dcterms:description`. Exports now mirror quoted/excluded exact searches as
+well as filters, years, scope and sort. Facet checkboxes explicitly reset the
+IWAC theme's custom transform/appearance so labels remain vertically aligned.
 
 ## Testing checklist (after each deploy)
 
 Changes below this line are **not yet verified on the live site**. Tick
 as you confirm; remove rows once they've been through a full cycle.
 
+- [ ] **3.8.0 REINDEX REQUIRED**: the content collection bumps to `iwac_v5`. After the rebuild, search a title or topic that occurs only inside a publication issue's table of contents; the issue must appear with a highlighted ToC snippet. Browse publications with no query and confirm a bounded ToC excerpt appears as the body line. The v5 embedding also includes `toc_txt`.
+- [ ] **3.8.0 non-press bodies**: open a photograph and an audiovisual search result whose Omeka item has `dcterms:description` but no `bibo:shortDescription`; the card must show that description. Items with an AI summary must still prefer it.
+- [ ] **3.8.0 export fidelity**: combine a text query, country/type facet and year range, change the sort, then export TXT, JSON, RIS and BibTeX. Every file must contain that filtered set in the visible order (maximum 1,000); a quoted phrase export must not add semantic-only hits absent from the screen.
+- [ ] **3.8.0 facet checkbox alignment**: on `/s/westafrica/page/benin` and another country page with a wrapping facet label, verify the checkbox square, label and count are vertically centered on desktop and in the mobile filter drawer.
 - [ ] **3.7.1 reindex runs at all**: `OmekaSourceReader` bound its `IN (:ids)` lists with `Doctrine\DBAL\ArrayParameterType`, which only exists from DBAL 3.6 — Omeka S 4.x pins `doctrine/dbal ^2.13.8`, so every reindex died at the first value query with `Class "Doctrine\DBAL\ArrayParameterType" not found`. Now bound with the legacy `Connection::PARAM_INT_ARRAY` / `PARAM_STR_ARRAY` (identical ints, portable to DBAL 3.x). Confirm the bulk reindex reaches the alias swap instead of failing in `EntityAuthority->build()`.
 - [ ] **3.7.0 REINDEX REQUIRED**: the nine AI-sentiment fields are renamed from the vendor slot to the annotating model (`gemini_*` → `gemini_3_flash_preview_*`, `chatgpt_*` → `gpt_5_mini_*`, `mistral_*` → `ministral_14b_2512_*`), matching the Hugging Face dataset. The content collection bumps to `iwac_v4` — a field rename cannot happen in place, so **the sentiment facets stay empty until the rebuild**. After it: the Sentiment group on `/search` shows Polarité / Centralité / Subjectivité with counts again.
 - [ ] **3.7.0 legacy sentiment links**: open a pre-3.7.0 share link, e.g. `/search?f.gemini_polarite_ss=Neutre`. The filter must apply (decoded under the new name) and the URL must rewrite itself to `f.gemini_3_flash_preview_polarite_ss=Neutre` on the next filter change. Same for a page block saved with the old facet names — its Sentiment facets must still render, and re-saving the block in the admin rewrites them.
@@ -383,7 +395,7 @@ The earlier `iwac_browse_config` table + admin CRUD UI were retired. Old
 docker compose exec php php /var/www/html/modules/IwacSearch/cli/reindex.php
 ```
 
-Builds a versioned collection (`iwac_v4_<UTC timestamp>`), reads content
+Builds a versioned collection (`iwac_v5_<UTC timestamp>`), reads content
 directly from the Omeka MySQL database, batch-imports into Typesense, then
 atomic-swaps the `iwac_current` alias. Live search keeps serving the previous
 collection uninterrupted until the swap completes — a failed reindex

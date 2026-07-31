@@ -150,7 +150,7 @@ export async function runSuggest(
     highlight_fields: 'title_txt',
     highlight_full_fields: 'title_txt',
     // No snippet — keeps the response tiny and the dropdown render fast.
-    exclude_fields: 'ocr_text,embedding',
+    exclude_fields: 'ocr_text,toc_txt,embedding',
     limit_hits: 50,
   };
 

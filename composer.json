@@ -8,8 +8,6 @@
     "ext-curl": "*",
     "ext-json": "*",
     "ext-mbstring": "*",
-    "psr/container": "^1.1 || ^2.0",
-    "psr/log": "^2.0 || ^3.0",
     "typesense/typesense-php": "^6.0",
     "symfony/yaml": "^7.0",
     "guzzlehttp/guzzle": "^7.10",

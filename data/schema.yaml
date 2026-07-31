@@ -34,7 +34,7 @@
 #     dependency at search time.
 #
 # Versioning:
-#   - The actual collection is named `iwac_v4` and aliased as `iwac_current`.
+#   - The actual collection is named `iwac_v5` and aliased as `iwac_current`.
 #     (v1 → v2: French stemming + the `iwac_diversity` curation set.
 #      v2 → v3: accent-insensitive indexing (locale dropped), alt_title_txt,
 #      subjects_ss, searchable/facetable publisher_s + book_title_s, and the
@@ -43,7 +43,9 @@
 #      v3 → v4: the nine AI-sentiment fields are renamed from the vendor slot
 #      to the model that produced the value, matching the Hugging Face
 #      dataset's 2026-07-31 rename. A field rename is a fresh collection —
-#      Typesense cannot rename in place.)
+#      Typesense cannot rename in place.
+#      v4 → v5: publication tables of contents become a searchable/stemmed
+#      `toc_txt` field and join the document embedding.)
 #   - Schema changes ⇒ bump the name (`iwac_v4` → `iwac_v5`), atomic-swap
 #     the alias. The browser only ever queries the alias, so swaps are
 #     zero-downtime.
@@ -54,7 +56,7 @@
 # both the bulk reindex and the M4 incremental path. No Hugging Face.
 # country_ss is derived (newspaper→country / item-set). See docs/data-sources.md.
 
-name: iwac_v4
+name: iwac_v5
 
 # Global curation set linked to this collection. The set itself is created
 # (idempotently) by src/Indexer/CurationSync.php during the bulk reindex.
@@ -161,9 +163,14 @@ fields:
 
   # ── Body / OCR ────────────────────────────────────────────────────────
   # ocr_text is INDEXED (so matches work) but EXCLUDED from public results
-  # via the scoped key (exclude_fields: ocr_text). Highlights still ship.
+  # via the scoped key (exclude_fields: ocr_text,toc_txt). Highlights still ship.
   # Loosening this requires licensing sign-off — see roadmap "Security model".
   - { name: ocr_text,    type: string, stem: true, optional: true }
+  # Curated issue-level table of contents (`dcterms:tableOfContents`). Like
+  # OCR, the full blob is excluded from public result documents while a
+  # sanitized matching snippet may ship. PublicationMapper also puts a
+  # bounded excerpt in `abstract` for browse/result-card display.
+  - { name: toc_txt,    type: string, stem: true, optional: true }
   - { name: nb_words,    type: int32,  facet: false, optional: true }
   # Whether the item's full text (bibo:content) is PUBLICLY READABLE on the
   # item page — i.e. the value exists AND its Omeka value-level visibility
@@ -178,10 +185,11 @@ fields:
   # Two sources feed this one field, by design:
   #   1. References — the real, human-written `abstract` (ReferenceMapper).
   #      References have no OCR; the abstract IS the body text.
-  #   2. Primary sources (articles / documents / audiovisual) — the
-  #      AI-generated `descriptionAI` summary (addDescription() in the
-  #      mappers). A short clean French précis, distinct from the
-  #      licensing-restricted OCR.
+  #   2. Primary sources (articles / documents / audiovisual / photographs)
+  #      — the AI-generated `descriptionAI` summary, falling back to
+  #      `dcterms:description` where no AI summary exists.
+  #   3. Publications — a bounded excerpt of `dcterms:tableOfContents`; the
+  #      complete text remains searchable in `toc_txt`.
   # Visible in public results (NOT in the scoped key's exclude_fields) so
   # the result card can show a couple of lines for every type. Also in
   # query_by, so the summary lightly improves recall.
@@ -251,9 +259,9 @@ fields:
   - { name: item_set_ids, type: "int32[]", facet: false, optional: true }
 
   # ── Semantic search ───────────────────────────────────────────────────
-  # Auto-embedded by Typesense from title_txt + ocr_text using the in-process
-  # multilingual-e5-small ONNX model. Same model encodes user queries at
-  # search time, so no external API needed.
+  # Auto-embedded by Typesense from title_txt + ocr_text + toc_txt using the
+  # in-process multilingual-e5-small ONNX model. Same model encodes user
+  # queries at search time, so no external API needed.
   #
   # Memory note: the model resident set is ~500 MB. The IWAC-docker stack
   # bumps the typesense container limits to 4 GiB before this lands.
@@ -265,5 +273,6 @@ fields:
       from:
         - title_txt
         - ocr_text
+        - toc_txt
       model_config:
         model_name: ts/multilingual-e5-small
