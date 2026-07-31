@@ -170,6 +170,53 @@ describe('exact-query handling', () => {
     expect(search.q).toBe('*');
     expect(search).not.toHaveProperty('num_typos');
   });
+
+  it('exports the exact same strict, filtered and sorted result set', async () => {
+    const { sent } = mockServer([{ results: [HIT_PAGE] }]);
+
+    await new TypesenseClient(
+      bootstrap({
+        locked_filters: 'type_s:=publication',
+        query_by: 'title_txt,toc_txt,embedding',
+      }),
+    ).fetchForExport({
+      q: '"éducation islamique"',
+      sortBy: 'date:asc',
+      activeFilters: { country_ss: ['Niger'] },
+      yearRange: { from: 1990, to: 1999 },
+    });
+
+    const search = (sent[0].searches as Sent[])[0];
+    expect(search.query_by).toBe('title_txt,toc_txt');
+    expect(search).not.toHaveProperty('stopwords');
+    expect(search).toMatchObject({
+      num_typos: 0,
+      typo_tokens_threshold: 0,
+      drop_tokens_threshold: 0,
+      sort_by: 'date:asc',
+      filter_by:
+        'type_s:=publication && country_ss:=[`Niger`] && pub_year:>=1990 && pub_year:<=1999',
+      page: 1,
+      per_page: 250,
+      highlight_fields: 'none',
+    });
+  });
+
+  it('recovers an ordinary export when the stopword set is missing', async () => {
+    const { sent } = mockServer([{ results: [STOPWORD_ERROR] }, { results: [HIT_PAGE] }]);
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    await new TypesenseClient(bootstrap()).fetchForExport({ q: 'ramadan' });
+
+    expect(sent).toHaveLength(2);
+    expect((sent[0].searches as Sent[])[0]).toMatchObject({
+      page: 1,
+      stopwords: 'fr_default',
+    });
+    expect((sent[1].searches as Sent[])[0]).toMatchObject({ page: 1 });
+    expect((sent[1].searches as Sent[])[0]).not.toHaveProperty('stopwords');
+    expect(warn).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe('shared request preamble', () => {

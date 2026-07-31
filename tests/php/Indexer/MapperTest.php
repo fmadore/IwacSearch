@@ -144,6 +144,8 @@ final class MapperTest extends TestCase
         // A term only references declare, and one only the primary sources do.
         self::assertContains('bibo:authorList', $terms);
         self::assertContains('bibo:content', $terms);
+        self::assertContains('dcterms:description', $terms);
+        self::assertContains('dcterms:tableOfContents', $terms);
     }
 
     // ── Identity / base fields ───────────────────────────────────────────
@@ -320,6 +322,68 @@ final class MapperTest extends TestCase
         );
 
         self::assertArrayNotHasKey('has_fulltext', $doc);
+    }
+
+    public function testPublicationTableOfContentsIsIndexedAsOneBlobAndDisplayed(): void
+    {
+        $doc = $this->registry->get('publications')->map(
+            self::item(['class' => IwacInstance::CLASS_PUBLICATION]),
+            self::values(['dcterms:tableOfContents' => [
+                ['value' => 'private editorial note', 'vpub' => false],
+                ['value' => 'p. 2 : Entretien intime'],
+                ['value' => 'p. 5 : La jeunesse musulmane'],
+                // Exact duplicate values are collapsed by PropertyValues.
+                ['value' => 'p. 5 : La jeunesse musulmane'],
+            ]]),
+            null
+        );
+
+        $expected = "p. 2 : Entretien intime\n\np. 5 : La jeunesse musulmane";
+        self::assertSame($expected, $doc['toc_txt']);
+        self::assertSame($expected, $doc['abstract']);
+        self::assertStringNotContainsString('private editorial note', $doc['toc_txt']);
+    }
+
+    public function testPublicationCardExcerptIsBoundedWithoutBreakingUnicode(): void
+    {
+        $toc = str_repeat('é', 650);
+        $doc = $this->registry->get('publications')->map(
+            self::item(['class' => IwacInstance::CLASS_PUBLICATION]),
+            self::values(['dcterms:tableOfContents' => [['value' => $toc]]]),
+            null
+        );
+
+        self::assertSame($toc, $doc['toc_txt'], 'the searchable field must keep the whole ToC');
+        self::assertSame(600, mb_strlen($doc['abstract'], 'UTF-8'));
+        self::assertStringEndsWith('…', $doc['abstract']);
+    }
+
+    public function testSparseNonPressRecordsFallBackToDublinCoreDescription(): void
+    {
+        foreach (['audiovisual', 'photographs'] as $subset) {
+            $mapper = $this->registry->get($subset);
+            $doc = $mapper->map(
+                self::item(['class' => $mapper->classIds()[0]]),
+                self::values(['dcterms:description' => [['value' => 'Curated description']]]),
+                null
+            );
+
+            self::assertSame('Curated description', $doc['abstract'], $subset);
+        }
+    }
+
+    public function testAiSummaryStillWinsOverTheDescriptionFallback(): void
+    {
+        $doc = $this->registry->get('audiovisual')->map(
+            self::item(['class' => IwacInstance::CLASS_AUDIOVISUAL]),
+            self::values([
+                'bibo:shortDescription' => [['value' => 'AI summary']],
+                'dcterms:description' => [['value' => 'Ordinary description']],
+            ]),
+            null
+        );
+
+        self::assertSame('AI summary', $doc['abstract']);
     }
 
     // ── country_ss ───────────────────────────────────────────────────────

@@ -108,7 +108,7 @@ final class TypesenseSearchKeyProvider
      *
      * Public constraints (belt-and-suspenders, see roadmap "Security model"):
      *   - filter_by: is_public:=true   — only public docs ever returned
-     *   - exclude_fields: ocr_text     — full OCR never ships, highlights only
+     *   - exclude_fields: ocr_text,toc_txt — full bodies never ship, highlights only
      *   - expires_at                   — defaults to now+1h
      *
      * @return array{key: string, expires_at: int, host: string, collection: string}
@@ -123,7 +123,7 @@ final class TypesenseSearchKeyProvider
 
         $scoped = ($this->clientFactory)()->keys->generateScopedSearchKey($parent, [
             'filter_by'      => 'is_public:=true',
-            'exclude_fields' => 'ocr_text',
+            'exclude_fields' => 'ocr_text,toc_txt',
             'expires_at'     => $expiresAt,
         ]);
 

@@ -36,6 +36,14 @@ describe('pickSnippet', () => {
     );
   });
 
+  it('uses a publication ToC match before the generic card excerpt', () => {
+    const h = hit([
+      { field: 'abstract', snippet: 'the short <mark>excerpt</mark>' },
+      { field: 'toc_txt', snippet: 'p. 5: article about <mark>education</mark>' },
+    ]);
+    expect(pickSnippet(h)).toBe('p. 5: article about <mark>education</mark>');
+  });
+
   it('is empty on a browse response, which carries no highlights at all', () => {
     expect(pickSnippet(hit(undefined))).toBe('');
   });
@@ -73,6 +81,7 @@ describe('pickMatchedIn', () => {
       { field: 'ocr_text', snippet: '<mark>a</mark>' },
       { field: 'title_txt', value: '<mark>a</mark>' },
       { field: 'abstract', snippet: '<mark>a</mark>' },
+      { field: 'toc_txt', snippet: '<mark>a</mark>' },
       { field: 'subjects_ss', snippet: '<mark>Islam</mark>' },
     ]);
     expect(pickMatchedIn(h, 'fr').map((m) => m.field)).toEqual(['subjects_ss']);

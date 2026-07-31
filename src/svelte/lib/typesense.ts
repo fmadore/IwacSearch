@@ -101,8 +101,9 @@ const MAP_INCLUDE_FIELDS = [
  * Five methods used to repeat this key→collection→filter→browse-mode→query_by
  * sequence verbatim, and had already drifted: `yearDistribution` deliberately
  * omits the year range from filter_by (the histogram must show the full span),
- * while `searchFacetValues` and `fetchForExport` do not apply exact mode. Both
- * variations are now explicit parameters rather than accidents of copying.
+ * while `searchFacetValues` and `fetchForMap` deliberately do not apply exact
+ * mode. Those variations are explicit parameters rather than accidents of
+ * copying; export uses the same exact-query contract as the visible results.
  */
 /**
  * Does this message mean the server has no `fr_default` stopword set?
@@ -180,8 +181,8 @@ export class TypesenseClient {
    * curated browse surfaces, page blocks with locked_filters, and the
    * standalone /search route all show results + facet counts immediately
    * on mount. The public scoped key still carries `filter_by:is_public:=true`,
-   * so this never leaks private docs. `exclude_fields: ocr_text` is also
-   * baked in at mint time, so browse responses stay lean.
+   * so this never leaks private docs. `exclude_fields: ocr_text,toc_txt` is
+   * also baked in at mint time, so browse responses stay lean.
    *
    * `activeFilters` are the in-memory selections from the facet panel,
    * one entry per facet field. They're combined with the block's
@@ -433,20 +434,15 @@ export class TypesenseClient {
     activeFilters?: ActiveFilters;
     yearRange?: YearRange | null;
   }): Promise<{ docs: IwacDoc[]; found: number }> {
-    // applyExact:false preserves the behaviour this has always had — see the
-    // note in docs/engineering-roadmap.md, which flags it as a real (separate)
-    // question rather than something to change inside a refactor.
-    const { key, collection, q, filterBy, queryBy, sortBy } = await this.resolveContext({
-      ...args,
-      applyExact: false,
-    });
+    const { key, collection, q, filterBy, queryBy, sortBy, exact } =
+      await this.resolveContext(args);
 
     const docs: IwacDoc[] = [];
     let found = 0;
     // Stopwords mirror the live search so the export matches what the user
     // sees; dropped after the first stopword-set-missing error (same
     // degradation path as search()).
-    let useStopwords = true;
+    let useStopwords = !exact;
     const pages = Math.ceil(EXPORT_MAX_HITS / 250);
 
     for (let page = 1; page <= pages; page++) {
@@ -457,6 +453,7 @@ export class TypesenseClient {
             q,
             query_by: queryBy,
             ...(useStopwords ? { stopwords: 'fr_default' } : {}),
+            ...(exact ? EXACT_MODE_PARAMS : {}),
             filter_by: filterBy || undefined,
             sort_by: sortBy,
             page,
@@ -466,15 +463,28 @@ export class TypesenseClient {
           },
         ],
       };
-      const json = await postJson<MultiSearchEnvelope>(
-        this.bootstrap.endpoints.search,
-        key.key,
-        body,
-        'Export',
-      );
+      let json: MultiSearchEnvelope;
+      try {
+        json = await postJson<MultiSearchEnvelope>(
+          this.bootstrap.endpoints.search,
+          key.key,
+          body,
+          'Export',
+        );
+      } catch (e) {
+        const message = e instanceof Error ? e.message : String(e);
+        if (useStopwords && isStopwordError(message)) {
+          this.warnStopwords();
+          useStopwords = false;
+          page--; // retry this page without stopwords
+          continue;
+        }
+        throw e;
+      }
       const first = json.results?.[0];
       const err = perSearchError(first);
       if (err && useStopwords && isStopwordError(err.error)) {
+        this.warnStopwords();
         useStopwords = false;
         page--; // retry this page without stopwords
         continue;
@@ -583,7 +593,7 @@ export class TypesenseClient {
         sort_by: sortBy,
         highlight_fields: 'title_txt',
         highlight_full_fields: 'title_txt',
-        exclude_fields: 'ocr_text,embedding',
+        exclude_fields: 'ocr_text,toc_txt,embedding',
       })),
     });
 

@@ -111,12 +111,14 @@ final class InitialResponseRendererTest extends TestCase
         );
     }
 
-    public function testOcrTextNeverReachesTheInlinedPayload(): void
+    public function testFullBodyFieldsNeverReachTheInlinedPayload(): void
     {
-        // The SSR response is inlined into the HTML; OCR fulltext must not be.
+        // The SSR response is inlined into HTML; complete body blobs must not be.
         $this->renderer([['results' => [self::page()]]])->render(self::bootstrap());
 
-        self::assertStringContainsString('ocr_text', $this->sent->entries[0]['searches'][0]['exclude_fields']);
+        $excluded = $this->sent->entries[0]['searches'][0]['exclude_fields'];
+        self::assertStringContainsString('ocr_text', $excluded);
+        self::assertStringContainsString('toc_txt', $excluded);
     }
 
     // ── Request shaping ─────────────────────────────────────────────────

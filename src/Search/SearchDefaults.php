@@ -26,9 +26,9 @@ final class SearchDefaults
      * (search by author, journal, book title, publisher). `embedding` last —
      * hybrid semantic recall, ignored for highlights.
      */
-    public const CONTENT_QUERY_BY        = 'title_txt,alt_title_txt,ocr_text,abstract,'
+    public const CONTENT_QUERY_BY        = 'title_txt,alt_title_txt,ocr_text,toc_txt,abstract,'
         . 'creator_ss,subjects_ss,places_ss,publisher_s,book_title_s,entity_aliases_txt,embedding';
-    public const CONTENT_HIGHLIGHT_FIELDS = 'title_txt,alt_title_txt,ocr_text,abstract,'
+    public const CONTENT_HIGHLIGHT_FIELDS = 'title_txt,alt_title_txt,ocr_text,toc_txt,abstract,'
         . 'creator_ss,subjects_ss,places_ss,publisher_s,book_title_s,entity_aliases_txt';
 
     public const ENTITY_QUERY_BY         = 'title_txt,entity_aliases_txt';

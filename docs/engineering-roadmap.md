@@ -141,19 +141,12 @@ Everything here is implemented; the surviving item is a product decision,
 not an engineering one, and the two done items still want a pass on the
 live stack (noted in the README verification checklist).
 
-- **Export and map fetches don't apply exact mode, but the live search
-  does.** Surfaced while extracting `resolveContext()`: `search()` and
-  `yearDistribution()` switch a quoted / `-excluded` query to strict
-  keyword matching (drop `embedding`, no typo tolerance), while
-  `fetchForExport()`, `fetchForMap()` and `searchFacetValues()` do not. So
-  exporting the results of `"radicalisation en Côte d'Ivoire"` can include
-  semantically-similar documents the user never saw on screen. The
-  refactor preserved the existing behaviour deliberately — changing what
-  an export contains is a product decision, not a cleanup — and the call
-  sites now say `applyExact: false` explicitly instead of diverging by
-  omission. Decide whether export/map should mirror the live set (probably
-  yes for export; the map's `frequency:desc` browse ordering makes it less
-  clear-cut).
+- **Map/facet-value fetches don't apply exact mode, but the live search
+  does.** Export now mirrors the visible result set: quoted / `-excluded`
+  queries drop `embedding`, stopwords and typo tolerance there too. The map
+  and facet-value lookup still pass `applyExact: false` explicitly; whether
+  the map's `frequency:desc` aggregation should adopt literal-query behavior
+  remains a product decision.
 
 - ~~**Tighten the search-only parent key scope** from `collections: ['*']`
   to the two aliases.~~ **Unblocked, one config line away.** The blocker
@@ -222,16 +215,11 @@ result row — walk a search page in both layouts before tagging a release.
 - **Reuse `SearchInput` in `FederatedApp`** — the federated page
   hand-rolls the same debounced input + clear button + webkit-cancel
   suppression.
-- **`TypesenseClient` internal helpers** — the stopword-recovery retry
-  loop exists three times (`search`, `unionSearch`, `fetchForExport`) and
-  five methods repeat the key→collection→browse-mode→query_by preamble;
-  extract `withStopwordRetry()` + `resolveContext()` next time the file
-  is open for a feature. (The per-channel abort dance — four hand-rolled
-  `?.abort()` + `new AbortController()` pairs, plus the map loop's counter
-  — is already done: `AbortSlot` / `SeqGuard` in `transport.ts`. The
-  retry/preamble halves stay open deliberately: they restructure the
-  request path of the module's most critical file, which wants the Vitest
-  harness from Phase 1 in place first.)
+- **`TypesenseClient` internal helpers** — `resolveContext()` now owns the
+  key→collection→filter→exact-mode preamble, and `withStopwordRetry()` serves
+  search + union. Export retains a small page-aware retry loop because it must
+  retry the same page before continuing toward its 1,000-hit cap; its exact
+  and stopword behavior is pinned by Vitest.
 - ~~**`ResultItem` list/gallery split**~~ — done as a derivations
   extraction (`lib/resultCard.ts` + `lib/resultCard.svelte.ts`, 19 new
   Vitest cases) rather than a component split; see ROADMAP.md for why the

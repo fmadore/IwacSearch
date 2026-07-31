@@ -493,13 +493,32 @@
     box-shadow: var(--ring-focus, 0 0 0 3px rgba(0, 0, 0, 0.1));
   }
   .iwac-facet__checkbox {
-    /* Use the theme primary as the checkbox tick colour so checked
-       boxes pick up brand without a custom SVG control. */
+    /* Restore the native control completely. The IWAC theme globally turns
+       checkboxes into custom grid controls and shifts them down by 0.2em;
+       those declarations otherwise leak into this component and misalign
+       the square with its label. The local grid owns centering, while the
+       native control keeps platform focus/checked/high-contrast behaviour. */
+    appearance: auto;
+    -webkit-appearance: checkbox;
+    display: inline-block;
+    place-content: normal;
+    box-sizing: border-box;
     accent-color: var(--primary, #ce4115);
     width: 1rem;
     height: 1rem;
     margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+    transform: none;
+    vertical-align: middle;
     cursor: pointer;
+  }
+  .iwac-facet__option .iwac-facet__checkbox::before {
+    /* Suppress the pseudo-element used by the theme's custom checkbox. */
+    content: none;
   }
   .iwac-facet__value {
     overflow-wrap: anywhere;

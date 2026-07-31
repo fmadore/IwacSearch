@@ -87,8 +87,9 @@ export interface ScopedKeyResponse {
  * Subset of the Typesense document shape we render. Optional fields
  * track schema.yaml — the server may or may not emit them per row.
  *
- * `ocr_text` is intentionally absent — public scoped keys carry
- * `exclude_fields: ocr_text` so it never reaches the browser.
+ * `ocr_text` and `toc_txt` are intentionally absent — public scoped keys
+ * exclude both full body fields, while their sanitized highlights may reach
+ * the browser.
  */
 export interface IwacDoc {
   id: string;
@@ -100,7 +101,8 @@ export interface IwacDoc {
   pub_year?: number;
   /**
    * Public-safe display body — the human-written abstract for references,
-   * or the AI `descriptionAI` summary for articles/documents/audiovisual.
+   * the AI `descriptionAI` summary (or dcterms:description fallback) for
+   * primary sources, or a bounded table-of-contents excerpt for publications.
    * Distinct from (and unlike) the licensing-restricted ocr_text, which
    * the scoped key excludes. Rendered as a couple of lines on the card.
    */

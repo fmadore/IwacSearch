@@ -374,7 +374,7 @@ return [
         ],
         'public_search_key' => [
             // TTL of the public scoped key. The key's SECURITY constraints
-            // (filter_by is_public:=true + exclude_fields ocr_text) are NOT
+            // (filter_by is_public:=true + exclude_fields ocr_text,toc_txt) are NOT
             // configurable — they are hardcoded in
             // TypesenseSearchKeyProvider::mintPublicScopedKey(), the single
             // source of truth. Loosening them there requires sign-off.

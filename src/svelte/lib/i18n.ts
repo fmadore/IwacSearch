@@ -270,6 +270,7 @@ const FACET_LABELS: Record<Locale, Record<string, string>> = {
     has_fulltext: 'Texte intégral',
     is_part_of_ss: 'Catégorie',
     alt_title_txt: 'Titre alternatif',
+    toc_txt: 'Table des matières',
     entity_aliases_txt: 'Autre dénomination',
     // Sentiment fields are keyed by the annotating model (see
     // data/schema.yaml). The surfaced trio keeps a bare label — the panel
@@ -305,6 +306,7 @@ const FACET_LABELS: Record<Locale, Record<string, string>> = {
     has_fulltext: 'Full text',
     is_part_of_ss: 'Category',
     alt_title_txt: 'Alternative title',
+    toc_txt: 'Table of contents',
     entity_aliases_txt: 'Also known as',
     gemini_3_flash_preview_polarite_ss: 'Polarity',
     gemini_3_flash_preview_centralite_ss: 'Centrality',
