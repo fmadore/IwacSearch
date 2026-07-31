@@ -44,6 +44,28 @@ abstract class AbstractMapper implements MapperInterface
     ];
 
     /**
+     * Omeka term infix => document field prefix.
+     *
+     * The two sides deliberately disagree. Omeka's `iwac:` vocabulary names a
+     * VENDOR SLOT (`iwac:geminiPolarite`) and carries no `iwac:*Model`
+     * annotation, so the source records nothing about which model actually
+     * produced a value — the corpus was annotated in Jan–Feb 2026 by
+     * gemini-3-flash-preview, gpt-5-mini and ministral-14b-2512. The Hugging
+     * Face dataset renamed its columns to the model on 2026-07-31 for exactly
+     * that reason; the index follows, so a facet key means one model rather
+     * than "whatever we last ran in the Gemini slot".
+     *
+     * Re-annotating with a different model = add a row here with new field
+     * names + a schema bump. Never repoint an existing prefix at a new model:
+     * that silently changes what an already-published facet URL means.
+     */
+    private const SENTIMENT_MODELS = [
+        'gemini'  => 'gemini_3_flash_preview',
+        'chatgpt' => 'gpt_5_mini',
+        'mistral' => 'ministral_14b_2512',
+    ];
+
+    /**
      * Subjectivité is stored as a linked-resource CATEGORY (not a number) for
      * ALL THREE models — confirmed live (the iwac-data note claiming only
      * Mistral is categorical is stale). The HF pipeline converts the label to
@@ -252,25 +274,28 @@ abstract class AbstractMapper implements MapperInterface
      * (linked or literal — disp() handles both); subjectivité is a linked
      * category resolved to its 1–5 score for every model.
      *
+     * Reads the vendor-keyed Omeka terms and writes model-keyed document
+     * fields — see {@see SENTIMENT_MODELS} for why the two differ.
+     *
      * @param array<string, mixed> $doc
      */
     protected function addAiSentiment(array &$doc, PropertyValues $values): void
     {
-        foreach (['gemini', 'chatgpt', 'mistral'] as $model) {
-            $cent = $values->firstDisplay("iwac:{$model}Centralite");
-            $pol  = $values->firstDisplay("iwac:{$model}Polarite");
+        foreach (self::SENTIMENT_MODELS as $vendor => $field) {
+            $cent = $values->firstDisplay("iwac:{$vendor}Centralite");
+            $pol  = $values->firstDisplay("iwac:{$vendor}Polarite");
             if ($cent !== '') {
-                $doc["{$model}_centralite_ss"] = [$cent];
+                $doc["{$field}_centralite_ss"] = [$cent];
             }
             if ($pol !== '') {
-                $doc["{$model}_polarite_ss"] = [$pol];
+                $doc["{$field}_polarite_ss"] = [$pol];
             }
 
-            $subjLabel = $values->firstDisplay("iwac:{$model}SubjectiviteScore");
+            $subjLabel = $values->firstDisplay("iwac:{$vendor}SubjectiviteScore");
             $score = self::SUBJECTIVITE_LABELS[$subjLabel]
                 ?? (is_numeric($subjLabel) ? (float) $subjLabel : null);
             if ($score !== null) {
-                $doc["{$model}_subjectivite"] = $score;
+                $doc["{$field}_subjectivite"] = $score;
             }
         }
     }

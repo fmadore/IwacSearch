@@ -26,6 +26,32 @@ import type { ActiveFilters, SearchState, ViewMode, YearRange } from './types';
 const FILTER_PREFIX = 'f.';
 
 /**
+ * Retired facet field name → current one, applied when DECODING a URL.
+ *
+ * The v4 schema renamed the sentiment fields from the vendor slot to the
+ * model that produced the value (see data/schema.yaml). Facet field names
+ * are part of the shareable URL contract — they sit in every link a
+ * researcher has bookmarked, pasted into a paper, or cited — so the old
+ * spellings have to keep resolving. Decoding maps them forward; encoding
+ * only ever writes the current names, so a shared legacy link silently
+ * upgrades itself the first time the user touches a filter.
+ *
+ * Keep in sync with FacetCatalog::LEGACY_FIELD_ALIASES (the server-side
+ * twin, which covers saved page-block configs).
+ */
+const LEGACY_FILTER_FIELDS: Readonly<Record<string, string>> = {
+  gemini_polarite_ss: 'gemini_3_flash_preview_polarite_ss',
+  gemini_centralite_ss: 'gemini_3_flash_preview_centralite_ss',
+  gemini_subjectivite: 'gemini_3_flash_preview_subjectivite',
+  chatgpt_polarite_ss: 'gpt_5_mini_polarite_ss',
+  chatgpt_centralite_ss: 'gpt_5_mini_centralite_ss',
+  chatgpt_subjectivite: 'gpt_5_mini_subjectivite',
+  mistral_polarite_ss: 'ministral_14b_2512_polarite_ss',
+  mistral_centralite_ss: 'ministral_14b_2512_centralite_ss',
+  mistral_subjectivite: 'ministral_14b_2512_subjectivite',
+};
+
+/**
  * Sort used when a surface declares none. Every caller should pass the
  * surface's own `bootstrap.default_sort` instead — this is only the
  * last-resort fallback for a bootstrap that omits it.
@@ -56,12 +82,23 @@ export function readUrlState(
   const filters: ActiveFilters = {};
   for (const key of new Set(params.keys())) {
     if (!key.startsWith(filterKey)) continue;
-    const field = key.slice(filterKey.length);
-    if (!isValidFieldName(field)) continue;
+    const rawField = key.slice(filterKey.length);
+    if (!isValidFieldName(rawField)) continue;
+    // Object.hasOwn on BOTH lookups below, never a bare `obj[key] ?? …`.
+    // Field names come from the URL and `isValidFieldName` happily accepts
+    // `constructor`, which a bare lookup resolves through Object.prototype
+    // to a function — the alias hop would return the Object constructor, and
+    // the merge below would throw trying to spread it.
+    const field = Object.hasOwn(LEGACY_FILTER_FIELDS, rawField)
+      ? LEGACY_FILTER_FIELDS[rawField]
+      : rawField;
     // getAll handles repeated keys; values that came in comma-separated
     // (legacy) get split too.
     const raw = params.getAll(key).flatMap((v) => v.split(',').map((s) => s.trim()));
-    const values = Array.from(new Set(raw.filter((v) => v !== '')));
+    // A URL naming both the old and the new spelling of one field merges
+    // into a single entry rather than the second silently winning.
+    const seen = Object.hasOwn(filters, field) ? (filters[field] ?? []) : [];
+    const values = Array.from(new Set([...seen, ...raw.filter((v) => v !== '')]));
     if (values.length > 0) {
       filters[field] = values;
     }

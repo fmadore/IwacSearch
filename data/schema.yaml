@@ -34,13 +34,17 @@
 #     dependency at search time.
 #
 # Versioning:
-#   - The actual collection is named `iwac_v3` and aliased as `iwac_current`.
+#   - The actual collection is named `iwac_v4` and aliased as `iwac_current`.
 #     (v1 → v2: French stemming + the `iwac_diversity` curation set.
 #      v2 → v3: accent-insensitive indexing (locale dropped), alt_title_txt,
 #      subjects_ss, searchable/facetable publisher_s + book_title_s, and the
 #      has_fulltext flag — all index-time changes that need a fresh
-#      collection.)
-#   - Schema changes ⇒ bump the name (`iwac_v3` → `iwac_v4`), atomic-swap
+#      collection.
+#      v3 → v4: the nine AI-sentiment fields are renamed from the vendor slot
+#      to the model that produced the value, matching the Hugging Face
+#      dataset's 2026-07-31 rename. A field rename is a fresh collection —
+#      Typesense cannot rename in place.)
+#   - Schema changes ⇒ bump the name (`iwac_v4` → `iwac_v5`), atomic-swap
 #     the alias. The browser only ever queries the alias, so swaps are
 #     zero-downtime.
 #
@@ -50,7 +54,7 @@
 # both the bulk reindex and the M4 incremental path. No Hugging Face.
 # country_ss is derived (newspaper→country / item-set). See docs/data-sources.md.
 
-name: iwac_v3
+name: iwac_v4
 
 # Global curation set linked to this collection. The set itself is created
 # (idempotently) by src/Indexer/CurationSync.php during the bulk reindex.
@@ -215,15 +219,29 @@ fields:
   # ── AI sentiment (3 models — keep all three for cross-model queries) ──
   # `centralite` and `polarite` are categorical → facets.
   # `subjectivite` is 1–5 float → range facet + sort.
-  - { name: gemini_centralite_ss,    type: "string[]", facet: true, optional: true }
-  - { name: gemini_polarite_ss,      type: "string[]", facet: true, optional: true }
-  - { name: gemini_subjectivite,     type: float,    facet: true, sort: true, optional: true }
-  - { name: chatgpt_centralite_ss,   type: "string[]", facet: true, optional: true }
-  - { name: chatgpt_polarite_ss,     type: "string[]", facet: true, optional: true }
-  - { name: chatgpt_subjectivite,    type: float,    facet: true, sort: true, optional: true }
-  - { name: mistral_centralite_ss,   type: "string[]", facet: true, optional: true }
-  - { name: mistral_polarite_ss,     type: "string[]", facet: true, optional: true }
-  - { name: mistral_subjectivite,    type: float,    facet: true, sort: true, optional: true }
+  #
+  # v4: fields are keyed by the MODEL that produced the value, not by the
+  # vendor slot. The Omeka properties are still vendor-keyed
+  # (`iwac:geminiPolarite`, `iwac:chatgptPolarite`, `iwac:mistralPolarite`)
+  # and carry no `iwac:*Model` annotation, so nothing in the source records
+  # which model ran; the corpus was in fact annotated in Jan–Feb 2026 by
+  # gemini-3-flash-preview, gpt-5-mini and ministral-14b-2512. The Hugging
+  # Face dataset renamed its columns for exactly that reason on 2026-07-31
+  # (`gemini_*`→`gemini_3_flash_preview_*`, `chatgpt_*`→`gpt_5_mini_*`,
+  # `mistral_*`→`ministral_14b_2512_*`); these names mirror it so the search
+  # index, the dataset and the docs all name the same thing. A re-annotation
+  # with different models means NEW field names, not silently changed values
+  # under the old ones. AbstractMapper::SENTIMENT_MODELS holds the
+  # Omeka-term → field-prefix map.
+  - { name: gemini_3_flash_preview_centralite_ss, type: "string[]", facet: true, optional: true }
+  - { name: gemini_3_flash_preview_polarite_ss,   type: "string[]", facet: true, optional: true }
+  - { name: gemini_3_flash_preview_subjectivite,  type: float,    facet: true, sort: true, optional: true }
+  - { name: gpt_5_mini_centralite_ss,             type: "string[]", facet: true, optional: true }
+  - { name: gpt_5_mini_polarite_ss,               type: "string[]", facet: true, optional: true }
+  - { name: gpt_5_mini_subjectivite,              type: float,    facet: true, sort: true, optional: true }
+  - { name: ministral_14b_2512_centralite_ss,     type: "string[]", facet: true, optional: true }
+  - { name: ministral_14b_2512_polarite_ss,       type: "string[]", facet: true, optional: true }
+  - { name: ministral_14b_2512_subjectivite,      type: float,    facet: true, sort: true, optional: true }
 
   # ── ACL ───────────────────────────────────────────────────────────────
   # Sourced from Omeka, NOT HF. Public scoped keys carry filter_by:is_public:=true

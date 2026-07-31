@@ -34,7 +34,8 @@ export function buildFilterBy(filters: ActiveFilters): string {
     if (NUMERIC_FACET_FIELDS.has(field)) {
       // Numeric exact-match-any: bare numbers, NO backticks. Typesense
       // rejects a backticked number ("Numerical field has an invalid
-      // comparator"), so e.g. gemini_subjectivite:=[1,2] — never [`1`,`2`].
+      // comparator"), so e.g. gpt_5_mini_subjectivite:=[1,2] — never
+      // [`1`,`2`].
       const nums = values.filter((v) => v.trim() !== '' && Number.isFinite(Number(v)));
       if (nums.length === 0) continue;
       parts.push(`${field}:=[${nums.join(',')}]`);

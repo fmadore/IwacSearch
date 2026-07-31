@@ -52,6 +52,39 @@ describe('readUrlState', () => {
     expect(s.filters).toEqual({ country_ss: ['Niger', 'Tógo', 'Bénin'] });
   });
 
+  it('upgrades retired sentiment facet names so old share links still resolve', () => {
+    // v4 renamed the sentiment fields from the vendor slot to the model.
+    // Links predating that rename are in bookmarks and published papers.
+    const s = readUrlState(`${base}?f.gemini_polarite_ss=Neutre&f.mistral_subjectivite=4`);
+    expect(s.filters).toEqual({
+      gemini_3_flash_preview_polarite_ss: ['Neutre'],
+      ministral_14b_2512_subjectivite: ['4'],
+    });
+  });
+
+  it('merges a legacy and a current spelling of the same field', () => {
+    const s = readUrlState(
+      `${base}?f.gemini_polarite_ss=Neutre&f.gemini_3_flash_preview_polarite_ss=Positive`,
+    );
+    expect(s.filters.gemini_3_flash_preview_polarite_ss?.sort()).toEqual(['Neutre', 'Positive']);
+  });
+
+  it('re-encodes a legacy link under the current field name only', () => {
+    // The upgrade is one-way: decode accepts both, encode emits only the
+    // current name, so a shared legacy link heals the first time it round-trips.
+    const s = readUrlState(`${base}?f.gemini_polarite_ss=Neutre`);
+    expect(writeUrlState(s)).toBe('?f.gemini_3_flash_preview_polarite_ss=Neutre');
+  });
+
+  it('does not resolve a facet name through Object.prototype', () => {
+    // `constructor` passes the schema-shaped name check, so the alias lookup
+    // must be an own-property test — otherwise the field becomes a function
+    // and stringifies into a garbage filter_by clause.
+    const s = readUrlState(`${base}?f.constructor=x&f.country_ss=Niger`);
+    expect(Object.keys(s.filters).sort()).toEqual(['constructor', 'country_ss']);
+    expect(s.filters.constructor).toEqual(['x']);
+  });
+
   it('drops facet fields whose names are not schema-shaped', () => {
     // The token goes straight into a Typesense filter_by, so a smuggled
     // `is_public:=false`-style key must never survive decoding.

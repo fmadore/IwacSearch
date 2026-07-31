@@ -36,6 +36,8 @@ The admin surface is the **maintenance page** (`/admin/iwac-search/maintenance`)
 Changes below this line are **not yet verified on the live site**. Tick
 as you confirm; remove rows once they've been through a full cycle.
 
+- [ ] **3.7.0 REINDEX REQUIRED**: the nine AI-sentiment fields are renamed from the vendor slot to the annotating model (`gemini_*` → `gemini_3_flash_preview_*`, `chatgpt_*` → `gpt_5_mini_*`, `mistral_*` → `ministral_14b_2512_*`), matching the Hugging Face dataset. The content collection bumps to `iwac_v4` — a field rename cannot happen in place, so **the sentiment facets stay empty until the rebuild**. After it: the Sentiment group on `/search` shows Polarité / Centralité / Subjectivité with counts again.
+- [ ] **3.7.0 legacy sentiment links**: open a pre-3.7.0 share link, e.g. `/search?f.gemini_polarite_ss=Neutre`. The filter must apply (decoded under the new name) and the URL must rewrite itself to `f.gemini_3_flash_preview_polarite_ss=Neutre` on the next filter change. Same for a page block saved with the old facet names — its Sentiment facets must still render, and re-saving the block in the admin rewrites them.
 - [ ] **3.6.2 REINDEX REQUIRED**: audiovisual now derives `country_ss` from its place heading (`dcterms:spatial` → `IwacInstance::COUNTRY_PLACE_NAMES`), so the recordings only gain a country on rebuild. After the reindex, `/browse/nigeria` must show ~45 audiovisual items — it returned nothing at all before, because the recordings resolved to no country and country presets exclude references.
 - [ ] **3.6.2 mobile toolbar**: on a phone (~450px wide), open a country page **with results**. The Liste/Galerie toggle must render in full — previously the actions row refused to shrink or wrap, so the toggle was clipped mid-word ("Lis", Galerie gone). It wraps to a second row when Export is present and stays on one row when it isn't.
 - [ ] **3.6.0 REINDEX FIRST**: after deploying, run the bulk reindex before anything else — the entity schema bumped to `iwac_index_v3` (geopoints) and the content collection only links `iwac_synonyms` on rebuild. See [ROADMAP.md](ROADMAP.md) for the ordered checklist.
@@ -240,19 +242,19 @@ this codebase without surprise.
 Standalone `/search` and freshly-dropped page blocks ship with this
 facet set, ordered coarse → fine:
 
-| Field                  | What it filters                                                          |
-| ---------------------- | ------------------------------------------------------------------------ |
-| `type_s`               | Article / Publication / Document / Audiovisual / Photograph / Reference  |
-| `has_fulltext`         | Full text (bibo:content) exists AND is publicly readable                 |
-| `country_ss`           | Country (Bénin, Burkina Faso, Côte d'Ivoire, Niger, Togo, Nigeria)       |
-| `newspaper_ss`         | Publisher (newspaper / magazine title)                                   |
-| `places_ss`            | Mentioned locations                                                      |
-| `persons_ss`           | Mentioned persons                                                        |
-| `organisations_ss`     | Mentioned organisations                                                  |
-| `topics_ss`            | Subjects (controlled vocabulary — `fabio:AuthorityFile` authority items) |
-| `gemini_polarite_ss`   | Sentiment polarity (Gemini model)                                        |
-| `gemini_centralite_ss` | Centrality of Islam/Muslims (Gemini model)                               |
-| `gemini_subjectivite`  | Subjectivity, 1–5 (Gemini model)                                         |
+| Field                                  | What it filters                                                          |
+| -------------------------------------- | ------------------------------------------------------------------------ |
+| `type_s`                               | Article / Publication / Document / Audiovisual / Photograph / Reference  |
+| `has_fulltext`                         | Full text (bibo:content) exists AND is publicly readable                 |
+| `country_ss`                           | Country (Bénin, Burkina Faso, Côte d'Ivoire, Niger, Togo, Nigeria)       |
+| `newspaper_ss`                         | Publisher (newspaper / magazine title)                                   |
+| `places_ss`                            | Mentioned locations                                                      |
+| `persons_ss`                           | Mentioned persons                                                        |
+| `organisations_ss`                     | Mentioned organisations                                                  |
+| `topics_ss`                            | Subjects (controlled vocabulary — `fabio:AuthorityFile` authority items) |
+| `gemini_3_flash_preview_polarite_ss`   | Sentiment polarity                                                       |
+| `gemini_3_flash_preview_centralite_ss` | Centrality of Islam/Muslims                                              |
+| `gemini_3_flash_preview_subjectivite`  | Subjectivity, 1–5                                                        |
 
 The canonical list is `SearchDefaults::CONTENT_PROMINENT_FACETS` — the
 standalone route, the federated Content tab, and the page-block default
@@ -380,7 +382,7 @@ The earlier `iwac_browse_config` table + admin CRUD UI were retired. Old
 docker compose exec php php /var/www/html/modules/IwacSearch/cli/reindex.php
 ```
 
-Builds a versioned collection (`iwac_v3_<UTC timestamp>`), reads content
+Builds a versioned collection (`iwac_v4_<UTC timestamp>`), reads content
 directly from the Omeka MySQL database, batch-imports into Typesense, then
 atomic-swaps the `iwac_current` alias. Live search keeps serving the previous
 collection uninterrupted until the swap completes — a failed reindex

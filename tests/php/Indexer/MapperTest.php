@@ -506,7 +506,7 @@ final class MapperTest extends TestCase
                 self::values(['iwac:geminiSubjectiviteScore' => [['vrid' => 5, 'title' => $label]]]),
                 null
             );
-            self::assertSame($score, $doc['gemini_subjectivite'], $label);
+            self::assertSame($score, $doc['gemini_3_flash_preview_subjectivite'], $label);
         }
     }
 
@@ -518,7 +518,7 @@ final class MapperTest extends TestCase
             null
         );
 
-        self::assertSame(4.0, $doc['mistral_subjectivite']);
+        self::assertSame(4.0, $doc['ministral_14b_2512_subjectivite']);
     }
 
     public function testAnUnrecognisedSubjectivityLabelIsDroppedRatherThanGuessed(): void
@@ -529,9 +529,15 @@ final class MapperTest extends TestCase
             null
         );
 
-        self::assertArrayNotHasKey('gemini_subjectivite', $doc);
+        self::assertArrayNotHasKey('gemini_3_flash_preview_subjectivite', $doc);
     }
 
+    /**
+     * The vendor-keyed Omeka term maps to a MODEL-keyed document field —
+     * `iwac:chatgpt*` → `gpt_5_mini_*`, not `chatgpt_*`. Asserting the
+     * crossover explicitly, because a mapper that echoed the Omeka infix
+     * straight through would still look right on the Gemini row.
+     */
     public function testAllThreeSentimentModelsAreMappedIndependently(): void
     {
         $doc = $this->registry->get('articles')->map(
@@ -543,9 +549,10 @@ final class MapperTest extends TestCase
             null
         );
 
-        self::assertSame(['Neutre'], $doc['gemini_polarite_ss']);
-        self::assertSame(['Centrale'], $doc['chatgpt_centralite_ss']);
-        self::assertArrayNotHasKey('mistral_polarite_ss', $doc);
+        self::assertSame(['Neutre'], $doc['gemini_3_flash_preview_polarite_ss']);
+        self::assertSame(['Centrale'], $doc['gpt_5_mini_centralite_ss']);
+        self::assertArrayNotHasKey('chatgpt_centralite_ss', $doc);
+        self::assertArrayNotHasKey('ministral_14b_2512_polarite_ss', $doc);
     }
 
     public function testPublicationsCarryNoSentimentFields(): void
@@ -557,7 +564,7 @@ final class MapperTest extends TestCase
             null
         );
 
-        self::assertArrayNotHasKey('gemini_polarite_ss', $doc);
+        self::assertArrayNotHasKey('gemini_3_flash_preview_polarite_ss', $doc);
     }
 
     // ── References ───────────────────────────────────────────────────────

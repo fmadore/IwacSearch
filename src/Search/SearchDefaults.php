@@ -60,9 +60,11 @@ final class SearchDefaults
         'persons_ss',            // persons
         'organisations_ss',      // organisations
         'topics_ss',             // subjects
-        // Sentiment trio — grouped under one collapsible section in the client.
-        'gemini_polarite_ss',    // polarity
-        'gemini_centralite_ss',  // centrality (of Islam/Muslims)
-        'gemini_subjectivite',   // subjectivity (1–5)
+        // Sentiment trio — grouped under one collapsible section in the
+        // client. Named for the annotating model (gemini-3-flash-preview),
+        // not the vendor slot; see data/schema.yaml.
+        'gemini_3_flash_preview_polarite_ss',    // polarity
+        'gemini_3_flash_preview_centralite_ss',  // centrality (of Islam/Muslims)
+        'gemini_3_flash_preview_subjectivite',   // subjectivity (1–5)
     ];
 }

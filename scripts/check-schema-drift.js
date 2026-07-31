@@ -13,6 +13,12 @@
  *   2. Every FacetCatalog key must have a label in BOTH locales of
  *      i18n.ts FACET_LABELS (otherwise the UI silently falls back to
  *      humanise()).
+ *   3. The two legacy-field rename maps — FacetCatalog::LEGACY_FIELD_ALIASES
+ *      (saved page-block configs) and urlState.ts LEGACY_FILTER_FIELDS
+ *      (share links) — must agree with each other, and every target must be
+ *      a field data/schema.yaml actually declares. Added with the v4
+ *      sentiment rename; a rename that lands in only one map resolves on one
+ *      surface and silently drops the filter on the other.
  *
  * It also prints (informational, non-fatal) the schema facet fields NOT in
  * the catalog, so deliberate exclusions stay visible.
@@ -154,6 +160,31 @@ function parseTsStringConst(tsText, name, label) {
     throw new Error(`${label}: const ${name} not found — update the drift check.`);
   }
   return [...m[1].matchAll(/'([^']*)'/g)].map((x) => x[1]).join('');
+}
+
+/**
+ * A PHP `const NAME = [ 'key' => 'value', … ];` map, as a Map. Unlike
+ * parsePhpSortConst this keeps the VALUES, which is what a rename map is.
+ */
+function parsePhpStringMap(phpText, name, label) {
+  const start = phpText.indexOf(`${name} = [`);
+  if (start === -1) {
+    throw new Error(`${label}: const ${name} not found — update the drift check.`);
+  }
+  const body = phpText.slice(start, phpText.indexOf('];', start));
+  const pairs = [...body.matchAll(/^\s*'([A-Za-z0-9_]+)'\s*=>\s*'([A-Za-z0-9_]+)'/gm)];
+  return new Map(pairs.map((m) => [m[1], m[2]]));
+}
+
+/** A TS `const NAME: … = { key: 'value', … };` map, as a Map. */
+function parseTsStringMap(tsText, name, label) {
+  const start = tsText.indexOf(`const ${name}`);
+  if (start === -1) {
+    throw new Error(`${label}: const ${name} not found — update the drift check.`);
+  }
+  const body = tsText.slice(start, tsText.indexOf('\n};', start));
+  const pairs = [...body.matchAll(/^\s*([A-Za-z0-9_]+):\s*'([A-Za-z0-9_]+)'/gm)];
+  return new Map(pairs.map((m) => [m[1], m[2]]));
 }
 
 /** Sort values from a PHP `const NAME = [ 'value' => 'Label', … ];` map. */
@@ -310,7 +341,50 @@ try {
     }
   }
 
+  // ── Legacy field aliases (PHP ↔ TS ↔ schema) ─────────────────────────
+  // A field rename leaves two rename maps behind: FacetCatalog's (saved
+  // page-block configs) and urlState's (share links). They encode the same
+  // contract, are edited by hand, and a divergence is invisible — an alias
+  // present in only one of them means the same retired name resolves on one
+  // surface and silently vanishes on the other.
+  //
+  // Also checked against the schema, because a typo'd TARGET is worse than
+  // no alias at all: it survives both maps, then Typesense 400s the whole
+  // search on an unknown filter field.
+  const phpAliases = parsePhpStringMap(facetCatalogPhp, 'LEGACY_FIELD_ALIASES', 'FacetCatalog.php');
+  const urlStateTs = read('src/svelte/lib/urlState.ts');
+  const tsAliases = parseTsStringMap(urlStateTs, 'LEGACY_FILTER_FIELDS', 'urlState.ts');
+
+  for (const [old, current] of phpAliases) {
+    if (tsAliases.get(old) !== current) {
+      fail(
+        `Legacy alias '${old}' → '${current}' is in FacetCatalog::LEGACY_FIELD_ALIASES but ` +
+          `urlState.ts LEGACY_FILTER_FIELDS maps it to '${tsAliases.get(old) ?? '(nothing)'}'.`,
+      );
+    }
+    if (!contentFields.has(current)) {
+      fail(
+        `Legacy alias '${old}' points at '${current}', which data/schema.yaml does not declare.`,
+      );
+    }
+    if (contentFields.has(old)) {
+      fail(`Legacy alias '${old}' is still declared in data/schema.yaml — it is not retired.`);
+    }
+  }
+  for (const old of tsAliases.keys()) {
+    if (!phpAliases.has(old)) {
+      fail(
+        `Legacy alias '${old}' is in urlState.ts LEGACY_FILTER_FIELDS but not in ` +
+          'FacetCatalog::LEGACY_FIELD_ALIASES — a page block saved with it would lose the facet.',
+      );
+    }
+  }
+
   if (!failed) {
+    console.log(
+      `✅ legacy field aliases: ${phpAliases.size} consistent across FacetCatalog.php / ` +
+        'urlState.ts / schema.yaml',
+    );
     console.log(
       `✅ schema drift check: ${catalogKeys.length} catalog keys consistent across ` +
         'schema.yaml / schema-index.yaml / FacetCatalog.php / i18n.ts; ' +

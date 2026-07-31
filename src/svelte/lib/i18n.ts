@@ -271,13 +271,18 @@ const FACET_LABELS: Record<Locale, Record<string, string>> = {
     is_part_of_ss: 'Catégorie',
     alt_title_txt: 'Titre alternatif',
     entity_aliases_txt: 'Autre dénomination',
-    gemini_polarite_ss: 'Polarité',
-    gemini_centralite_ss: 'Centralité',
-    gemini_subjectivite: 'Subjectivité',
-    chatgpt_polarite_ss: 'Polarité (ChatGPT)',
-    chatgpt_centralite_ss: 'Centralité (ChatGPT)',
-    mistral_polarite_ss: 'Polarité (Mistral)',
-    mistral_centralite_ss: 'Centralité (Mistral)',
+    // Sentiment fields are keyed by the annotating model (see
+    // data/schema.yaml). The surfaced trio keeps a bare label — the panel
+    // groups it under "Sentiment" and only one model is offered, so naming
+    // it in every heading would be noise. The other two are labelled
+    // because their only reason to appear is which model said it.
+    gemini_3_flash_preview_polarite_ss: 'Polarité',
+    gemini_3_flash_preview_centralite_ss: 'Centralité',
+    gemini_3_flash_preview_subjectivite: 'Subjectivité',
+    gpt_5_mini_polarite_ss: 'Polarité (GPT-5 mini)',
+    gpt_5_mini_centralite_ss: 'Centralité (GPT-5 mini)',
+    ministral_14b_2512_polarite_ss: 'Polarité (Ministral 14B)',
+    ministral_14b_2512_centralite_ss: 'Centralité (Ministral 14B)',
   },
   en: {
     country_ss: 'Country',
@@ -301,13 +306,13 @@ const FACET_LABELS: Record<Locale, Record<string, string>> = {
     is_part_of_ss: 'Category',
     alt_title_txt: 'Alternative title',
     entity_aliases_txt: 'Also known as',
-    gemini_polarite_ss: 'Polarity',
-    gemini_centralite_ss: 'Centrality',
-    gemini_subjectivite: 'Subjectivity',
-    chatgpt_polarite_ss: 'Polarity (ChatGPT)',
-    chatgpt_centralite_ss: 'Centrality (ChatGPT)',
-    mistral_polarite_ss: 'Polarity (Mistral)',
-    mistral_centralite_ss: 'Centrality (Mistral)',
+    gemini_3_flash_preview_polarite_ss: 'Polarity',
+    gemini_3_flash_preview_centralite_ss: 'Centrality',
+    gemini_3_flash_preview_subjectivite: 'Subjectivity',
+    gpt_5_mini_polarite_ss: 'Polarity (GPT-5 mini)',
+    gpt_5_mini_centralite_ss: 'Centrality (GPT-5 mini)',
+    ministral_14b_2512_polarite_ss: 'Polarity (Ministral 14B)',
+    ministral_14b_2512_centralite_ss: 'Centrality (Ministral 14B)',
   },
 };
 
@@ -315,17 +320,21 @@ export function facetLabel(field: string, locale: Locale): string {
   return FACET_LABELS[locale]?.[field] ?? FACET_LABELS.fr[field] ?? humanise(field);
 }
 
-/** Sentiment sub-facets render under one collapsible "Sentiment" group. */
+/**
+ * Sentiment sub-facets render under one collapsible "Sentiment" group.
+ * Keyed by the annotating model, mirroring data/schema.yaml and the Hugging
+ * Face dataset's column names.
+ */
 export const SENTIMENT_FIELDS: ReadonlySet<string> = new Set([
-  'gemini_polarite_ss',
-  'gemini_centralite_ss',
-  'gemini_subjectivite',
-  'chatgpt_polarite_ss',
-  'chatgpt_centralite_ss',
-  'chatgpt_subjectivite',
-  'mistral_polarite_ss',
-  'mistral_centralite_ss',
-  'mistral_subjectivite',
+  'gemini_3_flash_preview_polarite_ss',
+  'gemini_3_flash_preview_centralite_ss',
+  'gemini_3_flash_preview_subjectivite',
+  'gpt_5_mini_polarite_ss',
+  'gpt_5_mini_centralite_ss',
+  'gpt_5_mini_subjectivite',
+  'ministral_14b_2512_polarite_ss',
+  'ministral_14b_2512_centralite_ss',
+  'ministral_14b_2512_subjectivite',
 ]);
 
 /**
@@ -334,9 +343,9 @@ export const SENTIMENT_FIELDS: ReadonlySet<string> = new Set([
  * invalid comparator"); they're emitted as a bare numeric array instead.
  */
 export const NUMERIC_FACET_FIELDS: ReadonlySet<string> = new Set([
-  'gemini_subjectivite',
-  'chatgpt_subjectivite',
-  'mistral_subjectivite',
+  'gemini_3_flash_preview_subjectivite',
+  'gpt_5_mini_subjectivite',
+  'ministral_14b_2512_subjectivite',
   'pub_year',
 ]);
 
@@ -430,7 +439,7 @@ export function countryLabel(value: string, locale: Locale): string {
 }
 
 // ── Subjectivity scale value labels (1–5 → readable label) ─────────────
-// gemini/chatgpt/mistral_subjectivite are 1–5 float facets. Typesense
+// The three *_subjectivite fields are 1–5 float facets. Typesense
 // returns the facet value as a string ("1", or possibly "1.0"), so the raw
 // sidebar reads as a bare "1". We map the rounded integer to a human label
 // — labels only; the long scale descriptions live in the dataset docs, not

@@ -38,7 +38,9 @@ describe('buildFilterBy', () => {
   });
 
   it('emits numeric facets bare — a backticked number is a Typesense error', () => {
-    expect(buildFilterBy({ gemini_subjectivite: ['1', '2'] })).toBe('gemini_subjectivite:=[1,2]');
+    expect(buildFilterBy({ gemini_3_flash_preview_subjectivite: ['1', '2'] })).toBe(
+      'gemini_3_flash_preview_subjectivite:=[1,2]',
+    );
   });
 
   it('emits boolean facets bare and drops non-boolean tokens', () => {
@@ -47,7 +49,7 @@ describe('buildFilterBy', () => {
   });
 
   it('drops numeric facets whose values are not numbers', () => {
-    expect(buildFilterBy({ gemini_subjectivite: ['high', ''] })).toBe('');
+    expect(buildFilterBy({ gemini_3_flash_preview_subjectivite: ['high', ''] })).toBe('');
   });
 
   it('ignores empty selections rather than emitting an empty clause', () => {

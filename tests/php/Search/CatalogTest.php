@@ -44,6 +44,45 @@ final class CatalogTest extends TestCase
         self::assertSame([], FacetCatalog::normaliseFacets([]));
     }
 
+    public function testNormaliseFacetsUpgradesRetiredSentimentFieldNames(): void
+    {
+        // A page block saved before the v4 rename still holds the vendor-slot
+        // names in site_block.data. Dropping them would strip a curated
+        // block's sentiment facets on upgrade with nothing to explain it.
+        self::assertSame(
+            ['country_ss', 'gemini_3_flash_preview_polarite_ss'],
+            FacetCatalog::normaliseFacets(['country_ss', 'gemini_polarite_ss'])
+        );
+    }
+
+    public function testNormaliseFacetsDedupesAcrossTheLegacyAliasHop(): void
+    {
+        // Old and new spelling of one field in the same config must not
+        // produce a duplicate facet_by entry.
+        self::assertSame(
+            ['gemini_3_flash_preview_polarite_ss'],
+            FacetCatalog::normaliseFacets(['gemini_polarite_ss', 'gemini_3_flash_preview_polarite_ss'])
+        );
+    }
+
+    public function testEveryLegacyAliasResolvesToACurrentSchemaField(): void
+    {
+        // An alias pointing at a field that no longer exists would be worse
+        // than no alias: normaliseFacets drops it either way, but the map
+        // would read as covering a case it doesn't. Aliases for fields not
+        // offered in the picker (the two non-surfaced models) are expected —
+        // they still matter to the URL codec's twin map.
+        foreach (FacetCatalog::LEGACY_FIELD_ALIASES as $old => $new) {
+            self::assertArrayNotHasKey($old, FacetCatalog::FACETABLE_FIELDS, "$old is retired");
+            self::assertNotSame($old, $new);
+            self::assertSame($new, FacetCatalog::canonicalField($old));
+        }
+
+        // Unknown names pass through untouched — canonicalField is a rename
+        // hop, not a validator.
+        self::assertSame('country_ss', FacetCatalog::canonicalField('country_ss'));
+    }
+
     public function testSortOptionsAreCollectionSpecific(): void
     {
         // The entity index has no relevance or author sort; offering one

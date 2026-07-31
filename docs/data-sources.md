@@ -26,7 +26,7 @@ live Omeka API (the Phase 0 parity spike):
 | title / dates / language / type / publisher            | ✅                  | `dcterms:*`                                               |
 | OCR full text (`ocr_text`)                             | ✅                  | `bibo:content`                                            |
 | AI summary (`abstract`)                                | ✅                  | `bibo:shortDescription`                                   |
-| AI sentiment ×3 (centralité / polarité / subjectivité) | ✅                  | `iwac:{model}*`                                           |
+| AI sentiment ×3 (centralité / polarité / subjectivité) | ✅                  | `iwac:{vendor}*` (see below)                              |
 | entities (persons / places / orgs / events / subjects) | ✅                  | `dcterms:subject` + `dcterms:spatial` linked resources    |
 | `is_public`                                            | ✅                  | `resource.is_public`                                      |
 | **semantic embedding**                                 | ✅ (Typesense-side) | generated in-process from title + OCR, source-independent |
@@ -123,8 +123,47 @@ Nigerian material.
 ### Sentiment — categorical labels resolved to scores
 
 Centralité and polarité are categorical labels (linked or literal). Subjectivité
-is a linked-resource category for **all three** models (gemini / chatgpt /
-mistral), resolved to a 1–5 score: `Très objectif`→1 … `Très subjectif`→5.
+is a linked-resource category for **all three** models, resolved to a 1–5 score:
+`Très objectif`→1 … `Très subjectif`→5.
+
+#### The Omeka term and the index field name deliberately differ
+
+Omeka's `iwac:` vocabulary names a **vendor slot** — `iwac:geminiPolarite`,
+`iwac:chatgptPolarite`, `iwac:mistralPolarite` — and, unlike `iwac:summaryModel`
+or `iwac:ocrModel`, sentiment values carry no `iwac:*Model` annotation. Nothing
+in the source records which model actually produced a value. (Recovered from the
+pipeline's git history: the corpus was annotated in January–February 2026 by
+`gemini-3-flash-preview`, `gpt-5-mini` and `ministral-14b-2512`.)
+
+The Hugging Face dataset renamed its columns to the model on 2026-07-31 for that
+reason. Schema v4 follows, so a facet key in a shared URL means one specific
+model rather than "whatever last ran in the Gemini slot":
+
+| Omeka term (unchanged)         | Index field (v4)                       | Was (v3)               |
+| ------------------------------ | -------------------------------------- | ---------------------- |
+| `iwac:geminiPolarite`          | `gemini_3_flash_preview_polarite_ss`   | `gemini_polarite_ss`   |
+| `iwac:geminiCentralite`        | `gemini_3_flash_preview_centralite_ss` | `gemini_centralite_ss` |
+| `iwac:geminiSubjectiviteScore` | `gemini_3_flash_preview_subjectivite`  | `gemini_subjectivite`  |
+| `iwac:chatgpt*`                | `gpt_5_mini_*`                         | `chatgpt_*`            |
+| `iwac:mistral*`                | `ministral_14b_2512_*`                 | `mistral_*`            |
+
+`AbstractMapper::SENTIMENT_MODELS` is the one place that map lives. **A
+re-annotation with different models means new field names and a schema bump —
+never repoint an existing prefix at a new model**, which would silently change
+what an already-published facet URL means.
+
+Retired names keep resolving on both sides: `FacetCatalog::LEGACY_FIELD_ALIASES`
+upgrades page-block configs saved before the rename, and `LEGACY_FILTER_FIELDS`
+in `src/svelte/lib/urlState.ts` does the same for share links, on decode only —
+so a legacy link rewrites itself to the current name once the user touches a
+filter. Keep the two maps in sync.
+
+Only the `gemini_3_flash_preview_*` trio is offered in the facet UI. The other
+two models are indexed and facetable, but comparing models is a dataset job, not
+a search-sidebar one — and on centralité `ministral-14b-2512` is a documented
+systematic outlier (leave-one-out κ 0.182 against 0.70–0.78), so a "2 of 3
+models agree" reading of the sidebar would be misleading. `*_subjectivite` is
+the weakest of the three measures generally; treat it as weak evidence.
 
 ## Subset → resource class
 

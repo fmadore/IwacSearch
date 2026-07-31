@@ -7,18 +7,27 @@ infrastructure decision, or block on work in another repo.
 Engineering-side deferrals (tests, static analysis, refactors, request
 reductions) live in [docs/engineering-roadmap.md](docs/engineering-roadmap.md).
 
-## 3.6.0 deployment prerequisites (do these in order)
+## 3.6.0 / 3.7.0 deployment prerequisites (do these in order)
 
 1. **Copy the module + `composer install --no-dev`** in the php container
    (unchanged from previous releases).
 2. **Run a full reindex immediately** (`discovery:reindex` or the admin
-   button). 3.6.0 bumps the ENTITY schema (`iwac_index_v2` → `iwac_index_v3`:
-   `geo` geopoint + `has_coords`) and adds features the content collection
-   only picks up on rebuild (the `iwac_synonyms` linkage via `synonym_sets`,
-   the now-populated `item_set_ids`). Until the reindex completes, the Map
-   view finds no `has_coords` field (filter error → empty map) and synonym
-   expansion is inactive. Content search itself keeps working on the old
-   collection — the alias only swaps on success.
+   button). Both pending releases need it, and one rebuild covers both:
+   - 3.6.0 bumps the ENTITY schema (`iwac_index_v2` → `iwac_index_v3`:
+     `geo` geopoint + `has_coords`) and adds features the content collection
+     only picks up on rebuild (the `iwac_synonyms` linkage via `synonym_sets`,
+     the now-populated `item_set_ids`). Until the reindex completes, the Map
+     view finds no `has_coords` field (filter error → empty map) and synonym
+     expansion is inactive.
+   - 3.7.0 bumps the CONTENT schema (`iwac_v3` → `iwac_v4`) for the sentiment
+     field rename (vendor slot → annotating model, matching the Hugging Face
+     dataset). Typesense cannot rename a field in place, so **the Sentiment
+     facet group stays empty until the rebuild** — the fields exist in the
+     new schema but no live collection carries them yet.
+
+   Content search itself keeps working on the old collection throughout —
+   the alias only swaps on success.
+
 3. **Optional — enable search analytics** (see below).
 
 ## Needs an IWAC-docker change: search analytics server flags

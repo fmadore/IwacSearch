@@ -66,12 +66,47 @@ final class FacetCatalog
         'events_ss'          => 'Events',
         'date_decade_ss'     => 'Decade',
         // Sentiment trio — rendered together under one collapsible
-        // "Sentiment" group in the client. All three are already indexed
-        // (Gemini model); centrality + subjectivity were surfaced in
-        // 0.2.22. subjectivite is a 1–5 numeric facet.
-        'gemini_polarite_ss'    => 'Polarity (Gemini)',
-        'gemini_centralite_ss'  => 'Centrality (Gemini)',
-        'gemini_subjectivite'   => 'Subjectivity (Gemini)',
+        // "Sentiment" group in the client. All three are already indexed;
+        // centrality + subjectivity were surfaced in 0.2.22. subjectivite is
+        // a 1–5 numeric facet. The other two annotating models
+        // (gpt_5_mini_*, ministral_14b_2512_*) are indexed and facetable in
+        // schema.yaml but deliberately NOT offered here: three parallel
+        // sentiment trios in the admin picker read as noise, and the panel
+        // only has room for one. Cross-model comparison is a dataset job,
+        // not a search-sidebar one.
+        'gemini_3_flash_preview_polarite_ss'   => 'Polarity (Gemini 3 Flash Preview)',
+        'gemini_3_flash_preview_centralite_ss' => 'Centrality (Gemini 3 Flash Preview)',
+        'gemini_3_flash_preview_subjectivite'  => 'Subjectivity (Gemini 3 Flash Preview)',
+    ];
+
+    /**
+     * Retired field name => current one.
+     *
+     * v4 renamed the sentiment fields from the vendor slot to the model that
+     * produced the value (see data/schema.yaml). Page-block configs are JSON
+     * in `site_block.data` and hold field names verbatim, so blocks saved
+     * before the rename still name `gemini_polarite_ss`. Without this map
+     * normaliseFacets() would silently DROP those entries — a curated block
+     * would come back from the upgrade missing its sentiment facets, with
+     * nothing in the UI to explain why.
+     *
+     * Mapping on read (rather than migrating `site_block.data` in
+     * Module::upgrade) keeps the module's "owns no tables, writes no
+     * migrations" lifecycle intact; a block rewrites itself to the new names
+     * the next time an admin saves it.
+     *
+     * @var array<string, string>
+     */
+    public const LEGACY_FIELD_ALIASES = [
+        'gemini_polarite_ss'    => 'gemini_3_flash_preview_polarite_ss',
+        'gemini_centralite_ss'  => 'gemini_3_flash_preview_centralite_ss',
+        'gemini_subjectivite'   => 'gemini_3_flash_preview_subjectivite',
+        'chatgpt_polarite_ss'   => 'gpt_5_mini_polarite_ss',
+        'chatgpt_centralite_ss' => 'gpt_5_mini_centralite_ss',
+        'chatgpt_subjectivite'  => 'gpt_5_mini_subjectivite',
+        'mistral_polarite_ss'   => 'ministral_14b_2512_polarite_ss',
+        'mistral_centralite_ss' => 'ministral_14b_2512_centralite_ss',
+        'mistral_subjectivite'  => 'ministral_14b_2512_subjectivite',
     ];
 
     public const SORT_OPTIONS = [
@@ -104,12 +139,23 @@ final class FacetCatalog
         'results-only' => 'Results only (curated grid, no search box)',
     ];
 
+    /** Resolve a possibly-retired field name to the one the schema declares. */
+    public static function canonicalField(string $field): string
+    {
+        return self::LEGACY_FIELD_ALIASES[$field] ?? $field;
+    }
+
     /**
      * Filter an arbitrary admin-submitted list of field names down to
      * the ones that actually exist in FACETABLE_FIELDS. Preserves the
      * submitted order so an admin can reorder via drag-and-drop in
      * the picker and have the new order persist. Applied on save by
      * IwacSearchBlock::onHydrate().
+     *
+     * Retired names are upgraded via LEGACY_FIELD_ALIASES first, so a block
+     * saved before a rename keeps its facets. Deduplication happens AFTER
+     * that hop — a config naming both the old and the new spelling collapses
+     * to one entry rather than emitting a duplicate facet_by field.
      *
      * @param iterable<mixed> $submitted
      * @return list<string>
@@ -122,6 +168,7 @@ final class FacetCatalog
             if (!is_string($field)) {
                 continue;
             }
+            $field = self::canonicalField($field);
             if (!isset(self::FACETABLE_FIELDS[$field])) {
                 continue;
             }
