@@ -123,6 +123,10 @@ namespace Laminas\Mvc\Controller\Plugin {
         public function toRoute($route = null, $params = [], $options = [], $reuseMatchedParams = false)
         {
         }
+
+        public function toUrl($url)
+        {
+        }
     }
 
     class Url
