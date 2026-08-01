@@ -12,6 +12,22 @@ namespace IwacSearch;
 
 use Typesense\Client as TypesenseClient;
 
+$legacySearchRoute = static fn(string $resource): array => [
+    'type' => \Laminas\Router\Http\Literal::class,
+    'options' => [
+        'route' => sprintf('/%s/search', $resource),
+        'defaults' => [
+            '__NAMESPACE__' => 'IwacSearch\Controller',
+            'controller' => Controller\LegacySearchController::class,
+            'action' => 'redirect',
+        ],
+    ],
+    // Omeka's generic /:controller[/:action] route also matches these URLs.
+    // A literal route with an explicit priority makes module ownership
+    // deterministic regardless of module/config merge order.
+    'priority' => 1000,
+];
+
 return [
     'service_manager' => [
         'factories' => [
@@ -37,6 +53,7 @@ return [
     'controllers' => [
         'factories' => [
             Controller\SearchController::class            => Service\SearchControllerFactory::class,
+            Controller\LegacySearchController::class      => Service\Controller\LegacySearchControllerFactory::class,
             Controller\Admin\MaintenanceController::class => Service\Controller\MaintenanceControllerFactory::class,
         ],
     ],
@@ -213,6 +230,16 @@ return [
             // + /search/everything routes the header search form targets.
             'site' => [
                 'child_routes' => [
+                    // Replace Omeka's public advanced-search entry points with
+                    // the locale-aware Typesense surface while this module is
+                    // active. Item sets and media intentionally share the same
+                    // federated destination: neither has a separate Typesense
+                    // collection, and the companion theme already presents all
+                    // three links as "Search the collection".
+                    'iwac-legacy-item-search' => $legacySearchRoute('item'),
+                    'iwac-legacy-item-set-search' => $legacySearchRoute('item-set'),
+                    'iwac-legacy-media-search' => $legacySearchRoute('media'),
+
                     'iwac-browse' => [
                         'type'    => \Laminas\Router\Http\Segment::class,
                         'options' => [
@@ -325,9 +352,9 @@ return [
             // Resolves 'fr' | 'en' from the current site for UI strings +
             // the /parcourir vs /browse route choice.
             'iwacLocale'        => View\Helper\IwacLocale::class,
-            // Builds the locale-correct search landing URL for the current
-            // site (FR → /recherche, EN → /search). Called by the IWAC-theme
-            // header search form to set its `action`.
+            // Builds the locale-correct federated search URL for the current
+            // site (FR → /recherche/tout, EN → /search/everything). Called by
+            // the theme and the legacy-search redirect controller.
             'iwacSearchUrl'     => View\Helper\IwacSearchUrl::class,
         ],
     ],

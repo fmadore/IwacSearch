@@ -52,10 +52,11 @@ class Module extends AbstractModule
      *
      * Two zones:
      *
-     *   1. Public discovery (SearchController) — index / token / browse /
-     *      everything. Granted to the null role so anonymous site visitors can
-     *      hit /search, /search/everything, /discovery/token, and the legacy
-     *      /browse redirect. Without this, Omeka's deny-by-default ACL throws
+     *   1. Public discovery (SearchController + LegacySearchController) —
+     *      index / token / browse / everything plus the core-search handoff.
+     *      Granted to the null role so anonymous site visitors can hit /search,
+     *      /search/everything, /discovery/token, and both families of legacy
+     *      redirects. Without this, Omeka's deny-by-default ACL throws
      *      PermissionDeniedException for every anonymous request and the Svelte
      *      client shows "Search unavailable. Token HTTP 500" on every public
      *      surface (including page blocks, whose JS still calls /discovery/token).
@@ -82,6 +83,11 @@ class Module extends AbstractModule
             null,
             [Controller\SearchController::class],
             ['index', 'token', 'browse', 'everything']
+        );
+        $acl->allow(
+            null,
+            [Controller\LegacySearchController::class],
+            ['redirect']
         );
 
         // Maintenance page — same role tier. Lets editors dispatch
