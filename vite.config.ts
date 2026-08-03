@@ -53,7 +53,7 @@ export default defineConfig({
     sourcemap: false,
     target: 'es2022',
     lib: {
-      entry: resolve(__dirname, active.entry),
+      entry: resolve(import.meta.dirname, active.entry),
       formats: ['iife'],
       name: active.name,
       fileName: () => `${active.fileName}.js`,
