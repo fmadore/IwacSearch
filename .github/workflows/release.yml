@@ -150,12 +150,25 @@ jobs:
               || { echo "::error::missing from zip: $f"; exit 1; }
           done
 
-          LEAKED="$(unzip -Z1 "$ZIP" | grep -E '(^|/)(tests|node_modules|\.github|scripts|tools|src/svelte)/|(package\.json|package-lock\.json|phpunit\.xml|phpstan\.neon|tsconfig\.json|vite\.config\.ts|vitest\.config\.ts|eslint\.config\.js|CLAUDE\.md)$' || true)"
+          # Only the module's own tree is policed. Third-party packages ship
+          # their own .github/, tests/ and package.json, and those are a
+          # normal part of a vendor tree — not this repo's tooling leaking.
+          # What matters about vendor/ is that --no-dev worked, checked below.
+          LEAKED="$(unzip -Z1 "$ZIP" | grep -v '^IwacSearch/vendor/' \
+            | grep -E '(^|/)(tests|node_modules|\.github|scripts|tools|src/svelte)/|(package\.json|package-lock\.json|phpunit\.xml|phpstan\.neon|tsconfig\.json|vite\.config\.ts|vitest\.config\.ts|eslint\.config\.js|CLAUDE\.md)$' || true)"
           if [ -n "$LEAKED" ]; then
             echo "::error::dev tooling leaked into the zip:"
             echo "$LEAKED"
             exit 1
           fi
+
+          for dev in phpunit phpstan; do
+            if unzip -Z1 "$ZIP" | grep -q "^IwacSearch/vendor/$dev/"; then
+              echo "::error::vendor/$dev is present — the install was not --no-dev"
+              exit 1
+            fi
+          done
+
           echo "Zip verified: $(unzip -Z1 "$ZIP" | wc -l) entries, no dev tooling."
 
       # Manual runs exist to prove the build still works without cutting a
