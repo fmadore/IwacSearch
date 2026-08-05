@@ -1,0 +1,184 @@
+# Release: build the installable Omeka S module zip and publish it on the tag.
+#
+# Before this workflow existed, every release shipped source only — no asset —
+# so the sole install path was `git clone` + `composer install`, which is not
+# how Omeka S modules are distributed. Omeka expects a zip whose single top
+# level directory is named exactly after the module, dropped into `modules/`.
+#
+# The zip is assembled from `git archive`, so the `export-ignore` rules in
+# .gitattributes decide what ships; the Svelte sources and docs/ come out on
+# top of that (they are build inputs and prose, not runtime code), and a
+# production `vendor/` goes in. What is left is exactly what the module needs
+# to boot: Module.php, config/, src/ PHP, view/, data/, cli/, asset/ (with the
+# committed asset/dist bundles) and vendor/.
+#
+# NOTE ON REPRODUCIBILITY: composer.lock is gitignored in this repo, so the
+# vendor tree here is resolved fresh at release time rather than pinned. Two
+# builds of the same tag can therefore differ in transitive dependency
+# versions. Committing composer.lock would fix that, and is worth doing if
+# these zips ever become the primary distribution channel.
+
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Build + publish module zip
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v7
+
+      # The tag is the single source of truth for the version, but Omeka reads
+      # config/module.ini and the client build reads package.json. A tag that
+      # disagrees with either would ship a module that reports the wrong
+      # version in the admin module list — catch it before anything is built.
+      - name: Resolve version and check it against module.ini + package.json
+        id: version
+        run: |
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            VERSION="${GITHUB_REF_NAME#v}"
+          else
+            VERSION="$(sed -n 's/^version *= *"\(.*\)"/\1/p' config/module.ini)"
+            echo "::notice::Manual run — version taken from module.ini ($VERSION)"
+          fi
+
+          INI="$(sed -n 's/^version *= *"\(.*\)"/\1/p' config/module.ini)"
+          PKG="$(node -p "require('./package.json').version")"
+
+          echo "tag=$VERSION  module.ini=$INI  package.json=$PKG"
+          [ "$VERSION" = "$INI" ] || { echo "::error::tag $VERSION != config/module.ini $INI"; exit 1; }
+          [ "$VERSION" = "$PKG" ] || { echo "::error::tag $VERSION != package.json $PKG"; exit 1; }
+
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "zip=IwacSearch-v$VERSION.zip" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - name: Install client deps
+        run: npm ci --no-audit --no-fund
+
+      - name: Test + build client
+        run: |
+          npm run lint
+          npm test
+          npm run build
+
+      # Same guard as CI. asset/dist is committed because production has no
+      # Node toolchain, and the zip ships the committed copy — so a tag whose
+      # bundle is stale would ship stale JS to every install. Fail loudly.
+      - name: Verify committed bundles match the source
+        run: |
+          git diff --exit-code -- asset/dist \
+            || (echo '::error::asset/dist is stale at this tag — rebuild and retag' && exit 1)
+
+      # 8.2 is the composer.json floor. Resolving there yields a vendor tree
+      # that runs on every supported PHP, including the live server's 8.5.
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          coverage: none
+          tools: composer:v2
+
+      - name: Assemble the module tree
+        run: |
+          set -euo pipefail
+          mkdir -p build
+          # export-ignore in .gitattributes filters out the dev toolchain.
+          git archive --format=tar --prefix=IwacSearch/ HEAD | tar -x -C build
+          # Build inputs and prose that survive export-ignore because the
+          # source tarball should keep them — the runtime module should not.
+          rm -rf build/IwacSearch/src/svelte \
+                 build/IwacSearch/src/svelte-shared \
+                 build/IwacSearch/docs
+          composer install \
+            --working-dir=build/IwacSearch \
+            --no-dev --optimize-autoloader \
+            --no-interaction --no-progress --prefer-dist
+
+      # Omeka's core vendor/ already provides Laminas at runtime. A bundled
+      # duplicate makes PHP load the wrong copy of an interface and fatals the
+      # whole site, not just this module — it has happened here before. The
+      # composer.json declares no laminas/*, and this keeps it that way even
+      # if a future dependency drags one in transitively.
+      - name: Assert no Laminas is bundled
+        run: |
+          if [ -d build/IwacSearch/vendor/laminas ]; then
+            echo "::error::vendor/laminas is present — it would collide with Omeka core"
+            ls build/IwacSearch/vendor/laminas
+            exit 1
+          fi
+          echo "psr/* packages present (transitive, via the Guzzle PSR adapters):"
+          ls build/IwacSearch/vendor/psr 2>/dev/null || echo "  none"
+
+      - name: Create the zip
+        run: |
+          set -euo pipefail
+          (cd build && zip -qr "../${{ steps.version.outputs.zip }}" IwacSearch)
+          echo "Built ${{ steps.version.outputs.zip }} ($(du -h "${{ steps.version.outputs.zip }}" | cut -f1))"
+
+      - name: Verify the zip is installable and carries no dev tooling
+        run: |
+          set -euo pipefail
+          ZIP="${{ steps.version.outputs.zip }}"
+
+          for f in IwacSearch/Module.php \
+                   IwacSearch/config/module.ini \
+                   IwacSearch/config/module.config.php \
+                   IwacSearch/vendor/autoload.php \
+                   IwacSearch/asset/dist/iwac-search.js \
+                   IwacSearch/asset/dist/iwac-search.css \
+                   IwacSearch/asset/dist/iwac-search-header.js \
+                   IwacSearch/asset/dist/iwac-search-header.css \
+                   IwacSearch/data/schema.yaml \
+                   IwacSearch/LICENSE; do
+            unzip -l "$ZIP" "$f" > /dev/null 2>&1 \
+              || { echo "::error::missing from zip: $f"; exit 1; }
+          done
+
+          LEAKED="$(unzip -Z1 "$ZIP" | grep -E '(^|/)(tests|node_modules|\.github|scripts|tools|src/svelte)/|(package\.json|package-lock\.json|phpunit\.xml|phpstan\.neon|tsconfig\.json|vite\.config\.ts|vitest\.config\.ts|eslint\.config\.js|CLAUDE\.md)$' || true)"
+          if [ -n "$LEAKED" ]; then
+            echo "::error::dev tooling leaked into the zip:"
+            echo "$LEAKED"
+            exit 1
+          fi
+          echo "Zip verified: $(unzip -Z1 "$ZIP" | wc -l) entries, no dev tooling."
+
+      # Manual runs exist to prove the build still works without cutting a
+      # release; they stop here, with the zip downloadable from the run.
+      - name: Upload the zip as a run artifact (manual runs)
+        if: github.ref_type != 'tag'
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ steps.version.outputs.zip }}
+          path: ${{ steps.version.outputs.zip }}
+          retention-days: 14
+
+      - name: Publish the release
+        if: github.ref_type == 'tag'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_REF_NAME}"
+          if gh release view "$TAG" > /dev/null 2>&1; then
+            gh release upload "$TAG" "${{ steps.version.outputs.zip }}" --clobber
+          else
+            gh release create "$TAG" "${{ steps.version.outputs.zip }}" \
+              --title "${{ steps.version.outputs.version }}" \
+              --generate-notes
+          fi
