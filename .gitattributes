@@ -24,3 +24,32 @@
 *.woff2 binary
 *.ttf  binary
 *.eot  binary
+
+# Keep the dev toolchain out of `git archive` output (the source zip/tarball
+# GitHub attaches to every release, and the `composer create-project` path).
+#
+# NOTE: this alone does NOT make the source tarball installable — `vendor/` is
+# gitignored, so a `git archive` export can never be a working Omeka S module.
+# The installable artifact is the release zip built by the release workflow
+# (module tree + `composer install --no-dev` vendor/ + the committed
+# asset/dist). These rules exist so that artifact, and the auto-generated
+# source archives, carry only what ships.
+/.github/       export-ignore
+/scripts/       export-ignore
+/tests/         export-ignore
+/tools/         export-ignore
+/.gitattributes export-ignore
+/.gitignore     export-ignore
+/.prettierignore export-ignore
+/.prettierrc.json export-ignore
+/CLAUDE.md      export-ignore
+/ROADMAP.md     export-ignore
+/eslint.config.js export-ignore
+/package.json   export-ignore
+/package-lock.json export-ignore
+/phpstan.neon   export-ignore
+/phpunit.xml    export-ignore
+/tokens.json    export-ignore
+/tsconfig.json  export-ignore
+/vite.config.ts export-ignore
+/vitest.config.ts export-ignore
