@@ -1,0 +1,25 @@
+cff-version: 1.2.0
+message: If you use this software, please cite it as below.
+type: software
+title: IwacSearch
+abstract: >-
+  Omeka S module providing the public discovery experience (faceted search,
+  federated content and entity search, and page-block search scopes) for the
+  Islam West Africa Collection, backed by Typesense.
+authors:
+  - given-names: Frédérick
+    family-names: Madore
+    orcid: https://orcid.org/0000-0003-0959-2092
+    affiliation: University of Bayreuth
+repository-code: https://github.com/fmadore/IwacSearch
+url: https://islam.zmo.de/
+license: GPL-3.0-or-later
+keywords:
+  - Omeka S
+  - Typesense
+  - faceted search
+  - digital humanities
+  - West Africa
+  - Islamic studies
+version: 3.9.0
+date-released: 2026-08-05
