@@ -102,11 +102,22 @@
   }
   .iwac-summary__count {
     color: var(--ink-strong, var(--ink, #13161c));
-    /* Ledger numeral: display serif, tabular figures, display tracking. */
+    /* Ledger numeral: display serif, lining figures, display tracking. */
     font-family: var(--font-headings, Georgia, serif);
     font-size: var(--text-xl, 1.5rem);
     font-weight: 700;
     line-height: 1;
+    /* Lining, NOT tabular — and the tabular-nums above is inherited, so it
+       has to be cleared here explicitly. Besley's `tnum` zero is frozen at a
+       55-unit advance on every weight while 1-9 track the weight axis (66 at
+       700), so a tabular zero renders 17% narrow and reads as un-bolded
+       ("4 100"). font-feature-settings because the theme's body sets an
+       inherited "onum"/"pnum" that outranks font-variant-numeric. */
+    font-variant-numeric: normal;
+    font-feature-settings:
+      'kern' 1,
+      'liga' 1,
+      'lnum' 1;
     letter-spacing: var(--tracking-display, -0.01em);
   }
   .iwac-summary__count-label {

@@ -718,7 +718,15 @@
     font-weight: 700;
     line-height: 1;
     color: var(--ink-strong, var(--ink, #13161c));
-    font-variant-numeric: tabular-nums;
+    /* Lining, NOT tabular. Besley's `tnum` zero is frozen at a 55-unit
+       advance on every weight while 1-9 track the weight axis (66 at 700),
+       so a tabular zero renders 17% narrow and reads as un-bolded ("3 009").
+       Declared as font-feature-settings because the theme's body sets an
+       inherited "onum"/"pnum" that outranks font-variant-numeric. */
+    font-feature-settings:
+      'kern' 1,
+      'liga' 1,
+      'lnum' 1;
     letter-spacing: var(--tracking-display, -0.01em);
   }
   .iwac-card__mentions-label {
