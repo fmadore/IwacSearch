@@ -5,8 +5,10 @@ namespace IwacSearch\Site\BlockLayout;
 
 use IwacSearch\Asset\SvelteAssets;
 use IwacSearch\Browse\FacetCatalog;
+use IwacSearch\Search\FacetValueLookup;
 use IwacSearch\Search\InitialResponseRenderer;
 use IwacSearch\Search\PresetCatalog;
+use IwacSearch\Search\ScopeFilters;
 use IwacSearch\Search\SearchDefaults;
 use IwacSearch\Search\SurfaceBootstrap;
 use Laminas\View\Renderer\PhpRenderer;
@@ -34,6 +36,7 @@ use Omeka\Stdlib\HtmlPurifier;
  *     "title":             "Optional H2",
  *     "intro_html":        "Optional intro paragraph",
  *     "locked_filters":    "country_ss:=Burkina Faso && newspaper_ss:=Sidwaya",
+ *     "filter_values":     {"country_ss": ["Bénin", "Togo"], "type_s": ["article"]},
  *     "prominent_facets":  ["country_ss", "newspaper_ss", "topics_ss"],
  *     "default_sort":      "" | "_text_match:desc" | "date:desc" | "frequency:desc" | …,
  *     "results_per_page":  10
@@ -48,6 +51,14 @@ use Omeka\Stdlib\HtmlPurifier;
  * empty means "use the scope's own default sort". Blocks saved before the Scope
  * dropdown existed have no `preset` key and default to `custom`, so their stored
  * filters keep working unchanged.
+ *
+ * `filter_values` is the multi-select narrowing an editor does WITHOUT writing
+ * query syntax — several types, countries, newspapers, languages or sentiment
+ * labels at once ({@see ScopeFilters}). Unlike locked_filters it applies to
+ * EVERY scope, ANDed onto whatever that scope already locks, so "Bénin + Togo"
+ * is a whole-corpus scope with two countries ticked rather than a preset that
+ * can only ever hold one. Absent key → empty clause → the block behaves exactly
+ * as it did before this existed.
  *
  * locked_filters uses Typesense filter_by syntax directly. NOTE: they are
  * COSMETIC scoping only — the client applies them to every query this block
@@ -64,6 +75,10 @@ class IwacSearchBlock extends AbstractBlockLayout
         private readonly HtmlPurifier $htmlPurifier,
         private readonly string $contentAlias = 'iwac_current',
         private readonly string $indexAlias = 'iwac_index_current',
+        // Live facet values for the form's value pickers. Null (or an
+        // unreachable index) degrades to the static option lists — see
+        // renderValuePickers(). Never touched by render(), only by form().
+        private readonly ?FacetValueLookup $facetValues = null,
     ) {
     }
 
@@ -89,6 +104,13 @@ class IwacSearchBlock extends AbstractBlockLayout
         $data['prominent_facets'] = FacetCatalog::normaliseFacets(
             is_iterable($data['prominent_facets'] ?? null) ? $data['prominent_facets'] : []
         );
+
+        // Value pickers: structural normalisation only (known fields, non-empty
+        // string values, numeric fields numeric). Deliberately NOT checked
+        // against the live index — a save made while Typesense is down, or a
+        // newspaper that has left the corpus, must not silently strip a
+        // curated block's scope.
+        $data['filter_values'] = ScopeFilters::normalise($data['filter_values'] ?? null);
 
         $perPage = (int) ($data['results_per_page'] ?? 10);
         $data['results_per_page'] = max(1, min(50, $perPage));
@@ -143,6 +165,7 @@ class IwacSearchBlock extends AbstractBlockLayout
         $title            = $data['title']            ?? '';
         $introHtml        = $data['intro_html']       ?? '';
         $lockedFilters    = $data['locked_filters']   ?? '';
+        $filterValues     = ScopeFilters::normalise($data['filter_values'] ?? null);
         // Default mirrors what the standalone /search route shows — the
         // SAME constant, so the two can't drift. Block admin can override
         // per-instance via the form below.
@@ -230,18 +253,20 @@ class IwacSearchBlock extends AbstractBlockLayout
             </div>
         </div>
 
+        <?= $this->renderValuePickers($view, $namePrefix, $uid, $filterValues) ?>
+
         <div class="field">
             <div class="field-meta">
                 <label for="iwac-search-locked-<?= $escAttr($uid) ?>"><?= $esc($t('Locked filters (Typesense filter_by)')) ?></label>
                 <div class="field-description">
-                    <?= $esc($t('Custom scope only. Applied to every query from this block (cosmetic scoping — not a privacy boundary). Example: country_ss:=`Burkina Faso` && date:>=946684800')) ?>
+                    <?= $esc($t('Advanced escape hatch, for conditions the pickers above cannot express (date ranges, exclusions). Custom scope only. Applied to every query from this block (cosmetic scoping — not a privacy boundary). Example: date:>=946684800 && type_s:!=reference')) ?>
                 </div>
             </div>
             <div class="inputs">
                 <input id="iwac-search-locked-<?= $escAttr($uid) ?>" type="text"
                        name="<?= $escAttr($namePrefix) ?>[locked_filters]"
                        value="<?= $escAttr($lockedFilters) ?>"
-                       placeholder="country_ss:=`Burkina Faso`">
+                       placeholder="date:>=946684800">
             </div>
         </div>
 
@@ -311,6 +336,162 @@ class IwacSearchBlock extends AbstractBlockLayout
     }
 
     /**
+     * The multi-select value pickers — one checkbox list per
+     * {@see ScopeFilters::FIELDS} entry.
+     *
+     * Options come from the live index where the vocabulary is open data
+     * (newspaper titles, languages, the categorical sentiment labels) and from
+     * the closed enums this codebase already declares otherwise (types,
+     * countries, the 1–5 subjectivity scale). The index is also asked for
+     * document counts on the closed enums, since "Photographie (0)" is what
+     * tells an editor not to bother scoping to it.
+     *
+     * Nothing here is required for the form to work: an unreachable index
+     * costs the open pickers their options and every picker its counts, and
+     * says so — the page-edit screen still renders, and the raw locked_filters
+     * field below is still a complete escape hatch.
+     *
+     * @param array<string, list<string>> $selected Normalised current selection.
+     */
+    private function renderValuePickers(
+        PhpRenderer $view,
+        string $namePrefix,
+        string $uid,
+        array $selected
+    ): string {
+        $esc     = fn(string $s): string => $view->escapeHtml($s);
+        $escAttr = fn(string $s): string => $view->escapeHtmlAttr($s);
+        $t       = fn(string $s): string => (string) $view->translate($s);
+
+        // One Typesense round trip per request, memoized inside the lookup —
+        // Omeka calls form() once per block on the page plus once for the
+        // "add block" template.
+        $counts = $this->facetValues?->counts(ScopeFilters::lookupFields());
+
+        // Only the closed-enum labels are translatable source strings; a
+        // newspaper title is data and goes through verbatim.
+        $valueLabel = static function (string $field, string $value) use ($t): string {
+            $label = ScopeFilters::valueLabel($field, $value);
+            return $label === $value ? $value : $t($label);
+        };
+
+        ob_start();
+        ?>
+        <div class="field">
+            <div class="field-meta">
+                <label><?= $esc($t('Narrow by value')) ?></label>
+                <div class="field-description">
+                    <?= $esc($t('Tick any number of values. Within one picker values are OR-ed ("Bénin or Togo"); separate pickers are AND-ed ("… and only news articles"). Applies to every scope, on top of what that scope already locks — so for a multi-country block choose the "All content" scope and tick the countries here, rather than a single-country scope. Leave a picker empty to not filter on it. Visitors cannot remove these.')) ?>
+                </div>
+            </div>
+        </div>
+        <?php foreach (ScopeFilters::FIELDS as $field): ?>
+            <?php
+            $chosen  = $selected[$field] ?? [];
+            $options = $this->pickerOptions($field, $counts, $chosen);
+            // A checkbox LIST has no single labelable control, so the group
+            // label can't use `for` (it would point at a div). Name the label
+            // instead and let the list reference it as a labelled group.
+            $labelId = 'iwac-search-values-' . $field . '-' . $uid;
+            ?>
+            <div class="field">
+                <div class="field-meta">
+                    <label id="<?= $escAttr($labelId) ?>"><?= $esc($t(ScopeFilters::label($field))) ?></label>
+                    <div class="field-description">
+                        <code style="opacity:.6"><?= $esc($field) ?></code>
+                        <?php if (FacetValueLookup::isTruncated($counts, $field)): ?>
+                            <?php // Translate the pattern, THEN interpolate — the other way
+                                  // round there is no msgid for the translator to match. ?>
+                            <br><?= $esc(sprintf(
+                                $t('Showing the %d most common values — the index holds more.'),
+                                FacetValueLookup::MAX_VALUES
+                            )) ?>
+                        <?php endif; ?>
+                    </div>
+                </div>
+                <div class="inputs">
+                    <?php if ($options === []): ?>
+                        <p style="margin:0;opacity:.7">
+                            <?= $esc($counts === null
+                                ? $t('The search index is unreachable, so this list could not be loaded. Existing selections are preserved; reopen this form once the index is back, or use the Locked filters field below.')
+                                : $t('The index holds no values for this field yet.')) ?>
+                        </p>
+                    <?php else: ?>
+                        <div class="iwac-value-picker" role="group" aria-labelledby="<?= $escAttr($labelId) ?>"
+                             style="max-height:13em;overflow-y:auto;border:1px solid #dfdfdf;border-radius:3px;padding:.4em .6em;">
+                            <?php foreach ($options as $option): ?>
+                                <label class="iwac-value-pick" style="display:block;">
+                                    <input type="checkbox"
+                                           name="<?= $escAttr($namePrefix) ?>[filter_values][<?= $escAttr($field) ?>][]"
+                                           value="<?= $escAttr($option['value']) ?>"
+                                           <?= in_array($option['value'], $chosen, true) ? 'checked' : '' ?>>
+                                    <?= $esc($valueLabel($field, $option['value'])) ?>
+                                    <?php if ($option['count'] !== null): ?>
+                                        <span style="opacity:.55">(<?= $esc(number_format($option['count'])) ?>)</span>
+                                    <?php endif; ?>
+                                    <?php if ($option['stale']): ?>
+                                        <em style="opacity:.7"><?= $esc($t('— saved, but not in the index')) ?></em>
+                                    <?php endif; ?>
+                                </label>
+                            <?php endforeach; ?>
+                        </div>
+                    <?php endif; ?>
+                </div>
+            </div>
+        <?php endforeach; ?>
+        <?php
+        return (string) ob_get_clean();
+    }
+
+    /**
+     * The option list for one picker: the field's own values, plus any
+     * already-saved value the index doesn't (or can't) offer.
+     *
+     * That last part is the whole reason this isn't inline. A saved value
+     * missing from the rendered list posts back as unchecked, so re-saving the
+     * block would silently drop it — losing a curated scope to a newspaper
+     * leaving the corpus, or to Typesense being down at the wrong moment.
+     * Rendering it checked and flagged keeps the save round-trip lossless.
+     *
+     * @param  array<string, list<array{value: string, count: int}>>|null $counts
+     * @param  list<string> $selected
+     * @return list<array{value: string, count: ?int, stale: bool}>
+     */
+    private function pickerOptions(string $field, ?array $counts, array $selected): array
+    {
+        $live = $counts[$field] ?? [];
+
+        $liveCounts = [];
+        foreach ($live as $entry) {
+            $liveCounts[$entry['value']] = $entry['count'];
+        }
+
+        // Closed enums keep their declared order (which is meaningful — the
+        // subjectivity scale runs 1→5); open vocabularies keep Typesense's
+        // count-descending order.
+        $static = ScopeFilters::staticOptions($field);
+        $values = $static !== [] ? $static : array_column($live, 'value');
+
+        $out  = [];
+        $seen = [];
+        foreach ($values as $value) {
+            $seen[$value] = true;
+            $out[] = [
+                'value' => $value,
+                'count' => $liveCounts[$value] ?? null,
+                'stale' => false,
+            ];
+        }
+        foreach ($selected as $value) {
+            if (!isset($seen[$value])) {
+                $out[] = ['value' => $value, 'count' => null, 'stale' => true];
+            }
+        }
+
+        return $out;
+    }
+
+    /**
      * Render the block on a public page.
      *
      * Asset injection happens here (idempotent — Laminas headScript dedupes
@@ -360,6 +541,16 @@ class IwacSearchBlock extends AbstractBlockLayout
             // Custom blocks expose country however the editor configured it.
             $hideCountry      = false;
         }
+
+        // The value pickers apply to EVERY scope, ANDed onto whatever that
+        // scope already locks — which is what makes "Bénin + Togo" possible at
+        // all (the country presets can only ever hold one). A block with no
+        // filter_values compiles to '' and combine() drops it, so the string
+        // handed to the client is byte-identical to what it was before.
+        $lockedFilters = ScopeFilters::combine(
+            $lockedFilters,
+            ScopeFilters::compile(ScopeFilters::normalise($data['filter_values'] ?? null))
+        );
 
         // The admin's Default-sort choice (any scope) wins when it's a valid
         // order for this scope's collection — content vs the entity index;

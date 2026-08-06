@@ -121,9 +121,16 @@ A page block's **Scope** dropdown picks a ready-made scope from
 `src/Search/PresetCatalog.php` — the whole corpus, one country, the
 references subset, or the entity index — or **Custom…** for a raw
 content-collection `filter_by`. Each preset drives the collection, the
-locked filter (baked into the scoped key, so enforced server-side), the
-facet set, and the default sort. Compose discovery pages by dropping a
-block onto any Omeka page alongside your own text/HTML blocks.
+locked filter, the facet set, and the default sort. Compose discovery
+pages by dropping a block onto any Omeka page alongside your own
+text/HTML blocks.
+
+A scope's locked filter is **cosmetic client-side scoping**, not a
+privacy boundary: it is applied to every query the block issues but is
+NOT baked into the scoped key, so a tampering client can drop it. Privacy
+is enforced solely by the scoped key's own `is_public:=true` +
+`ocr_text`/`toc_txt` exclusion (see `TypesenseSearchKeyProvider`). Never
+use a scope to hide non-public material.
 
 | Scope        | Collection           | Locked filter                                   |
 | ------------ | -------------------- | ----------------------------------------------- |
@@ -134,6 +141,40 @@ block onto any Omeka page alongside your own text/HTML blocks.
 
 Country scopes exclude references since v3.2: a country page surfaces the
 primary sources; the bibliography lives in its own References scope.
+
+### Narrowing by value (multi-select)
+
+A scope is one choice, so it can only ever hold one country. Below the
+Scope dropdown the block form carries a **checkbox picker per field** —
+Type, Country, Newspaper, Language, and the three Gemini sentiment
+fields (`src/Search/ScopeFilters.php`). Tick as many values as you like:
+
+| Within one picker | Across pickers |
+| ----------------- | -------------- |
+| OR (`Bénin` or `Togo`) | AND (… `&&` only news articles) |
+
+which compiles to `country_ss:=[`Bénin`,`Togo`] && type_s:=[`article`]` —
+the same semantics the public facet panel already uses, so an
+admin-locked scope and a visitor's own facet selection compose
+predictably. The result is ANDed onto whatever the Scope already locks,
+so **a multi-country block is the "All content" scope with several
+countries ticked**, not a country scope (ticking Togo on the Bénin scope
+gives you documents that are both, i.e. none). Visitors cannot remove
+these values; an empty picker filters on nothing.
+
+Options come from the live index for the open vocabularies (newspaper
+titles, languages, sentiment labels, read public-only so the counts match
+what the block will show) and from the enums the code already declares
+for the closed ones (types, the six countries, the 1–5 subjectivity
+scale). An unreachable Typesense costs the open pickers their options and
+the rest their counts — the form says so and still saves; it never fails
+the page-edit screen. A saved value the index no longer offers is still
+rendered, checked and flagged, so re-saving a block can't silently drop
+part of its scope.
+
+The **Locked filters** text field remains as the escape hatch for what
+the pickers can't express — date ranges, exclusions (`type_s:!=reference`)
+— and is Custom-scope only.
 
 The earlier `iwac_browse_config` table + admin CRUD UI were retired. Old
 `/browse/{slug}` links still work: `SearchController::browseAction`

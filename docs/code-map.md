@@ -48,6 +48,8 @@ IwacSearch/
 │   ├── View/Helper/                            # IwacBootstrapJson · IwacLocale · IwacSearchUrl
 │   ├── Search/
 │   │   ├── PresetCatalog.php · Preset.php      # page-block scopes (all / country / references / entity index)
+│   │   ├── ScopeFilters.php                    # page-block value pickers → filter_by (multi type/country/…)
+│   │   ├── FacetValueLookup.php                #   live facet values for those pickers (degrades to null)
 │   │   ├── SearchDefaults.php                  # per-collection query_by / highlights / default facet stack
 │   │   ├── InitialResponseRenderer.php         # SSR: PHP→Typesense, inlines first page into bootstrap
 │   │   └── TypesenseSearchKeyProvider.php      # mints scoped keys for the browser

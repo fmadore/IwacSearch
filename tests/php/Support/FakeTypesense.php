@@ -51,6 +51,46 @@ final class FakeTypesense
     /** When set, dropping a collection throws. */
     public ?RuntimeException $dropFailure = null;
 
+    /** When set, searching throws — exercises the degrade-to-null paths. */
+    public ?RuntimeException $searchFailure = null;
+
+    /**
+     * The body `documents->search()` returns. Left null, the fake answers with
+     * a well-formed empty result. Set it to a `facet_counts` payload to drive
+     * the facet-value lookup, or to a malformed one to exercise its guards.
+     *
+     * @var ?array<string, mixed>
+     */
+    public ?array $searchResponse = null;
+
+    /**
+     * Every search params array received, in order — so a test can assert
+     * WHAT was asked for (facet_by, the is_public guard) and how often.
+     *
+     * @var list<array<string, mixed>>
+     */
+    public array $searches = [];
+
+    /**
+     * Build a Typesense-shaped `facet_counts` body from a
+     * `field => [value => count]` map, so tests read as data not plumbing.
+     *
+     * @param  array<string, array<string, int>> $byField
+     * @return array<string, mixed>
+     */
+    public static function facetResponse(array $byField): array
+    {
+        $facetCounts = [];
+        foreach ($byField as $field => $values) {
+            $counts = [];
+            foreach ($values as $value => $count) {
+                $counts[] = ['value' => (string) $value, 'count' => $count];
+            }
+            $facetCounts[] = ['field_name' => $field, 'counts' => $counts];
+        }
+        return ['found' => 0, 'hits' => [], 'facet_counts' => $facetCounts];
+    }
+
     public function client(): TypesenseClient
     {
         return FakeClient::create($this);
@@ -211,6 +251,19 @@ final class FakeDocuments extends Documents
             }
         }
         return implode("\n", $out);
+    }
+
+    /**
+     * @param  array<string, mixed> $searchParams
+     * @return array<string, mixed>
+     */
+    public function search(array $searchParams): array
+    {
+        if ($this->server->searchFailure !== null) {
+            throw $this->server->searchFailure;
+        }
+        $this->server->searches[] = $searchParams;
+        return $this->server->searchResponse ?? ['found' => 0, 'hits' => []];
     }
 
     public function offsetGet($documentId): Document

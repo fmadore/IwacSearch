@@ -200,6 +200,21 @@ final class PresetCatalog
     }
 
     /**
+     * The IWAC country names, exactly as `country_ss` stores them (accents
+     * included — Typesense filter_by is accent- and case-sensitive). The
+     * country scopes above filter on these strings, so they double as the
+     * option list for the page block's Country picker
+     * ({@see ScopeFilters::staticOptions()}) rather than that picker keeping
+     * a second, drift-prone copy.
+     *
+     * @return list<string>
+     */
+    public static function countryNames(): array
+    {
+        return array_column(self::COUNTRIES, 'name');
+    }
+
+    /**
      * Resolve a legacy /browse/{slug} segment to the preset that replaced it.
      * Used by the Phase-C redirect shim.
      */
