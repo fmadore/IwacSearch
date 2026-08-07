@@ -18,9 +18,9 @@ facet set, ordered coarse → fine:
 | `persons_ss`                           | Mentioned persons                                                        |
 | `organisations_ss`                     | Mentioned organisations                                                  |
 | `topics_ss`                            | Subjects (controlled vocabulary — `fabio:AuthorityFile` authority items) |
-| `gemini_3_flash_preview_polarite_ss`   | Sentiment polarity                                                       |
-| `gemini_3_flash_preview_centralite_ss` | Centrality of Islam/Muslims                                              |
-| `gemini_3_flash_preview_subjectivite`  | Subjectivity, 1–5                                                        |
+| `gpt_5_6_luna_polarite_ss`             | Sentiment polarity                                                       |
+| `gpt_5_6_luna_centralite_ss`           | Centrality of Islam/Muslims                                              |
+| `gpt_5_6_luna_subjectivite`            | Subjectivity, 1–5                                                        |
 
 The canonical list is `SearchDefaults::CONTENT_PROMINENT_FACETS` — the
 standalone route, the federated Content tab, and the page-block default
@@ -146,7 +146,7 @@ primary sources; the bibliography lives in its own References scope.
 
 A scope is one choice, so it can only ever hold one country. Below the
 Scope dropdown the block form carries a **checkbox picker per field** —
-Type, Country, Newspaper, Language, and the three Gemini sentiment
+Type, Country, Newspaper, Language, and the three GPT-5.6 Luna sentiment
 fields (`src/Search/ScopeFilters.php`). Tick as many values as you like:
 
 | Within one picker | Across pickers |

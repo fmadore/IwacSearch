@@ -7,7 +7,7 @@ infrastructure decision, or block on work in another repo.
 Engineering-side deferrals (tests, static analysis, refactors, request
 reductions) live in [docs/engineering-roadmap.md](docs/engineering-roadmap.md).
 
-## 3.6.0 / 3.7.0 / 3.8.0 deployment prerequisites (do these in order)
+## 3.6.0 → 3.11.0 deployment prerequisites (do these in order)
 
 1. **Copy the module + `composer install --no-dev`** in the php container
    (unchanged from previous releases).
@@ -28,6 +28,13 @@ reductions) live in [docs/engineering-roadmap.md](docs/engineering-roadmap.md).
      searchable/stemmed `toc_txt` field and include publication tables of
      contents in document embeddings. The same rebuild also fills publication
      card excerpts and the new `dcterms:description` fallbacks.
+   - 3.11.0 bumps it once more (`iwac_v5` → `iwac_v6`): sentiment now comes
+     from the generation-2 annotators (`gpt_5_6_luna_*`, `mistral_small_2603_*`,
+     `deepseek_v4_flash_0731_*`) and the generation-1 trio is dropped. Same
+     consequence as 3.7.0 — **no Sentiment facets until the rebuild** — and
+     since 3.7.0 was never deployed, the intermediate field names never went
+     live at all. Share links and page blocks naming the old fields lose their
+     sentiment filter deliberately (see docs/data-sources.md).
 
    Content search itself keeps working on the old collection throughout —
    the alias only swaps on success.

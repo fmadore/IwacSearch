@@ -63,11 +63,11 @@ final class ScopeFiltersTest extends TestCase
         // countries and the 1–5 scale are enums this codebase declares.
         self::assertTrue(ScopeFilters::isOpenVocabulary('newspaper_ss'));
         self::assertTrue(ScopeFilters::isOpenVocabulary('language_ss'));
-        self::assertTrue(ScopeFilters::isOpenVocabulary('gemini_3_flash_preview_polarite_ss'));
+        self::assertTrue(ScopeFilters::isOpenVocabulary('gpt_5_6_luna_polarite_ss'));
 
         self::assertFalse(ScopeFilters::isOpenVocabulary('type_s'));
         self::assertFalse(ScopeFilters::isOpenVocabulary('country_ss'));
-        self::assertSame(['1', '2', '3', '4', '5'], ScopeFilters::staticOptions('gemini_3_flash_preview_subjectivite'));
+        self::assertSame(['1', '2', '3', '4', '5'], ScopeFilters::staticOptions('gpt_5_6_luna_subjectivite'));
     }
 
     public function testLookupFieldsAskTheIndexForEverythingExceptTheNumericScale(): void
@@ -78,13 +78,13 @@ final class ScopeFiltersTest extends TestCase
         self::assertContains('newspaper_ss', ScopeFilters::lookupFields());
         // Float facet values come back as "1" or "1.0"; matching that back
         // against the fixed scale buys nothing.
-        self::assertNotContains('gemini_3_flash_preview_subjectivite', ScopeFilters::lookupFields());
+        self::assertNotContains('gpt_5_6_luna_subjectivite', ScopeFilters::lookupFields());
     }
 
     public function testClosedEnumValuesHaveLabelsAndOpenOnesPassThrough(): void
     {
         self::assertSame('News article', ScopeFilters::valueLabel('type_s', 'article'));
-        self::assertSame('Very subjective', ScopeFilters::valueLabel('gemini_3_flash_preview_subjectivite', '5'));
+        self::assertSame('Very subjective', ScopeFilters::valueLabel('gpt_5_6_luna_subjectivite', '5'));
         // A newspaper title is data, not a translatable source string.
         self::assertSame('Sidwaya', ScopeFilters::valueLabel('newspaper_ss', 'Sidwaya'));
 
@@ -140,32 +140,44 @@ final class ScopeFiltersTest extends TestCase
         // A non-numeric value here makes Typesense reject the entire search,
         // taking the block's results down with it.
         self::assertSame(
-            ['gemini_3_flash_preview_subjectivite' => ['1', '5']],
+            ['gpt_5_6_luna_subjectivite' => ['1', '5']],
             ScopeFilters::normalise([
-                'gemini_3_flash_preview_subjectivite' => ['1', 'très objectif', '5'],
+                'gpt_5_6_luna_subjectivite' => ['1', 'très objectif', '5'],
             ])
         );
 
         // Numbers arriving as ints/floats (hand-edited JSON) still count.
         self::assertSame(
-            ['gemini_3_flash_preview_subjectivite' => ['3']],
-            ScopeFilters::normalise(['gemini_3_flash_preview_subjectivite' => [3]])
+            ['gpt_5_6_luna_subjectivite' => ['3']],
+            ScopeFilters::normalise(['gpt_5_6_luna_subjectivite' => [3]])
         );
     }
 
     public function testNormaliseMergesARetiredFieldNameIntoItsCurrentOne(): void
     {
-        // No stored block can carry a retired name in this key yet — it is
-        // newer than the v4 sentiment rename — but a FUTURE rename must not
-        // silently drop a curated scope, and two spellings of one field must
-        // merge rather than one overwriting the other.
-        self::assertSame(
-            ['gemini_3_flash_preview_polarite_ss' => ['Neutre', 'Négative']],
-            ScopeFilters::normalise([
-                'gemini_polarite_ss'                 => ['Neutre'],
-                'gemini_3_flash_preview_polarite_ss' => ['Négative', 'Neutre'],
-            ])
-        );
+        // FacetCatalog::LEGACY_FIELD_ALIASES is empty today (v6 retired the
+        // generation-1 sentiment fields with no honest successor), so this
+        // asserts the property over whatever the map holds — a FUTURE rename
+        // must not silently drop a curated scope, and two spellings of one
+        // field must merge rather than one overwriting the other.
+        $aliases = array_intersect(FacetCatalog::LEGACY_FIELD_ALIASES, ScopeFilters::FIELDS);
+        if ($aliases === []) {
+            // Nothing in flight: a locked scope on a name the catalog no
+            // longer knows is dropped, not smuggled through under a new one.
+            self::assertSame([], ScopeFilters::normalise(['gemini_polarite_ss' => ['Neutre']]));
+            return;
+        }
+
+        foreach ($aliases as $old => $new) {
+            self::assertSame(
+                [$new => ['Neutre', 'Négative']],
+                ScopeFilters::normalise([
+                    $old => ['Neutre'],
+                    $new => ['Négative', 'Neutre'],
+                ]),
+                $old
+            );
+        }
     }
 
     public function testNormaliseHandlesAbsentAndMalformedInput(): void
@@ -212,8 +224,8 @@ final class ScopeFiltersTest extends TestCase
     {
         // Backticked numbers → "Numerical field has an invalid comparator".
         self::assertSame(
-            'gemini_3_flash_preview_subjectivite:=[1,2]',
-            ScopeFilters::compile(['gemini_3_flash_preview_subjectivite' => ['1', '2']])
+            'gpt_5_6_luna_subjectivite:=[1,2]',
+            ScopeFilters::compile(['gpt_5_6_luna_subjectivite' => ['1', '2']])
         );
     }
 
@@ -223,7 +235,7 @@ final class ScopeFiltersTest extends TestCase
         self::assertSame('', ScopeFilters::compile(['country_ss' => []]));
         self::assertSame('', ScopeFilters::compile(['topics_ss' => ['Islam']]));
         self::assertSame('', ScopeFilters::compile(['country_ss' => 'Togo']));
-        self::assertSame('', ScopeFilters::compile(['gemini_3_flash_preview_subjectivite' => ['x']]));
+        self::assertSame('', ScopeFilters::compile(['gpt_5_6_luna_subjectivite' => ['x']]));
     }
 
     public function testCompileOutputOrderFollowsTheCatalogNotTheInput(): void

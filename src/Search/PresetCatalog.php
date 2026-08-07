@@ -47,9 +47,9 @@ final class PresetCatalog
         'persons_ss',
         'organisations_ss',
         'topics_ss',
-        'gemini_3_flash_preview_polarite_ss',
-        'gemini_3_flash_preview_centralite_ss',
-        'gemini_3_flash_preview_subjectivite',
+        'gpt_5_6_luna_polarite_ss',
+        'gpt_5_6_luna_centralite_ss',
+        'gpt_5_6_luna_subjectivite',
     ];
 
     /**
@@ -67,9 +67,9 @@ final class PresetCatalog
         'persons_ss',
         'organisations_ss',
         'topics_ss',
-        'gemini_3_flash_preview_polarite_ss',
-        'gemini_3_flash_preview_centralite_ss',
-        'gemini_3_flash_preview_subjectivite',
+        'gpt_5_6_luna_polarite_ss',
+        'gpt_5_6_luna_centralite_ss',
+        'gpt_5_6_luna_subjectivite',
     ];
 
     /**

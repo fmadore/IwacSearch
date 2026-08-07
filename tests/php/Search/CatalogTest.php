@@ -44,38 +44,50 @@ final class CatalogTest extends TestCase
         self::assertSame([], FacetCatalog::normaliseFacets([]));
     }
 
-    public function testNormaliseFacetsUpgradesRetiredSentimentFieldNames(): void
+    public function testTheGenerationOneSentimentFieldNamesAreGone(): void
     {
-        // A page block saved before the v4 rename still holds the vendor-slot
-        // names in site_block.data. Dropping them would strip a curated
-        // block's sentiment facets on upgrade with nothing to explain it.
+        // v6 dropped the generation-1 annotators from the index, and the
+        // aliases that used to carry the pre-v4 spellings forward went with
+        // them: there is no honest target left, and pointing them at a
+        // generation-2 model would make a saved block filter on a different
+        // model's judgement under the name it was saved with. A block still
+        // holding these loses its sentiment facets and the admin re-picks.
         self::assertSame(
-            ['country_ss', 'gemini_3_flash_preview_polarite_ss'],
-            FacetCatalog::normaliseFacets(['country_ss', 'gemini_polarite_ss'])
+            ['country_ss'],
+            FacetCatalog::normaliseFacets([
+                'country_ss',
+                'gemini_polarite_ss',                 // pre-v4 vendor slot
+                'gemini_3_flash_preview_polarite_ss', // v4–v5
+                'gpt_5_mini_centralite_ss',
+                'ministral_14b_2512_subjectivite',
+            ])
         );
     }
 
-    public function testNormaliseFacetsDedupesAcrossTheLegacyAliasHop(): void
+    public function testEveryLegacyAliasIsRetiredAndResolvesToACurrentField(): void
     {
-        // Old and new spelling of one field in the same config must not
-        // produce a duplicate facet_by entry.
-        self::assertSame(
-            ['gemini_3_flash_preview_polarite_ss'],
-            FacetCatalog::normaliseFacets(['gemini_polarite_ss', 'gemini_3_flash_preview_polarite_ss'])
-        );
-    }
+        // The map is empty today; the invariants are asserted anyway so the
+        // next rename inherits the guard. An alias pointing at a field that
+        // no longer exists would be worse than no alias: normaliseFacets
+        // drops it either way, but the map would read as covering a case it
+        // doesn't. (check-schema-drift.js holds the other half — that every
+        // target is a field data/schema.yaml declares, and that urlState.ts's
+        // twin map agrees entry for entry.)
+        // Read through a local (see FacetCatalog::canonicalField) so the
+        // assertions still type-check while the map is empty.
+        /** @var array<string, string> $aliases */
+        $aliases = FacetCatalog::LEGACY_FIELD_ALIASES;
 
-    public function testEveryLegacyAliasResolvesToACurrentSchemaField(): void
-    {
-        // An alias pointing at a field that no longer exists would be worse
-        // than no alias: normaliseFacets drops it either way, but the map
-        // would read as covering a case it doesn't. Aliases for fields not
-        // offered in the picker (the two non-surfaced models) are expected —
-        // they still matter to the URL codec's twin map.
-        foreach (FacetCatalog::LEGACY_FIELD_ALIASES as $old => $new) {
+        foreach ($aliases as $old => $new) {
             self::assertArrayNotHasKey($old, FacetCatalog::FACETABLE_FIELDS, "$old is retired");
             self::assertNotSame($old, $new);
             self::assertSame($new, FacetCatalog::canonicalField($old));
+
+            // Old and new spelling of one field in the same config must
+            // collapse, not emit a duplicate facet_by entry.
+            if (array_key_exists($new, FacetCatalog::FACETABLE_FIELDS)) {
+                self::assertSame([$new], FacetCatalog::normaliseFacets([$old, $new]));
+            }
         }
 
         // Unknown names pass through untouched — canonicalField is a rename

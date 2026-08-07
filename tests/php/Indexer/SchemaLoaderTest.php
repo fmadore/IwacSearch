@@ -50,7 +50,7 @@ final class SchemaLoaderTest extends TestCase
         /** @var array{embed:array{from:list<string>}} $embedding */
         $embedding = $fields['embedding'];
 
-        self::assertSame('iwac_v5', $schema['name']);
+        self::assertSame('iwac_v6', $schema['name']);
         self::assertSame('string', $toc['type']);
         self::assertTrue($toc['stem']);
         self::assertTrue($toc['optional']);

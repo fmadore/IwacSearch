@@ -28,27 +28,22 @@ const FILTER_PREFIX = 'f.';
 /**
  * Retired facet field name → current one, applied when DECODING a URL.
  *
- * The v4 schema renamed the sentiment fields from the vendor slot to the
- * model that produced the value (see data/schema.yaml). Facet field names
- * are part of the shareable URL contract — they sit in every link a
- * researcher has bookmarked, pasted into a paper, or cited — so the old
- * spellings have to keep resolving. Decoding maps them forward; encoding
- * only ever writes the current names, so a shared legacy link silently
- * upgrades itself the first time the user touches a filter.
+ * Facet field names are part of the shareable URL contract — they sit in
+ * every link a researcher has bookmarked, pasted into a paper, or cited — so
+ * a renamed field's old spelling has to keep resolving. Decoding maps it
+ * forward; encoding only ever writes the current names, so a shared legacy
+ * link silently upgrades itself the first time the user touches a filter.
  *
- * Keep in sync with FacetCatalog::LEGACY_FIELD_ALIASES (the server-side
- * twin, which covers saved page-block configs).
+ * EMPTY on purpose since v6 — see the long note on the server-side twin,
+ * FacetCatalog::LEGACY_FIELD_ALIASES. In short: the only entries were the v4
+ * sentiment rename, v6 dropped the generation-1 sentiment fields from the
+ * index, and aliasing them onto a generation-2 model would make a bookmarked
+ * link return a different model's judgement under the name it was shared
+ * with. The two maps must stay in sync (enforced by
+ * scripts/check-schema-drift.js), including when both are empty.
  */
 const LEGACY_FILTER_FIELDS: Readonly<Record<string, string>> = {
-  gemini_polarite_ss: 'gemini_3_flash_preview_polarite_ss',
-  gemini_centralite_ss: 'gemini_3_flash_preview_centralite_ss',
-  gemini_subjectivite: 'gemini_3_flash_preview_subjectivite',
-  chatgpt_polarite_ss: 'gpt_5_mini_polarite_ss',
-  chatgpt_centralite_ss: 'gpt_5_mini_centralite_ss',
-  chatgpt_subjectivite: 'gpt_5_mini_subjectivite',
-  mistral_polarite_ss: 'ministral_14b_2512_polarite_ss',
-  mistral_centralite_ss: 'ministral_14b_2512_centralite_ss',
-  mistral_subjectivite: 'ministral_14b_2512_subjectivite',
+  // (no retired field names in flight)
 };
 
 /**

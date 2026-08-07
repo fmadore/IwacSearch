@@ -41,39 +41,44 @@ abstract class AbstractMapper implements MapperInterface
         'dcterms:description',
     ];
     protected const SENTIMENT_TERMS = [
-        'iwac:geminiCentralite', 'iwac:geminiPolarite', 'iwac:geminiSubjectiviteScore',
-        'iwac:chatgptCentralite', 'iwac:chatgptPolarite', 'iwac:chatgptSubjectiviteScore',
-        'iwac:mistralCentralite', 'iwac:mistralPolarite', 'iwac:mistralSubjectiviteScore',
+        'iwac:gpt56LunaCentralite', 'iwac:gpt56LunaPolarite', 'iwac:gpt56LunaSubjectiviteScore',
+        'iwac:mistralSmall2603Centralite', 'iwac:mistralSmall2603Polarite', 'iwac:mistralSmall2603SubjectiviteScore',
+        'iwac:deepseekV4Flash0731Centralite', 'iwac:deepseekV4Flash0731Polarite', 'iwac:deepseekV4Flash0731SubjectiviteScore',
     ];
 
     /**
      * Omeka term infix => document field prefix.
      *
-     * The two sides deliberately disagree. Omeka's `iwac:` vocabulary names a
-     * VENDOR SLOT (`iwac:geminiPolarite`) and carries no `iwac:*Model`
-     * annotation, so the source records nothing about which model actually
-     * produced a value — the corpus was annotated in Jan–Feb 2026 by
-     * gemini-3-flash-preview, gpt-5-mini and ministral-14b-2512. The Hugging
-     * Face dataset renamed its columns to the model on 2026-07-31 for exactly
-     * that reason; the index follows, so a facet key means one model rather
-     * than "whatever we last ran in the Gemini slot".
+     * Both sides name the MODEL. Generation 1 of the sentiment vocabulary
+     * named a VENDOR SLOT instead (`iwac:geminiPolarite`) and carried no
+     * `iwac:*Model` annotation, so the source recorded nothing about which
+     * model produced a value and this map had to bridge the two spellings.
+     * Generation 2 fixed that at the source: `iwac:gpt56LunaPolarite` says
+     * which model ran, so the map is now a pure snake_case transliteration.
      *
-     * Re-annotating with a different model = add a row here with new field
-     * names + a schema bump. Never repoint an existing prefix at a new model:
-     * that silently changes what an already-published facet URL means.
+     * Two DeepSeek prefixes exist in Omeka — `iwac:deepseekV4Flash*` is a
+     * RETIRED preview run and `iwac:deepseekV4Flash0731*` the current one.
+     * We read 0731; the two are different annotations of the same corpus and
+     * must never be merged.
+     *
+     * Re-annotating with a different model = swap the row here for one with
+     * new field names + a schema bump. Never repoint an existing prefix at a
+     * new model: that silently changes what an already-published facet URL
+     * means.
      */
     private const SENTIMENT_MODELS = [
-        'gemini'  => 'gemini_3_flash_preview',
-        'chatgpt' => 'gpt_5_mini',
-        'mistral' => 'ministral_14b_2512',
+        'gpt56Luna'           => 'gpt_5_6_luna',
+        'mistralSmall2603'    => 'mistral_small_2603',
+        'deepseekV4Flash0731' => 'deepseek_v4_flash_0731',
     ];
 
     /**
      * Subjectivité is stored as a linked-resource CATEGORY (not a number) for
-     * ALL THREE models — confirmed live (the iwac-data note claiming only
-     * Mistral is categorical is stale). The HF pipeline converts the label to
-     * the 1–5 score; we do the same. Scale derived empirically by pairing the
-     * Omeka label against the HF *_subjectivite_score for 25 articles.
+     * ALL THREE models — confirmed live against the generation-2 properties,
+     * which link to the same five scale items (78043–78047) generation 1 did.
+     * The HF pipeline converts the label to the 1–5 score; we do the same.
+     * Scale derived empirically by pairing the Omeka label against the HF
+     * *_subjectivite_score for 25 articles.
      */
     private const SUBJECTIVITE_LABELS = [
         'Très objectif'    => 1.0,
@@ -284,16 +289,16 @@ abstract class AbstractMapper implements MapperInterface
      * (linked or literal — disp() handles both); subjectivité is a linked
      * category resolved to its 1–5 score for every model.
      *
-     * Reads the vendor-keyed Omeka terms and writes model-keyed document
-     * fields — see {@see SENTIMENT_MODELS} for why the two differ.
+     * The Omeka term infix and the document field prefix name the same model
+     * in two spellings — see {@see SENTIMENT_MODELS}.
      *
      * @param array<string, mixed> $doc
      */
     protected function addAiSentiment(array &$doc, PropertyValues $values): void
     {
-        foreach (self::SENTIMENT_MODELS as $vendor => $field) {
-            $cent = $values->firstDisplay("iwac:{$vendor}Centralite");
-            $pol  = $values->firstDisplay("iwac:{$vendor}Polarite");
+        foreach (self::SENTIMENT_MODELS as $model => $field) {
+            $cent = $values->firstDisplay("iwac:{$model}Centralite");
+            $pol  = $values->firstDisplay("iwac:{$model}Polarite");
             if ($cent !== '') {
                 $doc["{$field}_centralite_ss"] = [$cent];
             }
@@ -301,7 +306,7 @@ abstract class AbstractMapper implements MapperInterface
                 $doc["{$field}_polarite_ss"] = [$pol];
             }
 
-            $subjLabel = $values->firstDisplay("iwac:{$vendor}SubjectiviteScore");
+            $subjLabel = $values->firstDisplay("iwac:{$model}SubjectiviteScore");
             $score = self::SUBJECTIVITE_LABELS[$subjLabel]
                 ?? (is_numeric($subjLabel) ? (float) $subjLabel : null);
             if ($score !== null) {

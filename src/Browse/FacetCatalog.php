@@ -66,47 +66,51 @@ final class FacetCatalog
         'events_ss'          => 'Events',
         'date_decade_ss'     => 'Decade',
         // Sentiment trio — rendered together under one collapsible
-        // "Sentiment" group in the client. All three are already indexed;
-        // centrality + subjectivity were surfaced in 0.2.22. subjectivite is
-        // a 1–5 numeric facet. The other two annotating models
-        // (gpt_5_mini_*, ministral_14b_2512_*) are indexed and facetable in
-        // schema.yaml but deliberately NOT offered here: three parallel
-        // sentiment trios in the admin picker read as noise, and the panel
-        // only has room for one. Cross-model comparison is a dataset job,
-        // not a search-sidebar one.
-        'gemini_3_flash_preview_polarite_ss'   => 'Polarity (Gemini 3 Flash Preview)',
-        'gemini_3_flash_preview_centralite_ss' => 'Centrality (Gemini 3 Flash Preview)',
-        'gemini_3_flash_preview_subjectivite'  => 'Subjectivity (Gemini 3 Flash Preview)',
+        // "Sentiment" group in the client. subjectivite is a 1–5 numeric
+        // facet. The other two annotating models (mistral_small_2603_*,
+        // deepseek_v4_flash_0731_*) are indexed and facetable in schema.yaml
+        // but deliberately NOT offered here: three parallel sentiment trios
+        // in the admin picker read as noise, and the panel only has room for
+        // one. Cross-model comparison is a dataset job, not a search-sidebar
+        // one.
+        //
+        // GPT-5.6 Luna holds the surfaced slot because it is the only
+        // generation-2 annotator complete on all three properties (12,305
+        // articles); DeepSeek is ~489 subjectivity values short, and on
+        // centralité the Mistral family is a documented systematic outlier.
+        'gpt_5_6_luna_polarite_ss'   => 'Polarity (GPT-5.6 Luna)',
+        'gpt_5_6_luna_centralite_ss' => 'Centrality (GPT-5.6 Luna)',
+        'gpt_5_6_luna_subjectivite'  => 'Subjectivity (GPT-5.6 Luna)',
     ];
 
     /**
      * Retired field name => current one.
      *
-     * v4 renamed the sentiment fields from the vendor slot to the model that
-     * produced the value (see data/schema.yaml). Page-block configs are JSON
-     * in `site_block.data` and hold field names verbatim, so blocks saved
-     * before the rename still name `gemini_polarite_ss`. Without this map
-     * normaliseFacets() would silently DROP those entries — a curated block
-     * would come back from the upgrade missing its sentiment facets, with
-     * nothing in the UI to explain why.
+     * Page-block configs are JSON in `site_block.data` and hold field names
+     * verbatim, so a block saved before a rename still names the old field.
+     * Without an entry here normaliseFacets() silently DROPS it — a curated
+     * block comes back from the upgrade missing that facet, with nothing in
+     * the UI to explain why. Mapping on read (rather than migrating
+     * `site_block.data` in Module::upgrade) keeps the module's "owns no
+     * tables, writes no migrations" lifecycle intact; a block rewrites itself
+     * to the new names the next time an admin saves it.
      *
-     * Mapping on read (rather than migrating `site_block.data` in
-     * Module::upgrade) keeps the module's "owns no tables, writes no
-     * migrations" lifecycle intact; a block rewrites itself to the new names
-     * the next time an admin saves it.
+     * EMPTY on purpose since v6. The map's only entries were the v4 sentiment
+     * rename (`gemini_polarite_ss` → `gemini_3_flash_preview_polarite_ss`, …),
+     * and v6 dropped the generation-1 sentiment fields from the index
+     * entirely. There is no honest target left: aliasing them onto a
+     * generation-2 model would make a saved block — or a bookmarked share
+     * link — quietly return a DIFFERENT model's judgement under the name it
+     * was saved with. Retired sentiment facets are dropped instead, and an
+     * admin re-picks them.
+     *
+     * Keep the constant (and its urlState.ts twin) rather than deleting it:
+     * both are wired into normaliseFacets, the URL decoder and the drift
+     * guard, so the next rename is one line here plus one there.
      *
      * @var array<string, string>
      */
     public const LEGACY_FIELD_ALIASES = [
-        'gemini_polarite_ss'    => 'gemini_3_flash_preview_polarite_ss',
-        'gemini_centralite_ss'  => 'gemini_3_flash_preview_centralite_ss',
-        'gemini_subjectivite'   => 'gemini_3_flash_preview_subjectivite',
-        'chatgpt_polarite_ss'   => 'gpt_5_mini_polarite_ss',
-        'chatgpt_centralite_ss' => 'gpt_5_mini_centralite_ss',
-        'chatgpt_subjectivite'  => 'gpt_5_mini_subjectivite',
-        'mistral_polarite_ss'   => 'ministral_14b_2512_polarite_ss',
-        'mistral_centralite_ss' => 'ministral_14b_2512_centralite_ss',
-        'mistral_subjectivite'  => 'ministral_14b_2512_subjectivite',
     ];
 
     public const SORT_OPTIONS = [
@@ -142,7 +146,13 @@ final class FacetCatalog
     /** Resolve a possibly-retired field name to the one the schema declares. */
     public static function canonicalField(string $field): string
     {
-        return self::LEGACY_FIELD_ALIASES[$field] ?? $field;
+        // Via a local, so the lookup keeps type-checking while the map is
+        // empty: PHPStan constant-folds the literal to `array{}` and would
+        // otherwise call every offset on it a guaranteed miss.
+        /** @var array<string, string> $aliases */
+        $aliases = self::LEGACY_FIELD_ALIASES;
+
+        return $aliases[$field] ?? $field;
     }
 
     /**

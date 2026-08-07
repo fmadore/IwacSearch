@@ -277,13 +277,13 @@ const FACET_LABELS: Record<Locale, Record<string, string>> = {
     // groups it under "Sentiment" and only one model is offered, so naming
     // it in every heading would be noise. The other two are labelled
     // because their only reason to appear is which model said it.
-    gemini_3_flash_preview_polarite_ss: 'Polarité',
-    gemini_3_flash_preview_centralite_ss: 'Centralité',
-    gemini_3_flash_preview_subjectivite: 'Subjectivité',
-    gpt_5_mini_polarite_ss: 'Polarité (GPT-5 mini)',
-    gpt_5_mini_centralite_ss: 'Centralité (GPT-5 mini)',
-    ministral_14b_2512_polarite_ss: 'Polarité (Ministral 14B)',
-    ministral_14b_2512_centralite_ss: 'Centralité (Ministral 14B)',
+    gpt_5_6_luna_polarite_ss: 'Polarité',
+    gpt_5_6_luna_centralite_ss: 'Centralité',
+    gpt_5_6_luna_subjectivite: 'Subjectivité',
+    mistral_small_2603_polarite_ss: 'Polarité (Mistral Small 2603)',
+    mistral_small_2603_centralite_ss: 'Centralité (Mistral Small 2603)',
+    deepseek_v4_flash_0731_polarite_ss: 'Polarité (DeepSeek V4 Flash 0731)',
+    deepseek_v4_flash_0731_centralite_ss: 'Centralité (DeepSeek V4 Flash 0731)',
   },
   en: {
     country_ss: 'Country',
@@ -308,13 +308,13 @@ const FACET_LABELS: Record<Locale, Record<string, string>> = {
     alt_title_txt: 'Alternative title',
     toc_txt: 'Table of contents',
     entity_aliases_txt: 'Also known as',
-    gemini_3_flash_preview_polarite_ss: 'Polarity',
-    gemini_3_flash_preview_centralite_ss: 'Centrality',
-    gemini_3_flash_preview_subjectivite: 'Subjectivity',
-    gpt_5_mini_polarite_ss: 'Polarity (GPT-5 mini)',
-    gpt_5_mini_centralite_ss: 'Centrality (GPT-5 mini)',
-    ministral_14b_2512_polarite_ss: 'Polarity (Ministral 14B)',
-    ministral_14b_2512_centralite_ss: 'Centrality (Ministral 14B)',
+    gpt_5_6_luna_polarite_ss: 'Polarity',
+    gpt_5_6_luna_centralite_ss: 'Centrality',
+    gpt_5_6_luna_subjectivite: 'Subjectivity',
+    mistral_small_2603_polarite_ss: 'Polarity (Mistral Small 2603)',
+    mistral_small_2603_centralite_ss: 'Centrality (Mistral Small 2603)',
+    deepseek_v4_flash_0731_polarite_ss: 'Polarity (DeepSeek V4 Flash 0731)',
+    deepseek_v4_flash_0731_centralite_ss: 'Centrality (DeepSeek V4 Flash 0731)',
   },
 };
 
@@ -328,15 +328,15 @@ export function facetLabel(field: string, locale: Locale): string {
  * Face dataset's column names.
  */
 export const SENTIMENT_FIELDS: ReadonlySet<string> = new Set([
-  'gemini_3_flash_preview_polarite_ss',
-  'gemini_3_flash_preview_centralite_ss',
-  'gemini_3_flash_preview_subjectivite',
-  'gpt_5_mini_polarite_ss',
-  'gpt_5_mini_centralite_ss',
-  'gpt_5_mini_subjectivite',
-  'ministral_14b_2512_polarite_ss',
-  'ministral_14b_2512_centralite_ss',
-  'ministral_14b_2512_subjectivite',
+  'gpt_5_6_luna_polarite_ss',
+  'gpt_5_6_luna_centralite_ss',
+  'gpt_5_6_luna_subjectivite',
+  'mistral_small_2603_polarite_ss',
+  'mistral_small_2603_centralite_ss',
+  'mistral_small_2603_subjectivite',
+  'deepseek_v4_flash_0731_polarite_ss',
+  'deepseek_v4_flash_0731_centralite_ss',
+  'deepseek_v4_flash_0731_subjectivite',
 ]);
 
 /**
@@ -345,9 +345,9 @@ export const SENTIMENT_FIELDS: ReadonlySet<string> = new Set([
  * invalid comparator"); they're emitted as a bare numeric array instead.
  */
 export const NUMERIC_FACET_FIELDS: ReadonlySet<string> = new Set([
-  'gemini_3_flash_preview_subjectivite',
-  'gpt_5_mini_subjectivite',
-  'ministral_14b_2512_subjectivite',
+  'gpt_5_6_luna_subjectivite',
+  'mistral_small_2603_subjectivite',
+  'deepseek_v4_flash_0731_subjectivite',
   'pub_year',
 ]);
 

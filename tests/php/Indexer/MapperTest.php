@@ -567,10 +567,10 @@ final class MapperTest extends TestCase
             $doc = $this->registry->get('articles')->map(
                 self::item(),
                 // Catalogued as a LINKED category, so the title carries it.
-                self::values(['iwac:geminiSubjectiviteScore' => [['vrid' => 5, 'title' => $label]]]),
+                self::values(['iwac:gpt56LunaSubjectiviteScore' => [['vrid' => 5, 'title' => $label]]]),
                 null
             );
-            self::assertSame($score, $doc['gemini_3_flash_preview_subjectivite'], $label);
+            self::assertSame($score, $doc['gpt_5_6_luna_subjectivite'], $label);
         }
     }
 
@@ -578,45 +578,67 @@ final class MapperTest extends TestCase
     {
         $doc = $this->registry->get('articles')->map(
             self::item(),
-            self::values(['iwac:mistralSubjectiviteScore' => [['value' => '4']]]),
+            self::values(['iwac:mistralSmall2603SubjectiviteScore' => [['value' => '4']]]),
             null
         );
 
-        self::assertSame(4.0, $doc['ministral_14b_2512_subjectivite']);
+        self::assertSame(4.0, $doc['mistral_small_2603_subjectivite']);
     }
 
     public function testAnUnrecognisedSubjectivityLabelIsDroppedRatherThanGuessed(): void
     {
         $doc = $this->registry->get('articles')->map(
             self::item(),
-            self::values(['iwac:geminiSubjectiviteScore' => [['value' => 'Assez objectif']]]),
+            self::values(['iwac:gpt56LunaSubjectiviteScore' => [['value' => 'Assez objectif']]]),
             null
         );
 
-        self::assertArrayNotHasKey('gemini_3_flash_preview_subjectivite', $doc);
+        self::assertArrayNotHasKey('gpt_5_6_luna_subjectivite', $doc);
     }
 
     /**
-     * The vendor-keyed Omeka term maps to a MODEL-keyed document field —
-     * `iwac:chatgpt*` → `gpt_5_mini_*`, not `chatgpt_*`. Asserting the
-     * crossover explicitly, because a mapper that echoed the Omeka infix
-     * straight through would still look right on the Gemini row.
+     * Each model's Omeka term feeds its OWN document field — no bleed between
+     * the three. Asserting the camelCase → snake_case crossover explicitly
+     * (`iwac:mistralSmall2603*` → `mistral_small_2603_*`), because a mapper
+     * that echoed the Omeka infix straight through would still populate
+     * something that looked plausible.
      */
     public function testAllThreeSentimentModelsAreMappedIndependently(): void
     {
         $doc = $this->registry->get('articles')->map(
             self::item(),
             self::values([
-                'iwac:geminiPolarite' => [['value' => 'Neutre']],
-                'iwac:chatgptCentralite' => [['vrid' => 3, 'title' => 'Centrale']],
+                'iwac:gpt56LunaPolarite' => [['value' => 'Neutre']],
+                'iwac:mistralSmall2603Centralite' => [['vrid' => 3, 'title' => 'Centrale']],
             ]),
             null
         );
 
-        self::assertSame(['Neutre'], $doc['gemini_3_flash_preview_polarite_ss']);
-        self::assertSame(['Centrale'], $doc['gpt_5_mini_centralite_ss']);
-        self::assertArrayNotHasKey('chatgpt_centralite_ss', $doc);
-        self::assertArrayNotHasKey('ministral_14b_2512_polarite_ss', $doc);
+        self::assertSame(['Neutre'], $doc['gpt_5_6_luna_polarite_ss']);
+        self::assertSame(['Centrale'], $doc['mistral_small_2603_centralite_ss']);
+        self::assertArrayNotHasKey('mistralSmall2603_centralite_ss', $doc);
+        self::assertArrayNotHasKey('deepseek_v4_flash_0731_polarite_ss', $doc);
+    }
+
+    /**
+     * `iwac:deepseekV4Flash*` is a RETIRED preview run that still holds
+     * ~11.5k annotations in Omeka, alongside the current
+     * `iwac:deepseekV4Flash0731*`. The infix of one is a prefix of the other,
+     * so a loose match would silently index the retired run's values as the
+     * current model's.
+     */
+    public function testTheRetiredDeepSeekPreviewIsNotIndexedAsTheCurrentRun(): void
+    {
+        $doc = $this->registry->get('articles')->map(
+            self::item(),
+            self::values([
+                'iwac:deepseekV4FlashPolarite' => [['value' => 'Négative']],
+                'iwac:deepseekV4Flash0731Polarite' => [['value' => 'Neutre']],
+            ]),
+            null
+        );
+
+        self::assertSame(['Neutre'], $doc['deepseek_v4_flash_0731_polarite_ss']);
     }
 
     public function testPublicationsCarryNoSentimentFields(): void
@@ -624,11 +646,11 @@ final class MapperTest extends TestCase
         // Sentiment is computed per article upstream, not per issue.
         $doc = $this->registry->get('publications')->map(
             self::item(['class' => IwacInstance::CLASS_PUBLICATION]),
-            self::values(['iwac:geminiPolarite' => [['value' => 'Neutre']]]),
+            self::values(['iwac:gpt56LunaPolarite' => [['value' => 'Neutre']]]),
             null
         );
 
-        self::assertArrayNotHasKey('gemini_3_flash_preview_polarite_ss', $doc);
+        self::assertArrayNotHasKey('gpt_5_6_luna_polarite_ss', $doc);
     }
 
     // ── References ───────────────────────────────────────────────────────

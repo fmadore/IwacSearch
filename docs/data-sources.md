@@ -27,7 +27,7 @@ live Omeka API (the Phase 0 parity spike):
 | OCR full text (`ocr_text`)                             | ✅                  | `bibo:content`                                            |
 | Display body (`abstract`)                              | ✅                  | AI summary → description → publication ToC excerpt        |
 | Publication ToC (`toc_txt`)                            | ✅                  | `dcterms:tableOfContents`                                 |
-| AI sentiment ×3 (centralité / polarité / subjectivité) | ✅                  | `iwac:{vendor}*` (see below)                              |
+| AI sentiment ×3 (centralité / polarité / subjectivité) | ✅                  | `iwac:{model}*` (see below)                               |
 | entities (persons / places / orgs / events / subjects) | ✅                  | `dcterms:subject` + `dcterms:spatial` linked resources    |
 | `is_public`                                            | ✅                  | `resource.is_public`                                      |
 | **semantic embedding**                                 | ✅ (Typesense-side) | generated in-process from title + OCR + ToC               |
@@ -50,6 +50,13 @@ Added in v5 (schema `iwac_v5`):
 | `toc_txt` (publication full-text field)  | all public `dcterms:tableOfContents` literals joined as one blob; stemmed/searchable |
 | publication `abstract`                   | first 600 Unicode characters of `toc_txt` for the public result-card body         |
 | non-press `abstract` fallback            | `dcterms:description` when `bibo:shortDescription` is absent                       |
+
+Changed in v6 (schema `iwac_v6`):
+
+| Search field                                     | Source / behavior                                                                |
+| ------------------------------------------------ | -------------------------------------------------------------------------------- |
+| `gpt_5_6_luna_*` (surfaced sentiment trio)       | `iwac:gpt56Luna*` — replaces the generation-1 `gemini_3_flash_preview_*` trio     |
+| `mistral_small_2603_*`, `deepseek_v4_flash_0731_*` | `iwac:mistralSmall2603*` / `iwac:deepseekV4Flash0731*` — indexed, not surfaced  |
 
 So HF bought exactly one facet (`lda_topic_label`) at the cost of a monthly
 refresh lag, a two-source reconciliation (HF content + Omeka ACL overlay), and
@@ -136,44 +143,56 @@ Centralité and polarité are categorical labels (linked or literal). Subjectivi
 is a linked-resource category for **all three** models, resolved to a 1–5 score:
 `Très objectif`→1 … `Très subjectif`→5.
 
-#### The Omeka term and the index field name deliberately differ
+#### Which three models, and why the field names say so
 
-Omeka's `iwac:` vocabulary names a **vendor slot** — `iwac:geminiPolarite`,
-`iwac:chatgptPolarite`, `iwac:mistralPolarite` — and, unlike `iwac:summaryModel`
-or `iwac:ocrModel`, sentiment values carry no `iwac:*Model` annotation. Nothing
-in the source records which model actually produced a value. (Recovered from the
-pipeline's git history: the corpus was annotated in January–February 2026 by
-`gemini-3-flash-preview`, `gpt-5-mini` and `ministral-14b-2512`.)
+Schema v6 indexes the **generation-2** annotators. Their Omeka properties name
+the model outright, so the term and the index field are the same name in two
+spellings:
 
-The Hugging Face dataset renamed its columns to the model on 2026-07-31 for that
-reason. Schema v4 follows, so a facet key in a shared URL means one specific
-model rather than "whatever last ran in the Gemini slot":
+| Omeka term                              | Index field (v6)                     |
+| --------------------------------------- | ------------------------------------ |
+| `iwac:gpt56LunaPolarite`                | `gpt_5_6_luna_polarite_ss`           |
+| `iwac:gpt56LunaCentralite`              | `gpt_5_6_luna_centralite_ss`         |
+| `iwac:gpt56LunaSubjectiviteScore`       | `gpt_5_6_luna_subjectivite`          |
+| `iwac:mistralSmall2603*`                | `mistral_small_2603_*`               |
+| `iwac:deepseekV4Flash0731*`             | `deepseek_v4_flash_0731_*`           |
 
-| Omeka term (unchanged)         | Index field (v4)                       | Was (v3)               |
-| ------------------------------ | -------------------------------------- | ---------------------- |
-| `iwac:geminiPolarite`          | `gemini_3_flash_preview_polarite_ss`   | `gemini_polarite_ss`   |
-| `iwac:geminiCentralite`        | `gemini_3_flash_preview_centralite_ss` | `gemini_centralite_ss` |
-| `iwac:geminiSubjectiviteScore` | `gemini_3_flash_preview_subjectivite`  | `gemini_subjectivite`  |
-| `iwac:chatgpt*`                | `gpt_5_mini_*`                         | `chatgpt_*`            |
-| `iwac:mistral*`                | `ministral_14b_2512_*`                 | `mistral_*`            |
+Watch the DeepSeek prefix: `iwac:deepseekV4Flash*` (no date) is a **retired
+preview run** that still holds ~11.5k annotations in Omeka. We read the `0731`
+properties only; the two are different readings of the same corpus.
 
-`AbstractMapper::SENTIMENT_MODELS` is the one place that map lives. **A
-re-annotation with different models means new field names and a schema bump —
-never repoint an existing prefix at a new model**, which would silently change
+Generation 1 — `iwac:gemini*` / `iwac:chatgpt*` / `iwac:mistral*`, indexed
+through v5 as `gemini_3_flash_preview_*` / `gpt_5_mini_*` /
+`ministral_14b_2512_*` — is no longer indexed. Those properties named a **vendor
+slot** and carried no `iwac:*Model` annotation, so nothing in the source recorded
+which model ran; the model names came from the pipeline's git history
+(January–February 2026: `gemini-3-flash-preview`, `gpt-5-mini`,
+`ministral-14b-2512`). The values remain in Omeka and in the HF dataset.
+
+`AbstractMapper::SENTIMENT_MODELS` is the one place the term→field map lives.
+**A re-annotation with different models means new field names and a schema bump
+— never repoint an existing prefix at a new model**, which would silently change
 what an already-published facet URL means.
 
-Retired names keep resolving on both sides: `FacetCatalog::LEGACY_FIELD_ALIASES`
-upgrades page-block configs saved before the rename, and `LEGACY_FILTER_FIELDS`
-in `src/svelte/lib/urlState.ts` does the same for share links, on decode only —
-so a legacy link rewrites itself to the current name once the user touches a
-filter. Keep the two maps in sync.
+That rule is also why v6 **emptied** both rename maps
+(`FacetCatalog::LEGACY_FIELD_ALIASES` for saved page-block configs,
+`LEGACY_FILTER_FIELDS` in `src/svelte/lib/urlState.ts` for share links) instead
+of pointing the generation-1 names at a generation-2 model: a bookmarked link
+would have come back filtered on a different model's judgement under the name it
+was shared with. Retired sentiment facets are dropped; an admin re-picks them on
+the block, and a stale link runs unfiltered. The maps stay in place, empty, for
+the next rename — `scripts/check-schema-drift.js` keeps the two in sync.
 
-Only the `gemini_3_flash_preview_*` trio is offered in the facet UI. The other
-two models are indexed and facetable, but comparing models is a dataset job, not
-a search-sidebar one — and on centralité `ministral-14b-2512` is a documented
-systematic outlier (leave-one-out κ 0.182 against 0.70–0.78), so a "2 of 3
-models agree" reading of the sidebar would be misleading. `*_subjectivite` is
-the weakest of the three measures generally; treat it as weak evidence.
+Only the `gpt_5_6_luna_*` trio is offered in the facet UI. GPT-5.6 Luna holds
+that slot because it is the only one complete on all three properties (12,305
+articles; DeepSeek 0731 is ~489 subjectivity values short). The other two models
+are indexed and facetable, but comparing models is a dataset job, not a
+search-sidebar one — and on centralité the Mistral family is a documented
+systematic outlier (`mistral-small-2603` runs κ 0.244–0.270 pairwise against
+0.511–0.725 for non-Mistral pairs), so a "2 of 3 models agree" reading of the
+sidebar would be misleading. `*_subjectivite` is the weakest of the three
+measures generally — inter-model κ as low as 0.093 in the v2 pilot — so treat it
+as weak evidence.
 
 ## Subset → resource class
 

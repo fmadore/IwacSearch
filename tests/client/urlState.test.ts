@@ -52,28 +52,22 @@ describe('readUrlState', () => {
     expect(s.filters).toEqual({ country_ss: ['Niger', 'Tógo', 'Bénin'] });
   });
 
-  it('upgrades retired sentiment facet names so old share links still resolve', () => {
-    // v4 renamed the sentiment fields from the vendor slot to the model.
-    // Links predating that rename are in bookmarks and published papers.
-    const s = readUrlState(`${base}?f.gemini_polarite_ss=Neutre&f.mistral_subjectivite=4`);
+  it('passes a retired sentiment facet name through rather than remapping it', () => {
+    // v6 dropped the generation-1 sentiment fields and emptied the alias map:
+    // no generation-2 model is an honest stand-in, so a link predating the
+    // change must NOT come back filtered on a different model's judgement.
+    // The unknown field survives decoding (the codec is a codec, not a
+    // validator) and Typesense's filter is built from the live facet list.
+    const s = readUrlState(`${base}?f.gemini_polarite_ss=Neutre&f.gpt_5_6_luna_subjectivite=4`);
     expect(s.filters).toEqual({
-      gemini_3_flash_preview_polarite_ss: ['Neutre'],
-      ministral_14b_2512_subjectivite: ['4'],
+      gemini_polarite_ss: ['Neutre'],
+      gpt_5_6_luna_subjectivite: ['4'],
     });
   });
 
-  it('merges a legacy and a current spelling of the same field', () => {
-    const s = readUrlState(
-      `${base}?f.gemini_polarite_ss=Neutre&f.gemini_3_flash_preview_polarite_ss=Positive`,
-    );
-    expect(s.filters.gemini_3_flash_preview_polarite_ss?.sort()).toEqual(['Neutre', 'Positive']);
-  });
-
-  it('re-encodes a legacy link under the current field name only', () => {
-    // The upgrade is one-way: decode accepts both, encode emits only the
-    // current name, so a shared legacy link heals the first time it round-trips.
-    const s = readUrlState(`${base}?f.gemini_polarite_ss=Neutre`);
-    expect(writeUrlState(s)).toBe('?f.gemini_3_flash_preview_polarite_ss=Neutre');
+  it('round-trips a current sentiment facet name unchanged', () => {
+    const s = readUrlState(`${base}?f.gpt_5_6_luna_polarite_ss=Neutre`);
+    expect(writeUrlState(s)).toBe('?f.gpt_5_6_luna_polarite_ss=Neutre');
   });
 
   it('does not resolve a facet name through Object.prototype', () => {

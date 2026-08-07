@@ -61,10 +61,10 @@ final class SearchDefaults
         'organisations_ss',      // organisations
         'topics_ss',             // subjects
         // Sentiment trio — grouped under one collapsible section in the
-        // client. Named for the annotating model (gemini-3-flash-preview),
-        // not the vendor slot; see data/schema.yaml.
-        'gemini_3_flash_preview_polarite_ss',    // polarity
-        'gemini_3_flash_preview_centralite_ss',  // centrality (of Islam/Muslims)
-        'gemini_3_flash_preview_subjectivite',   // subjectivity (1–5)
+        // client. Named for the annotating model (gpt-5.6-luna); the two
+        // other annotators are indexed but not surfaced. See data/schema.yaml.
+        'gpt_5_6_luna_polarite_ss',    // polarity
+        'gpt_5_6_luna_centralite_ss',  // centrality (of Islam/Muslims)
+        'gpt_5_6_luna_subjectivite',   // subjectivity (1–5)
     ];
 }

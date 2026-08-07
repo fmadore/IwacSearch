@@ -59,12 +59,12 @@ final class ScopeFilters
         'country_ss',
         'newspaper_ss',
         'language_ss',
-        // Only the gemini_3_flash_preview_* trio, matching the facet picker
-        // and the public panel — see the FacetCatalog note on why the other
-        // two annotating models stay out of the UI.
-        'gemini_3_flash_preview_polarite_ss',
-        'gemini_3_flash_preview_centralite_ss',
-        'gemini_3_flash_preview_subjectivite',
+        // Only the gpt_5_6_luna_* trio, matching the facet picker and the
+        // public panel — see the FacetCatalog note on why the other two
+        // annotating models stay out of the UI.
+        'gpt_5_6_luna_polarite_ss',
+        'gpt_5_6_luna_centralite_ss',
+        'gpt_5_6_luna_subjectivite',
     ];
 
     /**
@@ -76,7 +76,7 @@ final class ScopeFilters
      * @var list<string>
      */
     public const NUMERIC_FIELDS = [
-        'gemini_3_flash_preview_subjectivite',
+        'gpt_5_6_luna_subjectivite',
     ];
 
     /**
@@ -98,7 +98,7 @@ final class ScopeFilters
         // … "Très subjectif"→5). Static rather than live because Typesense
         // returns float facet values in a format we'd then have to match
         // against ("1" vs "1.0"), and the scale is fixed by definition.
-        'gemini_3_flash_preview_subjectivite' => ['1', '2', '3', '4', '5'],
+        'gpt_5_6_luna_subjectivite' => ['1', '2', '3', '4', '5'],
     ];
 
     /**
@@ -126,7 +126,7 @@ final class ScopeFilters
             'photograph'  => 'Photograph',          // @translate
             'reference'   => 'Reference',           // @translate
         ],
-        'gemini_3_flash_preview_subjectivite' => [
+        'gpt_5_6_luna_subjectivite' => [
             '1' => 'Very objective',    // @translate
             '2' => 'Rather objective',  // @translate
             '3' => 'Mixed',             // @translate
@@ -225,10 +225,11 @@ final class ScopeFilters
             if (!is_string($field) || !is_iterable($values)) {
                 continue;
             }
-            // Same rename hop the facet list gets: this key is newer than the
-            // v4 sentiment rename so no stored block can carry a retired name
-            // yet, but a future rename would otherwise silently drop a locked
-            // scope. Two spellings of one field merge instead of colliding.
+            // Same rename hop the facet list gets. The alias map is empty
+            // today (see FacetCatalog::LEGACY_FIELD_ALIASES), so this is a
+            // no-op — but a future rename would otherwise silently drop a
+            // locked scope. Two spellings of one field merge instead of
+            // colliding.
             $field = FacetCatalog::canonicalField($field);
             if (!in_array($field, self::FIELDS, true)) {
                 continue;
