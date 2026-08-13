@@ -42,6 +42,15 @@ final class PresetCatalog
         'type_s',
         'has_fulltext',
         'newspaper_ss',
+        // The corpus-wide and per-country scopes mix press with audiovisual,
+        // and since the 2026 YouTube ingest the video material is no longer a
+        // rounding error (1,099 of the 1,146 class-38 records, all Burkinabè
+        // so far). Without this the only publisher facet on those scopes is
+        // newspaper_ss, which audiovisual deliberately no longer populates —
+        // so a visitor could see the videos but not slice them by channel.
+        // Empty (and self-hiding) on a result set with no audiovisual in it,
+        // exactly as newspaper_ss already is on an audiovisual-only one.
+        'channel_ss',
         'language_ss',
         'places_ss',
         'persons_ss',
@@ -62,6 +71,7 @@ final class PresetCatalog
         'type_s',
         'has_fulltext',
         'newspaper_ss',
+        'channel_ss',
         'language_ss',
         'places_ss',
         'persons_ss',
@@ -70,6 +80,31 @@ final class PresetCatalog
         'gpt_5_6_luna_polarite_ss',
         'gpt_5_6_luna_centralite_ss',
         'gpt_5_6_luna_subjectivite',
+    ];
+
+    /**
+     * Audiovisual scope: the carrier/platform split leads (it is the coarsest
+     * cut through the class — web video vs deposited DVD/CD), then the
+     * channel, then the ordinary geography / authority stack.
+     *
+     * No sentiment trio: the annotators run over press articles, so on this
+     * scope those three facets would render empty on every result set.
+     * `has_fulltext` stays — for a video it means a transcript exists.
+     *
+     * @var list<string>
+     */
+    private const AUDIOVISUAL_FACETS = [
+        'media_platform_s',
+        'media_kind_s',
+        'channel_ss',
+        'country_ss',
+        'language_ss',
+        'has_fulltext',
+        'places_ss',
+        'persons_ss',
+        'organisations_ss',
+        'topics_ss',
+        'date_decade_ss',
     ];
 
     /**
@@ -124,7 +159,8 @@ final class PresetCatalog
     private static ?array $cache = null;
 
     /**
-     * Build the ordered preset map: All · 6 countries · References · Index.
+     * Build the ordered preset map: All · 6 countries · Audiovisual ·
+     * References · Index.
      *
      * @return array<string, Preset>
      */
@@ -167,6 +203,22 @@ final class PresetCatalog
                 redirectQuery: ['f.country_ss' => $country['name']],
             );
         }
+
+        // Audiovisual — content collection, type locked. A scope of its own
+        // because the class doubled in size by an order of magnitude in 2026
+        // (47 deposited recordings → 1,146 records, the rest YouTube), and
+        // none of its distinguishing facets (platform, media kind, channel)
+        // belong in the press-oriented stacks above.
+        $presets['audiovisual'] = new Preset(
+            key:           'audiovisual',
+            label:         'Audiovisual (radio, TV, YouTube)', // @translate
+            card:          self::CARD_CONTENT,
+            lockedFilters: 'type_s:=audiovisual',
+            facets:        self::AUDIOVISUAL_FACETS,
+            defaultSort:   'date:desc',
+            // No legacySlug: /browse/ never had an audiovisual page, so there
+            // is no old bookmark to redirect.
+        );
 
         // Bibliographic references — content collection, type locked.
         $presets['references'] = new Preset(

@@ -40,6 +40,13 @@ abstract class AbstractMapper implements MapperInterface
         'bibo:shortDescription',
         'dcterms:description',
     ];
+    /** Carrier / running time / rights — read by the audiovisual subset. */
+    protected const MEDIA_TERMS = [
+        'dcterms:type',
+        'dcterms:medium',
+        'dcterms:extent',
+        'dcterms:rights',
+    ];
     protected const SENTIMENT_TERMS = [
         'iwac:gpt56LunaCentralite', 'iwac:gpt56LunaPolarite', 'iwac:gpt56LunaSubjectiviteScore',
         'iwac:mistralSmall2603Centralite', 'iwac:mistralSmall2603Polarite', 'iwac:mistralSmall2603SubjectiviteScore',
@@ -86,6 +93,39 @@ abstract class AbstractMapper implements MapperInterface
         'Mixte'            => 3.0,
         'Plutôt subjectif' => 4.0,
         'Très subjectif'   => 5.0,
+    ];
+
+    /**
+     * `dcterms:type` heading → `media_kind_s`. Keys are the FOLDED heading
+     * (lowercased, diacritics stripped) so "Enregistrement vidéo" and a
+     * hand-typed "Enregistrement video" resolve the same.
+     *
+     * The archive's headings are French and controlled (linked authority
+     * items), so the map is French-only; anything else yields no value at
+     * all rather than a guess. Only "Enregistrement vidéo" is in use today
+     * (1,144 of the 1,146 class-38 items) — the audio row is here because
+     * the class is defined to hold sound recordings too, and a mapper that
+     * silently filed them as video would be worse than one that says nothing.
+     */
+    private const MEDIA_KINDS = [
+        'enregistrement video'  => 'video',
+        'enregistrement audio'  => 'audio',
+        'enregistrement sonore' => 'audio',
+    ];
+
+    /**
+     * `dcterms:medium` heading → `media_platform_s`. Same folded keys.
+     *
+     * "Vidéo sur le web" resolves to `web`, which
+     * {@see addMediaFields()} then narrows to `youtube` when the record's
+     * canonical URL is a YouTube watch link — every template-23 record has
+     * one, but the medium heading alone can't tell YouTube from any other
+     * host, and "which platform" is exactly what a visitor filters on.
+     */
+    private const MEDIA_PLATFORMS = [
+        'video sur le web' => 'web',
+        'dvd'              => 'dvd',
+        'cd'               => 'cd',
     ];
 
     public function __construct(
@@ -157,14 +197,25 @@ abstract class AbstractMapper implements MapperInterface
     }
 
     /**
-     * creator / language / newspaper facets, plus country_ss derived from the
-     * newspaper name. Used by articles / publications / documents / audiovisual
+     * creator / language / publisher facets, plus country_ss derived from the
+     * publisher name. Used by articles / publications / documents / audiovisual
      * (references override creator + country — see ReferenceMapper).
+     *
+     * `$publisherField` is which facet `dcterms:publisher` lands in. It is
+     * `newspaper_ss` everywhere except audiovisual, where the publisher is a
+     * broadcaster or a YouTube channel and calling it a newspaper is simply
+     * false (see AudiovisualMapper). The COUNTRY derivation is unaffected
+     * either way: `data/newspaper-countries.json` also covers the Burkinabè
+     * broadcasters (Radio Oméga, Burkina Info), and a producer that resolves
+     * to a country is a stronger signal than the place-heading fallback.
      *
      * @param array<string, mixed> $doc
      */
-    protected function addCommonFacets(array &$doc, PropertyValues $values): void
-    {
+    protected function addCommonFacets(
+        array &$doc,
+        PropertyValues $values,
+        string $publisherField = 'newspaper_ss'
+    ): void {
         $creators = $values->displays('dcterms:creator');
         $this->maybeAddList($doc, 'creator_ss', $creators);
         if ($creators !== []) {
@@ -175,9 +226,53 @@ abstract class AbstractMapper implements MapperInterface
 
         $this->maybeAddList($doc, 'language_ss', $values->displays('dcterms:language'));
 
-        $newspapers = $values->displays('dcterms:publisher');
-        $this->maybeAddList($doc, 'newspaper_ss', $newspapers);
-        $this->maybeAddList($doc, 'country_ss', $this->countries->forNewspapers($newspapers));
+        $publishers = $values->displays('dcterms:publisher');
+        $this->maybeAddList($doc, $publisherField, $publishers);
+        $this->maybeAddList($doc, 'country_ss', $this->countries->forNewspapers($publishers));
+    }
+
+    /**
+     * Carrier, running time and rights for an audiovisual record — the fields
+     * that let a visitor tell a web video from a deposited DVD, and read how
+     * long it runs.
+     *
+     * Both controlled headings are normalised to an internal enum rather than
+     * indexed verbatim: the source values are French display strings
+     * ("Vidéo sur le web"), so a facet URL built on them would break the day
+     * a cataloguer retitles the authority item, and the English site would
+     * show French filter values. An unrecognised heading yields NO field, so
+     * a new carrier surfaces as a gap in the facet counts rather than as a
+     * bogus value.
+     *
+     * Reads `source_url` off the document, so the caller must set it first.
+     *
+     * @param array<string, mixed> $doc
+     */
+    protected function addMediaFields(array &$doc, PropertyValues $values): void
+    {
+        $this->maybeAdd($doc, 'media_kind_s', self::MEDIA_KINDS[
+            $this->foldDiacritics(mb_strtolower(trim($values->firstDisplay('dcterms:type')), 'UTF-8'))
+        ] ?? '');
+
+        $platform = self::MEDIA_PLATFORMS[
+            $this->foldDiacritics(mb_strtolower(trim($values->firstDisplay('dcterms:medium')), 'UTF-8'))
+        ] ?? '';
+        // A web medium plus a YouTube watch URL IS the YouTube platform; a
+        // record with no medium at all but a YouTube URL is one too (the
+        // ingester always writes the URL, the medium is catalogued).
+        if (($platform === '' || $platform === 'web') && self::isYoutubeUrl((string) ($doc['source_url'] ?? ''))) {
+            $platform = 'youtube';
+        }
+        $this->maybeAdd($doc, 'media_platform_s', $platform);
+
+        $seconds = self::isoDurationToSeconds($values->firstScalar('dcterms:extent'));
+        if ($seconds !== null) {
+            $doc['duration_seconds'] = $seconds;
+        }
+
+        // `dcterms:rights` is a rightsstatements.org URI value whose literal
+        // is the human label ("In Copyright"); firstDisplay reads the label.
+        $this->maybeAdd($doc, 'rights_s', $values->firstDisplay('dcterms:rights'));
     }
 
     /**
@@ -393,5 +488,55 @@ abstract class AbstractMapper implements MapperInterface
     final protected function dateToYear(string $iso): ?int
     {
         return preg_match('/^(\d{4})/', $iso, $m) ? (int) $m[1] : null;
+    }
+
+    /**
+     * ISO-8601 duration → whole seconds. `dcterms:extent` is stored as an
+     * Omeka `numeric:duration` value, so the archive's 1,146 audiovisual
+     * records are uniformly ISO ("PT5M32S", "PT573M" — verified live, 497
+     * distinct values, none malformed).
+     *
+     * Weeks and days are accepted (a 9½-hour sermon set is already "PT573M",
+     * so a day-scale extent is not far-fetched); the DATE-part year and month
+     * designators are not, because their length depends on a calendar the
+     * value doesn't carry. Anything unparseable — or a well-formed zero —
+     * yields null, and the field stays absent rather than claiming a runtime
+     * of 0 s.
+     */
+    final protected static function isoDurationToSeconds(string $extent): ?int
+    {
+        $extent = trim($extent);
+        if ($extent === '') {
+            return null;
+        }
+        $matched = preg_match(
+            '/^P(?:(\d+)W)?(?:(\d+)D)?(?:T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+(?:\.\d+)?)S)?)?$/',
+            $extent,
+            $m
+        );
+        if ($matched !== 1) {
+            return null;
+        }
+        $seconds = ((int) ($m[1] ?? 0)) * 604800
+            + ((int) ($m[2] ?? 0)) * 86400
+            + ((int) ($m[3] ?? 0)) * 3600
+            + ((int) ($m[4] ?? 0)) * 60
+            + (int) round((float) ($m[5] ?? 0));
+
+        return $seconds > 0 ? $seconds : null;
+    }
+
+    /**
+     * Is this the canonical watch URL of a YouTube video? Host-anchored (not
+     * a substring test), so a URL that merely mentions youtube.com in a query
+     * string can't claim the platform.
+     */
+    final protected static function isYoutubeUrl(string $url): bool
+    {
+        $host = strtolower((string) parse_url(trim($url), PHP_URL_HOST));
+
+        return $host === 'youtu.be'
+            || $host === 'youtube.com'
+            || str_ends_with($host, '.youtube.com');
     }
 }

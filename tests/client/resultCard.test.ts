@@ -2,8 +2,11 @@ import { describe, expect, it } from 'vitest';
 import type { IwacDoc, IwacHit } from '../../src/svelte/lib/types';
 import {
   buildCitation,
+  buildSourceChips,
   formatDate,
+  formatDuration,
   formatYearRange,
+  pickExternalLink,
   pickMatchedIn,
   pickSnippet,
   pickTitleMarkup,
@@ -191,5 +194,113 @@ describe('formatYearRange', () => {
     expect(formatYearRange(1989, undefined)).toBe('1989');
     expect(formatYearRange(undefined, 2004)).toBe('2004');
     expect(formatYearRange(undefined, undefined)).toBe('');
+  });
+});
+
+describe('formatDuration', () => {
+  it('reads like a video player: m:ss under an hour, h:mm:ss over it', () => {
+    expect(formatDuration(332)).toBe('5:32');
+    expect(formatDuration(59)).toBe('0:59');
+    expect(formatDuration(3600)).toBe('1:00:00');
+    // The 9½-hour sermon set (PT573M) the deposited corpus actually holds.
+    expect(formatDuration(34380)).toBe('9:33:00');
+  });
+
+  it('is empty for a missing or nonsensical duration, never "0:00"', () => {
+    expect(formatDuration(undefined)).toBe('');
+    expect(formatDuration(0)).toBe('');
+    expect(formatDuration(-5)).toBe('');
+    expect(formatDuration(Number.NaN)).toBe('');
+  });
+});
+
+describe('buildSourceChips', () => {
+  const doc = (d: Partial<IwacDoc>): IwacDoc => ({ id: '1', title: 'T', ...d }) as IwacDoc;
+  const chips = (d: Partial<IwacDoc>, hideCountry = false): Array<[string, string]> =>
+    buildSourceChips(doc(d), { hideCountry, locale: 'fr' }).map((c) => [c.field, c.display]);
+
+  it('files a press publisher under newspaper_ss', () => {
+    expect(chips({ newspaper_ss: ['Sidwaya'], country_ss: ['Burkina Faso'] })).toEqual([
+      ['newspaper_ss', 'Sidwaya'],
+      ['country_ss', 'Burkina Faso'],
+    ]);
+  });
+
+  /** The acceptance criterion of issue #50: a channel is not a newspaper. */
+  it('files a broadcaster under channel_ss, never newspaper_ss', () => {
+    const out = chips({
+      type_s: 'audiovisual',
+      channel_ss: ['RTB - Radiodiffusion Télévision du Burkina'],
+      country_ss: ['Burkina Faso'],
+      media_platform_s: 'youtube',
+      source_url: 'https://www.youtube.com/watch?v=abc',
+    });
+
+    expect(out[0]).toEqual(['channel_ss', 'RTB - Radiodiffusion Télévision du Burkina']);
+    expect(out.some(([field]) => field === 'newspaper_ss')).toBe(false);
+  });
+
+  it('names the carrier only when there is no watch link to name it', () => {
+    // A deposited DVD: nothing else on the card says it is not a web video.
+    expect(
+      chips({
+        type_s: 'audiovisual',
+        channel_ss: ['Daarul Hadeethis Salafiyyah'],
+        country_ss: ['Nigeria'],
+        media_platform_s: 'dvd',
+      }),
+    ).toEqual([
+      ['channel_ss', 'Daarul Hadeethis Salafiyyah'],
+      // Displayed accented in French; the FILTER value stays the unaccented
+      // facet value, asserted below.
+      ['country_ss', 'Nigéria'],
+      ['media_platform_s', 'DVD'],
+    ]);
+    expect(
+      buildSourceChips(doc({ country_ss: ['Nigeria'] }), { hideCountry: false, locale: 'fr' })[0]
+        .value,
+    ).toBe('Nigeria');
+
+    // A YouTube video already ends its line with "Voir sur YouTube".
+    expect(
+      chips({
+        media_platform_s: 'youtube',
+        source_url: 'https://www.youtube.com/watch?v=abc',
+      }).some(([field]) => field === 'media_platform_s'),
+    ).toBe(false);
+  });
+
+  it('drops the country on a single-country scope, and copes with an empty doc', () => {
+    expect(chips({ newspaper_ss: ['Sidwaya'], country_ss: ['Burkina Faso'] }, true)).toEqual([
+      ['newspaper_ss', 'Sidwaya'],
+    ]);
+    expect(chips({})).toEqual([]);
+  });
+});
+
+describe('pickExternalLink', () => {
+  const doc = (d: Partial<IwacDoc>): IwacDoc => ({ id: '1', title: 'T', ...d }) as IwacDoc;
+
+  it('names the platform when we know it, and stays generic otherwise', () => {
+    expect(
+      pickExternalLink(
+        doc({ source_url: 'https://www.youtube.com/watch?v=abc', media_platform_s: 'youtube' }),
+      ),
+    ).toEqual({ url: 'https://www.youtube.com/watch?v=abc', labelKey: 'watch_on_youtube' });
+
+    expect(pickExternalLink(doc({ source_url: 'https://lefaso.net/article' }))?.labelKey).toBe(
+      'view_source',
+    );
+  });
+
+  it('is null without a source URL — the card then links only to the IWAC item', () => {
+    expect(pickExternalLink(doc({}))).toBeNull();
+    expect(pickExternalLink(doc({ source_url: '   ' }))).toBeNull();
+  });
+
+  /** The URL becomes an href, so a non-http scheme must never survive. */
+  it('rejects any scheme that is not http(s)', () => {
+    expect(pickExternalLink(doc({ source_url: 'javascript:alert(1)' }))).toBeNull();
+    expect(pickExternalLink(doc({ source_url: 'data:text/html,<script>' }))).toBeNull();
   });
 });

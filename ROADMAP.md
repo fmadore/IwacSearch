@@ -7,7 +7,7 @@ infrastructure decision, or block on work in another repo.
 Engineering-side deferrals (tests, static analysis, refactors, request
 reductions) live in [docs/engineering-roadmap.md](docs/engineering-roadmap.md).
 
-## 3.6.0 → 3.11.0 deployment prerequisites (do these in order)
+## 3.6.0 → 3.12.0 deployment prerequisites (do these in order)
 
 1. **Copy the module + `composer install --no-dev`** in the php container
    (unchanged from previous releases).
@@ -35,6 +35,13 @@ reductions) live in [docs/engineering-roadmap.md](docs/engineering-roadmap.md).
      since 3.7.0 was never deployed, the intermediate field names never went
      live at all. Share links and page blocks naming the old fields lose their
      sentiment filter deliberately (see docs/data-sources.md).
+   - 3.12.0 bumps it again (`iwac_v6` → `iwac_v7`) for the audiovisual
+     contract: `channel_ss`, `media_kind_s`, `media_platform_s`,
+     `duration_seconds`, `rights_s`, plus `source_url` and transcripts on
+     class 38. The trigger is upstream: IWAC-automation's YouTube ingest took
+     that class from 47 deposited recordings to 1,146 records in August 2026,
+     and until the rebuild those videos file their channel under "Journal".
+     One rebuild covers every bump above.
 
    Content search itself keeps working on the old collection throughout —
    the alias only swaps on success.

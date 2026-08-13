@@ -58,6 +58,19 @@ Changed in v6 (schema `iwac_v6`):
 | `gpt_5_6_luna_*` (surfaced sentiment trio)       | `iwac:gpt56Luna*` — replaces the generation-1 `gemini_3_flash_preview_*` trio     |
 | `mistral_small_2603_*`, `deepseek_v4_flash_0731_*` | `iwac:mistralSmall2603*` / `iwac:deepseekV4Flash0731*` — indexed, not surfaced  |
 
+Added in v7 (schema `iwac_v7`) — the audiovisual contract, see
+[Audiovisual](#audiovisual--one-class-two-populations):
+
+| Search field                    | Source / behavior                                                                     |
+| ------------------------------- | ------------------------------------------------------------------------------------- |
+| `channel_ss` (facet + searchable) | `dcterms:publisher` on class 38 — was landing in `newspaper_ss`                       |
+| `media_kind_s`                  | `dcterms:type` normalised: "Enregistrement vidéo" → `video`, audio/sonore → `audio`     |
+| `media_platform_s`              | `dcterms:medium` normalised: `dvd` · `cd` · `web`, refined to `youtube` by `source_url` |
+| `duration_seconds`              | ISO-8601 `dcterms:extent` in seconds ("PT5M32S" → 332); sortable, not a facet          |
+| `rights_s`                      | `dcterms:rights` label ("In Copyright")                                                |
+| audiovisual `source_url`        | `fabio:hasURL` — the canonical watch URL (was read by articles/references only)         |
+| audiovisual `ocr_text`          | `bibo:content` — transcripts, which the subset never even read before                   |
+
 So HF bought exactly one facet (`lda_topic_label`) at the cost of a monthly
 refresh lag, a two-source reconciliation (HF content + Omeka ACL overlay), and
 an external dependency at index time. Reading MySQL directly:
@@ -119,10 +132,17 @@ target's `dcterms:alternative`; `entity_ids` are the linked `o:id`s.
 - **references / documents** — from membership in a per-country item set
   (Références / Documents divers).
 - **audiovisual** — from a place heading naming a country (`dcterms:spatial`
-  against `IwacInstance::COUNTRY_PLACE_NAMES`). Recordings have neither
-  signal above: 44 of the 47 carry the producer "Daarul Hadeethis Salafiyyah"
-  rather than a newspaper, and they sit in topical sets ("Enregistrements
-  audio", "Collection de sermons islamiques sur vidéo"), not per-country ones.
+  against `IwacInstance::COUNTRY_PLACE_NAMES`). These have neither signal
+  above: the deposited recordings carry a producer ("Daarul Hadeethis
+  Salafiyyah" for 44 of the 47) rather than a newspaper and sit in topical
+  sets ("Enregistrements audio", "Collection de sermons islamiques sur
+  vidéo"), while the YouTube records carry a channel and sit in a per-platform
+  set (`108260 YouTube videos Burkina Faso`) — neither is a per-country set.
+  The place heading is reliable on both: every YouTube record names "Burkina
+  Faso", 45 of 47 recordings name "Nigéria".
+  The publisher path still runs FIRST and wins when it resolves, which is how
+  a Burkinabè broadcaster already in `newspaper-countries.json` (Radio Oméga,
+  Burkina Info) beats a place heading pointing elsewhere.
 
 The place path is **audiovisual-only** on purpose. Press items routinely
 mention neighbouring countries in `dcterms:spatial`, and reading country from
@@ -136,6 +156,45 @@ recordings under a country nothing filters on, which is precisely how
 `/browse/nigeria` came to be empty: audiovisual resolved to no country at
 all, and country presets exclude references, which were the only other
 Nigerian material.
+
+### Audiovisual — one class, two populations
+
+`bibo:AudioVisualDocument` (class 38) stopped being one kind of thing in
+August 2026. It now holds **47 deposited recordings** (resource template 19 —
+DVDs and CDs given to the project, mostly Nigerian, with a real media file and
+sometimes a transcript) and **1,099 videos ingested from public YouTube
+channels** (template 23 — RTB, CERFI, L'Autregard, Burkina Info, all Burkinabè
+so far), and the second number is still growing. `AudiovisualMapper` maps on
+CLASS, so the new population arrived by itself; what it needed was fidelity.
+
+| | Template 19 — deposited | Template 23 — YouTube |
+| --- | --- | --- |
+| `dcterms:publisher` | the depositing organisation | the channel |
+| `dcterms:medium`    | `DVD` / `CD`                | `Vidéo sur le web` |
+| `fabio:hasURL`      | usually absent              | always the watch URL |
+| media file          | a real video                | **none** — thumbnail derivatives only |
+
+Three consequences the mapper encodes:
+
+- **The publisher is not a newspaper.** It lands in `channel_ss`, and the card
+  renders it with its own label + icon. `newspaper_ss` stays empty on class 38,
+  so the "Journal / Newspaper" facet keeps meaning what it says. The COUNTRY
+  derivation is unchanged — it still reads the same publisher names.
+- **The controlled headings are normalised, not indexed verbatim.**
+  `media_kind_s` / `media_platform_s` are internal enums (`video`/`audio`,
+  `youtube`/`web`/`dvd`/`cd`), so a filter URL survives a cataloguer retitling
+  an authority item, and the English site doesn't show French filter values.
+  An unrecognised heading yields no value at all — a new carrier shows up as a
+  gap in the facet counts, never as a guess.
+- **A YouTube item gets no IIIF manifest.** Omeka's `youtube` ingester stores
+  no original file, so the item's manifest resolves 200 with **zero canvases**.
+  `buildBase` emits a manifest for anything thumbnailed (right for scans), so
+  `AudiovisualMapper` withdraws it for the `youtube` / `web` platforms. The
+  thumbnail stays — the poster frame is real.
+
+The canonical watch URL is `source_url`, offered on the card as a clearly
+labelled secondary action. The title link stays on the IWAC item: the archive
+record is the provenance, and a third-party URL never replaces it.
 
 ### Sentiment — categorical labels resolved to scores
 
@@ -201,7 +260,7 @@ as weak evidence.
 | articles          | 36                                   | `article`               |   OCR    | `Mapper\ArticleMapper`     |
 | publications      | 60                                   | `publication`           | OCR + ToC | `Mapper\PublicationMapper` |
 | documents         | 49                                   | `document`              |   OCR    | `Mapper\DocumentMapper`    |
-| audiovisual       | 38                                   | `audiovisual`           | description | `Mapper\AudiovisualMapper` |
+| audiovisual       | 38                                   | `audiovisual`           | transcript ‖ description | `Mapper\AudiovisualMapper` |
 | photographs       | 58 (≙ resource template 15)          | `photograph`            | description | `Mapper\PhotographMapper`  |
 | references        | 35, 43, 88, 40, 82, 178, 77, 52, 305 | `reference`             | abstract | `Mapper\ReferenceMapper`   |
 | entity collection | 94, 9, 96, 54, 244                   | (separate `iwac_index`) |    —     | `Mapper\IndexEntityMapper` |

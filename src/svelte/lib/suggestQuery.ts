@@ -34,6 +34,7 @@ const SUGGESTABLE_FACET_FIELDS: ReadonlySet<string> = new Set([
   'publisher_s',
   'book_title_s',
   'newspaper_ss',
+  'channel_ss',
 ]);
 
 /** Fallback for surfaces without prominent facets (e.g. the header box). */

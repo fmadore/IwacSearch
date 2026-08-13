@@ -295,6 +295,25 @@ final class MapperTest extends TestCase
         self::assertSame('restricted', $doc['ocr_text']);
     }
 
+    public function testAnAudiovisualTranscriptIsIndexedLikeAnyOtherFullText(): void
+    {
+        // Recordings were mapped for years on the assumption that class 38
+        // carries no bibo:content, so the term was never even read — the
+        // deposited recordings that DO have a transcript were unsearchable in
+        // their own words, and transcription is an ongoing pass.
+        self::assertContains('bibo:content', $this->registry->get('audiovisual')->readTerms());
+
+        $doc = $this->registry->get('audiovisual')->map(
+            self::item(['class' => IwacInstance::CLASS_AUDIOVISUAL]),
+            self::values(['bibo:content' => [['value' => 'Sermon transcrit en haoussa', 'vpub' => true]]]),
+            null
+        );
+
+        self::assertTrue($doc['has_fulltext']);
+        self::assertSame('Sermon transcrit en haoussa', $doc['ocr_text']);
+        self::assertSame(4, $doc['nb_words']);
+    }
+
     public function testSubsetsWithoutOcrGetAnHonestFalseRatherThanAMissingField(): void
     {
         // Keeps the "Full text available" facet counts complete across the
@@ -497,6 +516,229 @@ final class MapperTest extends TestCase
         );
 
         self::assertSame(['Bénin'], $doc['country_ss']);
+    }
+
+    // ── Audiovisual: two populations, one class ──────────────────────────
+
+    /**
+     * A deposited recording, as catalogued on resource template 19: producer,
+     * physical carrier, no URL. Modelled on item 15851 (a Nigerian DVD).
+     *
+     * @return array<string, list<array<string, mixed>>>
+     */
+    private static function depositedRecording(): array
+    {
+        return [
+            'dcterms:publisher' => [['value' => 'Daarul Hadeethis Salafiyyah']],
+            // Place headings without a vrid: resolving linked entities needs a
+            // built EntityAuthority, which is a different unit's contract (see
+            // EntityPipelineTest). What matters here is the country fallback.
+            'dcterms:spatial'   => [['title' => 'Zaria'], ['title' => 'Nigéria']],
+            'dcterms:type'      => [['vrid' => 67571, 'title' => 'Enregistrement vidéo']],
+            'dcterms:medium'    => [['vrid' => 8765, 'title' => 'DVD']],
+            'dcterms:extent'    => [['value' => 'PT126M']],
+            'dcterms:rights'    => [[
+                'uri'   => 'http://rightsstatements.org/vocab/InC-RUU/1.0/',
+                'value' => 'In Copyright - Rights-Holder(s) Unlocatable or Unidentifiable',
+            ]],
+            'dcterms:language'  => [['vrid' => 8364, 'title' => 'Haoussa']],
+        ];
+    }
+
+    /**
+     * A YouTube video, as catalogued on resource template 23: channel, web
+     * medium, ISO duration, canonical watch URL, public description, no
+     * transcript. Modelled on item 110631 (a CERFI report from Burkina Faso).
+     *
+     * @return array<string, list<array<string, mixed>>>
+     */
+    private static function youtubeVideo(): array
+    {
+        return [
+            'dcterms:publisher'   => [['vrid' => 571, 'title' => "Cercle d'études, de Recherches et de Formation Islamiques"]],
+            'dcterms:description' => [['value' => 'Le projet Djama Bêog-Nêrê du CERFI a formé les leaders musulmans.']],
+            'dcterms:date'        => [['value' => '2026-08-11']],
+            'dcterms:extent'      => [['value' => 'PT5M32S']],
+            'dcterms:type'        => [['vrid' => 67571, 'title' => 'Enregistrement vidéo']],
+            'dcterms:medium'      => [['vrid' => 108261, 'title' => 'Vidéo sur le web']],
+            'dcterms:spatial'     => [['title' => 'Burkina Faso']],
+            'dcterms:rights'      => [['uri' => 'http://rightsstatements.org/vocab/InC/1.0/', 'value' => 'In Copyright']],
+            'dcterms:language'    => [['vrid' => 8355, 'title' => 'Français']],
+            'fabio:hasURL'        => [['uri' => 'https://www.youtube.com/watch?v=vtrJSbeZNsg']],
+        ];
+    }
+
+    public function testAYoutubeVideoIsIndexedWithItsChannelDateDurationAndWatchUrl(): void
+    {
+        $doc = $this->registry->get('audiovisual')->map(
+            self::item(['class' => IwacInstance::CLASS_AUDIOVISUAL, 'item_sets' => [108260]]),
+            self::values(self::youtubeVideo()),
+            '/files/medium/feb505.jpg'
+        );
+
+        // The channel is a channel, NOT a newspaper — the whole point of the
+        // separate facet.
+        self::assertSame(
+            ["Cercle d'études, de Recherches et de Formation Islamiques"],
+            $doc['channel_ss']
+        );
+        self::assertArrayNotHasKey('newspaper_ss', $doc);
+
+        // The spatial heading is the only country signal these carry.
+        self::assertSame(['Burkina Faso'], $doc['country_ss']);
+        self::assertSame(2026, $doc['pub_year']);
+        self::assertSame('https://www.youtube.com/watch?v=vtrJSbeZNsg', $doc['source_url']);
+        self::assertSame('video', $doc['media_kind_s']);
+        self::assertSame('youtube', $doc['media_platform_s']);
+        self::assertSame(332, $doc['duration_seconds']);
+        self::assertSame('In Copyright', $doc['rights_s']);
+        // The public channel description is the card body — these have no
+        // transcript, so without it the card would be a bare title.
+        self::assertStringContainsString('Djama Bêog-Nêrê', $doc['abstract']);
+        self::assertFalse($doc['has_fulltext']);
+    }
+
+    public function testAYoutubeRecordKeepsItsPosterFrameButNotTheEmptyIiifManifest(): void
+    {
+        // Omeka's youtube ingester stores thumbnail derivatives and NO file,
+        // so the item's IIIF manifest resolves 200 with zero canvases. The
+        // thumbnail is real; the manifest is a link to nothing.
+        $doc = $this->registry->get('audiovisual')->map(
+            self::item(['class' => IwacInstance::CLASS_AUDIOVISUAL]),
+            self::values(self::youtubeVideo()),
+            '/files/medium/feb505.jpg'
+        );
+
+        self::assertSame('/files/medium/feb505.jpg', $doc['thumbnail_url']);
+        self::assertArrayNotHasKey('iiif_manifest', $doc);
+    }
+
+    public function testADepositedRecordingKeepsItsCarrierCountryAndManifest(): void
+    {
+        // The regression guard for the legacy population: the YouTube work
+        // must not cost the 47 deposited recordings anything they had.
+        $doc = $this->registry->get('audiovisual')->map(
+            self::item(['class' => IwacInstance::CLASS_AUDIOVISUAL]),
+            self::values(self::depositedRecording()),
+            '/files/medium/dvd.jpg'
+        );
+
+        self::assertSame(['Nigeria'], $doc['country_ss']);
+        self::assertSame(['Daarul Hadeethis Salafiyyah'], $doc['channel_ss']);
+        self::assertSame('dvd', $doc['media_platform_s']);
+        self::assertSame('video', $doc['media_kind_s']);
+        self::assertSame(126 * 60, $doc['duration_seconds']);
+        // A deposited DVD has a real media file behind its thumbnail.
+        self::assertSame('https://islam.zmo.de/iiif/3/123/manifest', $doc['iiif_manifest']);
+        self::assertArrayNotHasKey('source_url', $doc);
+    }
+
+    /**
+     * @return list<array{0:string,1:?int}>
+     */
+    public static function durationCases(): array
+    {
+        return [
+            ['PT5M32S', 332],
+            ['PT573M', 34380],
+            ['PT1H2M3S', 3723],
+            ['PT2H', 7200],
+            ['P1DT30M', 88200],
+            ['PT30.7S', 31],       // fractional seconds round to the nearest
+            ['PT0S', null],        // a zero runtime is no runtime
+            ['P', null],
+            ['126 min', null],     // free text is not a duration
+            ['P1Y', null],         // calendar-dependent, so not convertible
+            ['', null],
+        ];
+    }
+
+    #[\PHPUnit\Framework\Attributes\DataProvider('durationCases')]
+    public function testIsoDurationsBecomeSeconds(string $extent, ?int $seconds): void
+    {
+        $doc = $this->registry->get('audiovisual')->map(
+            self::item(['class' => IwacInstance::CLASS_AUDIOVISUAL]),
+            self::values(['dcterms:extent' => [['value' => $extent]]]),
+            null
+        );
+
+        if ($seconds === null) {
+            self::assertArrayNotHasKey('duration_seconds', $doc, $extent);
+            return;
+        }
+        self::assertSame($seconds, $doc['duration_seconds'], $extent);
+    }
+
+    public function testAnUnrecognisedMediumOrTypeHeadingIsDroppedRatherThanGuessed(): void
+    {
+        // Same rule the sentiment labels follow: a new carrier shows up as a
+        // gap in the facet counts, never as a made-up value.
+        $doc = $this->registry->get('audiovisual')->map(
+            self::item(['class' => IwacInstance::CLASS_AUDIOVISUAL]),
+            self::values([
+                'dcterms:type'   => [['vrid' => 1, 'title' => 'Bande magnétique']],
+                'dcterms:medium' => [['vrid' => 2, 'title' => 'Cassette VHS']],
+            ]),
+            null
+        );
+
+        self::assertArrayNotHasKey('media_kind_s', $doc);
+        self::assertArrayNotHasKey('media_platform_s', $doc);
+    }
+
+    public function testAWebVideoOnAnUnknownHostIsNotClaimedForYoutube(): void
+    {
+        $doc = $this->registry->get('audiovisual')->map(
+            self::item(['class' => IwacInstance::CLASS_AUDIOVISUAL]),
+            self::values([
+                'dcterms:medium' => [['vrid' => 108261, 'title' => 'Vidéo sur le web']],
+                'fabio:hasURL'   => [['uri' => 'https://vimeo.com/12345']],
+            ]),
+            null
+        );
+
+        self::assertSame('web', $doc['media_platform_s']);
+        // …and it gets no manifest either: a web video has no stored file.
+        self::assertArrayNotHasKey('iiif_manifest', $doc);
+    }
+
+    public function testTheYoutubeHostIsMatchedOnTheHostNotAsASubstring(): void
+    {
+        // A URL that merely MENTIONS youtube.com (a tracker, a search page on
+        // another host) must not claim the platform.
+        $doc = $this->registry->get('audiovisual')->map(
+            self::item(['class' => IwacInstance::CLASS_AUDIOVISUAL]),
+            self::values(['fabio:hasURL' => [['uri' => 'https://example.org/out?to=youtube.com/watch']]]),
+            null
+        );
+
+        self::assertArrayNotHasKey('media_platform_s', $doc);
+
+        foreach (['https://youtu.be/vtrJSbeZNsg', 'https://m.youtube.com/watch?v=x'] as $url) {
+            $doc = $this->registry->get('audiovisual')->map(
+                self::item(['class' => IwacInstance::CLASS_AUDIOVISUAL]),
+                self::values(['fabio:hasURL' => [['uri' => $url]]]),
+                null
+            );
+            self::assertSame('youtube', $doc['media_platform_s'], $url);
+        }
+    }
+
+    public function testOnlyAudiovisualRoutesItsPublisherToTheChannelFacet(): void
+    {
+        // The press subsets keep newspaper_ss; a stray channel_ss on an
+        // article would put a newspaper under a "Channel" heading, which is
+        // the same mislabelling in the other direction.
+        foreach (['articles', 'publications', 'documents', 'photographs'] as $subset) {
+            $mapper = $this->registry->get($subset);
+            $doc = $mapper->map(
+                self::item(['class' => $mapper->classIds()[0]]),
+                self::values(['dcterms:publisher' => [['value' => 'Sidwaya']]]),
+                null
+            );
+            self::assertSame(['Sidwaya'], $doc['newspaper_ss'], $subset);
+            self::assertArrayNotHasKey('channel_ss', $doc, $subset);
+        }
     }
 
     // ── creator_sort ─────────────────────────────────────────────────────

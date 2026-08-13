@@ -62,6 +62,13 @@ const EXPORT_INCLUDE_FIELDS = [
   'edition_s',
   'doi',
   'newspaper_ss',
+  // Audiovisual provenance: the producing channel stands in for the
+  // newspaper on those records, and the platform + running time are what
+  // makes an exported video row intelligible.
+  'channel_ss',
+  'media_kind_s',
+  'media_platform_s',
+  'duration_seconds',
   'country_ss',
   'language_ss',
   'subjects_ss',

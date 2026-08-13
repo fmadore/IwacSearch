@@ -23,13 +23,19 @@ final class SearchDefaults
      * matched ("found in subject / author / alternative title / spatial").
      * subjects_ss + places_ss make tag-only matches (no OCR mention) findable;
      * creator_ss / publisher_s / book_title_s power the references surface
-     * (search by author, journal, book title, publisher). `embedding` last —
-     * hybrid semantic recall, ignored for highlights.
+     * (search by author, journal, book title, publisher); channel_ss does the
+     * same for audiovisual, where the channel name ("RTB", "CERFI") is how
+     * people look for a broadcaster's videos and is the only metadata a
+     * transcript-less video has beyond its title and description (which lands
+     * in `abstract`, already listed above it). `embedding` last — hybrid
+     * semantic recall, ignored for highlights.
      */
     public const CONTENT_QUERY_BY        = 'title_txt,alt_title_txt,ocr_text,toc_txt,abstract,'
-        . 'creator_ss,subjects_ss,places_ss,publisher_s,book_title_s,entity_aliases_txt,embedding';
+        . 'creator_ss,subjects_ss,places_ss,publisher_s,book_title_s,channel_ss,'
+        . 'entity_aliases_txt,embedding';
     public const CONTENT_HIGHLIGHT_FIELDS = 'title_txt,alt_title_txt,ocr_text,toc_txt,abstract,'
-        . 'creator_ss,subjects_ss,places_ss,publisher_s,book_title_s,entity_aliases_txt';
+        . 'creator_ss,subjects_ss,places_ss,publisher_s,book_title_s,channel_ss,'
+        . 'entity_aliases_txt';
 
     public const ENTITY_QUERY_BY         = 'title_txt,entity_aliases_txt';
     public const ENTITY_HIGHLIGHT_FIELDS = 'title_txt';
@@ -55,7 +61,8 @@ final class SearchDefaults
         'type_s',                // article | publication | document | audiovisual
         'has_fulltext',          // full text publicly readable (primary sources only)
         'country_ss',            // country
-        'newspaper_ss',          // publisher
+        'newspaper_ss',          // newspaper (press subsets)
+        'channel_ss',            // channel / producer (audiovisual)
         'places_ss',             // locations
         'persons_ss',            // persons
         'organisations_ss',      // organisations

@@ -4,8 +4,11 @@ import { sizedThumbnail } from './thumbnail';
 import { densifyByYear, parseMentionsByYear } from './sparkline';
 import {
   buildCitation,
+  buildSourceChips,
   formatDate,
+  formatDuration,
   formatYearRange,
+  pickExternalLink,
   pickMatchedIn,
   pickSnippet,
   pickTitleMarkup,
@@ -105,21 +108,9 @@ export function createResultCard(input: () => { hit: IwacHit; hideCountry: boole
   const entityPartOfChips = $derived.by<CardChip[]>(() =>
     (doc.is_part_of_ss ?? []).map((v) => ({ field: 'is_part_of_ss', value: v, display: v })),
   );
-  // Compact source line: Newspaper · Country, each a clickable filter.
-  const sourceChips = $derived.by<CardChip[]>(() => {
-    const out: CardChip[] = [];
-    if (doc.newspaper_ss?.[0]) {
-      out.push({ field: 'newspaper_ss', value: doc.newspaper_ss[0], display: doc.newspaper_ss[0] });
-    }
-    if (!hideCountry && doc.country_ss?.[0]) {
-      out.push({
-        field: 'country_ss',
-        value: doc.country_ss[0],
-        display: countryLabel(doc.country_ss[0], locale),
-      });
-    }
-    return out;
-  });
+  // Compact source line: publisher · country (· carrier). The rule lives in
+  // resultCard.ts, where it is unit-tested.
+  const sourceChips = $derived(buildSourceChips(doc, { hideCountry, locale }));
 
   const snippet = $derived(pickSnippet(input().hit));
   const titleMarkup = $derived(pickTitleMarkup(input().hit));
@@ -131,6 +122,15 @@ export function createResultCard(input: () => { hit: IwacHit; hideCountry: boole
       ? ('journal' as const)
       : ('book' as const),
   );
+  // Audiovisual: running time in the dateline, and the canonical watch link
+  // as a secondary action. The title link stays on the IWAC item — the
+  // external URL is offered beside provenance, never in place of it.
+  const duration = $derived(formatDuration(doc.duration_seconds));
+  const externalLink = $derived.by(() => {
+    const link = pickExternalLink(doc);
+    return link ? { url: link.url, label: t(link.labelKey) } : null;
+  });
+
   const citation = $derived(buildCitation(doc, t('cite_eds')));
   const abstract = $derived((doc.abstract ?? '').trim());
   // Author byline — essential for references, informative for signed articles.
@@ -152,6 +152,12 @@ export function createResultCard(input: () => { hit: IwacHit; hideCountry: boole
     },
     get dateLabel() {
       return dateLabel;
+    },
+    get duration() {
+      return duration;
+    },
+    get externalLink() {
+      return externalLink;
     },
     get listThumb() {
       return listThumb;

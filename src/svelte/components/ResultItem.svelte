@@ -156,6 +156,36 @@
   {:else if cardData.dateLabel}<time class="iwac-card__eyebrow">{cardData.dateLabel}</time>{/if}
 {/snippet}
 
+<!-- Running time, for the audiovisual records that carry one. Sits at the end
+     of the dateline so the eye reads TYPE · DATE · 5:32 in one sweep. -->
+{#snippet eyebrowDuration()}
+  {#if !cardData.isEntity && cardData.duration}
+    <span class="iwac-card__eyebrow iwac-card__eyebrow--duration" title={t('duration')}>
+      <span class="iwac-card__meta-icon" aria-hidden="true"><Icon name="clock" /></span
+      >{cardData.duration}
+    </span>
+  {/if}
+{/snippet}
+
+<!-- Canonical external link (e.g. "Watch on YouTube"). Rendered BESIDE the
+     source chips, never as the title target: the card's primary link must
+     stay on the IWAC record, which is the provenance. -->
+{#snippet externalAction()}
+  {#if cardData.externalLink}
+    {@const link = cardData.externalLink}
+    <li>
+      <a
+        class="iwac-card__chip iwac-card__chip--external"
+        href={link.url}
+        target="_blank"
+        rel="noopener noreferrer external"
+        ><span class="iwac-card__meta-icon" aria-hidden="true"><Icon name="play" /></span
+        >{link.label}</a
+      >
+    </li>
+  {/if}
+{/snippet}
+
 <!-- Title link, with the query match highlighted in place when present. -->
 {#snippet titleLink()}
   {#if cardData.titleMarkup}
@@ -186,17 +216,20 @@
       {/if}
     </a>
     <div class="iwac-card__body iwac-card__body--gallery">
-      <header class="iwac-card__head">{@render typeBadge()}{@render eyebrowDate()}</header>
+      <header class="iwac-card__head">
+        {@render typeBadge()}{@render eyebrowDate()}{@render eyebrowDuration()}
+      </header>
       <h3 class="iwac-card__title iwac-card__title--gallery">{@render titleLink()}</h3>
       {#if cardData.isEntity}
         {#if cardData.mentionsLabel}<p class="iwac-card__gallery-meta">
             {cardData.mentionsLabel}
           </p>{/if}
-      {:else if cardData.sourceChips.length > 0}
+      {:else if cardData.sourceChips.length > 0 || cardData.externalLink}
         <ul class="iwac-card__source" aria-label={t('source')}>
           {#each cardData.sourceChips as chip (chip.field + '|' + chip.value)}
             {@render filterChip(chip)}
           {/each}
+          {@render externalAction()}
         </ul>
       {/if}
     </div>
@@ -247,7 +280,9 @@
           </ul>
         {/if}
       {:else}
-        <header class="iwac-card__head">{@render typeBadge()}{@render eyebrowDate()}</header>
+        <header class="iwac-card__head">
+          {@render typeBadge()}{@render eyebrowDate()}{@render eyebrowDuration()}
+        </header>
 
         <h3 class="iwac-card__title">{@render titleLink()}</h3>
 
@@ -297,11 +332,12 @@
           </p>
         {/if}
 
-        {#if cardData.sourceChips.length > 0}
+        {#if cardData.sourceChips.length > 0 || cardData.externalLink}
           <ul class="iwac-card__source" aria-label={t('source')}>
             {#each cardData.sourceChips as chip (chip.field + '|' + chip.value)}
               {@render filterChip(chip)}
             {/each}
+            {@render externalAction()}
           </ul>
         {/if}
       {/if}
@@ -477,6 +513,19 @@
     color: var(--primary, #ce4115);
     font-weight: 700;
     padding-inline: 0.45em 0.5em;
+  }
+  /* Running time closes the dateline; a muted interpunct separates it from
+     the date (or from the type badge on an undated recording). */
+  .iwac-card__eyebrow--duration::before {
+    content: '·';
+    color: var(--muted, #66696e);
+    font-weight: 700;
+    padding-inline: 0.45em 0.5em;
+  }
+  .iwac-card__eyebrow--duration {
+    color: var(--muted, #66696e);
+    letter-spacing: normal;
+    text-transform: none;
   }
   .iwac-card__type::before {
     content: '';
@@ -804,6 +853,28 @@
     text-underline-offset: 2px;
   }
   .iwac-card__chip--filter:focus-visible {
+    outline: none;
+    box-shadow: var(--ring-focus, 0 0 0 3px rgba(0, 0, 0, 0.1));
+    border-radius: var(--radius-sm, 0.375rem);
+  }
+
+  /*
+   * The one OUTBOUND link on a card (e.g. "Watch on YouTube"). Styled like the
+   * filter chips beside it but underlined at rest, because it leaves the site
+   * — the row's other tokens all filter in place, and an off-site jump should
+   * not look identical to them.
+   */
+  .iwac-card__chip--external {
+    color: var(--muted, #66696e);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    text-decoration-style: dotted;
+  }
+  .iwac-card__chip--external:hover {
+    color: var(--primary, #ce4115);
+    text-decoration-style: solid;
+  }
+  .iwac-card__chip--external:focus-visible {
     outline: none;
     box-shadow: var(--ring-focus, 0 0 0 3px rgba(0, 0, 0, 0.1));
     border-radius: var(--radius-sm, 0.375rem);

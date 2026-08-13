@@ -129,6 +129,21 @@ export interface IwacDoc {
   doi?: string;
   country_ss?: string[];
   newspaper_ss?: string[];
+  // ── Audiovisual (class 38) ──
+  /**
+   * Producing channel / broadcaster (`dcterms:publisher` on an audiovisual
+   * record). Separate from newspaper_ss because a YouTube channel is not a
+   * newspaper — the card renders it with its own label.
+   */
+  channel_ss?: string[];
+  /** Normalised `dcterms:type`: "video" | "audio". */
+  media_kind_s?: string;
+  /** Normalised `dcterms:medium`: "youtube" | "web" | "dvd" | "cd". */
+  media_platform_s?: string;
+  /** Running time in seconds, parsed from the ISO-8601 `dcterms:extent`. */
+  duration_seconds?: number;
+  /** Rights statement label, e.g. "In Copyright". */
+  rights_s?: string;
   language_ss?: string[];
   topics_ss?: string[];
   persons_ss?: string[];

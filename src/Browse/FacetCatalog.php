@@ -58,6 +58,15 @@ final class FacetCatalog
         'creator_ss'         => 'Author',
         'country_ss'         => 'Country',
         'newspaper_ss'       => 'Newspaper',
+        // Audiovisual: the producing channel / broadcaster (dcterms:publisher
+        // on class 38). Separate from newspaper_ss on purpose — see
+        // AudiovisualMapper. media_kind_s / media_platform_s are the
+        // normalised dcterms:type / dcterms:medium headings, so the filter
+        // values are stable enum keys rather than French display strings.
+        'channel_ss'         => 'Channel / Producer',
+        'media_kind_s'       => 'Media kind',
+        'media_platform_s'   => 'Format / Platform',
+        'rights_s'           => 'Rights',
         'language_ss'        => 'Language',
         'topics_ss'          => 'Topics',
         'persons_ss'         => 'Persons',

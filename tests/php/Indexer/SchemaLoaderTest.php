@@ -50,11 +50,32 @@ final class SchemaLoaderTest extends TestCase
         /** @var array{embed:array{from:list<string>}} $embedding */
         $embedding = $fields['embedding'];
 
-        self::assertSame('iwac_v6', $schema['name']);
+        // The collection NAME is the deployment contract: a schema change that
+        // reaches production without a bump silently keeps serving the old
+        // collection. v7 added the audiovisual fields asserted below.
+        self::assertSame('iwac_v7', $schema['name']);
         self::assertSame('string', $toc['type']);
         self::assertTrue($toc['stem']);
         self::assertTrue($toc['optional']);
         self::assertContains('toc_txt', $embedding['embed']['from']);
+    }
+
+    public function testContentV7DeclaresTheAudiovisualFields(): void
+    {
+        $schema = (new SchemaLoader(self::CONTENT))->load();
+        /** @var array<string, array<string, mixed>> $fields */
+        $fields = array_column($schema['fields'], null, 'name');
+
+        foreach (['channel_ss', 'media_kind_s', 'media_platform_s', 'rights_s'] as $name) {
+            self::assertArrayHasKey($name, $fields, $name);
+            self::assertTrue($fields[$name]['facet'] ?? false, "{$name} must be facetable");
+        }
+
+        // duration_seconds is sortable and range-filterable but deliberately
+        // NOT a facet — ~900 distinct running times is a wall, not a filter.
+        self::assertSame('int32', $fields['duration_seconds']['type']);
+        self::assertTrue($fields['duration_seconds']['sort'] ?? false);
+        self::assertFalse($fields['duration_seconds']['facet'] ?? false);
     }
 
     public function testTheReindexNameIsTheBaseNamePlusAUtcTimestamp(): void

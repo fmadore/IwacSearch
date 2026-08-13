@@ -30,6 +30,28 @@ const publication: IwacDoc = {
   omeka_url: 'https://islam.zmo.de/s/afrique_ouest/item/84',
 };
 
+/**
+ * A YouTube video (class 38, resource template 23). Its provenance lives in
+ * `channel_ss` rather than `newspaper_ss`, and its canonical watch URL is
+ * separate from the IWAC record — an export that dropped either would strip
+ * the row of everything that identifies it.
+ */
+const video: IwacDoc = {
+  id: '110631',
+  title: 'Les leaders musulmans de la province du Bazèga',
+  type_s: 'audiovisual',
+  channel_ss: ["Cercle d'études, de Recherches et de Formation Islamiques"],
+  media_kind_s: 'video',
+  media_platform_s: 'youtube',
+  duration_seconds: 332,
+  country_ss: ['Burkina Faso'],
+  date: Date.UTC(2026, 7, 11) / 1000,
+  pub_year: 2026,
+  abstract: 'Reportage de CERFI TV',
+  omeka_url: 'https://islam.zmo.de/s/afrique_ouest/item/110631',
+  source_url: 'https://www.youtube.com/watch?v=vtrJSbeZNsg',
+};
+
 const meta = { query: 'éducation', found: 27 };
 
 describe('result export serializers', () => {
@@ -78,5 +100,41 @@ describe('result export serializers', () => {
     expect(bibtex).toContain('pages = {185--209}');
     expect(bibtex).toContain('@article{iwac84,');
     expect(bibtex).toContain('journal = {Al Mawadda}');
+  });
+
+  describe('audiovisual rows', () => {
+    it('carries the channel, the running time and the watch URL in text', () => {
+      const text = serialize('txt', [video], meta, 'en');
+
+      expect(text).toContain("Cercle d'études, de Recherches et de Formation Islamiques");
+      expect(text).toContain('[Audiovisual, 5:32]');
+      // Provenance first, the third-party link after it.
+      expect(text).toContain(
+        'https://islam.zmo.de/s/afrique_ouest/item/110631. https://www.youtube.com/watch?v=vtrJSbeZNsg',
+      );
+    });
+
+    it('files the channel as the RIS studio, and the watch URL beside UR', () => {
+      const ris = serialize('ris', [video], meta, 'fr');
+
+      expect(ris).toContain('TY  - VIDEO');
+      // PB, not T2: the channel is the producer, not a series this belongs to.
+      expect(ris).toContain("PB  - Cercle d'études, de Recherches et de Formation Islamiques");
+      expect(ris).not.toContain('T2  - ');
+      expect(ris).toContain('UR  - https://islam.zmo.de/s/afrique_ouest/item/110631');
+      expect(ris).toContain('L2  - https://www.youtube.com/watch?v=vtrJSbeZNsg');
+    });
+
+    it('keeps url on the IWAC record in BibTeX and puts the source in note', () => {
+      const bibtex = serialize('bibtex', [video], meta, 'fr');
+
+      expect(bibtex).toContain('@misc{iwac110631,');
+      expect(bibtex).toContain(
+        "howpublished = {Cercle d'études, de Recherches et de Formation Islamiques}",
+      );
+      // BibTeX escaping applies to URLs too (the `_` in the site slug).
+      expect(bibtex).toContain('url = {https://islam.zmo.de/s/afrique\\_ouest/item/110631}');
+      expect(bibtex).toContain('note = {https://www.youtube.com/watch?v=vtrJSbeZNsg}');
+    });
   });
 });

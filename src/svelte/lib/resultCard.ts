@@ -1,6 +1,6 @@
 import type { IwacDoc, IwacHit } from './types';
 import type { Locale } from './i18n';
-import { facetLabel } from './i18n';
+import { countryLabel, facetLabel, mediaPlatformLabel } from './i18n';
 import { sanitizeHighlight } from './sanitize';
 
 /**
@@ -39,8 +39,9 @@ export interface MatchedIn {
 const VISIBLE_MATCH_FIELDS = ['title_txt', 'ocr_text', 'toc_txt', 'abstract'];
 
 /** Source-line chip icons — the Bootstrap Icons set the IWAC theme uses. */
-export const CHIP_ICONS: Record<string, 'newspaper' | 'globe'> = {
+export const CHIP_ICONS: Record<string, 'newspaper' | 'globe' | 'camera-video'> = {
   newspaper_ss: 'newspaper',
+  channel_ss: 'camera-video',
   country_ss: 'globe',
 };
 
@@ -157,4 +158,90 @@ export function formatDate(
 export function formatYearRange(first?: number, last?: number): string {
   if (first && last) return first === last ? String(first) : `${first} – ${last}`;
   return first ? String(first) : last ? String(last) : '';
+}
+
+/**
+ * Running time for an audiovisual card: `5:32`, or `9:33:00` once it passes
+ * an hour. Colon-separated rather than "5 min 32 s" because it is the form
+ * every video player uses, and it needs no translation. Returns '' for a
+ * missing / non-finite / non-positive duration, so the card omits the field
+ * rather than printing "0:00".
+ */
+export function formatDuration(seconds?: number): string {
+  if (typeof seconds !== 'number' || !Number.isFinite(seconds) || seconds <= 0) return '';
+  const total = Math.round(seconds);
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = total % 60;
+  const pad = (n: number): string => String(n).padStart(2, '0');
+  return h > 0 ? `${h}:${pad(m)}:${pad(s)}` : `${m}:${pad(s)}`;
+}
+
+/**
+ * The external link a card may offer BESIDE (never instead of) the IWAC item
+ * link: the canonical watch URL of a YouTube video, or whatever other source
+ * URL the record carries. Only http(s) — a `javascript:` or `data:` value in
+ * the index must never become an href.
+ *
+ * Returns the URL plus the i18n key for its label, so the platform names
+ * itself ("Watch on YouTube") where we know it.
+ */
+export function pickExternalLink(d: IwacDoc): { url: string; labelKey: string } | null {
+  const url = (d.source_url ?? '').trim();
+  if (!/^https?:\/\//i.test(url)) return null;
+  return {
+    url,
+    labelKey: d.media_platform_s === 'youtube' ? 'watch_on_youtube' : 'view_source',
+  };
+}
+
+/**
+ * The card's source line: where this record comes from, each token a
+ * clickable facet.
+ *
+ *   press        Sidwaya · Burkina Faso
+ *   audiovisual  RTB · Burkina Faso            (+ a watch link, rendered
+ *                                               separately by the component)
+ *   a DVD        Daarul Hadeethis Salafiyyah · Nigeria · DVD
+ *
+ * The publisher token reads `newspaper_ss` OR `channel_ss` — the indexer
+ * routes `dcterms:publisher` to one or the other by subset, so a YouTube
+ * channel is never labelled "Journal". Both are read here rather than
+ * branching on `type_s`, so a card is right whichever field the document
+ * carries.
+ *
+ * The carrier token is deliberately conditional: it appears only when the
+ * row has no watch link, because a video whose line already ends in "Watch
+ * on YouTube" does not need a "YouTube" chip too. What it is for is the
+ * deposited DVDs and CDs, which have no link and would otherwise be
+ * indistinguishable from a web video on the card.
+ */
+export function buildSourceChips(
+  d: IwacDoc,
+  opts: { hideCountry: boolean; locale: Locale },
+): CardChip[] {
+  const out: CardChip[] = [];
+  const publisher = d.newspaper_ss?.[0]
+    ? ({ field: 'newspaper_ss', value: d.newspaper_ss[0] } as const)
+    : d.channel_ss?.[0]
+      ? ({ field: 'channel_ss', value: d.channel_ss[0] } as const)
+      : null;
+  if (publisher) {
+    out.push({ ...publisher, display: publisher.value });
+  }
+  if (!opts.hideCountry && d.country_ss?.[0]) {
+    out.push({
+      field: 'country_ss',
+      value: d.country_ss[0],
+      display: countryLabel(d.country_ss[0], opts.locale),
+    });
+  }
+  if (d.media_platform_s && !pickExternalLink(d)) {
+    out.push({
+      field: 'media_platform_s',
+      value: d.media_platform_s,
+      display: mediaPlatformLabel(d.media_platform_s, opts.locale),
+    });
+  }
+  return out;
 }

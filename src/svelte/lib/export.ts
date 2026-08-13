@@ -1,5 +1,6 @@
 import type { IwacDoc } from './types';
 import { typeLabel, type Locale } from './i18n';
+import { formatDuration } from './resultCard';
 
 /**
  * Client-side serializers for the result-export menu: plain text, JSON,
@@ -73,14 +74,25 @@ export function exportFilename(extension: string): string {
 
 // ─── Shared field helpers ────────────────────────────────────────────────
 
-/** The container title: journal/publisher for references, newspaper else. */
+/**
+ * The container title: journal/publisher for references, newspaper for the
+ * press subsets, and the producing channel for audiovisual — which is where
+ * `dcterms:publisher` lands on those records (channel_ss, not newspaper_ss),
+ * so without the second read every exported video row lost its provenance.
+ */
 function container(d: IwacDoc): string {
   if (d.type_s === 'reference') {
     const rt = d.reference_type_ss?.[0] ?? '';
     if (rt === 'Chapitre') return (d.book_title_s ?? '').trim();
     return (d.publisher_s ?? '').trim();
   }
-  return (d.newspaper_ss?.[0] ?? '').trim();
+  return (d.newspaper_ss?.[0] ?? d.channel_ss?.[0] ?? '').trim();
+}
+
+/** An http(s) source URL, or '' — never a `javascript:` value from the index. */
+function externalUrl(d: IwacDoc): string {
+  const url = (d.source_url ?? '').trim();
+  return /^https?:\/\//i.test(url) ? url : '';
 }
 
 /** "185–209" → [start, end]; single page → [page, '']. */
@@ -131,9 +143,16 @@ function toTxt(docs: IwacDoc[], meta: ExportMeta, locale: Locale): string {
       parts.push([cont, volIss, pages].filter(Boolean).join(', '));
     }
     if (d.type_s && d.type_s !== 'reference') {
-      parts.push(`[${typeLabel(d.type_s, locale) || d.type_s}]`);
+      // Running time rides inside the type token — "[Audiovisuel, 5:32]" —
+      // rather than as a bare number nobody could interpret.
+      const dur = formatDuration(d.duration_seconds);
+      parts.push(`[${[typeLabel(d.type_s, locale) || d.type_s, dur].filter(Boolean).join(', ')}]`);
     }
     if (d.omeka_url) parts.push(d.omeka_url);
+    // The canonical source (a YouTube watch URL, an original article page)
+    // AFTER the IWAC record: provenance first, third party second.
+    const external = externalUrl(d);
+    if (external) parts.push(external);
     lines.push('- ' + parts.filter(Boolean).join('. '));
   }
   return lines.join('\n') + '\n';
@@ -198,7 +217,13 @@ function toRis(docs: IwacDoc[]): string {
     tag('TI', d.title);
     for (const a of d.creator_ss ?? []) tag('AU', a);
     for (const e of d.editor_ss ?? []) tag('A2', e);
-    tag('T2', container(d));
+    if (d.type_s === 'audiovisual') {
+      // On a VIDEO entry the channel is the studio/label (PB); T2 would
+      // claim it is a series the recording belongs to.
+      tag('PB', container(d));
+    } else {
+      tag('T2', container(d));
+    }
     // Publisher / institution — for chapters the container() above is the
     // book, so the actual publisher still goes to PB.
     const rt = d.reference_type_ss?.[0] ?? '';
@@ -219,6 +244,9 @@ function toRis(docs: IwacDoc[]): string {
     tag('AB', d.abstract);
     tag('DO', d.doi);
     tag('UR', d.omeka_url);
+    // L2 ("link to full text") carries the canonical source — the YouTube
+    // watch URL for a video — so UR keeps pointing at the IWAC record.
+    tag('L2', externalUrl(d));
     tag('ID', d.identifier ?? d.id);
     out.push('ER  - ', '');
   }
@@ -298,6 +326,9 @@ function toBibtex(docs: IwacDoc[]): string {
     add('keywords', (d.subjects_ss ?? []).join(', '));
     add('doi', d.doi);
     add('url', d.omeka_url);
+    // BibTeX has one url field, and it must stay on the IWAC record; the
+    // canonical source goes in note, which is where a reader looks for it.
+    add('note', externalUrl(d));
 
     const key = `iwac${d.id}`;
     const body = fields.map(([n, v]) => `  ${n} = {${v}}`).join(',\n');

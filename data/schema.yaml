@@ -52,8 +52,17 @@
 #      gpt-5.6-luna, mistral-small-2603, deepseek-v4-flash-0731. New field
 #      names, so a fresh collection; the v3→v4 note below on why they are
 #      keyed by model still applies, and applies more cleanly here because
-#      generation 2's Omeka properties already name the model.)
-#   - Schema changes ⇒ bump the name (`iwac_v5` → `iwac_v6`), atomic-swap
+#      generation 2's Omeka properties already name the model.
+#      v6 → v7: the audiovisual contract grows to fit the YouTube influx
+#      (class 38 went from 47 deposited recordings to 1,146 items in August
+#      2026, the rest embedded videos on resource template 23). New fields:
+#      channel_ss (the producing channel — was landing in newspaper_ss, which
+#      labelled a YouTube channel "Journal"), media_kind_s / media_platform_s
+#      (normalised from the French dcterms:type + dcterms:medium headings, so
+#      a visitor can tell web video from a deposited DVD without reading raw
+#      localised strings), duration_seconds (parsed from the ISO-8601
+#      dcterms:extent) and rights_s.)
+#   - Schema changes ⇒ bump the name (`iwac_v6` → `iwac_v7`), atomic-swap
 #     the alias. The browser only ever queries the alias, so swaps are
 #     zero-downtime.
 #
@@ -63,7 +72,7 @@
 # both the bulk reindex and the M4 incremental path. No Hugging Face.
 # country_ss is derived (newspaper→country / item-set). See docs/data-sources.md.
 
-name: iwac_v6
+name: iwac_v7
 
 # Global curation set linked to this collection. The set itself is created
 # (idempotently) by src/Indexer/CurationSync.php during the bulk reindex.
@@ -140,6 +149,34 @@ fields:
   - { name: newspaper_ss, type: "string[]", facet: true, optional: true }
   - { name: language_ss,  type: "string[]", facet: true, optional: true }
   - { name: type_s,       type: string,   facet: true, optional: true }   # article|publication|document|audiovisual|photograph|reference
+
+  # ── Audiovisual (class 38) ────────────────────────────────────────────
+  # The producing channel / organisation — `dcterms:publisher` on an
+  # audiovisual record. Deliberately NOT newspaper_ss: on template-23
+  # records the publisher is a YouTube channel (RTB, CERFI, L'Autregard),
+  # and filing it under a facet labelled "Journal / Newspaper" told the
+  # visitor something untrue. Every other subset keeps newspaper_ss.
+  # Searchable (SearchDefaults::CONTENT_QUERY_BY) so a channel name finds
+  # its videos, and suggestable in the typeahead.
+  - { name: channel_ss,       type: "string[]", facet: true, optional: true }
+  # Normalised from the French controlled headings, so neither the facet UI
+  # nor a share link depends on the localised source string:
+  #   media_kind_s     `dcterms:type`   "Enregistrement vidéo" → video
+  #   media_platform_s `dcterms:medium` "Vidéo sur le web" → youtube | web,
+  #                                     "DVD" → dvd, "CD" → cd
+  # An unrecognised heading yields NO value rather than a guess (same rule
+  # the subjectivité labels follow).
+  - { name: media_kind_s,     type: string,   facet: true, optional: true }   # video|audio
+  - { name: media_platform_s, type: string,   facet: true, optional: true }   # youtube|web|dvd|cd
+  # Running time in seconds, parsed from the ISO-8601 `dcterms:extent`
+  # duration ("PT5M32S" → 332). Sortable + range-filterable; NOT a sidebar
+  # facet (a facet over ~900 distinct running times is a wall, not a
+  # filter), and the card formats it back to h:mm:ss for display.
+  - { name: duration_seconds, type: int32,    facet: false, sort: true, optional: true }
+  # Rights statement LABEL (`dcterms:rights`, a rightsstatements.org URI
+  # whose literal is the label): "In Copyright" / "In Copyright -
+  # Rights-Holder(s) Unlocatable or Unidentifiable".
+  - { name: rights_s,         type: string,   facet: true, optional: true }
 
   # Pre-resolved entity references, resolved through EntityAuthority built from
   # the Omeka authority classes at index time. Strings are entity Titre; o:ids

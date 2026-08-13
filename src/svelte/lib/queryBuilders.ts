@@ -12,10 +12,12 @@ import { BOOLEAN_FACET_FIELDS, NUMERIC_FACET_FIELDS } from './i18n';
 /** Default content query_by — mirrors SearchDefaults::CONTENT_QUERY_BY. */
 export const CONTENT_QUERY_BY_FALLBACK =
   'title_txt,alt_title_txt,ocr_text,toc_txt,abstract,' +
-  'creator_ss,subjects_ss,places_ss,publisher_s,book_title_s,entity_aliases_txt,embedding';
+  'creator_ss,subjects_ss,places_ss,publisher_s,book_title_s,channel_ss,' +
+  'entity_aliases_txt,embedding';
 export const CONTENT_HIGHLIGHT_FALLBACK =
   'title_txt,alt_title_txt,ocr_text,toc_txt,abstract,' +
-  'creator_ss,subjects_ss,places_ss,publisher_s,book_title_s,entity_aliases_txt';
+  'creator_ss,subjects_ss,places_ss,publisher_s,book_title_s,channel_ss,' +
+  'entity_aliases_txt';
 
 /**
  * Build a Typesense `filter_by` string from the active facet selections.

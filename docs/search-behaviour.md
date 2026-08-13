@@ -13,7 +13,8 @@ facet set, ordered coarse → fine:
 | `type_s`                               | Article / Publication / Document / Audiovisual / Photograph / Reference  |
 | `has_fulltext`                         | Full text (bibo:content) exists AND is publicly readable                 |
 | `country_ss`                           | Country (Bénin, Burkina Faso, Côte d'Ivoire, Niger, Togo, Nigeria)       |
-| `newspaper_ss`                         | Publisher (newspaper / magazine title)                                   |
+| `newspaper_ss`                         | Newspaper / magazine title (press subsets)                               |
+| `channel_ss`                           | Channel / producer (audiovisual — a broadcaster or a YouTube channel)    |
 | `places_ss`                            | Mentioned locations                                                      |
 | `persons_ss`                           | Mentioned persons                                                        |
 | `organisations_ss`                     | Mentioned organisations                                                  |
@@ -119,7 +120,7 @@ raw relevance order.
 
 A page block's **Scope** dropdown picks a ready-made scope from
 `src/Search/PresetCatalog.php` — the whole corpus, one country, the
-references subset, or the entity index — or **Custom…** for a raw
+audiovisual or references subset, or the entity index — or **Custom…** for a raw
 content-collection `filter_by`. Each preset drives the collection, the
 locked filter, the facet set, and the default sort. Compose discovery
 pages by dropping a block onto any Omeka page alongside your own
@@ -136,18 +137,26 @@ use a scope to hide non-public material.
 | ------------ | -------------------- | ----------------------------------------------- |
 | All content  | `iwac_current`       | — (`is_public:=true` only)                      |
 | Bénin … Togo | `iwac_current`       | ``country_ss:=`Bénin` && type_s:!=reference`` … |
+| Audiovisual  | `iwac_current`       | `type_s:=audiovisual`                           |
 | References   | `iwac_current`       | `type_s:=reference`                             |
 | Entity index | `iwac_index_current` | — (entity cards, frequency)                     |
 
 Country scopes exclude references since v3.2: a country page surfaces the
 primary sources; the bibliography lives in its own References scope.
 
+The Audiovisual scope (v3.12) leads with **Format / Plateforme** and
+**Nature du média** — the coarsest cut through a class that now mixes 47
+deposited DVD/CD recordings with ~1,100 YouTube videos — then the channel.
+It carries no sentiment facets: the annotators run over press articles, so
+on this scope those three would be empty on every result set.
+
 ### Narrowing by value (multi-select)
 
 A scope is one choice, so it can only ever hold one country. Below the
 Scope dropdown the block form carries a **checkbox picker per field** —
-Type, Country, Newspaper, Language, and the three GPT-5.6 Luna sentiment
-fields (`src/Search/ScopeFilters.php`). Tick as many values as you like:
+Type, Country, Newspaper, Channel, Media kind, Format/Platform, Language,
+and the three GPT-5.6 Luna sentiment fields
+(`src/Search/ScopeFilters.php`). Tick as many values as you like:
 
 | Within one picker | Across pickers |
 | ----------------- | -------------- |
@@ -163,10 +172,10 @@ gives you documents that are both, i.e. none). Visitors cannot remove
 these values; an empty picker filters on nothing.
 
 Options come from the live index for the open vocabularies (newspaper
-titles, languages, sentiment labels, read public-only so the counts match
-what the block will show) and from the enums the code already declares
-for the closed ones (types, the six countries, the 1–5 subjectivity
-scale). An unreachable Typesense costs the open pickers their options and
+titles, channels, languages, sentiment labels, read public-only so the
+counts match what the block will show) and from the enums the code already
+declares for the closed ones (types, the six countries, the media
+kind/platform enums, the 1–5 subjectivity scale). An unreachable Typesense costs the open pickers their options and
 the rest their counts — the form says so and still saves; it never fails
 the page-edit screen. A saved value the index no longer offers is still
 rendered, checked and flagged, so re-saving a block can't silently drop

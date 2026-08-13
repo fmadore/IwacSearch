@@ -58,6 +58,12 @@ final class ScopeFilters
         'type_s',
         'country_ss',
         'newspaper_ss',
+        // Audiovisual scoping: "L'Autregard's videos", "web video only".
+        // channel_ss is open data (the channel list grows with every ingest)
+        // so its options come from the index; the two media enums are closed.
+        'channel_ss',
+        'media_kind_s',
+        'media_platform_s',
         'language_ss',
         // Only the gpt_5_6_luna_* trio, matching the facet picker and the
         // public panel — see the FacetCatalog note on why the other two
@@ -94,6 +100,12 @@ final class ScopeFilters
     private const STATIC_OPTIONS = [
         // The type_s enum — data/schema.yaml declares it inline on the field.
         'type_s' => ['article', 'publication', 'document', 'audiovisual', 'photograph', 'reference'],
+        // The normalised audiovisual enums (AbstractMapper::MEDIA_KINDS /
+        // MEDIA_PLATFORMS). Static because they are closed by construction:
+        // the mapper emits nothing for a heading it doesn't recognise, so a
+        // value outside these lists cannot reach the index.
+        'media_kind_s' => ['video', 'audio'],
+        'media_platform_s' => ['youtube', 'web', 'dvd', 'cd'],
         // The 1–5 subjectivity scale (docs/data-sources.md: "Très objectif"→1
         // … "Très subjectif"→5). Static rather than live because Typesense
         // returns float facet values in a format we'd then have to match
@@ -132,6 +144,16 @@ final class ScopeFilters
             '3' => 'Mixed',             // @translate
             '4' => 'Rather subjective', // @translate
             '5' => 'Very subjective',   // @translate
+        ],
+        'media_kind_s' => [
+            'video' => 'Video', // @translate
+            'audio' => 'Audio', // @translate
+        ],
+        'media_platform_s' => [
+            'youtube' => 'YouTube',   // @translate
+            'web'     => 'Web video', // @translate
+            'dvd'     => 'DVD',       // @translate
+            'cd'      => 'CD',        // @translate
         ],
     ];
 

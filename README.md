@@ -108,7 +108,7 @@ reasoning behind each of those choices: [docs/search-behaviour.md](docs/search-b
 docker compose exec php php /var/www/html/modules/IwacSearch/cli/reindex.php
 ```
 
-Builds a versioned collection (`iwac_v6_<UTC timestamp>`), reads content
+Builds a versioned collection (`iwac_v7_<UTC timestamp>`), reads content
 directly from the Omeka MySQL database, batch-imports into Typesense, then
 atomic-swaps the `iwac_current` alias. Live search keeps serving the
 previous collection until the swap completes, so a failed reindex never

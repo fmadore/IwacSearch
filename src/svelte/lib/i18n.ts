@@ -133,6 +133,9 @@ const STRINGS: Record<Locale, Record<string, string>> = {
     export_bibtex: 'BibTeX (.bib)',
     export_limit: 'Limité aux {n} premiers résultats',
     export_failed: "L'export a échoué : {message}",
+    duration: 'Durée',
+    watch_on_youtube: 'Voir sur YouTube',
+    view_source: 'Voir la source',
   },
   en: {
     search_placeholder: 'Search the IWAC…',
@@ -228,6 +231,9 @@ const STRINGS: Record<Locale, Record<string, string>> = {
     export_bibtex: 'BibTeX (.bib)',
     export_limit: 'Limited to the first {n} results',
     export_failed: 'Export failed: {message}',
+    duration: 'Duration',
+    watch_on_youtube: 'Watch on YouTube',
+    view_source: 'View the source',
   },
 };
 
@@ -252,6 +258,10 @@ const FACET_LABELS: Record<Locale, Record<string, string>> = {
   fr: {
     country_ss: 'Pays',
     newspaper_ss: 'Journal',
+    channel_ss: 'Chaîne / Producteur',
+    media_kind_s: 'Nature du média',
+    media_platform_s: 'Format / Plateforme',
+    rights_s: 'Droits',
     language_ss: 'Langue',
     topics_ss: 'Thème',
     persons_ss: 'Personne',
@@ -288,6 +298,10 @@ const FACET_LABELS: Record<Locale, Record<string, string>> = {
   en: {
     country_ss: 'Country',
     newspaper_ss: 'Newspaper',
+    channel_ss: 'Channel / Producer',
+    media_kind_s: 'Media kind',
+    media_platform_s: 'Format / Platform',
+    rights_s: 'Rights',
     language_ss: 'Language',
     topics_ss: 'Topic',
     persons_ss: 'Person',
@@ -367,8 +381,9 @@ const BOOLEAN_VALUE_LABELS: Record<Locale, Record<string, string>> = {
 // ── type_s value labels ────────────────────────────────────────────────
 // The type_s enum is an internal discriminator (article|publication|…),
 // not source data, so we fully control its display labels per locale.
-// `audiovisual` is the 45 DVD/CD recordings — NOT photographs (those live
-// only in Omeka, not the search dataset).
+// `audiovisual` covers BOTH populations of class 38 — the deposited DVD/CD
+// recordings and the videos ingested from public YouTube channels; the
+// media_platform_s facet is what separates them.
 
 const TYPE_LABELS: Record<Locale, Record<string, string>> = {
   fr: {
@@ -391,6 +406,32 @@ const TYPE_LABELS: Record<Locale, Record<string, string>> = {
 
 export function typeLabel(value: string, locale: Locale): string {
   return TYPE_LABELS[locale]?.[value] ?? TYPE_LABELS.fr[value] ?? '';
+}
+
+// ── media_kind_s / media_platform_s value labels ───────────────────────
+// Both are internal enums the indexer normalises the French `dcterms:type` /
+// `dcterms:medium` headings into (AbstractMapper::MEDIA_KINDS /
+// MEDIA_PLATFORMS), so — like type_s — we own their display text per locale
+// and a share link never carries a localised string. `web` is the honest
+// label for a web video whose host we don't recognise; every YouTube record
+// resolves to `youtube` instead.
+
+const MEDIA_KIND_LABELS: Record<Locale, Record<string, string>> = {
+  fr: { video: 'Vidéo', audio: 'Audio' },
+  en: { video: 'Video', audio: 'Audio' },
+};
+
+const MEDIA_PLATFORM_LABELS: Record<Locale, Record<string, string>> = {
+  fr: { youtube: 'YouTube', web: 'Vidéo en ligne', dvd: 'DVD', cd: 'CD' },
+  en: { youtube: 'YouTube', web: 'Web video', dvd: 'DVD', cd: 'CD' },
+};
+
+export function mediaKindLabel(value: string, locale: Locale): string {
+  return MEDIA_KIND_LABELS[locale]?.[value] ?? MEDIA_KIND_LABELS.fr[value] ?? value;
+}
+
+export function mediaPlatformLabel(value: string, locale: Locale): string {
+  return MEDIA_PLATFORM_LABELS[locale]?.[value] ?? MEDIA_PLATFORM_LABELS.fr[value] ?? value;
 }
 
 // ── Index/authority entity type labels (entity_type_s values) ──────────
@@ -486,6 +527,12 @@ export function facetValueLabel(field: string, value: string, locale: Locale): s
   }
   if (field === 'country_ss') {
     return countryLabel(value, locale);
+  }
+  if (field === 'media_kind_s') {
+    return mediaKindLabel(value, locale);
+  }
+  if (field === 'media_platform_s') {
+    return mediaPlatformLabel(value, locale);
   }
   if (field.endsWith('_subjectivite')) {
     const n = Number(value);
