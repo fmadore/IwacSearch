@@ -66,7 +66,7 @@
     height: var(--size-control-md, 2.5rem);
     padding-inline: var(--space-sm, 0.5rem) var(--space-md, 1rem);
     background: transparent;
-    color: var(--ink-light, var(--ink, #13161c));
+    color: var(--ink-light, #3f4349);
     border: none;
     border-radius: 0;
     box-shadow: none;
@@ -75,8 +75,8 @@
     font-weight: 500;
     cursor: pointer;
     transition:
-      background var(--transition-fast, 150ms ease),
-      color var(--transition-fast, 150ms ease);
+      background var(--transition-fast, 150ms cubic-bezier(0.25, 1, 0.5, 1)),
+      color var(--transition-fast, 150ms cubic-bezier(0.25, 1, 0.5, 1));
   }
   /* Hairline between the two segments. */
   .iwac-view__btn + .iwac-view__btn {
@@ -84,7 +84,7 @@
   }
   .iwac-view__btn:hover:not(.is-active) {
     background: color-mix(in oklab, var(--primary, #ce4115) 6%, transparent);
-    color: var(--ink-strong, var(--ink, #13161c));
+    color: var(--ink-strong, #05070c);
     box-shadow: none;
     transform: none;
   }
@@ -100,7 +100,7 @@
   }
   .iwac-view__btn:focus-visible {
     outline: none;
-    box-shadow: var(--ring-focus, 0 0 0 3px rgba(0, 0, 0, 0.1));
+    box-shadow: var(--ring-focus, 0 0 0 3px rgba(206, 65, 21, 0.3));
     /* Pull the ring above the sibling's border so it isn't clipped. */
     position: relative;
     z-index: 1;

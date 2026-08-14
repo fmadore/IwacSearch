@@ -83,7 +83,7 @@
     /* 2px ink rule underneath — the section-head grammar (h1.title, footer top,
        KPI figures). The strip itself is transparent: chips carry their own
        outline, no block-level wash. */
-    border-block-end: 2px solid var(--ink-strong, var(--ink, #13161c));
+    border-block-end: 2px solid var(--ink-strong, #05070c);
     padding-block-end: var(--space-sm, 0.5rem);
   }
   .iwac-summary__line {
@@ -101,9 +101,16 @@
     font-variant-numeric: tabular-nums;
   }
   .iwac-summary__count {
-    color: var(--ink-strong, var(--ink, #13161c));
+    color: var(--ink-strong, #05070c);
     /* Ledger numeral: display serif, lining figures, display tracking. */
-    font-family: var(--font-headings, Georgia, serif);
+    font-family: var(
+      --font-headings,
+      'Besley',
+      'Source Serif 4',
+      Georgia,
+      'Times New Roman',
+      serif
+    );
     font-size: var(--text-xl, 1.5rem);
     font-weight: 700;
     line-height: 1;
@@ -156,11 +163,11 @@
     background: none;
     box-shadow: none;
     transform: none;
-    color: var(--primary-hover, var(--primary, #ce4115));
+    color: var(--primary-hover, #b03710);
   }
   .iwac-summary__clear:focus-visible {
     outline: none;
-    box-shadow: var(--ring-focus, 0 0 0 3px rgba(0, 0, 0, 0.1));
+    box-shadow: var(--ring-focus, 0 0 0 3px rgba(206, 65, 21, 0.3));
     border-radius: var(--radius-sm, 0.375rem);
   }
 
@@ -172,7 +179,7 @@
     white-space: nowrap;
   }
   .iwac-summary__sort-value {
-    color: var(--ink-strong, var(--ink, #13161c));
+    color: var(--ink-strong, #05070c);
     font-weight: 600;
   }
 

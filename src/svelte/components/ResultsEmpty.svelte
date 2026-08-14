@@ -74,7 +74,7 @@
     gap: var(--space-sm, 0.5rem);
   }
   .iwac-empty strong {
-    color: var(--ink-strong, var(--ink, #13161c));
+    color: var(--ink-strong, #05070c);
     font-size: var(--text-lg, 1.1875rem);
   }
   .iwac-empty__scope {
@@ -85,7 +85,7 @@
     justify-content: center;
     gap: 0.4rem;
     font-size: var(--text-lg, 1.1875rem);
-    color: var(--ink-strong, var(--ink, #13161c));
+    color: var(--ink-strong, #05070c);
   }
   .iwac-empty__lead {
     font-weight: 600;
@@ -114,8 +114,8 @@
     cursor: pointer;
     margin-top: var(--space-xs, 0.25rem);
     transition:
-      background var(--transition-fast, 150ms ease),
-      color var(--transition-fast, 150ms ease);
+      background var(--transition-fast, 150ms cubic-bezier(0.25, 1, 0.5, 1)),
+      color var(--transition-fast, 150ms cubic-bezier(0.25, 1, 0.5, 1));
   }
   .iwac-empty__clear:hover {
     background: var(--primary, #ce4115);
@@ -125,6 +125,6 @@
   }
   .iwac-empty__clear:focus-visible {
     outline: none;
-    box-shadow: var(--ring-focus, 0 0 0 3px rgba(0, 0, 0, 0.1));
+    box-shadow: var(--ring-focus, 0 0 0 3px rgba(206, 65, 21, 0.3));
   }
 </style>

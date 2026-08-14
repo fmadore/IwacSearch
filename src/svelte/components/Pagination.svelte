@@ -152,9 +152,9 @@
     font-variant-numeric: tabular-nums;
     cursor: pointer;
     transition:
-      border-color var(--transition-fast, 150ms ease),
-      background var(--transition-fast, 150ms ease),
-      color var(--transition-fast, 150ms ease);
+      border-color var(--transition-fast, 150ms cubic-bezier(0.25, 1, 0.5, 1)),
+      background var(--transition-fast, 150ms cubic-bezier(0.25, 1, 0.5, 1)),
+      color var(--transition-fast, 150ms cubic-bezier(0.25, 1, 0.5, 1));
   }
   .iwac-pager__page:hover:not(.is-current),
   .iwac-pager__nav:hover:not(:disabled) {
@@ -167,7 +167,7 @@
   .iwac-pager__page:focus-visible,
   .iwac-pager__nav:focus-visible {
     outline: none;
-    box-shadow: var(--ring-focus, 0 0 0 3px rgba(0, 0, 0, 0.1));
+    box-shadow: var(--ring-focus, 0 0 0 3px rgba(206, 65, 21, 0.3));
   }
   .iwac-pager__page.is-current {
     background: var(--primary, #ce4115);

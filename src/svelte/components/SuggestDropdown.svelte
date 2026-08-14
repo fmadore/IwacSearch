@@ -388,7 +388,7 @@
   /* The "Search for …" action reads as the primary affordance. */
   .iwac-suggest__item--search {
     font-weight: 500;
-    color: var(--ink-strong, var(--ink, #13161c));
+    color: var(--ink-strong, #05070c);
   }
   .iwac-suggest__icon {
     display: inline-flex;
@@ -419,7 +419,7 @@
     padding: 0.125rem 0.375rem;
     background: transparent;
     border: 0;
-    border-radius: var(--radius-sm, 0.25rem);
+    border-radius: var(--radius-sm, 0.375rem);
     box-shadow: none;
     font: inherit;
     font-size: var(--text-xs, 0.8125rem);
@@ -448,7 +448,7 @@
   /* Inherited <mark> from the highlight snippet. */
   .iwac-suggest__title :global(mark) {
     background: color-mix(in oklab, var(--primary, #ce4115) 22%, transparent);
-    color: var(--ink-strong, var(--ink, #13161c));
+    color: var(--ink-strong, #05070c);
     border-radius: 0.125em;
     padding: 0 0.125em;
     font-weight: 500;

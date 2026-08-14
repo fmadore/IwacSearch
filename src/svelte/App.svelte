@@ -843,8 +843,8 @@
     font-weight: 500;
     cursor: pointer;
     transition:
-      border-color var(--transition-fast, 150ms ease),
-      color var(--transition-fast, 150ms ease);
+      border-color var(--transition-fast, 150ms cubic-bezier(0.25, 1, 0.5, 1)),
+      color var(--transition-fast, 150ms cubic-bezier(0.25, 1, 0.5, 1));
   }
   .iwac-search__copylink:hover {
     background: var(--surface, #fdfcfb);
@@ -855,7 +855,7 @@
   }
   .iwac-search__copylink:focus-visible {
     outline: none;
-    box-shadow: var(--ring-focus, 0 0 0 3px rgba(0, 0, 0, 0.1));
+    box-shadow: var(--ring-focus, 0 0 0 3px rgba(206, 65, 21, 0.3));
   }
   .iwac-search__copylink.is-copied {
     border-color: var(--primary, #ce4115);
@@ -901,8 +901,8 @@
     font-size: var(--text-sm, 0.9375rem);
     cursor: pointer;
     transition:
-      border-color var(--transition-fast, 150ms ease),
-      color var(--transition-fast, 150ms ease);
+      border-color var(--transition-fast, 150ms cubic-bezier(0.25, 1, 0.5, 1)),
+      color var(--transition-fast, 150ms cubic-bezier(0.25, 1, 0.5, 1));
   }
   .iwac-search__didyoumean-chip:hover,
   .iwac-search__didyoumean-chip:focus-visible {
@@ -987,8 +987,8 @@
       font-weight: 500;
       cursor: pointer;
       transition:
-        border-color var(--transition-fast, 150ms ease),
-        color var(--transition-fast, 150ms ease);
+        border-color var(--transition-fast, 150ms cubic-bezier(0.25, 1, 0.5, 1)),
+        color var(--transition-fast, 150ms cubic-bezier(0.25, 1, 0.5, 1));
     }
     .iwac-search__filters-trigger:hover {
       background: var(--surface, #fdfcfb);
@@ -999,7 +999,7 @@
     }
     .iwac-search__filters-trigger:focus-visible {
       outline: none;
-      box-shadow: var(--ring-focus, 0 0 0 3px rgba(0, 0, 0, 0.1));
+      box-shadow: var(--ring-focus, 0 0 0 3px rgba(206, 65, 21, 0.3));
     }
     .iwac-search__filters-trigger-icon {
       display: inline-flex;
@@ -1093,7 +1093,7 @@
     border: 1px solid color-mix(in oklab, var(--error, #c9222b) 35%, transparent);
     border-radius: var(--radius-md, 0.5rem);
     padding: var(--space-md, 1rem);
-    color: var(--ink-strong, var(--ink, #13161c));
+    color: var(--ink-strong, #05070c);
     display: flex;
     flex-direction: column;
     gap: var(--space-xs, 0.25rem);

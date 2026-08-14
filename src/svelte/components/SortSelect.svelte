@@ -59,15 +59,15 @@
     font-size: var(--text-sm, 0.9375rem);
     cursor: pointer;
     transition:
-      border-color var(--transition-fast, 150ms ease),
-      box-shadow var(--transition-fast, 150ms ease);
+      border-color var(--transition-fast, 150ms cubic-bezier(0.25, 1, 0.5, 1)),
+      box-shadow var(--transition-fast, 150ms cubic-bezier(0.25, 1, 0.5, 1));
   }
   .iwac-sort__select:hover {
-    border-color: var(--border-strong, var(--border, #ced1d6));
+    border-color: var(--border-strong, #aeb1b7);
   }
   .iwac-sort__select:focus-visible {
     outline: none;
     border-color: var(--primary, #ce4115);
-    box-shadow: var(--ring-focus, 0 0 0 3px rgba(0, 0, 0, 0.1));
+    box-shadow: var(--ring-focus, 0 0 0 3px rgba(206, 65, 21, 0.3));
   }
 </style>

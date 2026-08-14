@@ -8,9 +8,17 @@
  * file's `var(--token, #fallback)` drifts from the theme's resolved token,
  * keeping the discipline automatic as new components land.
  *
- * Scans hand-written sources under src/ (*.svelte, *.css, *.ts). The
- * canonical values come from `tokens.json`, synced from the theme by
- * IWAC-theme/scripts/build-tokens.js — the SINGLE SOURCE OF TRUTH.
+ * Scans EVERY hand-written stylesheet the module ships: `src/` (*.svelte,
+ * *.css, *.ts) and `asset/css/` (the hand-edited sheets that are not produced
+ * by Vite). The canonical values come from `tokens.json`, synced from the
+ * theme by IWAC-theme/scripts/build-tokens.js — the SINGLE SOURCE OF TRUTH.
+ *
+ * `asset/css/` was outside the walk until 2026-08 and it showed: `src/` was
+ * spotless while every single colour fallback in `asset/css/iwac-search.css`
+ * was still the pre-v2.6 cool-blue palette, including a
+ * `var(--ink-light, var(--ink, #2c2f37))` chain asserting that a secondary
+ * ink degrades to a primary one. A guard that skips a file is not a guard;
+ * it is a comment about the files it does read.
  *
  * Rules:
  *   1. No removed tokens — `--primary-hue` / `--primary-sat` (theme v2.0.0).
@@ -18,6 +26,14 @@
  *   3. Every `var(--token, #hex)` fallback must EQUAL the token's canonical
  *      light value (tokens.json). A stale fallback is a competing variable
  *      even if it only paints when the theme is absent.
+ *   3b. …and so must every NON-COLOUR fallback: type steps, spacing, radii,
+ *      control sizes, line-heights, font stacks, shadows, transitions, all
+ *      compared against `tokens.json`'s generated `values.light`. Rule 3 was
+ *      a hex-only regex, so it enforced the fallback contract for colour and
+ *      nothing else — which is precisely where this module's fallbacks had
+ *      drifted a generation (`--panel-radius` 0.75rem vs 0.5rem,
+ *      `--panel-shadow: none`, `--transition-base: 200ms ease`,
+ *      `--ring-focus` as a neutral black ring).
  *   4. No bare hex outside a var() fallback slot, in any CSS context — `.css`
  *      files AND the `<style>` block of a `.svelte` SFC (the module's CSS).
  *      Svelte TEMPLATE markup (SVG fills, inline attrs) is exempt — only the
@@ -31,6 +47,11 @@
  *      forever, silently decoupled from the scale it appeared to track.
  *      `--space-2xs` sat here undetected that way until the theme published
  *      `names` (IWAC-theme 2.9.1).
+ *   6. Every `@media (min|max-width: …)` must use one of the theme's five
+ *      published breakpoints. Media queries cannot read custom properties, so
+ *      the widths are necessarily restated as literals — which makes them the
+ *      one part of the contract held together by a comment rather than a
+ *      check.
  * Lines carrying an `allow-hex` marker comment are exempt from 3 and 4.
  *
  * Usage: node scripts/check-theme-tokens.js   (npm run lint:theme)
@@ -42,11 +63,12 @@ import { join, relative, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
-const SRC_DIR = join(ROOT, 'src');
+const SRC_DIRS = [join(ROOT, 'src'), join(ROOT, 'asset', 'css')];
 const TOKENS_PATH = join(ROOT, 'tokens.json');
 const EXTS = ['.svelte', '.css', '.ts'];
 
 function walk(dir, out = []) {
+  if (!existsSync(dir)) return out;
   for (const entry of readdirSync(dir)) {
     const p = join(dir, entry);
     if (statSync(p).isDirectory()) walk(p, out);
@@ -85,6 +107,81 @@ const HEX = /#[0-9a-fA-F]{3}(?:[0-9a-fA-F]{3}(?:[0-9a-fA-F]{2})?)?\b/g;
 const VAR_FALLBACK = /var\(\s*(--[\w-]+)\s*,\s*(#[0-9a-fA-F]{3,8})\b/g;
 const VAR_USE = /var\(\s*(--[\w-]+)/g;
 const DECL = /(--[\w-]+)\s*:/g;
+const MEDIA_WIDTH = /\((min|max)-width\s*:\s*([\d.]+)px\)/g;
+// Absolute font-size literals only: em / % / unitless scale WITH whatever token
+// the cascade already set, so they don't fork the scale. This module is already
+// clean — >75 declarations all reading var(--text-*, …), the seven literals all
+// relative — and the rule is here to keep it that way rather than to fix it.
+const ABS_FONT_SIZE = /font-size:\s*(-?[\d.]+(?:px|rem|pt))\b/i;
+
+/**
+ * Every `var(--token, <fallback>)` on a line, with the fallback text extracted
+ * by balancing parens — so a nested `var()` inside the fallback slot is
+ * captured whole instead of truncated at the first `)`.
+ */
+function varFallbacks(line) {
+  const out = [];
+  for (let i = 0; (i = line.indexOf('var(', i)) !== -1;) {
+    let depth = 0,
+      j = i + 3;
+    for (; j < line.length; j++) {
+      if (line[j] === '(') depth++;
+      else if (line[j] === ')') {
+        depth--;
+        if (depth === 0) break;
+      }
+    }
+    if (j >= line.length) break; // fallback spans lines — not our business
+    const inner = line.slice(i + 4, j);
+    const comma = inner.indexOf(',');
+    if (comma !== -1) {
+      out.push({ name: inner.slice(0, comma).trim(), fallback: inner.slice(comma + 1).trim() });
+    }
+    i = j + 1;
+  }
+  return out;
+}
+
+/**
+ * Is the position after `before` inside the fallback slot of an open `var()`?
+ *
+ * Not "does a comma immediately precede it": a fallback is a whole CSS value,
+ * so `var(--panel-border, 1px solid #ced1d6)` puts the hex three tokens past
+ * the comma. Requiring adjacency reported every composite fallback as bare
+ * chrome — which is a standing incentive to write the nested-var() chains
+ * rule 3c exists to forbid.
+ */
+function isInVarFallback(before) {
+  let depth = 0,
+    varDepth = -1,
+    sawComma = false;
+  for (let i = 0; i < before.length; i++) {
+    if (before[i] === '(') {
+      if (before.slice(Math.max(0, i - 3), i) === 'var' && varDepth === -1) {
+        varDepth = depth;
+        sawComma = false;
+      }
+      depth++;
+    } else if (before[i] === ')') {
+      depth--;
+      if (varDepth !== -1 && depth <= varDepth) varDepth = -1;
+    } else if (before[i] === ',' && varDepth !== -1 && depth === varDepth + 1) {
+      sawComma = true;
+    }
+  }
+  return varDepth !== -1 && sawComma;
+}
+
+/** Compare CSS values ignoring case, spacing, quote style and leading zeros. */
+function normValue(s) {
+  return s
+    .trim()
+    .toLowerCase()
+    .replace(/'/g, '"')
+    .replace(/\s+/g, ' ')
+    .replace(/\s*,\s*/g, ',')
+    .replace(/(^|[\s,(])\.(\d)/g, '$10.$2');
+}
 // Module-owned namespace: data colours, and properties set at runtime (e.g.
 // Svelte's `style:--iwac-drawer-width={width}` directive).
 const MODULE_PREFIX = /^--iwac-/;
@@ -106,6 +203,83 @@ function collectModuleOwned(files) {
     let m;
     DECL.lastIndex = 0;
     while ((m = DECL.exec(src)) !== null) moduleOwned.add(m[1]);
+  }
+}
+
+/**
+ * Rule 3b/3c — the non-colour half of the fallback contract.
+ *
+ * 3c: a THEME token's fallback may not itself contain `var()`. It renders only
+ *     when the theme is absent — in which case the nested theme token is
+ *     absent too, so the chain never rescues anything. What it does do is
+ *     assert a substitution: `var(--ink-light, var(--ink, …))` claims a
+ *     secondary ink degrades to a primary one, which the type hierarchy would
+ *     not survive. A MODULE-OWNED property is exempt: `var(--iwac-type-dot,
+ *     var(--muted, …))` is asking a scope question ("is this row inside a
+ *     typed chip?"), not a theme-absent question.
+ * 3b: otherwise it must equal `values.light[token]`, the theme's generated
+ *     literal for that token.
+ */
+function checkNonColourFallbacks(file, raw, n) {
+  if (!TOKENS || !TOKENS.values || !TOKENS.values.light) return;
+  for (const { name, fallback } of varFallbacks(raw)) {
+    if (fallback.includes('var(')) {
+      if (!MODULE_PREFIX.test(name)) {
+        flag(
+          file,
+          n,
+          `nested var() in the fallback for ${name} — a theme-token fallback only renders when the theme is absent, so the inner var() is absent too; write the literal`,
+          raw,
+        );
+      }
+      continue;
+    }
+    if (fallback.startsWith('#')) continue; // rule 3 owns hex
+    const canon = TOKENS.values.light[name];
+    if (canon && normValue(fallback) !== normValue(canon)) {
+      flag(
+        file,
+        n,
+        `fallback "${fallback}" for ${name} ≠ canonical ${canon} (tokens.json values.light)`,
+        raw,
+      );
+    }
+  }
+}
+
+/**
+ * Rule 6 — media-query widths must be one of the theme's breakpoints.
+ *
+ * `@media` only: a `@container` query measures its own container rather than
+ * the viewport, so the viewport scale does not apply to it.
+ */
+function checkBreakpoints(file, raw, n) {
+  if (!TOKENS || !TOKENS.breakpoints || !/@media\b/.test(raw)) return;
+  const bps = Object.values(TOKENS.breakpoints).map(parseFloat);
+  // `min-width` sits ON the breakpoint; `max-width` sits JUST BELOW it, so the
+  // two halves of a pair never both match at the boundary pixel.
+  const minOk = new Set(bps);
+  const maxOk = new Set(bps.flatMap((v) => [v - 1, v - 0.02]));
+  const names = Object.entries(TOKENS.breakpoints)
+    .map(([k, v]) => `${k} ${v}`)
+    .join(', ');
+  MEDIA_WIDTH.lastIndex = 0;
+  let m;
+  while ((m = MEDIA_WIDTH.exec(raw)) !== null) {
+    const [, kind, px] = m;
+    const v = parseFloat(px);
+    if (kind === 'min' ? !minOk.has(v) : !maxOk.has(v)) {
+      const hint =
+        kind === 'max' && minOk.has(v)
+          ? ` — use ${v - 1}px so it doesn't overlap min-width: ${v}px`
+          : '';
+      flag(
+        file,
+        n,
+        `${kind}-width: ${px}px is not one of the theme's breakpoints (${names})${hint}`,
+        raw,
+      );
+    }
   }
 }
 
@@ -153,7 +327,20 @@ function scan(file) {
         flag(file, n, 'color-mix(in srgb …) — use `in oklab`', raw);
       }
       checkVarNames(file, raw, n);
+      checkBreakpoints(file, raw, n);
+      if (cssContext) {
+        const fs = ABS_FONT_SIZE.exec(raw);
+        if (fs) {
+          flag(
+            file,
+            n,
+            `font-size: ${fs[1]} — use a --text-* token (--text-2xs is the floor)`,
+            raw,
+          );
+        }
+      }
       if (!/allow-hex/.test(raw)) {
+        checkNonColourFallbacks(file, raw, n);
         // Rule 3 — fallback value must equal canonical light token.
         if (TOKENS) {
           let m;
@@ -178,10 +365,7 @@ function scan(file) {
           HEX.lastIndex = 0;
           while ((m = HEX.exec(raw)) !== null) {
             const before = raw.slice(0, m.index);
-            const isFallback =
-              /,\s*$/.test(before) &&
-              (before.match(/var\(/g) || []).length > (before.match(/\)/g) || []).length;
-            if (!isFallback) {
+            if (!isInVarFallback(before)) {
               flag(
                 file,
                 n,
@@ -198,7 +382,7 @@ function scan(file) {
     });
 }
 
-const sources = walk(SRC_DIR);
+const sources = SRC_DIRS.flatMap((d) => walk(d));
 collectModuleOwned(sources);
 sources.forEach(scan);
 

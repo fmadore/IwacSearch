@@ -100,26 +100,35 @@ provides the Typesense container, nginx `/search-api/` proxy, and backups.
 
 ## Visual design
 
-The CSS in `asset/css/iwac-search.css` consumes
-[IWAC-theme](https://github.com/fmadore/IWAC-theme)'s CSS custom
-properties. Token vocabulary used:
+The visual stance and the token contract live in **one place, in the theme** —
+do not restate either here:
 
-| Tokens                                              | Purpose              |
-| --------------------------------------------------- | -------------------- |
-| `--space-{xs,sm,md,lg,xl}`, `--space-{2,4,6}`       | Spacing              |
-| `--primary`, `--ink`, `--muted`                     | Foreground colors    |
-| `--surface`, `--surface-raised`, `--surface-sunken` | Backgrounds          |
-| `--border`, `--border-strong`                       | Separators           |
-| `--radius-{sm,md,lg}`                               | Rounded corners      |
-| `--text-{sm,base,lg,xl,2xl}`                        | Fluid type scale     |
-| `--ring-focus`                                      | Focus ring           |
-| `--measure-{narrow,wide}`                           | Reading line lengths |
-| `--size-control-{md,lg}`                            | Form control sizes   |
+- [`docs/DESIGN-PHILOSOPHY.md`](https://github.com/fmadore/IWAC-theme/blob/master/docs/DESIGN-PHILOSOPHY.md)
+  — the register ("press archive"), what to avoid.
+- [`docs/DESIGN-SYSTEM.md`](https://github.com/fmadore/IWAC-theme/blob/master/docs/DESIGN-SYSTEM.md)
+  — the token contract, the fallback rule, the breakpoints.
+- `tokens.json` (synced into this repo) — the machine-readable truth. When it
+  and any prose disagree, it wins.
 
-All selectors are scoped under `.iwac-search-block` / standalone shell —
-no global rules — so the module never collides with theme styles. When
-adding new component CSS, **prefer existing tokens** over hard-coded
-values; var() fallbacks degrade gracefully if the theme is swapped out.
+This file used to carry its own copy of the token vocabulary. It went stale in
+the way copies do: it advertised `--text-*` as a "fluid type scale" when only
+the three display steps (`--text-3xl/4xl/5xl`) are `clamp()`ed and every UI
+step is fixed on purpose — so that a 15px facet label doesn't quietly become
+15.6px between breakpoints.
+
+### Module-specific gotchas
+
+- `asset/css/iwac-search.css` is hand-edited — **not** produced by Vite. It is
+  now inside `npm run lint:theme`'s walk; it was outside it until 2026-08,
+  which is how every colour fallback in it stayed on the pre-v2.6 blue-grey
+  palette while `src/` was spotless.
+- **A `var()` fallback must be a flat literal.** No `var(--a, var(--b, …))`
+  chains: the fallback only ever renders when the theme is absent, in which
+  case the inner token is absent too — so the chain rescues nothing and
+  asserts a substitution nobody meant (`var(--ink-strong, var(--ink, …))`
+  claimed a headline ink degrades to body ink). `lint:theme` fails on them.
+- All selectors are scoped under `.iwac-search-block` / the standalone shell —
+  no global rules — so the module never collides with theme styles.
 
 ## Linked repos
 

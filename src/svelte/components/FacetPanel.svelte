@@ -244,7 +244,7 @@
     font-weight: 700;
     letter-spacing: var(--tracking-wider, 0.08em);
     text-transform: uppercase;
-    color: var(--ink-strong, var(--ink, #13161c));
+    color: var(--ink-strong, #05070c);
   }
   .iwac-facets__clear-all {
     background: none;
@@ -265,7 +265,7 @@
   }
   .iwac-facets__clear-all:focus-visible {
     outline: none;
-    box-shadow: var(--ring-focus, 0 0 0 3px rgba(0, 0, 0, 0.1));
+    box-shadow: var(--ring-focus, 0 0 0 3px rgba(206, 65, 21, 0.3));
     border-radius: var(--radius-sm, 0.375rem);
   }
 
@@ -311,13 +311,13 @@
     box-shadow: none;
     cursor: pointer;
     font: inherit;
-    color: var(--ink-strong, var(--ink, #13161c));
+    color: var(--ink-strong, #05070c);
     font-size: var(--text-xs, 0.8125rem);
     font-weight: 700;
     letter-spacing: var(--tracking-wider, 0.08em);
     text-transform: uppercase;
     text-align: start;
-    transition: color var(--transition-fast, 150ms ease);
+    transition: color var(--transition-fast, 150ms cubic-bezier(0.25, 1, 0.5, 1));
   }
   .iwac-facets__group-heading:hover {
     color: var(--primary, #ce4115);
@@ -327,7 +327,7 @@
   }
   .iwac-facets__group-heading:focus-visible {
     outline: none;
-    box-shadow: var(--ring-focus, 0 0 0 3px rgba(0, 0, 0, 0.1));
+    box-shadow: var(--ring-focus, 0 0 0 3px rgba(206, 65, 21, 0.3));
     border-radius: var(--radius-sm, 0.375rem);
   }
   .iwac-facets__group-label {

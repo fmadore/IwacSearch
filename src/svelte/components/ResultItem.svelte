@@ -359,13 +359,13 @@
     border: none;
     border-radius: 0;
     box-shadow: none;
-    transition: background-color var(--transition-fast, 150ms ease);
+    transition: background-color var(--transition-fast, 150ms cubic-bezier(0.25, 1, 0.5, 1));
   }
   .iwac-card:hover {
     background: color-mix(in oklab, var(--primary, #ce4115) 4%, transparent);
   }
   .iwac-card:has(:focus-visible) {
-    box-shadow: var(--ring-focus, 0 0 0 3px rgba(0, 0, 0, 0.1));
+    box-shadow: var(--ring-focus, 0 0 0 3px rgba(206, 65, 21, 0.3));
   }
   /* Drop the thumb column when there's no image (list only). */
   .iwac-card--no-thumb {
@@ -406,7 +406,7 @@
     /* Newsprint at rest, full plate on engagement. Eased from saturate(0.4) so
        portraits and colour plates stay legible while scanning (punch item 5). */
     filter: saturate(0.6) contrast(1.02);
-    transition: filter var(--transition-base, 200ms ease);
+    transition: filter var(--transition-base, 200ms cubic-bezier(0.25, 1, 0.5, 1));
   }
   .iwac-card:hover .iwac-card__thumb img,
   .iwac-card__thumb:hover img {
@@ -459,7 +459,9 @@
   .iwac-card__thumb-ph {
     color: var(--muted, #66696e);
     opacity: 0.5;
-    font-size: 2rem;
+    /* A glyph, not text — but still a font-size, so it comes off the scale
+       (nearest step to the previous bare 2rem). */
+    font-size: var(--text-2xl, 1.875rem);
     display: inline-flex;
   }
 
@@ -499,7 +501,7 @@
     gap: 0.4em;
     padding: 0;
     background: transparent;
-    color: var(--ink-light, var(--ink, #13161c));
+    color: var(--ink-light, #3f4349);
     border: none;
     font-size: var(--text-xs, 0.8125rem);
     font-weight: 700;
@@ -574,11 +576,11 @@
     cursor: pointer;
     font-family: inherit;
     box-shadow: none;
-    transition: color var(--transition-fast, 150ms ease);
+    transition: color var(--transition-fast, 150ms cubic-bezier(0.25, 1, 0.5, 1));
   }
   .iwac-card__type--filter:hover {
     background: transparent;
-    color: var(--ink-strong, var(--ink, #13161c));
+    color: var(--ink-strong, #05070c);
     box-shadow: none;
     transform: none;
   }
@@ -590,7 +592,7 @@
   }
   .iwac-card__type--filter:focus-visible {
     outline: none;
-    box-shadow: var(--ring-focus, 0 0 0 3px rgba(0, 0, 0, 0.1));
+    box-shadow: var(--ring-focus, 0 0 0 3px rgba(206, 65, 21, 0.3));
     border-radius: var(--radius-sm, 0.375rem);
   }
 
@@ -598,7 +600,7 @@
     margin: 0;
     font-size: var(--text-lg, 1.1875rem);
     line-height: 1.3;
-    color: var(--ink-strong, var(--ink, #13161c));
+    color: var(--ink-strong, #05070c);
     /* Clarendon slabs clog at tighter tracking — shared display token. */
     letter-spacing: var(--tracking-display, -0.01em);
   }
@@ -625,7 +627,7 @@
   .iwac-card__byline {
     margin: 0;
     font-size: var(--text-sm, 0.9375rem);
-    color: var(--ink-light, var(--ink, #13161c));
+    color: var(--ink-light, #3f4349);
     line-height: 1.4;
     display: -webkit-box;
     -webkit-line-clamp: 2;
@@ -644,7 +646,7 @@
     color: inherit;
     cursor: pointer;
     text-align: start;
-    transition: color var(--transition-fast, 150ms ease);
+    transition: color var(--transition-fast, 150ms cubic-bezier(0.25, 1, 0.5, 1));
   }
   .iwac-card__author:hover {
     color: var(--primary, #ce4115);
@@ -662,12 +664,12 @@
   }
   .iwac-card__author:focus-visible {
     outline: none;
-    box-shadow: var(--ring-focus, 0 0 0 3px rgba(0, 0, 0, 0.1));
+    box-shadow: var(--ring-focus, 0 0 0 3px rgba(206, 65, 21, 0.3));
     border-radius: var(--radius-sm, 0.375rem);
   }
   .iwac-card__byline-sep::before {
     content: ', ';
-    color: var(--ink-light, var(--ink, #13161c));
+    color: var(--ink-light, #3f4349);
   }
 
   .iwac-card__meta-icon {
@@ -693,7 +695,7 @@
   .iwac-card__snippet {
     margin: var(--space-xs, 0.25rem) 0 0;
     font-size: var(--text-sm, 0.9375rem);
-    color: var(--ink-light, var(--ink, #13161c));
+    color: var(--ink-light, #3f4349);
     line-height: var(--line-height-normal, 1.5);
     display: -webkit-box;
     -webkit-line-clamp: 3;
@@ -734,7 +736,7 @@
   }
   .iwac-card__matched-field {
     font-weight: 600;
-    color: var(--ink-light, var(--ink, #13161c));
+    color: var(--ink-light, #3f4349);
   }
   .iwac-card__matched-field::after {
     content: ' : ';
@@ -762,11 +764,18 @@
     gap: 0.35em;
   }
   .iwac-card__mentions-n {
-    font-family: var(--font-headings, Georgia, serif);
+    font-family: var(
+      --font-headings,
+      'Besley',
+      'Source Serif 4',
+      Georgia,
+      'Times New Roman',
+      serif
+    );
     font-size: var(--text-xl, 1.5rem);
     font-weight: 700;
     line-height: 1;
-    color: var(--ink-strong, var(--ink, #13161c));
+    color: var(--ink-strong, #05070c);
     /* Lining, NOT tabular. Besley's `tnum` zero is frozen at a 55-unit
        advance on every weight while 1-9 track the weight axis (66 at 700),
        so a tabular zero renders 17% narrow and reads as un-bolded ("3 009").
@@ -835,7 +844,7 @@
     cursor: pointer;
     font-family: inherit;
     box-shadow: none;
-    transition: color var(--transition-fast, 150ms ease);
+    transition: color var(--transition-fast, 150ms cubic-bezier(0.25, 1, 0.5, 1));
   }
   .iwac-card__chip--filter:hover {
     background: transparent;
@@ -854,7 +863,7 @@
   }
   .iwac-card__chip--filter:focus-visible {
     outline: none;
-    box-shadow: var(--ring-focus, 0 0 0 3px rgba(0, 0, 0, 0.1));
+    box-shadow: var(--ring-focus, 0 0 0 3px rgba(206, 65, 21, 0.3));
     border-radius: var(--radius-sm, 0.375rem);
   }
 
@@ -876,7 +885,7 @@
   }
   .iwac-card__chip--external:focus-visible {
     outline: none;
-    box-shadow: var(--ring-focus, 0 0 0 3px rgba(0, 0, 0, 0.1));
+    box-shadow: var(--ring-focus, 0 0 0 3px rgba(206, 65, 21, 0.3));
     border-radius: var(--radius-sm, 0.375rem);
   }
 

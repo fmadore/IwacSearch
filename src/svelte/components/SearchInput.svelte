@@ -139,10 +139,10 @@
     background: var(--surface, #fdfcfb);
     border: 1px solid var(--border, #ced1d6);
     border-radius: var(--radius-md, 0.5rem);
-    box-shadow: var(--shadow-xs, 0 1px 2px rgba(0, 0, 0, 0.04));
+    box-shadow: var(--shadow-xs, 0 1px 2px 0 rgba(20, 22, 27, 0.06));
     transition:
-      border-color var(--transition-fast, 150ms ease),
-      box-shadow var(--transition-fast, 150ms ease);
+      border-color var(--transition-fast, 150ms cubic-bezier(0.25, 1, 0.5, 1)),
+      box-shadow var(--transition-fast, 150ms cubic-bezier(0.25, 1, 0.5, 1));
   }
   .iwac-input__field::placeholder {
     color: var(--muted, #66696e);
@@ -156,12 +156,12 @@
     display: none;
   }
   .iwac-input__field:hover {
-    border-color: var(--border-strong, var(--border, #ced1d6));
+    border-color: var(--border-strong, #aeb1b7);
   }
   .iwac-input__field:focus {
     outline: none;
     border-color: var(--primary, #ce4115);
-    box-shadow: var(--ring-focus, 0 0 0 3px rgba(0, 0, 0, 0.1));
+    box-shadow: var(--ring-focus, 0 0 0 3px rgba(206, 65, 21, 0.3));
   }
   .iwac-input__clear {
     position: absolute;

@@ -318,7 +318,7 @@
     align-items: center;
     justify-content: space-between;
     gap: var(--space-sm, 0.5rem);
-    color: var(--ink-strong, var(--ink, #13161c));
+    color: var(--ink-strong, #05070c);
   }
   .iwac-daterange__label {
     font-size: var(--text-xs, 0.8125rem);
@@ -353,7 +353,7 @@
   }
   .iwac-daterange__reset:focus-visible {
     outline: none;
-    box-shadow: var(--ring-focus, 0 0 0 3px rgba(0, 0, 0, 0.1));
+    box-shadow: var(--ring-focus, 0 0 0 3px rgba(206, 65, 21, 0.3));
     border-radius: var(--radius-sm, 0.375rem);
   }
 
@@ -380,8 +380,8 @@
        them into blobs; a 1px cap just softens the top edge. */
     border-radius: 1px 1px 0 0;
     transition:
-      height var(--transition-base, 200ms ease),
-      background-color var(--transition-fast, 150ms ease);
+      height var(--transition-base, 200ms cubic-bezier(0.25, 1, 0.5, 1)),
+      background-color var(--transition-fast, 150ms cubic-bezier(0.25, 1, 0.5, 1));
   }
   /* Years inside the selected range take the brand, echoing the fill bar. */
   .iwac-daterange__bar--in {
@@ -449,7 +449,11 @@
     background: var(--surface, #fdfcfb);
     border: 2px solid var(--primary, #ce4115);
     border-radius: var(--radius-full, 9999px);
-    box-shadow: var(--shadow-sm, 0 1px 3px rgba(0, 0, 0, 0.12));
+    box-shadow: var(
+      --shadow-sm,
+      0 1px 3px 0 rgba(9, 11, 15, 0.12),
+      0 1px 2px -1px rgba(20, 22, 27, 0.06)
+    );
     cursor: grab;
     transition:
       transform 80ms ease,
@@ -459,18 +463,26 @@
   }
   .iwac-daterange__thumb:hover {
     transform: translateX(-50%) scale(1.08);
-    box-shadow: var(--shadow-md, 0 4px 6px rgba(0, 0, 0, 0.12));
+    box-shadow: var(
+      --shadow-md,
+      0 4px 6px -1px rgba(9, 11, 15, 0.12),
+      0 2px 4px -2px rgba(20, 22, 27, 0.06)
+    );
   }
   .iwac-daterange__thumb:focus-visible {
     outline: none;
     box-shadow:
-      var(--shadow-sm, 0 1px 3px rgba(0, 0, 0, 0.12)),
-      var(--ring-focus, 0 0 0 3px color-mix(in oklab, var(--primary, #ce4115) 30%, transparent));
+      var(--shadow-sm, 0 1px 3px 0 rgba(9, 11, 15, 0.12), 0 1px 2px -1px rgba(20, 22, 27, 0.06)),
+      var(--ring-focus, 0 0 0 3px rgba(206, 65, 21, 0.3));
   }
   .iwac-daterange__thumb--dragging {
     cursor: grabbing;
     transform: translateX(-50%) scale(1.12);
-    box-shadow: var(--shadow-md, 0 4px 6px rgba(0, 0, 0, 0.12));
+    box-shadow: var(
+      --shadow-md,
+      0 4px 6px -1px rgba(9, 11, 15, 0.12),
+      0 2px 4px -2px rgba(20, 22, 27, 0.06)
+    );
   }
 
   /*

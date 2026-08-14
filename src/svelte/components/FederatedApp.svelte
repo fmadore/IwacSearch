@@ -425,7 +425,7 @@
    * inside, including the clear button, is the component's.
    */
   .iwac-fed__search {
-    max-width: var(--measure-narrow, 36rem);
+    max-width: var(--measure-narrow, 44rem);
   }
   .iwac-fed__search :global(.iwac-input) {
     width: 100%;
@@ -490,7 +490,7 @@
   }
   .iwac-fed__tab:focus-visible {
     outline: none;
-    box-shadow: var(--ring-focus, 0 0 0 3px rgba(0, 0, 0, 0.15)) !important;
+    box-shadow: var(--ring-focus, 0 0 0 3px rgba(206, 65, 21, 0.3)) !important;
   }
   .iwac-fed__tab-count {
     font-variant-numeric: tabular-nums;

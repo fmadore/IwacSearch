@@ -328,13 +328,13 @@
     box-shadow: none;
     cursor: pointer;
     font: inherit;
-    color: var(--ink-strong, var(--ink, #13161c));
+    color: var(--ink-strong, #05070c);
     font-size: var(--text-xs, 0.8125rem);
     font-weight: 700;
     letter-spacing: var(--tracking-wider, 0.08em);
     text-transform: uppercase;
     text-align: start;
-    transition: color var(--transition-fast, 150ms ease);
+    transition: color var(--transition-fast, 150ms cubic-bezier(0.25, 1, 0.5, 1));
   }
   .iwac-facet__heading:hover {
     color: var(--primary, #ce4115);
@@ -344,7 +344,7 @@
   }
   .iwac-facet__heading:focus-visible {
     outline: none;
-    box-shadow: var(--ring-focus, 0 0 0 3px rgba(0, 0, 0, 0.1));
+    box-shadow: var(--ring-focus, 0 0 0 3px rgba(206, 65, 21, 0.3));
     border-radius: var(--radius-sm, 0.375rem);
   }
   .iwac-facet__label {
@@ -384,8 +384,8 @@
     font-size: var(--text-sm, 0.9375rem);
     box-shadow: none;
     transition:
-      border-color var(--transition-fast, 150ms ease),
-      box-shadow var(--transition-fast, 150ms ease);
+      border-color var(--transition-fast, 150ms cubic-bezier(0.25, 1, 0.5, 1)),
+      box-shadow var(--transition-fast, 150ms cubic-bezier(0.25, 1, 0.5, 1));
   }
   .iwac-facet__search-input::placeholder {
     color: var(--muted, #66696e);
@@ -401,7 +401,7 @@
   .iwac-facet__search-input:focus {
     outline: none;
     border-color: var(--primary, #ce4115);
-    box-shadow: var(--ring-focus, 0 0 0 3px rgba(0, 0, 0, 0.1));
+    box-shadow: var(--ring-focus, 0 0 0 3px rgba(206, 65, 21, 0.3));
   }
   .iwac-facet__search-clear {
     position: absolute;
@@ -423,8 +423,8 @@
     line-height: 1;
     cursor: pointer;
     transition:
-      color var(--transition-fast, 150ms ease),
-      background var(--transition-fast, 150ms ease);
+      color var(--transition-fast, 150ms cubic-bezier(0.25, 1, 0.5, 1)),
+      background var(--transition-fast, 150ms cubic-bezier(0.25, 1, 0.5, 1));
   }
   .iwac-facet__search-clear:hover {
     background: var(--surface-sunken, #f4f1ef);
@@ -434,7 +434,7 @@
   }
   .iwac-facet__search-clear:focus-visible {
     outline: none;
-    box-shadow: var(--ring-focus, 0 0 0 3px rgba(0, 0, 0, 0.1));
+    box-shadow: var(--ring-focus, 0 0 0 3px rgba(206, 65, 21, 0.3));
   }
 
   .iwac-facet__list {
@@ -480,17 +480,17 @@
     color: var(--ink, #13161c);
     font-size: var(--text-sm, 0.9375rem);
     line-height: 1.4;
-    transition: background var(--transition-fast, 150ms ease);
+    transition: background var(--transition-fast, 150ms cubic-bezier(0.25, 1, 0.5, 1));
   }
   .iwac-facet__option:hover {
     background: var(--surface-sunken, #f4f1ef);
   }
   .iwac-facet__option.is-selected {
-    color: var(--ink-strong, var(--ink, #13161c));
+    color: var(--ink-strong, #05070c);
     font-weight: 500;
   }
   .iwac-facet__option:has(input:focus-visible) {
-    box-shadow: var(--ring-focus, 0 0 0 3px rgba(0, 0, 0, 0.1));
+    box-shadow: var(--ring-focus, 0 0 0 3px rgba(206, 65, 21, 0.3));
   }
   .iwac-facet__checkbox {
     /* Restore the native control completely. The IWAC theme globally turns
@@ -529,7 +529,7 @@
     font-size: var(--text-xs, 0.8125rem);
   }
   .iwac-facet__option.is-selected .iwac-facet__count {
-    color: var(--ink-light, var(--muted, #66696e));
+    color: var(--ink-light, #3f4349);
   }
 
   .iwac-facet__more {
@@ -542,7 +542,7 @@
     font-weight: 500;
     cursor: pointer;
     padding: var(--space-xs, 0.25rem) 0;
-    transition: color var(--transition-fast, 150ms ease);
+    transition: color var(--transition-fast, 150ms cubic-bezier(0.25, 1, 0.5, 1));
   }
   .iwac-facet__more:hover {
     background: none;
@@ -553,7 +553,7 @@
   }
   .iwac-facet__more:focus-visible {
     outline: none;
-    box-shadow: var(--ring-focus, 0 0 0 3px rgba(0, 0, 0, 0.1));
+    box-shadow: var(--ring-focus, 0 0 0 3px rgba(206, 65, 21, 0.3));
     border-radius: var(--radius-sm, 0.375rem);
   }
 

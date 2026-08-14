@@ -64,9 +64,9 @@
     color: var(--ink, #13161c);
     line-height: 1.4;
     transition:
-      background var(--transition-fast, 150ms ease),
-      border-color var(--transition-fast, 150ms ease),
-      color var(--transition-fast, 150ms ease);
+      background var(--transition-fast, 150ms cubic-bezier(0.25, 1, 0.5, 1)),
+      border-color var(--transition-fast, 150ms cubic-bezier(0.25, 1, 0.5, 1)),
+      color var(--transition-fast, 150ms cubic-bezier(0.25, 1, 0.5, 1));
   }
   .iwac-chip--sm {
     padding: 0.2rem 0.55rem;
@@ -75,12 +75,12 @@
   .iwac-chip--md {
     padding: 0.1rem 0.55rem;
     font-size: var(--text-sm, 0.9375rem);
-    color: var(--ink-strong, var(--ink, #13161c));
+    color: var(--ink-strong, #05070c);
   }
   .iwac-chip:hover {
     background: color-mix(in oklab, var(--primary, #ce4115) 10%, transparent);
     border-color: var(--primary, #ce4115);
-    color: var(--ink-strong, var(--ink, #13161c));
+    color: var(--ink-strong, #05070c);
     box-shadow: none;
     transform: none;
   }
@@ -91,7 +91,7 @@
   }
   .iwac-chip:focus-visible {
     outline: none;
-    box-shadow: var(--ring-focus, 0 0 0 3px rgba(0, 0, 0, 0.1));
+    box-shadow: var(--ring-focus, 0 0 0 3px rgba(206, 65, 21, 0.3));
   }
   .iwac-chip__field {
     color: var(--muted, #66696e);
