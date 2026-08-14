@@ -206,32 +206,104 @@ function collectModuleOwned(files) {
   }
 }
 
+/** The canonical value of a token, colour or otherwise, or undefined. */
+function canonicalOf(name) {
+  if (!TOKENS) return undefined;
+  return (
+    (TOKENS.light && TOKENS.light[name]) ||
+    (TOKENS.values && TOKENS.values.light && TOKENS.values.light[name])
+  );
+}
+
+/** Index of the first comma at paren depth 0, or -1. */
+function splitTopLevelComma(s) {
+  let depth = 0;
+  for (let i = 0; i < s.length; i++) {
+    if (s[i] === '(') depth++;
+    else if (s[i] === ')') depth--;
+    else if (s[i] === ',' && depth === 0) return i;
+  }
+  return -1;
+}
+
 /**
- * Rule 3b/3c — the non-colour half of the fallback contract.
+ * Resolve a fallback expression the way CSS would if only the COARSER tokens
+ * in it were defined: substitute each `var(--X, Y)` with X's canonical value,
+ * or with Y when X is one the theme doesn't publish (module-owned).
+ */
+function resolveFallbackExpr(expr) {
+  let out = '',
+    i = 0;
+  while (i < expr.length) {
+    const at = expr.indexOf('var(', i);
+    if (at === -1) {
+      out += expr.slice(i);
+      break;
+    }
+    out += expr.slice(i, at);
+    let depth = 0,
+      j = at + 3;
+    for (; j < expr.length; j++) {
+      if (expr[j] === '(') depth++;
+      else if (expr[j] === ')') {
+        depth--;
+        if (depth === 0) break;
+      }
+    }
+    if (j >= expr.length) {
+      out += expr.slice(at);
+      break;
+    }
+    const inner = expr.slice(at + 4, j);
+    const comma = splitTopLevelComma(inner);
+    const tok = comma === -1 ? inner.trim() : inner.slice(0, comma).trim();
+    const rest = comma === -1 ? '' : inner.slice(comma + 1).trim();
+    const canon = canonicalOf(tok);
+    out += canon !== undefined ? canon : resolveFallbackExpr(rest);
+    i = j + 1;
+  }
+  return out;
+}
+
+/**
+ * Rule 3c — a nested fallback chain must RESOLVE to the outer token's value.
  *
- * 3c: a THEME token's fallback may not itself contain `var()`. It renders only
- *     when the theme is absent — in which case the nested theme token is
- *     absent too, so the chain never rescues anything. What it does do is
- *     assert a substitution: `var(--ink-light, var(--ink, …))` claims a
- *     secondary ink degrades to a primary one, which the type hierarchy would
- *     not survive. A MODULE-OWNED property is exempt: `var(--iwac-type-dot,
- *     var(--muted, …))` is asking a scope question ("is this row inside a
- *     typed chip?"), not a theme-absent question.
- * 3b: otherwise it must equal `values.light[token]`, the theme's generated
- *     literal for that token.
+ * `var(--A, var(--B, lit))` is legitimate when B is a coarser token resolving
+ * to the same thing as A: a consumer holding only a partial token set — a
+ * third-party Omeka theme defining `--surface` but not `--panel-bg` — still
+ * lands on the right value instead of a frozen literal.
+ *
+ * It is a LIE when the chain resolves to something else. `var(--ink-strong,
+ * var(--ink, …))` claims a headline ink degrades to a body ink;
+ * `var(--panel-radius, var(--radius-lg, …))` claims an 8px panel degrades to a
+ * 12px one. Resolving rather than comparing token-by-token also keeps COMPONENT
+ * substitution legal, as in `var(--focus-outline, 2px solid var(--focus-color,
+ * #ce4115))`.
+ */
+function checkFallbackChain(file, raw, n, name, fallback) {
+  const want = canonicalOf(name);
+  if (want === undefined) return; // module-owned, or a token we can't judge
+  const got = resolveFallbackExpr(fallback);
+  if (got.includes('var(')) return; // unresolvable — nothing to assert
+  if (normValue(got) !== normValue(want)) {
+    flag(
+      file,
+      n,
+      `fallback chain for ${name} resolves to "${got.trim()}" ≠ canonical ${want} (tokens.json)`,
+      raw,
+    );
+  }
+}
+
+/**
+ * Rule 3b — the non-colour half of the fallback contract: a flat fallback must
+ * equal `values.light[token]`, the theme's generated literal for that token.
  */
 function checkNonColourFallbacks(file, raw, n) {
   if (!TOKENS || !TOKENS.values || !TOKENS.values.light) return;
   for (const { name, fallback } of varFallbacks(raw)) {
     if (fallback.includes('var(')) {
-      if (!MODULE_PREFIX.test(name)) {
-        flag(
-          file,
-          n,
-          `nested var() in the fallback for ${name} — a theme-token fallback only renders when the theme is absent, so the inner var() is absent too; write the literal`,
-          raw,
-        );
-      }
+      checkFallbackChain(file, raw, n, name, fallback);
       continue;
     }
     if (fallback.startsWith('#')) continue; // rule 3 owns hex
