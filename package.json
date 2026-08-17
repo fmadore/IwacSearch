@@ -30,7 +30,7 @@
     "cross-env": "^10.1.0",
     "eslint": "^10.8.0",
     "eslint-plugin-svelte": "^3.22.0",
-    "globals": "^17.9.0",
+    "globals": "^17.11.0",
     "jsdom": "^30.0.1",
     "prettier": "^3.9.6",
     "prettier-plugin-svelte": "^4.1.1",
