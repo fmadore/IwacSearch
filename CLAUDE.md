@@ -73,6 +73,17 @@ provides the Typesense container, nginx `/search-api/` proxy, and backups.
 - `npm run lint` includes `scripts/check-schema-drift.js`, which fails CI
   when `FacetCatalog::FACETABLE_FIELDS`, the schema YAMLs, and the i18n
   `FACET_LABELS` disagree. If you add a facet, all four must move together.
+- **Every locale table in `i18n.ts` must carry the same keys in `fr` and
+  `en`** — `npm run lint:i18n` (`scripts/check-i18n.js`) enforces it. The
+  tables are typed `Record<Locale, Record<string, string>>`, and that inner
+  `string` means TypeScript never checks key parity; `translate()` then
+  resolves `table[key] ?? STRINGS.fr[key] ?? key`, so a key missing from `en`
+  serves the **French** string to English visitors rather than throwing.
+  Tables are discovered from the type annotation and locales from the
+  `Locale` union, so neither is a list to maintain. Mark a table
+  `Partial<Record<Locale, …>>` to declare it deliberately locale-specific
+  (`COUNTRY_LABELS`); that is the only exemption, and it is printed on every
+  run so it stays visible.
 
 ## Adding a new field
 

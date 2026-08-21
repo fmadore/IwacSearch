@@ -9,7 +9,7 @@
   },
   "scripts": {
     "dev": "vite build --watch",
-    "build": "npm run lint:theme && npm run lint:drift && npm run build:public && npm run build:header",
+    "build": "npm run lint:theme && npm run lint:drift && npm run lint:i18n && npm run build:public && npm run build:header",
     "build:public": "cross-env IWAC_BUNDLE=public vite build",
     "build:header": "cross-env IWAC_BUNDLE=header vite build",
     "check": "svelte-check --tsconfig ./tsconfig.json",
@@ -17,7 +17,8 @@
     "test:watch": "vitest --config vitest.config.ts",
     "lint:theme": "node scripts/check-theme-tokens.js",
     "lint:drift": "node scripts/check-schema-drift.js",
-    "lint": "npm run lint:theme && npm run lint:drift && eslint src/svelte src/svelte-shared scripts tests && prettier --check \"src/svelte/**/*.{ts,svelte}\" \"src/svelte-shared/**/*.{ts,svelte}\" \"scripts/**/*.js\" \"tests/client/**/*.ts\" \"*.{ts,json,md}\"",
+    "lint:i18n": "node scripts/check-i18n.js",
+    "lint": "npm run lint:theme && npm run lint:drift && npm run lint:i18n && eslint src/svelte src/svelte-shared scripts tests && prettier --check \"src/svelte/**/*.{ts,svelte}\" \"src/svelte-shared/**/*.{ts,svelte}\" \"scripts/**/*.js\" \"tests/client/**/*.ts\" \"*.{ts,json,md}\"",
     "lint:fix": "eslint src/svelte src/svelte-shared scripts tests --fix && prettier --write \"src/svelte/**/*.{ts,svelte}\" \"src/svelte-shared/**/*.{ts,svelte}\" \"scripts/**/*.js\" \"tests/client/**/*.ts\" \"*.{ts,json,md}\"",
     "format": "prettier --write \"src/svelte/**/*.{ts,svelte}\" \"src/svelte-shared/**/*.{ts,svelte}\" \"scripts/**/*.js\" \"tests/client/**/*.ts\" \"*.{ts,json,md}\""
   },
