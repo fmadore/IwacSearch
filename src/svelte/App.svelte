@@ -1060,8 +1060,12 @@
   .iwac-search__skip:focus-visible {
     position: static;
     display: inline-block;
-    align-self: start;
+    /* Spans the grid so it can't be squeezed into the facet column's width,
+       but justify-self keeps it the width of its own label — a skip link is a
+       control, not a banner. */
     grid-column: 1 / -1;
+    justify-self: start;
+    align-self: start;
     margin-block-end: var(--space-sm, 0.5rem);
     padding: var(--space-xs, 0.25rem) var(--space-md, 1rem);
     border: 1px solid var(--border, #ced1d6);
