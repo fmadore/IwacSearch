@@ -173,7 +173,14 @@
     background: var(--primary, #ce4115);
     border-color: var(--primary, #ce4115);
     color: var(--white, #fff);
-    box-shadow: none;
+    /* NO `box-shadow: none` here. It used to sit after the :focus-visible rule
+       at equal specificity (class + pseudo-class are both 0,2,0), so it won
+       on source order and the CURRENT page was the one control on the surface
+       with no focus indicator at all — an outright 2.4.7 failure. It was also
+       redundant: it dated from the theme's old loud-<button> base, and since
+       2.10 a bare button carries no shadow. The base .iwac-pager__page rule
+       already sets `box-shadow: none`, which keeps the UNFOCUSED current page
+       ring-free at lower specificity while :focus-visible still wins. */
     transform: none;
     font-weight: 600;
     cursor: default;

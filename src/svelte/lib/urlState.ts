@@ -1,4 +1,5 @@
 import type { ActiveFilters, SearchState, ViewMode, YearRange } from './types';
+import { SORT_VALUES } from './i18n';
 
 /**
  * URL state codec for search surfaces.
@@ -105,7 +106,7 @@ export function readUrlState(
     // `found` ("every match is reachable"), so a shared deep link must not
     // be silently re-clamped to an arbitrary low page.
     page: clampInt(params.get(`${prefix}page`), 1, 10000, 1),
-    sort: params.get(`${prefix}sort`) || defaultSort,
+    sort: parseSort(params.get(`${prefix}sort`), defaultSort),
     filters,
     yearRange: parseYearRange(params, prefix),
     view: parseView(params.get(`${prefix}view`)),
@@ -115,6 +116,22 @@ export function readUrlState(
 /** Non-default views (`gallery` / `map`) are encoded; anything else is `list`. */
 function parseView(raw: string | null): ViewMode {
   return raw === 'gallery' || raw === 'map' ? raw : 'list';
+}
+
+/**
+ * Allowlist `?sort=` against the option set the surfaces actually offer, the
+ * same way `?view=` is allowlisted just above.
+ *
+ * The value goes straight into a Typesense `sort_by`, where an unknown field
+ * is not a bad sort but a 422 — which the client surfaces as the full-page
+ * "Search unavailable" error. `?sort=junk` in a mangled share link (or a
+ * crawler's guess) should degrade to the surface's default, exactly as an
+ * absent param does. `defaultSort` itself is server-supplied and trusted, so
+ * it is never filtered.
+ */
+function parseSort(raw: string | null, defaultSort: string): string {
+  if (!raw) return defaultSort;
+  return SORT_VALUES.has(raw) ? raw : defaultSort;
 }
 
 /**

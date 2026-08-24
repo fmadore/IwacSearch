@@ -126,6 +126,34 @@ describe('readUrlState', () => {
     it('uses the global fallback when no surface default is given', () => {
       expect(readUrlState(base).sort).toBe(FALLBACK_SORT);
     });
+
+    /**
+     * `sort` was the one URL param that reached Typesense unvalidated, while
+     * `page` was clamped and `view` allowlisted. An unknown sort field is not
+     * a bad ordering but a 422, which the client surfaces as the full-page
+     * "Search unavailable" error — so a mangled share link took the whole
+     * surface down (Phase-1 critique P2).
+     */
+    it('falls back to the surface default for a sort value no surface offers', () => {
+      expect(readUrlState(`${base}?sort=junk`, '', 'date:desc').sort).toBe('date:desc');
+      expect(readUrlState(`${base}?sort=is_public:desc`, '', 'date:desc').sort).toBe('date:desc');
+      expect(readUrlState(`${base}?sort=date:sideways`, '', 'date:desc').sort).toBe('date:desc');
+      expect(readUrlState(`${base}?sort=junk`).sort).toBe(FALLBACK_SORT);
+    });
+
+    it('accepts every value the surfaces actually offer, in both vocabularies', () => {
+      for (const value of [
+        '_text_match:desc',
+        'date:desc',
+        'date:asc',
+        'creator_sort:asc',
+        'frequency:desc',
+        'frequency:asc',
+        'title:asc',
+      ]) {
+        expect(readUrlState(`${base}?sort=${value}`, '', 'date:desc').sort).toBe(value);
+      }
+    });
   });
 
   describe('block prefixes', () => {

@@ -22,6 +22,7 @@
     type MapLibreMapLike,
   } from '../lib/maplibreLoader';
   import { useI18n } from '../lib/i18n';
+  import { localizeSiteUrl } from '../lib/siteUrl';
 
   interface Props {
     docs: IwacDoc[];
@@ -56,7 +57,8 @@
           title: d.title,
           entityType: d.entity_type_s ?? '',
           frequency: d.frequency ?? 0,
-          url: d.omeka_url ?? '',
+          // Site-localised, like every other link out of a result (siteUrl.ts).
+          url: d.omeka_url ? localizeSiteUrl(d.omeka_url) : '',
         },
         geometry: {
           type: 'Point' as const,

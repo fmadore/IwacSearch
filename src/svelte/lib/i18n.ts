@@ -114,6 +114,13 @@ const STRINGS: Record<Locale, Record<string, string>> = {
     copy_link: 'Copier le lien',
     link_copied: 'Lien copié !',
     did_you_mean: 'Vouliez-vous dire :',
+    // Semantic fallback: a query the keyword leg didn't match at all. The
+    // vector leg's top-k is offered, never asserted (see lib/semanticFallback.ts).
+    show_semantic_one: 'Afficher 1 document sémantiquement proche',
+    show_semantic_other: 'Afficher {n} documents sémantiquement proches',
+    semantic_only_banner:
+      'Aucune correspondance exacte pour « {q} » — voici des documents sémantiquement proches.',
+    hide_semantic: 'Masquer ces résultats',
     recent_searches: 'Recherches récentes',
     clear_history: "Effacer l'historique",
     tab_all: 'Tout',
@@ -212,6 +219,10 @@ const STRINGS: Record<Locale, Record<string, string>> = {
     copy_link: 'Copy link',
     link_copied: 'Link copied!',
     did_you_mean: 'Did you mean:',
+    show_semantic_one: 'Show 1 semantically related item',
+    show_semantic_other: 'Show {n} semantically related items',
+    semantic_only_banner: 'No exact matches for “{q}” — showing semantically related items.',
+    hide_semantic: 'Hide these results',
     recent_searches: 'Recent searches',
     clear_history: 'Clear history',
     tab_all: 'All',
@@ -570,6 +581,24 @@ export function sortOptions(
     { value: 'creator_sort:asc', label: translate(locale, 'sort_author_az') },
   ];
 }
+
+/**
+ * Every sort value ANY surface offers, across both card vocabularies.
+ *
+ * Derived from sortOptions() rather than listed, so a new sort order stays a
+ * one-line change there — a hand-maintained twin is the thing that drifts. The
+ * values are locale-independent (only the labels are translated), so reading
+ * one locale is enough.
+ *
+ * This is the allowlist `?sort=` is validated against on decode: the param
+ * goes straight into a Typesense `sort_by`, where an unknown field is a 422
+ * that error-states the whole surface. Every other URL param was already
+ * clamped or allowlisted (see urlState.ts); sort was the one hole.
+ */
+export const SORT_VALUES: ReadonlySet<string> = new Set([
+  ...sortOptions('fr', 'content').map((o) => o.value),
+  ...sortOptions('fr', 'entity').map((o) => o.value),
+]);
 
 /**
  * Fallback for facets we haven't explicitly labelled — strip the suffix

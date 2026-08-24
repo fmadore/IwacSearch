@@ -5,6 +5,7 @@ import {
   buildFilterBy,
   buildYearRangeFilter,
   combineFilters,
+  effectiveSortValue,
   isExactQuery,
   resolveSortBy,
   withoutField,
@@ -134,5 +135,42 @@ describe('resolveSortBy', () => {
     expect(resolveSortBy('creator_sort:asc', false, undefined)).toBe(
       'creator_sort(missing_values:last):asc',
     );
+  });
+});
+
+/**
+ * The UI half of the same resolution. The summary strip and the sort dropdown
+ * used to label the UNRESOLVED state value, so the resting state of
+ * /references and FR /parcourir — both configured `_text_match:desc`, both
+ * silently served date:desc because relevance is meaningless without a query —
+ * read "sorted by Relevance" over strictly date-ordered results (Phase-1
+ * critique P2).
+ */
+describe('effectiveSortValue', () => {
+  it('agrees with resolveSortBy on every case that needs no decoration', () => {
+    const cases: Array<[string | undefined, boolean, string | undefined]> = [
+      ['_text_match:desc', true, undefined],
+      [undefined, true, undefined],
+      ['frequency:desc', true, 'frequency:desc'],
+      [undefined, false, 'date:desc'],
+      [undefined, false, undefined],
+      ['date:asc', false, 'date:desc'],
+    ];
+    for (const [requested, isBrowse, def] of cases) {
+      expect(effectiveSortValue(requested, isBrowse, def)).toBe(
+        resolveSortBy(requested, isBrowse, def),
+      );
+    }
+  });
+
+  it('reports the substitution the browse surfaces actually apply', () => {
+    // /references and FR /parcourir at rest: configured relevance, served date.
+    expect(effectiveSortValue('_text_match:desc', true, '_text_match:desc')).toBe('date:desc');
+  });
+
+  it('stays a plain sort-option value for creator_sort — no Typesense decoration', () => {
+    // resolveSortBy() wraps this for the wire; the dropdown must still be able
+    // to find the value in its own option list.
+    expect(effectiveSortValue('creator_sort:asc', false, undefined)).toBe('creator_sort:asc');
   });
 });

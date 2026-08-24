@@ -120,27 +120,45 @@ export const EXACT_MODE_PARAMS = {
 } as const;
 
 /**
- * Resolve the effective sort_by:
+ * The sort order the surface will ACTUALLY apply, as a plain sort-option
+ * value (one of i18n's SORT_VALUES — no Typesense decoration).
  *
- *   - Relevance sort is meaningless in browse mode (q=*), so it falls back
- *     to date:desc unless the surface configured its own default.
- *   - creator_sort is an optional field (only docs with an author have it);
- *     Typesense needs an explicit missing-values rule for optional sort
- *     fields, or it errors. Push author-less docs (e.g. unsigned press) to
- *     the end. Done here, not in the sort-option value, so the URL and the
- *     dropdown stay clean (`creator_sort:asc`).
+ * Relevance sort is meaningless in browse mode (`q=*`), so it falls back to
+ * date:desc unless the surface configured its own default. That substitution
+ * is why this is exported separately from {@link resolveSortBy}: the result
+ * summary and the sort dropdown must READ what the engine will do, not the
+ * state value that asked for it. Labelling the unresolved value is how the
+ * resting state of /references and FR /parcourir came to say "sorted by
+ * Relevance" over strictly date-ordered results.
+ */
+export function effectiveSortValue(
+  requested: string | undefined,
+  isBrowse: boolean,
+  defaultSort: string | undefined,
+): string {
+  return requested && requested !== '_text_match:desc'
+    ? requested
+    : isBrowse
+      ? 'date:desc'
+      : (defaultSort ?? '_text_match:desc');
+}
+
+/**
+ * Resolve the effective sort_by for the wire.
+ *
+ * {@link effectiveSortValue}, plus the one Typesense decoration: creator_sort
+ * is an optional field (only docs with an author have it), and Typesense needs
+ * an explicit missing-values rule for optional sort fields or it errors. Push
+ * author-less docs (e.g. unsigned press) to the end. Done here, not in the
+ * sort-option value, so the URL and the dropdown stay clean
+ * (`creator_sort:asc`).
  */
 export function resolveSortBy(
   requested: string | undefined,
   isBrowse: boolean,
   defaultSort: string | undefined,
 ): string {
-  const sortBy =
-    requested && requested !== '_text_match:desc'
-      ? requested
-      : isBrowse
-        ? 'date:desc'
-        : (defaultSort ?? '_text_match:desc');
+  const sortBy = effectiveSortValue(requested, isBrowse, defaultSort);
   return sortBy.startsWith('creator_sort:')
     ? sortBy.replace('creator_sort:', 'creator_sort(missing_values:last):')
     : sortBy;

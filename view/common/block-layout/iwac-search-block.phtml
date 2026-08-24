@@ -16,14 +16,26 @@
  * [data-iwac-search-root] element and reads the sibling state script.
  */
 
-$blockId = (int) $block->id();
+$blockId   = (int) $block->id();
+$headingId = 'iwac-search-heading-' . $blockId;
+
+// The block title is optional, so aria-labelledby cannot be unconditional:
+// on the pages that leave it blank (/references, /index) it pointed at an
+// element that never rendered, and a dangling reference names nothing — the
+// search region was simply anonymous to assistive tech. Label by the heading
+// when there is one, by a translated fallback when there isn't.
+$hasHeading = $title !== '';
 ?>
 <section
     class="iwac-search-block iwac-search-block--<?= $this->escapeHtmlAttr($data['mode'] ?? 'full') ?>"
-    aria-labelledby="iwac-search-heading-<?= $blockId ?>"
+    <?php if ($hasHeading): ?>
+    aria-labelledby="<?= $this->escapeHtmlAttr($headingId) ?>"
+    <?php else: ?>
+    aria-label="<?= $this->escapeHtmlAttr($this->translate('Search and filter the collection')) ?>"
+    <?php endif; ?>
 >
-    <?php if ($title !== ''): ?>
-        <h2 id="iwac-search-heading-<?= $blockId ?>" class="iwac-search-block__title">
+    <?php if ($hasHeading): ?>
+        <h2 id="<?= $this->escapeHtmlAttr($headingId) ?>" class="iwac-search-block__title">
             <?= $this->escapeHtml($title) ?>
         </h2>
     <?php endif; ?>

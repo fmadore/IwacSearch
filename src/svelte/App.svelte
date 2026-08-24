@@ -10,6 +10,8 @@
   } from './lib/types';
   import { TypesenseClient } from './lib/typesense';
   import { SeqGuard, isAbortError } from './lib/transport';
+  import { effectiveSortValue } from './lib/queryBuilders';
+  import { isSemanticOnlyResponse } from './lib/semanticFallback';
   import { FALLBACK_SORT, onUrlPop, readUrlState, syncToUrl } from './lib/urlState';
   import { facetLabel, normalizeCard, normalizeLocale, provideI18n } from './lib/i18n';
   import { createViewMode } from './lib/viewMode.svelte';
@@ -206,6 +208,22 @@
   // entity. Rendered above the empty state; picking one applies the filter.
   let didYouMean = $state<EntitySuggestion[]>([]);
 
+  /**
+   * The query the reader explicitly asked to see semantic near-matches for.
+   *
+   * Content surfaces search hybrid, so a query the keyword leg doesn't match
+   * still comes back full: the vector leg returns its fixed top-k (100) and
+   * the client used to render them as ordinary results — "100 results" with
+   * confident facet counts over a set nothing in it actually matched
+   * (lib/semanticFallback.ts). Those hits are now offered rather than
+   * asserted, behind this opt-in.
+   *
+   * Keyed by the query string rather than a bare boolean: an opt-in belongs to
+   * ONE dead query and must not carry over to the next one, while paging or
+   * narrowing a facet within that query keeps it.
+   */
+  let semanticOptInFor = $state<string | null>(null);
+
   // Geo-tagged docs for the Map view (entity surfaces). Fetched when the
   // map is active and the query/filter state changes.
   let mapDocs = $state<IwacDoc[]>([]);
@@ -344,7 +362,12 @@
           lastHistogramKey = histogramKey;
         }
         if (q.trim() !== '') {
-          if (r.found > 0) {
+          // A semantic-only response is a dead query wearing a full result
+          // list, so it takes the zero-result path on BOTH counts: it never
+          // enters the recent-searches history, and it gets the spelling
+          // suggestions that used to be unreachable behind it.
+          const foundNothing = r.found === 0 || isSemanticOnlyResponse(r, q);
+          if (!foundNothing) {
             // Only fruitful queries enter the recent-searches history, so
             // typo dead-ends don't pollute the dropdown.
             recordSearch(q);
@@ -521,9 +544,38 @@
     }
   }
 
-  const facets = $derived(response?.facet_counts ?? []);
+  // ── Semantic-only fallback ──────────────────────────────────────────
+  // Did the keyword leg match nothing at all? (See lib/semanticFallback.ts.)
+  const semanticOnly = $derived(isSemanticOnlyResponse(response, query));
+  const semanticOptIn = $derived(semanticOptInFor !== null && semanticOptInFor === query);
+  /**
+   * The default state for such a response: the vector set is withheld. No
+   * result list, no count, no facet counts, no export — nothing that would
+   * present it as findings. The scope-aware empty state shows instead, with
+   * the set offered behind one explicit control.
+   */
+  const semanticHidden = $derived(semanticOnly && !semanticOptIn);
+
+  // Facet counts computed over a withheld set would under-write the same
+  // claim the summary strip no longer makes, so the panel falls back to its
+  // "Search to see filter options." state.
+  const facets = $derived(semanticHidden ? [] : (response?.facet_counts ?? []));
   const perPage = $derived(response?.request_params?.per_page ?? bootstrap.results_per_page ?? 20);
   const searchTimeMs = $derived(response?.search_time_ms ?? 0);
+
+  /**
+   * The sort order actually in force, which is not always the one in `sort`:
+   * relevance is meaningless without a query, so resolveSortBy() substitutes
+   * date:desc in browse mode. The summary strip and the dropdown read THIS —
+   * labelling the unresolved state value is what made the resting /references
+   * and FR /parcourir pages claim "sorted by Relevance" over strictly
+   * date-ordered results. `bootstrap.default_sort` (not the FALLBACK_SORT-
+   * defaulted `defaultSort`) because that is the exact value TypesenseClient
+   * passes to resolveSortBy — the two must not diverge.
+   */
+  const effectiveSort = $derived(
+    effectiveSortValue(sort, query.trim() === '', bootstrap.default_sort),
+  );
   // Single-country scopes hide the (redundant) country chip on result cards.
   const hideCountry = $derived(bootstrap.hide_country ?? false);
 
@@ -689,23 +741,33 @@
                     </span>
                   </button>
                 {/if}
-                {#if card === 'content' && response.found > 0}
+                {#if card === 'content' && response.found > 0 && !semanticHidden}
                   <ExportMenu fetchDocs={handleExportFetch} {query} found={response.found} />
                 {/if}
               </div>
             </div>
-            <SortSelect value={sort} onChange={handleSortChange} />
+            <!-- Shows the RESOLVED order, so the control and the summary a few
+                 pixels below it can never disagree about the ordering — which
+                 also means it must not offer a value that resolves to a
+                 different one, hence hasQuery. -->
+            <SortSelect
+              value={effectiveSort}
+              onChange={handleSortChange}
+              hasQuery={query.trim() !== ''}
+            />
           </div>
 
           <!-- Persistent count + scope + sort summary, visible on every
-               viewport (the mobile filter readout). Closed by a 2px ink rule. -->
-          {#if response.found > 0}
+               viewport (the mobile filter readout). Closed by a 2px ink rule.
+               Withheld for a semantic-only response: its count is the vector
+               leg's top-k, not a number of matches. -->
+          {#if response.found > 0 && !semanticHidden}
             <ResultSummary
               found={response.found}
               {searchTimeMs}
               {filters}
               {yearRange}
-              {sort}
+              sort={effectiveSort}
               onRemoveChip={(c) => filterState.removeChip(c)}
               onClearAll={() => filterState.clearAll()}
             />
@@ -721,7 +783,7 @@
           <!-- Galley-proof skeleton in the active view (replaces the opacity
                dim) — holds geometry so the page doesn't jump (§03A). -->
           <ResultSkeleton view={view.mode} count={Math.min(Math.max(perPage, 4), 8)} />
-        {:else if response && response.found === 0}
+        {:else if response && (response.found === 0 || semanticHidden)}
           {#if didYouMean.length > 0}
             <div class="iwac-search__didyoumean" role="status">
               <span class="iwac-search__didyoumean-label">{t('did_you_mean')}</span>
@@ -744,7 +806,37 @@
             onRemoveChip={(c) => filterState.removeChip(c)}
             onClearAll={() => filterState.clearAll()}
           />
+          {#if semanticHidden}
+            <!-- The vector leg found near neighbours. Offered, not asserted:
+                 one control, labelled with what it will actually show. -->
+            <div class="iwac-search__semantic-offer">
+              <button
+                type="button"
+                class="iwac-search__semantic-btn"
+                onclick={() => (semanticOptInFor = query)}
+              >
+                {t(response.found === 1 ? 'show_semantic_one' : 'show_semantic_other', {
+                  n: response.found.toLocaleString(),
+                })}
+              </button>
+            </div>
+          {/if}
         {:else if response}
+          {#if semanticOnly}
+            <!-- Opted in: the set renders, but never unlabelled. -->
+            <div class="iwac-search__semantic-banner" role="status">
+              <p class="iwac-search__semantic-banner-text">
+                {t('semantic_only_banner', { q: query })}
+              </p>
+              <button
+                type="button"
+                class="iwac-search__semantic-btn"
+                onclick={() => (semanticOptInFor = null)}
+              >
+                {t('hide_semantic')}
+              </button>
+            </div>
+          {/if}
           <ResultsList
             {response}
             {perPage}
@@ -759,7 +851,36 @@
     </div>
   {:else if isLoading && !response}
     <p class="iwac-search__status" aria-live="polite">{t('searching')}</p>
+  {:else if response && semanticHidden}
+    <!-- Compact / results-only blocks have no facet panel or summary strip, but
+         they run the same hybrid query and so could present the same vector-only
+         set as findings. Same contract, smaller frame: say nothing matched, and
+         offer the near neighbours explicitly. -->
+    <p class="iwac-search__status" role="status">{t('results_empty_list')}</p>
+    <div class="iwac-search__semantic-offer">
+      <button
+        type="button"
+        class="iwac-search__semantic-btn"
+        onclick={() => (semanticOptInFor = query)}
+      >
+        {t(response.found === 1 ? 'show_semantic_one' : 'show_semantic_other', {
+          n: response.found.toLocaleString(),
+        })}
+      </button>
+    </div>
   {:else if response}
+    {#if semanticOnly}
+      <div class="iwac-search__semantic-banner" role="status">
+        <p class="iwac-search__semantic-banner-text">{t('semantic_only_banner', { q: query })}</p>
+        <button
+          type="button"
+          class="iwac-search__semantic-btn"
+          onclick={() => (semanticOptInFor = null)}
+        >
+          {t('hide_semantic')}
+        </button>
+      </div>
+    {/if}
     <ResultsList
       {response}
       {perPage}
@@ -919,6 +1040,64 @@
     background: var(--surface-sunken, #f4f1ef);
     padding: 0.0625rem 0.375rem;
     border-radius: var(--radius-full, 9999px);
+  }
+
+  /*
+   * Semantic fallback — the opt-in under the empty state, and the labelled
+   * banner over the set once it's shown. Quiet outlined control in the toolbar
+   * vocabulary: this offers a weaker kind of answer, so it must not out-shout
+   * the empty state's own "Clear all filters".
+   */
+  .iwac-search__semantic-offer {
+    display: flex;
+    justify-content: center;
+  }
+  .iwac-search__semantic-banner {
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: var(--space-xs, 0.25rem) var(--space-md, 1rem);
+    padding-block-end: var(--space-sm, 0.5rem);
+    /* Hairline under, like the toolbar — a dateline over the set, not a card. */
+    border-block-end: 1px solid var(--border-light, #e2e5e8);
+  }
+  .iwac-search__semantic-banner-text {
+    margin: 0;
+    color: var(--ink, #13161c);
+    font-size: var(--text-sm, 0.9375rem);
+  }
+  .iwac-search__semantic-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-xs, 0.25rem);
+    padding: 0.4rem 0.75rem;
+    border: 1px solid var(--border, #ced1d6);
+    border-radius: var(--radius-md, 0.5rem);
+    background: var(--surface, #fdfcfb);
+    color: var(--ink, #13161c);
+    box-shadow: none;
+    font: inherit;
+    font-size: var(--text-sm, 0.9375rem);
+    font-weight: 500;
+    cursor: pointer;
+    transition:
+      border-color var(--transition-fast, 150ms cubic-bezier(0.25, 1, 0.5, 1)),
+      color var(--transition-fast, 150ms cubic-bezier(0.25, 1, 0.5, 1));
+  }
+  .iwac-search__semantic-btn:hover {
+    background: var(--surface, #fdfcfb);
+    border-color: var(--primary, #ce4115);
+    color: var(--primary, #ce4115);
+    box-shadow: none;
+    transform: none;
+  }
+  .iwac-search__semantic-btn:focus-visible {
+    outline: none;
+    box-shadow: var(--ring-focus, 0 0 0 3px rgba(206, 65, 21, 0.3));
+  }
+  .iwac-search__semantic-banner .iwac-search__semantic-btn {
+    /* Tail of the banner line, like the summary strip's sort readout. */
+    margin-inline-start: auto;
   }
 
   @media (max-width: 48rem) {

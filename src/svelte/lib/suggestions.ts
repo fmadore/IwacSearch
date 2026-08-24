@@ -1,5 +1,6 @@
 import type { EntitySuggestion, IwacHit } from './types';
 import { escapeHtml, sanitizeHighlight } from './sanitize';
+import { localizeSiteUrl } from './siteUrl';
 
 /**
  * Shared typeahead row model + markup helpers — ONE definition for the two
@@ -63,9 +64,17 @@ export function titleMarkupOf(hit: IwacHit): string {
   return escapeHtml(hit.document.title ?? '');
 }
 
-/** Where an article row navigates: the item page, else the original source. */
+/**
+ * Where an article row navigates: the item page, else the original source.
+ *
+ * Site-localised — the indexed `omeka_url` always names the French site, and
+ * this one helper is what both suggest surfaces (the in-app SuggestDropdown
+ * and the framework-free site-wide header enhancer) build their hrefs from.
+ * An external `source_url` carries no site slug and passes through untouched.
+ */
 export function urlOf(hit: IwacHit): string | null {
-  return hit.document.omeka_url ?? hit.document.source_url ?? null;
+  const url = hit.document.omeka_url ?? hit.document.source_url ?? null;
+  return url === null ? null : localizeSiteUrl(url);
 }
 
 /**

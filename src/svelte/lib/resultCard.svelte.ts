@@ -1,6 +1,7 @@
 import type { IwacHit } from './types';
 import { countryLabel, entityTypeLabel, typeLabel as typeLabelFor, useI18n } from './i18n';
 import { sizedThumbnail } from './thumbnail';
+import { itemPath, localizeSiteUrl } from './siteUrl';
 import { densifyByYear, parseMentionsByYear } from './sparkline';
 import {
   buildCitation,
@@ -135,7 +136,11 @@ export function createResultCard(input: () => { hit: IwacHit; hideCountry: boole
   const abstract = $derived((doc.abstract ?? '').trim());
   // Author byline — essential for references, informative for signed articles.
   const authors = $derived(doc.creator_ss ?? []);
-  const itemUrl = $derived(doc.omeka_url || `/s/afrique_ouest/item/${doc.id}`);
+  // The index stores every omeka_url against the canonical FRENCH site, so it
+  // is rewritten onto the site the reader is on (see lib/siteUrl.ts). The
+  // fallback used to hardcode the French slug too, which sent an English
+  // reader across editions even for a document with no indexed URL at all.
+  const itemUrl = $derived(doc.omeka_url ? localizeSiteUrl(doc.omeka_url) : itemPath(doc.id));
 
   return {
     get doc() {

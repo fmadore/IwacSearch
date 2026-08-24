@@ -10,12 +10,26 @@
   interface Props {
     value: string;
     onChange: (next: string) => void;
+    /**
+     * Is there a query to rank against? Relevance sort is meaningless without
+     * one — Typesense scores nothing on `q=*` — so the engine substitutes
+     * date:desc (resolveSortBy). The option is therefore offered as
+     * unavailable rather than as a choice that silently does something else:
+     * `value` shows the RESOLVED order, so letting the user pick a value that
+     * resolves to a different one would put this control back in disagreement
+     * with the summary strip a few pixels below it. Defaults true — surfaces
+     * that don't pass it keep the full option set.
+     */
+    hasQuery?: boolean;
   }
 
-  const { value, onChange }: Props = $props();
+  const { value, onChange, hasQuery = true }: Props = $props();
 
   const { locale, card, t } = useI18n();
   const options = $derived(sortOptions(locale, card));
+
+  /** Only relevance is query-dependent; the entity vocabulary has no such option. */
+  const isUnavailable = $derived((v: string) => !hasQuery && v === '_text_match:desc');
 </script>
 
 <label class="iwac-sort">
@@ -26,7 +40,7 @@
     onchange={(e) => onChange((e.currentTarget as HTMLSelectElement).value)}
   >
     {#each options as opt (opt.value)}
-      <option value={opt.value}>{opt.label}</option>
+      <option value={opt.value} disabled={isUnavailable(opt.value)}>{opt.label}</option>
     {/each}
   </select>
 </label>

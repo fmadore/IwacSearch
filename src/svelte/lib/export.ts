@@ -1,6 +1,7 @@
 import type { IwacDoc } from './types';
 import { typeLabel, type Locale } from './i18n';
 import { formatDuration } from './resultCard';
+import { localizeSiteUrl } from './siteUrl';
 
 /**
  * Client-side serializers for the result-export menu: plain text, JSON,
@@ -95,6 +96,20 @@ function externalUrl(d: IwacDoc): string {
   return /^https?:\/\//i.test(url) ? url : '';
 }
 
+/**
+ * The IWAC record URL for a document, on the site the export was run from.
+ *
+ * The index stores omeka_url against the canonical French site (siteUrl.ts),
+ * so an export taken on /s/westafrica would otherwise cite the French edition
+ * of every row — the same cross-edition handoff the result links had. Off-site
+ * (the global /search route) the current site is unknown and the canonical
+ * French URL is emitted unchanged.
+ */
+function recordUrl(d: IwacDoc): string {
+  const url = (d.omeka_url ?? '').trim();
+  return url ? localizeSiteUrl(url) : '';
+}
+
 /** "185–209" → [start, end]; single page → [page, '']. */
 function pageRange(d: IwacDoc): [string, string] {
   const pages = (d.pages_s ?? '').trim();
@@ -148,7 +163,8 @@ function toTxt(docs: IwacDoc[], meta: ExportMeta, locale: Locale): string {
       const dur = formatDuration(d.duration_seconds);
       parts.push(`[${[typeLabel(d.type_s, locale) || d.type_s, dur].filter(Boolean).join(', ')}]`);
     }
-    if (d.omeka_url) parts.push(d.omeka_url);
+    const record = recordUrl(d);
+    if (record) parts.push(record);
     // The canonical source (a YouTube watch URL, an original article page)
     // AFTER the IWAC record: provenance first, third party second.
     const external = externalUrl(d);
@@ -168,7 +184,10 @@ function toJson(docs: IwacDoc[], meta: ExportMeta): string {
       query: meta.query || null,
       total_found: meta.found,
       exported: docs.length,
-      results: docs,
+      // Same site-localised record URL the other three formats emit, so a
+      // JSON dump and a RIS export of the same search never disagree about
+      // where a row lives. Spread, not mutation — `docs` is the caller's.
+      results: docs.map((d) => (d.omeka_url ? { ...d, omeka_url: recordUrl(d) } : d)),
     },
     null,
     2,
@@ -243,7 +262,7 @@ function toRis(docs: IwacDoc[]): string {
     for (const kw of d.subjects_ss ?? []) tag('KW', kw);
     tag('AB', d.abstract);
     tag('DO', d.doi);
-    tag('UR', d.omeka_url);
+    tag('UR', recordUrl(d));
     // L2 ("link to full text") carries the canonical source — the YouTube
     // watch URL for a video — so UR keeps pointing at the IWAC record.
     tag('L2', externalUrl(d));
@@ -325,7 +344,7 @@ function toBibtex(docs: IwacDoc[]): string {
     add('language', d.language_ss?.[0]);
     add('keywords', (d.subjects_ss ?? []).join(', '));
     add('doi', d.doi);
-    add('url', d.omeka_url);
+    add('url', recordUrl(d));
     // BibTeX has one url field, and it must stay on the IWAC record; the
     // canonical source goes in note, which is where a reader looks for it.
     add('note', externalUrl(d));
