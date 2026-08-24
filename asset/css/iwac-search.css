@@ -31,6 +31,22 @@
  *             an indicator — the input inside carries its own outline
  *   measure   --measure-wide
  *
+ * KNOWN, UPSTREAM (theme, 2026-08-24): --focus-outline and --ring-focus are
+ * declared once at :root as `2px solid var(--focus-color)` / `0 0 0 3px
+ * var(--focus-ring-color)`, while the dark palette is applied at <body>. A
+ * custom property is substituted at the element that DECLARES it, so both
+ * compose against the LIGHT colour and inherit down frozen — measured on the
+ * rig, dark <body> reports --focus-color as the dark mix and --focus-outline
+ * as the light one. Every focus ring on this module therefore paints the
+ * light primary in dark mode. It still passes comfortably (4.25:1 measured
+ * against the dark ground, vs the 3:1 non-text minimum), so nothing is worked
+ * around here: forking the composed-outline decision in one of three consuming
+ * repos would be wrong again the moment the theme fixes the declaration site.
+ * Note tokens.json publishes values.dark['--focus-outline'] as the dark
+ * colour — the generator resolves what was meant, the browser delivers
+ * something else, and the guard cannot see it because it only compares LIGHT
+ * fallbacks.
+ *
  * No global selectors — everything scoped under .iwac-search-block,
  * .iwac-search-shell, or the standalone shell — so the module never
  * collides with theme styles.

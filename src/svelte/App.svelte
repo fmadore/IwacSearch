@@ -611,9 +611,17 @@
       });
     }
     if (response.found === 0) return t('announce_no_results');
-    const count = t(response.found === 1 ? 'announce_results_one' : 'announce_results_other', {
-      n: response.found.toLocaleString(),
-    });
+    // Opted in to the near-neighbour set: it is rendered, so it is announced —
+    // but as what it is. Reading "100 results found" over the set the banner
+    // and the count line both just qualified would put the fabrication back
+    // in the only channel that had never carried it.
+    const count = semanticOnly
+      ? t(response.found === 1 ? 'announce_semantic_shown_one' : 'announce_semantic_shown_other', {
+          n: response.found.toLocaleString(),
+        })
+      : t(response.found === 1 ? 'announce_results_one' : 'announce_results_other', {
+          n: response.found.toLocaleString(),
+        });
     // The page is only worth saying when there is more than one of them.
     return totalPages > 1
       ? `${count} ${t('announce_page', { p: page.toLocaleString(), total: totalPages.toLocaleString() })}`

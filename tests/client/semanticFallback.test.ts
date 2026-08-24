@@ -28,6 +28,18 @@ function hit(id: string, textMatch?: number, vectorDistance?: number): IwacHit {
   return h;
 }
 
+/**
+ * A hit carrying the `text_match_info` breakdown, which is the shape every
+ * real response has — and the only one that tells the truth in union mode.
+ */
+function hitWithInfo(id: string, textMatch: number, tokensMatched: number): IwacHit {
+  return {
+    document: { id, title: `doc ${id}` },
+    text_match: textMatch,
+    text_match_info: { tokens_matched: tokensMatched, score: String(textMatch) },
+  };
+}
+
 function response(hits: IwacHit[], found = hits.length): IwacSearchResponse {
   return { found, page: 1, request_params: { per_page: 10 }, hits, search_time_ms: 3 };
 }
@@ -71,6 +83,51 @@ describe('isSemanticOnlyResponse', () => {
   it('is false for a missing response', () => {
     expect(isSemanticOnlyResponse(null, 'xzqvwk')).toBe(false);
     expect(isSemanticOnlyResponse(undefined, 'xzqvwk')).toBe(false);
+  });
+
+  /**
+   * UNION mode (/search/everything) is a different wire shape, and the
+   * difference is not cosmetic: Typesense synthesises `text_match` out of the
+   * rank-fusion score there, so a hit no query token touched arrives scoring
+   * over a billion. A `text_match > 0` test calls that whole fabricated set
+   * genuine — which is why the federated withhold, written against the
+   * per-collection signal, rendered "100 results" on the rig with the code
+   * that was supposed to prevent it. `tokens_matched` is the field that says
+   * the same thing in both modes.
+   *
+   * Every figure below was read off the live wire, not invented.
+   */
+  describe('union mode, where text_match lies', () => {
+    it('flags a union set whose hits matched zero tokens despite huge text_match', () => {
+      const unionVectorOnly = response(
+        [
+          hitWithInfo('1', 1050253722, 0),
+          hitWithInfo('2', 1041865114, 0),
+          hitWithInfo('3', 1036831949, 0),
+        ],
+        100,
+      );
+      expect(isSemanticOnlyResponse(unionVectorOnly, 'xzqvwk')).toBe(true);
+    });
+
+    it('does not flag a real union query', () => {
+      const unionReal = response(
+        [hitWithInfo('1', 578730123373578400, 1), hitWithInfo('2', 578730123365189800, 1)],
+        5872,
+      );
+      expect(isSemanticOnlyResponse(unionReal, 'imam')).toBe(false);
+    });
+
+    it('prefers tokens_matched over text_match when the two disagree', () => {
+      // The disagreement IS the union bug, stated as a single assertion.
+      const conflicted = response([hitWithInfo('1', 1050253722, 0)], 100);
+      expect(isSemanticOnlyResponse(conflicted, 'xzqvwk')).toBe(true);
+    });
+
+    it('still trusts text_match when no breakdown is present', () => {
+      expect(isSemanticOnlyResponse(response([hit('1', 0, 0.18)]), 'xzqvwk')).toBe(true);
+      expect(isSemanticOnlyResponse(response([hit('1', 100013)]), 'imam')).toBe(false);
+    });
   });
 
   /**

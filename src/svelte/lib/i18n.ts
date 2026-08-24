@@ -163,6 +163,8 @@ const STRINGS: Record<Locale, Record<string, string>> = {
       'Aucune correspondance exacte. 1 document sémantiquement proche peut être affiché.',
     announce_semantic_other:
       'Aucune correspondance exacte. {n} documents sémantiquement proches peuvent être affichés.',
+    announce_semantic_shown_one: 'Affichage de 1 document sémantiquement proche.',
+    announce_semantic_shown_other: 'Affichage de {n} documents sémantiquement proches.',
   },
   en: {
     search_placeholder: 'Search the IWAC…',
@@ -276,6 +278,8 @@ const STRINGS: Record<Locale, Record<string, string>> = {
     announce_page: 'Page {p} of {total}.',
     announce_semantic_one: 'No exact matches. 1 semantically related item can be shown.',
     announce_semantic_other: 'No exact matches. {n} semantically related items can be shown.',
+    announce_semantic_shown_one: 'Showing 1 semantically related item.',
+    announce_semantic_shown_other: 'Showing {n} semantically related items.',
   },
 };
 

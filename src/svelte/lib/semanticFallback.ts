@@ -22,21 +22,39 @@ export interface KeywordScorable {
  * name answered with "100 results", confident facet counts, and no signal that
  * nothing actually matched (Phase-1 critique P0 #2).
  *
- * `text_match` is the signal, and it is unambiguous on the wire. Observed
- * against the live collection:
+ * The signal is `text_match_info.tokens_matched` — how many query tokens
+ * actually touched the document. Observed against the live collection:
  *
- *   q=xzqvwk   found 100  every hit  text_match: 0, + vector_distance
- *                                    + hybrid_search_info.rank_fusion_score
- *   q=imam     found 5857 first hit  text_match: 578730123365189800
- *   q="imam de Ouagadougou"          text_match: 100013 (no vector leg —
- *                                    exact mode drops `embedding`)
+ *   PER-COLLECTION search
+ *     q=xzqvwk   found 100   text_match 0,  tokens_matched 0, vector_distance
+ *     q=imam     found 5857  text_match 578730123365189800, tokens_matched 1
+ *     q="imam …" exact mode  text_match 100013 (no vector leg)
  *
- * So: a non-empty query whose hits ALL score zero on the keyword leg found
- * nothing, whatever `found` says.
+ *   UNION search (/search/everything)
+ *     q=xzqvwk   found 100   text_match 1050253722 (!), tokens_matched 0,
+ *                            num_tokens_dropped 1, vector_distance 0.184,
+ *                            hybrid_search_info.rank_fusion_score 0.3
+ *     q=imam     found 5872  text_match 578730123373578400, tokens_matched 1
+ *
+ * That second block is why this predicate reads `tokens_matched` and not
+ * `text_match`. In union mode Typesense SYNTHESISES a large `text_match` out
+ * of the rank-fusion score, so a hit no query token touched arrives scoring
+ * 1,050,253,722 — and a `text_match > 0` test calls the whole fabricated set
+ * genuine. The federated withhold was written against the per-collection
+ * signal and was inert on the wire until the rig showed this.
+ *
+ * `tokens_matched` says the same thing in both modes, and says it about the
+ * keyword leg specifically. `text_match` remains the fallback for any
+ * response shape that omits the breakdown.
+ *
+ * So: a non-empty query whose hits ALL matched zero tokens found nothing,
+ * whatever `found` says.
  */
 
 /** Did this hit match the keyword leg at all? */
 function hasKeywordMatch(hit: IwacHit): boolean {
+  const matched = hit.text_match_info?.tokens_matched;
+  if (typeof matched === 'number') return matched > 0;
   return typeof hit.text_match === 'number' && hit.text_match > 0;
 }
 

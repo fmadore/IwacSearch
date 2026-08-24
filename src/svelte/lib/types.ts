@@ -231,7 +231,21 @@ export interface IwacHit {
   document: IwacDoc;
   /** Absent on browse (q=*) responses — Typesense only highlights real queries. */
   highlights?: IwacHighlight[];
+  /**
+   * The fused relevance score. NOT a reliable "did the keyword leg match"
+   * signal on its own: in UNION mode Typesense synthesises a large
+   * `text_match` out of the rank-fusion score even for a hit no query token
+   * touched. Use `text_match_info.tokens_matched` — see lib/semanticFallback.ts.
+   */
   text_match?: number;
+  /** Breakdown behind `text_match`. `tokens_matched` is the honest signal. */
+  text_match_info?: {
+    /** How many query tokens actually matched this document. */
+    tokens_matched?: number;
+    num_tokens_dropped?: number;
+    fields_matched?: number;
+    score?: string;
+  };
 }
 
 export interface IwacFacetCount {
