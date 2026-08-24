@@ -52,7 +52,7 @@
  * instead, capping the width to the viewport so it can never overflow either
  * side. max-content keeps it snug for short lists; the cap truncates long ones.
  */
-@media (max-width: 47.99em) {
+@media (max-width: 767px) {
   .iwac-header-suggest {
     inset-inline-start: 0;
     inset-inline-end: auto;

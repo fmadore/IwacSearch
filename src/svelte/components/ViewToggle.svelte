@@ -112,7 +112,7 @@
   }
 
   /* On the narrowest screens the labels drop; the icons keep the meaning. */
-  @media (max-width: 26rem) {
+  @media (max-width: 399px) {
     .iwac-view__label {
       display: none;
     }

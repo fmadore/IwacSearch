@@ -8,6 +8,15 @@
  * FacetPanel re-mounts on a resize across the breakpoint; acceptable
  * because the only state worth preserving is FacetGroup's expand memory,
  * and resizing across breakpoints mid-session is rare.
+ *
+ * THE BOUNDARY IS DUPLICATED. `max-width: 767px` here (md 768 − 1, the
+ * theme's published breakpoint scale) must equal the `@media` in
+ * App.svelte that collapses `.iwac-search__layout` to one column: this
+ * decides which SHELL renders, that decides the grid it renders into, and
+ * a disagreement puts the facet panel in the drawer while the page still
+ * reserves a sidebar column for it (or the reverse). No guard reaches a
+ * matchMedia string, so it is checked by eye — which is the reason both
+ * halves name the same literal rather than one deriving from the other.
  */
 export interface FilterDrawerState {
   readonly open: boolean;
@@ -35,7 +44,7 @@ export function createFilterDrawer(): FilterDrawerState {
     close(): void {
       open = false;
     },
-    attach(breakpoint = '(max-width: 48rem)'): (() => void) | undefined {
+    attach(breakpoint = '(max-width: 767px)'): (() => void) | undefined {
       if (typeof window === 'undefined') return undefined;
       const mq = window.matchMedia(breakpoint);
       const update = (): void => {

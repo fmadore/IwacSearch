@@ -47,11 +47,15 @@
  *      forever, silently decoupled from the scale it appeared to track.
  *      `--space-2xs` sat here undetected that way until the theme published
  *      `names` (IWAC-theme 2.9.1).
- *   6. Every `@media (min|max-width: …)` must use one of the theme's five
- *      published breakpoints. Media queries cannot read custom properties, so
- *      the widths are necessarily restated as literals — which makes them the
- *      one part of the contract held together by a comment rather than a
- *      check.
+ *   6. Every `@media (min|max-width: …)` must be written in px AND sit on one
+ *      of the theme's six published breakpoints (`min-width` ON it,
+ *      `max-width` at it − 1, so the halves of a pair never both match).
+ *      Media queries cannot read custom properties, so the widths are
+ *      necessarily restated as literals — which makes them the one part of
+ *      the contract held together by a comment rather than a check. The px
+ *      half of the rule is not stylistic: tokens.json publishes px, and a
+ *      rem/em width resolves against a root font-size no linter can know, so
+ *      requiring px is what makes the breakpoint check possible at all.
  * Lines carrying an `allow-hex` marker comment are exempt from 3 and 4.
  *
  * Usage: node scripts/check-theme-tokens.js   (npm run lint:theme)
@@ -108,6 +112,15 @@ const VAR_FALLBACK = /var\(\s*(--[\w-]+)\s*,\s*(#[0-9a-fA-F]{3,8})\b/g;
 const VAR_USE = /var\(\s*(--[\w-]+)/g;
 const DECL = /(--[\w-]+)\s*:/g;
 const MEDIA_WIDTH = /\((min|max)-width\s*:\s*([\d.]+)px\)/g;
+// The same thing in any OTHER unit. The px form above is the only one the
+// contract can check, because tokens.json publishes px and a rem/em width
+// resolves against a root font-size the guard cannot know. Until 2026-08 the
+// px requirement silently doubled as an exemption: every one of this module's
+// eleven width queries was written in rem/em, so MEDIA_WIDTH matched nothing
+// and rule 6 exited green over eleven violations — two of them sitting exactly
+// ON 768px, taking the narrow branch at the 768 viewport where the min-width
+// half of the pair also matched.
+const MEDIA_WIDTH_NON_PX = /\((min|max)-width\s*:\s*[\d.]+(?!px)([a-z%]+)\)/gi;
 // Absolute font-size literals only: em / % / unitless scale WITH whatever token
 // the cascade already set, so they don't fork the scale. This module is already
 // clean — >75 declarations all reading var(--text-*, …), the seven literals all
@@ -335,6 +348,16 @@ function checkBreakpoints(file, raw, n) {
   const names = Object.entries(TOKENS.breakpoints)
     .map(([k, v]) => `${k} ${v}`)
     .join(', ');
+  MEDIA_WIDTH_NON_PX.lastIndex = 0;
+  let u;
+  while ((u = MEDIA_WIDTH_NON_PX.exec(raw)) !== null) {
+    flag(
+      file,
+      n,
+      `${u[1]}-width in ${u[2]}, not px — the breakpoint contract is published in px (${names}), and a non-px width is invisible to this rule`,
+      raw,
+    );
+  }
   MEDIA_WIDTH.lastIndex = 0;
   let m;
   while ((m = MEDIA_WIDTH.exec(raw)) !== null) {

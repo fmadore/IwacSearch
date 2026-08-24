@@ -204,7 +204,7 @@
     font-size: var(--text-sm, 0.9375rem);
   }
 
-  @media (max-width: 30rem) {
+  @media (max-width: 599px) {
     /* Hide "Prev"/"Next" word labels on tiny screens — chevrons keep
        the meaning, and the row stops wrapping awkwardly. */
     .iwac-pager__nav-label {

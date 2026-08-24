@@ -183,7 +183,7 @@
    * toggle and Filters trigger do the same at this breakpoint), so the Export
    * label collapses to its download glyph — the button keeps its aria-label.
    */
-  @media (max-width: 26rem) {
+  @media (max-width: 399px) {
     .iwac-export__trigger {
       padding-inline: var(--space-sm, 0.5rem);
     }

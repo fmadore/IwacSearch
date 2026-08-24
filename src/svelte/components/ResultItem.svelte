@@ -898,7 +898,7 @@
   }
 
   /* Narrow viewport: stack the list thumb on top so titles get full width. */
-  @media (max-width: 32rem) {
+  @media (max-width: 599px) {
     .iwac-card--list {
       grid-template-columns: 1fr;
       gap: var(--space-sm, 0.5rem);

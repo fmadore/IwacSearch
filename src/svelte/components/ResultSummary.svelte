@@ -182,7 +182,7 @@
     font-weight: 600;
   }
 
-  @media (max-width: 48rem) {
+  @media (max-width: 767px) {
     /* Let the sort readout sit under the count/chips rather than be squeezed. */
     .iwac-summary__sort {
       margin-inline-start: 0;

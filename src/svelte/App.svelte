@@ -1106,7 +1106,11 @@
     margin-inline-start: auto;
   }
 
-  @media (max-width: 48rem) {
+  /* 767px = md 768 − 1 on the theme's published scale. This literal has a
+     twin in lib/filterDrawer.svelte.ts's matchMedia, which decides whether
+     the facet panel renders as a column or inside the Drawer; the two must
+     agree or the page reserves a sidebar for a panel that moved. */
+  @media (max-width: 767px) {
     .iwac-search__layout {
       grid-template-columns: 1fr;
       gap: var(--space-md, 1rem);
@@ -1216,7 +1220,7 @@
    * Export trigger already drop their labels at this breakpoint, so the Filters
    * and copy-link labels follow (icons stay; the buttons keep their aria-labels).
    */
-  @media (max-width: 26rem) {
+  @media (max-width: 399px) {
     .iwac-search__filters-trigger,
     .iwac-search__copylink {
       padding-inline: var(--space-sm, 0.5rem);

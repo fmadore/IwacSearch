@@ -108,7 +108,7 @@
     grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
     gap: var(--space-lg, 1.5rem);
   }
-  @media (max-width: 30rem) {
+  @media (max-width: 599px) {
     .iwac-results__gallery {
       grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: var(--space-md, 1rem);

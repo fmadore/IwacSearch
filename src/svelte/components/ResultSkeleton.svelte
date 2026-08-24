@@ -150,7 +150,7 @@
   }
 
   /* Mirror ResultItem's narrow-viewport stacking so the proof matches. */
-  @media (max-width: 32rem) {
+  @media (max-width: 599px) {
     .iwac-skeleton__row {
       grid-template-columns: 1fr;
       gap: var(--space-sm, 0.5rem);
