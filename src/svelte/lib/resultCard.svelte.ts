@@ -1,6 +1,6 @@
 import type { IwacHit } from './types';
 import { countryLabel, entityTypeLabel, typeLabel as typeLabelFor, useI18n } from './i18n';
-import { sizedThumbnail } from './thumbnail';
+import { sizedThumbnail, thumbnailSrcset } from './thumbnail';
 import { itemPath, localizeSiteUrl } from './siteUrl';
 import { densifyByYear, parseMentionsByYear } from './sparkline';
 import {
@@ -41,12 +41,15 @@ export function createResultCard(input: () => { hit: IwacHit; hideCountry: boole
   const referenceType = $derived(doc.reference_type_ss?.[0] ?? '');
   const dateLabel = $derived(formatDate(locale, doc.date, doc.pub_year, isReference));
 
-  // Thumbnail derivative per layout: list rows take `medium`, gallery tiles
-  // take `large` (the 200px `medium` would upscale at tile size). Both are
-  // derived up front — the component picks by layout, and switching views
-  // must not restart the derivation.
-  const listThumb = $derived(sizedThumbnail(doc.thumbnail_url, 'medium'));
-  const galleryThumb = $derived(sizedThumbnail(doc.thumbnail_url, 'large'));
+  // Thumbnail source. ONE derivation for both layouts now: `medium` is the
+  // 1× answer at both the 112px list thumb and the ~190px gallery tile, and
+  // the srcset lets the browser take `large` on a high-DPR screen instead of
+  // on every screen. The two used to differ — the gallery asked for `large`
+  // unconditionally, which cost 41–141 KB per 190px tile (see
+  // lib/thumbnail.ts for the measured tiers). The layouts still differ in
+  // `sizes`, which is a property of the slot, so it lives in the component.
+  const thumbSrc = $derived(sizedThumbnail(doc.thumbnail_url, 'medium'));
+  const thumbSrcset = $derived(thumbnailSrcset(doc.thumbnail_url, ['medium', 'large']));
 
   // Type badge → a clickable facet. References surface their publication
   // type (reference_type_ss) so the badge reads "Chapitre" / "Article de
@@ -164,11 +167,11 @@ export function createResultCard(input: () => { hit: IwacHit; hideCountry: boole
     get externalLink() {
       return externalLink;
     },
-    get listThumb() {
-      return listThumb;
+    get thumbSrc() {
+      return thumbSrc;
     },
-    get galleryThumb() {
-      return galleryThumb;
+    get thumbSrcset() {
+      return thumbSrcset;
     },
     get typeChip() {
       return typeChip;

@@ -1,5 +1,4 @@
 import type { IwacSearchResponse, ViewMode } from './types';
-import { urlHasView } from './urlState';
 
 /**
  * View-mode composable — extracted from App.svelte (design review §01),
@@ -25,8 +24,8 @@ export interface ViewModeOptions {
   /** Whether this mount syncs state to the URL. */
   syncUrl: boolean;
   urlPrefix: string;
-  /** View parsed from the URL at mount ('list' when absent). */
-  initialView: ViewMode;
+  /** View parsed from the URL at mount; null when the URL carries none. */
+  initialView: ViewMode | null;
 }
 
 export interface ViewModeState {
@@ -38,7 +37,7 @@ export interface ViewModeState {
   readonly supportsToggle: boolean;
   readonly modes: readonly ViewMode[];
   set(next: ViewMode): void;
-  applyPop(view: ViewMode): void;
+  applyPop(view: ViewMode | null): void;
   autoSuggest(r: IwacSearchResponse): void;
 }
 
@@ -61,12 +60,12 @@ export function createViewMode(opts: ViewModeOptions): ViewModeState {
   // upgraded later by the image-heavy auto-suggest.
   function resolveInitial(): { view: ViewMode; explicit: boolean } {
     if (!multi) return { view: 'list', explicit: true };
-    if (
-      opts.syncUrl &&
-      urlHasView(window.location.href, opts.urlPrefix) &&
-      valid(opts.initialView)
-    ) {
-      return { view: opts.initialView, explicit: true };
+    // A `view` in the URL is an explicit choice even when this surface can't
+    // honour the exact mode (a stored `map` on a content surface): the reader
+    // asked for a presentation, so the auto-suggest stays out of it either
+    // way and the unsupported value falls back to `list`.
+    if (opts.syncUrl && opts.initialView !== null) {
+      return { view: valid(opts.initialView) ? opts.initialView : 'list', explicit: true };
     }
     const stored = readStored();
     if (stored) return { view: stored, explicit: true };
@@ -92,9 +91,18 @@ export function createViewMode(opts: ViewModeOptions): ViewModeState {
       return opts.modes;
     },
 
-    /** Explicit user choice — sticks in localStorage and the URL. */
+    /**
+     * Explicit user choice — sticks in localStorage and the URL.
+     *
+     * The `next === mode` early return that used to guard this was a bug, not
+     * an optimisation: pressing "List" while the surface was on the IMPLICIT
+     * list recorded no choice at all, so the image-heavy auto-suggest was
+     * still armed and the first response flipped the reader straight out of
+     * the view they had just asked for. Choosing the mode you are already in
+     * is how a reader says "yes, this one, stop deciding for me".
+     */
     set(next: ViewMode): void {
-      if (next === mode || !valid(next)) return;
+      if (!valid(next)) return;
       mode = next;
       explicit = true;
       try {
@@ -106,20 +114,28 @@ export function createViewMode(opts: ViewModeOptions): ViewModeState {
 
     /** Back/forward re-hydration: a `view` in the popped URL is an explicit
      * choice to honour; its absence reverts to the implicit default. */
-    applyPop(view: ViewMode): void {
+    applyPop(view: ViewMode | null): void {
       if (!multi) return;
-      mode = valid(view) ? view : 'list';
-      explicit = urlHasView(window.location.href, opts.urlPrefix);
+      explicit = view !== null;
+      mode = view !== null && valid(view) ? view : 'list';
     },
 
-    /** Auto-suggest Gallery once, on the first response, when the set is
+    /**
+     * Auto-suggest Gallery once, on the first response, when the set is
      * image-heavy and the user hasn't explicitly chosen a view. Never
-     * overrides an explicit choice; doesn't persist (session hint). */
+     * overrides an explicit choice; doesn't persist (session hint).
+     *
+     * MUST only be handed a response the reader is actually being shown. It
+     * used to run on every response, including the vector-only set the
+     * semantic withhold hides — so a dead query could silently flip the
+     * surface to a gallery of documents nobody could see, and the flip then
+     * outlived the query that caused it.
+     */
     autoSuggest(r: IwacSearchResponse): void {
       if (!multi || explicit || autoApplied || !valid('gallery')) return;
-      autoApplied = true;
       const hits = r.hits ?? [];
-      if (hits.length < 4) return; // too few to judge confidently
+      if (hits.length < 4) return; // too few to judge confidently — try again
+      autoApplied = true;
       const n = hits.filter((h) => IMAGE_BEARING_TYPES.has(h.document.type_s ?? '')).length;
       if (n / hits.length > 0.6) mode = 'gallery';
     },

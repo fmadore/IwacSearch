@@ -113,8 +113,15 @@ export function readUrlState(
   };
 }
 
-/** Non-default views (`gallery` / `map`) are encoded; anything else is `list`. */
-function parseView(raw: string | null): ViewMode {
+/**
+ * Decode `?view=`. An absent param is null — "the reader never chose" — and
+ * an unrecognised value degrades to `list` rather than null, because a
+ * mangled `?view=carousel` in a shared link is still someone having asked for
+ * a specific presentation, and silently re-enabling the auto-suggest on top
+ * of it would be a second surprise on top of the first.
+ */
+function parseView(raw: string | null): ViewMode | null {
+  if (raw === null) return null;
   return raw === 'gallery' || raw === 'map' ? raw : 'list';
 }
 
@@ -134,14 +141,14 @@ function parseSort(raw: string | null, defaultSort: string): string {
   return SORT_VALUES.has(raw) ? raw : defaultSort;
 }
 
-/**
- * Whether the URL explicitly carries a `view` param under this prefix. Lets the
- * App tell "user/shared-link chose a view" from "defaulted to list", so it only
- * falls back to localStorage / auto-suggest when no explicit choice was made.
+/*
+ * There was a `urlHasView()` helper here, answering "did the reader choose a
+ * view" by re-parsing the URL — because the decoded `view` collapsed "chose
+ * List" and "chose nothing" into the same 'list'. Now that the decoder
+ * distinguishes them with null, a second reader of the same param is one more
+ * thing that can disagree with the first, so it is gone: ask the decoded
+ * state.
  */
-export function urlHasView(href: string = window.location.href, prefix = ''): boolean {
-  return new URL(href).searchParams.has(`${prefix}view`);
-}
 
 function parseYearRange(params: URLSearchParams, prefix: string): YearRange | null {
   const from = parseYearOrNull(params.get(`${prefix}date.from`));
@@ -219,8 +226,10 @@ function applyState(
       params.set(`${prefix}date.to`, String(state.yearRange.to));
     }
   }
-  // `list` is the default, so it's omitted to keep a fresh URL clean.
-  if (state.view !== 'list') {
+  // Every EXPLICIT view is written, `list` included — the param's job is to
+  // reproduce what the sharer was looking at, and "List" is as much a choice
+  // as "Gallery". Only null (no choice made) leaves the URL clean.
+  if (state.view !== null) {
     params.set(`${prefix}view`, state.view);
   }
 }

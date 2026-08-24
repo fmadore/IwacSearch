@@ -306,8 +306,18 @@ export interface SearchState {
   sort: string; // e.g. "_text_match:desc", "date:desc"
   filters: ActiveFilters;
   yearRange: YearRange | null;
-  /** Presentation mode (does not affect the query). Defaults to 'list'. */
-  view: ViewMode;
+  /**
+   * Presentation mode (does not affect the query), or null for "the reader
+   * never said".
+   *
+   * The distinction is the whole point. `list` used to double as both "the
+   * reader chose List" and "no view in the URL", and since the encoder omits
+   * defaults, choosing List wrote nothing — so a copied link re-ran the
+   * image-heavy auto-suggest on the recipient's side and handed them the
+   * gallery the sharer had explicitly rejected. A null here is the absence of
+   * a choice; a ViewMode is a choice, and every choice is written.
+   */
+  view: ViewMode | null;
 }
 
 /**

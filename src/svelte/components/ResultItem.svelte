@@ -28,9 +28,10 @@
    *     it's aria-hidden and not wrapped around the whole card.
    *   - Type LEADS the dateline as a dotted uppercase token, so the eye scans
    *     category down the left margin without reading every title.
-   *   - Thumbnails request the Omeka derivative tier that fits the slot (list →
-   *     `medium`, gallery → `large`) instead of upscaling one stored thumb
-   *     (design review punch-list item 5; see lib/thumbnail.ts).
+   *   - Thumbnails offer the browser two Omeka derivative tiers with a `sizes`
+   *     describing the slot, so a 1× screen takes the 9 KB `medium` and a
+   *     retina one the `large` — instead of every screen taking `large` for a
+   *     190px tile (see lib/thumbnail.ts for the measured tier sizes).
    *
    * Clickable metadata: the type badge, author byline, newspaper and country
    * are facet-toggle buttons calling onFacetToggle — the same handler the
@@ -199,7 +200,7 @@
 
 <article
   class="iwac-card iwac-card--{layout}"
-  class:iwac-card--no-thumb={layout === 'list' && !cardData.listThumb}
+  class:iwac-card--no-thumb={layout === 'list' && !cardData.thumbSrc}
 >
   {#if layout === 'gallery'}
     <!-- ── Gallery tile: image-forward, compact metadata below ── -->
@@ -209,8 +210,22 @@
       aria-hidden="true"
       tabindex="-1"
     >
-      {#if cardData.galleryThumb}
-        <img src={cardData.galleryThumb} alt="" loading="lazy" />
+      {#if cardData.thumbSrc}
+        <!-- 4:3 tile. `sizes` describes the SLOT so the browser can pick the
+             tier: two-up under 600px, otherwise the ~200px the auto-fill grid
+             settles on. Intrinsic width/height are the `medium` constraint,
+             present so the box is reserved even if the CSS aspect-ratio
+             hasn't applied yet. -->
+        <img
+          src={cardData.thumbSrc}
+          srcset={cardData.thumbSrcset}
+          sizes="(max-width: 599px) 45vw, 200px"
+          width="200"
+          height="150"
+          alt=""
+          loading="lazy"
+          decoding="async"
+        />
       {:else}
         <span class="iwac-card__thumb-ph" aria-hidden="true"><Icon name="image" /></span>
       {/if}
@@ -235,9 +250,20 @@
     </div>
   {:else}
     <!-- ── List ledger row ── -->
-    {#if cardData.listThumb}
+    {#if cardData.thumbSrc}
       <a class="iwac-card__thumb" href={cardData.itemUrl} aria-hidden="true" tabindex="-1">
-        <img src={cardData.listThumb} alt="" loading="lazy" />
+        <!-- Fixed 7rem square (9rem tall and full-width under 600px, see the
+             media query), so `sizes` is stated rather than computed. -->
+        <img
+          src={cardData.thumbSrc}
+          srcset={cardData.thumbSrcset}
+          sizes="(max-width: 599px) 100vw, 112px"
+          width="200"
+          height="150"
+          alt=""
+          loading="lazy"
+          decoding="async"
+        />
       </a>
     {/if}
 

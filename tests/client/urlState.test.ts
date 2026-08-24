@@ -1,10 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  FALLBACK_SORT,
-  readUrlState,
-  urlHasView,
-  writeUrlState,
-} from '../../src/svelte/lib/urlState';
+import { FALLBACK_SORT, readUrlState, writeUrlState } from '../../src/svelte/lib/urlState';
 import type { SearchState } from '../../src/svelte/lib/types';
 
 /**
@@ -29,7 +24,9 @@ function state(overrides: Partial<SearchState> = {}): SearchState {
     sort: FALLBACK_SORT,
     filters: {},
     yearRange: null,
-    view: 'list',
+    // null, not 'list': the pristine state is "the reader has not chosen a
+    // view", which is a different thing from having chosen the list.
+    view: null,
     ...overrides,
   };
 }
@@ -101,12 +98,22 @@ describe('readUrlState', () => {
     expect(readUrlState(`${base}?date.from=1800`).yearRange).toEqual({ from: 1800 });
   });
 
-  it('only recognises gallery and map as explicit views', () => {
+  it('distinguishes a chosen view from no choice at all', () => {
+    // The distinction the image-heavy auto-suggest turns on: `list` means the
+    // reader chose List, null means they said nothing. Collapsing the two is
+    // what let a copied link re-flip a recipient into the gallery the sharer
+    // had explicitly rejected.
     expect(readUrlState(`${base}?view=gallery`).view).toBe('gallery');
     expect(readUrlState(`${base}?view=map`).view).toBe('map');
+    expect(readUrlState(`${base}?view=list`).view).toBe('list');
+    expect(readUrlState(base).view).toBeNull();
+  });
+
+  it('degrades an unrecognised view to list rather than to "no choice"', () => {
+    // A mangled ?view= is still someone asking for a presentation; treating it
+    // as absent would re-arm the auto-suggest on top of the mangling.
     expect(readUrlState(`${base}?view=carousel`).view).toBe('list');
-    expect(urlHasView(`${base}?view=map`)).toBe(true);
-    expect(urlHasView(base)).toBe(false);
+    expect(readUrlState(`${base}?view=`).view).toBe('list');
   });
 
   describe('surface default sort', () => {
@@ -216,6 +223,9 @@ describe('round trip', () => {
     ['year range', state({ yearRange: { from: 1990, to: 1999 } })],
     ['open-ended year range', state({ yearRange: { from: 1990 } })],
     ['explicit view', state({ view: 'gallery' })],
+    // The case the old encoder dropped on the floor: choosing List wrote
+    // nothing, so the link could not carry the choice.
+    ['explicit list view', state({ view: 'list' })],
     [
       'everything at once',
       state({

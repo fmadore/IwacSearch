@@ -136,7 +136,7 @@
         sort: defaultSort,
         filters: bootstrap.initial_filters ?? {},
         yearRange: null,
-        view: 'list',
+        view: null,
       };
 
   let query = $state(initial.q);
@@ -257,9 +257,10 @@
   // the toolbar header below.
   let resultsAnchor: HTMLElement | null = $state(null);
 
-  // Push state → URL whenever anything observable changes. `view` only goes to
-  // the URL when explicitly chosen — an auto-suggested gallery stays a session
-  // hint and never mutates a shared link.
+  // Push state → URL whenever anything observable changes. An EXPLICIT view
+  // always goes to the URL, `list` included, so a copied link reproduces what
+  // the sharer was looking at; an auto-suggested gallery writes nothing and
+  // stays a session hint (the recipient's own results re-derive it, or don't).
   $effect(() => {
     if (!syncUrl) return;
     const next: SearchState = {
@@ -268,7 +269,7 @@
       sort,
       filters,
       yearRange,
-      view: view.explicit ? view.mode : 'list',
+      view: view.explicit ? view.mode : null,
     };
     syncToUrl(next, prevState, urlPrefix, defaultSort);
     // Snapshot for the next diff. NOT structuredClone(next): `filters` and
@@ -301,12 +302,18 @@
     );
   });
 
-  // Auto-suggest Gallery once, on the first response, when the set is
-  // image-heavy and the user hasn't explicitly chosen a view (design review
-  // §01). Never overrides an explicit choice; doesn't persist (session hint).
+  // Auto-suggest Gallery once, on the first response the reader is actually
+  // SHOWN, when that set is image-heavy and no view has been chosen (design
+  // review §01). Never overrides an explicit choice; doesn't persist.
+  //
+  // The `semanticHidden` guard is the fix for a real inversion: this effect
+  // used to run before the withhold, so a query that matched nothing had its
+  // presentation decided by the vector-only set the surface was refusing to
+  // show — a gallery chosen on the strength of documents the reader was
+  // being told did not exist.
   $effect(() => {
     const r = response;
-    if (r) view.autoSuggest(r);
+    if (r && !semanticHidden) view.autoSuggest(r);
   });
 
   // Query → search. Tracks every reactive state field by reading it.

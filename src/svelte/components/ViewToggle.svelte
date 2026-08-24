@@ -98,12 +98,13 @@
     transform: none;
     cursor: default;
   }
+  /* INSET, unlike the rest of the toolbar: .iwac-view clips (`overflow:
+     hidden`, which is what rounds the segment corners), so an outset outline
+     would be trimmed on three sides of each end segment and on two of the
+     middle one. z-index cannot rescue ink a clipping ancestor has cut. */
   .iwac-view__btn:focus-visible {
     outline: var(--focus-outline, 2px solid #ce4115);
-    outline-offset: 2px;
-    /* Pull the ring above the sibling's border so it isn't clipped. */
-    position: relative;
-    z-index: 1;
+    outline-offset: -2px;
   }
   .iwac-view__icon {
     display: inline-flex;
