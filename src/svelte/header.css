@@ -118,7 +118,13 @@
   background: color-mix(in oklab, var(--primary, #ce4115) 8%, var(--surface, #fdfcfb));
   box-shadow: none;
   transform: none;
-  outline: none;
+}
+
+/* --active is the aria-activedescendant highlight; real keyboard focus gets a
+   solid indicator, inset because the panel is rounded and clipped. */
+.iwac-header-suggest__item:focus-visible {
+  outline: var(--focus-outline, 2px solid #ce4115);
+  outline-offset: -2px;
 }
 
 .iwac-header-suggest__item--search {

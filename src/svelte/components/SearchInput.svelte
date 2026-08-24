@@ -159,9 +159,9 @@
     border-color: var(--border-strong, #aeb1b7);
   }
   .iwac-input__field:focus {
-    outline: none;
     border-color: var(--primary, #ce4115);
-    box-shadow: var(--ring-focus, 0 0 0 3px rgba(206, 65, 21, 0.3));
+    outline: var(--focus-outline, 2px solid #ce4115);
+    outline-offset: 2px;
   }
   .iwac-input__clear {
     position: absolute;

@@ -166,9 +166,8 @@
     color: var(--primary-hover, #b03710);
   }
   .iwac-summary__clear:focus-visible {
-    outline: none;
-    box-shadow: var(--ring-focus, 0 0 0 3px rgba(206, 65, 21, 0.3));
-    border-radius: var(--radius-sm, 0.375rem);
+    outline: var(--focus-outline, 2px solid #ce4115);
+    outline-offset: 2px;
   }
 
   .iwac-summary__sort {

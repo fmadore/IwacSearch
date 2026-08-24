@@ -489,8 +489,8 @@
     opacity: 0.55;
   }
   .iwac-fed__tab:focus-visible {
-    outline: none;
-    box-shadow: var(--ring-focus, 0 0 0 3px rgba(206, 65, 21, 0.3)) !important;
+    outline: var(--focus-outline, 2px solid #ce4115) !important;
+    outline-offset: 2px;
   }
   .iwac-fed__tab-count {
     font-variant-numeric: tabular-nums;

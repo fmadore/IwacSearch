@@ -352,9 +352,8 @@
     text-underline-offset: 2px;
   }
   .iwac-daterange__reset:focus-visible {
-    outline: none;
-    box-shadow: var(--ring-focus, 0 0 0 3px rgba(206, 65, 21, 0.3));
-    border-radius: var(--radius-sm, 0.375rem);
+    outline: var(--focus-outline, 2px solid #ce4115);
+    outline-offset: 2px;
   }
 
   /*
@@ -470,10 +469,11 @@
     );
   }
   .iwac-daterange__thumb:focus-visible {
-    outline: none;
-    box-shadow:
-      var(--shadow-sm, 0 1px 3px 0 rgba(9, 11, 15, 0.12), 0 1px 2px -1px rgba(20, 22, 27, 0.06)),
-      var(--ring-focus, 0 0 0 3px rgba(206, 65, 21, 0.3));
+    /* The translucent halo measured 1.01:1 against the dark track — a slider
+       thumb is exactly the control that cannot afford a tint-only indicator.
+       The solid outline keeps the thumb's resting shadow underneath it. */
+    outline: var(--focus-outline, 2px solid #ce4115);
+    outline-offset: 2px;
   }
   .iwac-daterange__thumb--dragging {
     cursor: grabbing;

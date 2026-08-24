@@ -264,9 +264,8 @@
     text-underline-offset: 2px;
   }
   .iwac-facets__clear-all:focus-visible {
-    outline: none;
-    box-shadow: var(--ring-focus, 0 0 0 3px rgba(206, 65, 21, 0.3));
-    border-radius: var(--radius-sm, 0.375rem);
+    outline: var(--focus-outline, 2px solid #ce4115);
+    outline-offset: 2px;
   }
 
   .iwac-facets__section {
@@ -326,9 +325,8 @@
     transform: none;
   }
   .iwac-facets__group-heading:focus-visible {
-    outline: none;
-    box-shadow: var(--ring-focus, 0 0 0 3px rgba(206, 65, 21, 0.3));
-    border-radius: var(--radius-sm, 0.375rem);
+    outline: var(--focus-outline, 2px solid #ce4115);
+    outline-offset: 2px;
   }
   .iwac-facets__group-label {
     flex: 1;

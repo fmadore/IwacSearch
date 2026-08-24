@@ -364,8 +364,12 @@
   .iwac-card:hover {
     background: color-mix(in oklab, var(--primary, #ce4115) 4%, transparent);
   }
+  /* Row-level context for whichever control inside is focused. The indicator
+     itself is that control's own --focus-outline; this is the hover wash
+     reused so the eye finds the row, not a second (weaker) ring competing
+     with it. */
   .iwac-card:has(:focus-visible) {
-    box-shadow: var(--ring-focus, 0 0 0 3px rgba(206, 65, 21, 0.3));
+    background: color-mix(in oklab, var(--primary, #ce4115) 4%, transparent);
   }
   /* Drop the thumb column when there's no image (list only). */
   .iwac-card--no-thumb {
@@ -591,9 +595,8 @@
     color: var(--primary, #ce4115);
   }
   .iwac-card__type--filter:focus-visible {
-    outline: none;
-    box-shadow: var(--ring-focus, 0 0 0 3px rgba(206, 65, 21, 0.3));
-    border-radius: var(--radius-sm, 0.375rem);
+    outline: var(--focus-outline, 2px solid #ce4115);
+    outline-offset: 2px;
   }
 
   .iwac-card__title {
@@ -663,9 +666,8 @@
     text-underline-offset: 2px;
   }
   .iwac-card__author:focus-visible {
-    outline: none;
-    box-shadow: var(--ring-focus, 0 0 0 3px rgba(206, 65, 21, 0.3));
-    border-radius: var(--radius-sm, 0.375rem);
+    outline: var(--focus-outline, 2px solid #ce4115);
+    outline-offset: 2px;
   }
   .iwac-card__byline-sep::before {
     content: ', ';
@@ -862,9 +864,8 @@
     text-underline-offset: 2px;
   }
   .iwac-card__chip--filter:focus-visible {
-    outline: none;
-    box-shadow: var(--ring-focus, 0 0 0 3px rgba(206, 65, 21, 0.3));
-    border-radius: var(--radius-sm, 0.375rem);
+    outline: var(--focus-outline, 2px solid #ce4115);
+    outline-offset: 2px;
   }
 
   /*
@@ -884,9 +885,8 @@
     text-decoration-style: solid;
   }
   .iwac-card__chip--external:focus-visible {
-    outline: none;
-    box-shadow: var(--ring-focus, 0 0 0 3px rgba(206, 65, 21, 0.3));
-    border-radius: var(--radius-sm, 0.375rem);
+    outline: var(--focus-outline, 2px solid #ce4115);
+    outline-offset: 2px;
   }
 
   /* Compact entity meta in a gallery tile (e.g. "312 mentions"). */

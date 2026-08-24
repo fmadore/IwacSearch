@@ -166,8 +166,8 @@
     transform: none;
   }
   .iwac-export__trigger:focus-visible {
-    outline: none;
-    box-shadow: var(--ring-focus, 0 0 0 3px rgba(206, 65, 21, 0.3));
+    outline: var(--focus-outline, 2px solid #ce4115);
+    outline-offset: 2px;
   }
   .iwac-export__trigger:disabled {
     opacity: 0.6;
@@ -241,7 +241,12 @@
     background: color-mix(in oklab, var(--primary, #ce4115) 8%, var(--surface, #fdfcfb));
     box-shadow: none;
     transform: none;
-    outline: none;
+  }
+  .iwac-export__item:focus-visible {
+    /* Inset: the menu is a rounded, clipped panel and these items run its full
+       width, so an outset outline would be trimmed on both edges. */
+    outline: var(--focus-outline, 2px solid #ce4115);
+    outline-offset: -2px;
   }
   .iwac-export__hint,
   .iwac-export__error {

@@ -383,7 +383,13 @@
     background: color-mix(in oklab, var(--primary, #ce4115) 8%, var(--surface, #fdfcfb));
     box-shadow: none;
     transform: none;
-    outline: none;
+  }
+  /* --active is the aria-activedescendant highlight (focus stays in the
+     input), so it keeps the tint alone. Real keyboard focus on the row gets a
+     solid indicator, drawn INSET because the panel is rounded and clipped. */
+  .iwac-suggest__item:focus-visible {
+    outline: var(--focus-outline, 2px solid #ce4115);
+    outline-offset: -2px;
   }
   /* The "Search for …" action reads as the primary affordance. */
   .iwac-suggest__item--search {
@@ -432,8 +438,11 @@
     background: transparent;
     box-shadow: none;
     transform: none;
-    outline: none;
     text-decoration: underline;
+  }
+  .iwac-suggest__clear:focus-visible {
+    outline: var(--focus-outline, 2px solid #ce4115);
+    outline-offset: -2px;
   }
   .iwac-suggest__title {
     flex: 1;

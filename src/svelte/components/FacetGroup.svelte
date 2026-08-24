@@ -343,9 +343,8 @@
     transform: none;
   }
   .iwac-facet__heading:focus-visible {
-    outline: none;
-    box-shadow: var(--ring-focus, 0 0 0 3px rgba(206, 65, 21, 0.3));
-    border-radius: var(--radius-sm, 0.375rem);
+    outline: var(--focus-outline, 2px solid #ce4115);
+    outline-offset: 2px;
   }
   .iwac-facet__label {
     flex: 1;
@@ -399,9 +398,9 @@
     display: none;
   }
   .iwac-facet__search-input:focus {
-    outline: none;
     border-color: var(--primary, #ce4115);
-    box-shadow: var(--ring-focus, 0 0 0 3px rgba(206, 65, 21, 0.3));
+    outline: var(--focus-outline, 2px solid #ce4115);
+    outline-offset: 2px;
   }
   .iwac-facet__search-clear {
     position: absolute;
@@ -433,8 +432,8 @@
     box-shadow: none;
   }
   .iwac-facet__search-clear:focus-visible {
-    outline: none;
-    box-shadow: var(--ring-focus, 0 0 0 3px rgba(206, 65, 21, 0.3));
+    outline: var(--focus-outline, 2px solid #ce4115);
+    outline-offset: 2px;
   }
 
   .iwac-facet__list {
@@ -489,8 +488,14 @@
     color: var(--ink-strong, #05070c);
     font-weight: 500;
   }
+  /* The row, not the (visually small) checkbox, carries the indicator — the
+     whole <label> is the click target. Room for the outset ring comes from
+     .iwac-facet__list--bounded's inline padding here and from the facet
+     column's own inline padding in App.svelte; both are scroll containers,
+     which clip ink drawn outside their padding box. */
   .iwac-facet__option:has(input:focus-visible) {
-    box-shadow: var(--ring-focus, 0 0 0 3px rgba(206, 65, 21, 0.3));
+    outline: var(--focus-outline, 2px solid #ce4115);
+    outline-offset: 2px;
   }
   .iwac-facet__checkbox {
     /* Restore the native control completely. The IWAC theme globally turns
@@ -552,9 +557,8 @@
     text-underline-offset: 2px;
   }
   .iwac-facet__more:focus-visible {
-    outline: none;
-    box-shadow: var(--ring-focus, 0 0 0 3px rgba(206, 65, 21, 0.3));
-    border-radius: var(--radius-sm, 0.375rem);
+    outline: var(--focus-outline, 2px solid #ce4115);
+    outline-offset: 2px;
   }
 
   .iwac-facet__hint {

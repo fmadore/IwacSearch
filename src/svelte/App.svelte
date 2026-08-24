@@ -931,8 +931,11 @@
     scrollbar-width: thin;
     scrollbar-gutter: stable;
     /* Subtle right "rail" so the column has a visual edge against the
-       results without becoming a card. */
-    padding-inline-end: var(--space-md, 1rem);
+       results without becoming a card. The 3px start padding is not
+       decoration: `overflow-y: auto` makes this a scroll container, which
+       clips ink painted outside its padding box — without it the leading
+       stroke of a facet control's 2px focus outline is trimmed away. */
+    padding-inline: 0.1875rem var(--space-md, 1rem);
     border-inline-end: 1px solid var(--border-light, #e2e5e8);
   }
   .iwac-search__facets-body {
@@ -975,8 +978,8 @@
     transform: none;
   }
   .iwac-search__copylink:focus-visible {
-    outline: none;
-    box-shadow: var(--ring-focus, 0 0 0 3px rgba(206, 65, 21, 0.3));
+    outline: var(--focus-outline, 2px solid #ce4115);
+    outline-offset: 2px;
   }
   .iwac-search__copylink.is-copied {
     border-color: var(--primary, #ce4115);
@@ -1032,7 +1035,10 @@
     background: var(--surface, #fdfcfb);
     box-shadow: none;
     transform: none;
-    outline: none;
+  }
+  .iwac-search__didyoumean-chip:focus-visible {
+    outline: var(--focus-outline, 2px solid #ce4115);
+    outline-offset: 2px;
   }
   .iwac-search__didyoumean-tag {
     font-size: var(--text-xs, 0.8125rem);
@@ -1092,8 +1098,8 @@
     transform: none;
   }
   .iwac-search__semantic-btn:focus-visible {
-    outline: none;
-    box-shadow: var(--ring-focus, 0 0 0 3px rgba(206, 65, 21, 0.3));
+    outline: var(--focus-outline, 2px solid #ce4115);
+    outline-offset: 2px;
   }
   .iwac-search__semantic-banner .iwac-search__semantic-btn {
     /* Tail of the banner line, like the summary strip's sort readout. */
@@ -1177,8 +1183,8 @@
       transform: none;
     }
     .iwac-search__filters-trigger:focus-visible {
-      outline: none;
-      box-shadow: var(--ring-focus, 0 0 0 3px rgba(206, 65, 21, 0.3));
+      outline: var(--focus-outline, 2px solid #ce4115);
+      outline-offset: 2px;
     }
     .iwac-search__filters-trigger-icon {
       display: inline-flex;
