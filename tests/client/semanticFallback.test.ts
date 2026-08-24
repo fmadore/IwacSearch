@@ -72,4 +72,29 @@ describe('isSemanticOnlyResponse', () => {
     expect(isSemanticOnlyResponse(null, 'xzqvwk')).toBe(false);
     expect(isSemanticOnlyResponse(undefined, 'xzqvwk')).toBe(false);
   });
+
+  /**
+   * The federated tab badges ask the same question of the same wire field,
+   * but from a one-hit counts probe rather than a full response — so the
+   * predicate takes anything carrying `hits`. Two surfaces answering "did the
+   * keyword leg match" with two implementations is how a badge reading "100"
+   * ends up next to the empty state of the tab it labels.
+   */
+  describe('the one-hit count probe (federated tab badges)', () => {
+    it('flags a probe whose single best keyword match scores zero', () => {
+      // Ordered by _text_match:desc, so this hit IS the best there is.
+      expect(isSemanticOnlyResponse({ hits: [hit('110615', 0, 0.16)] }, 'xzqvwk')).toBe(true);
+    });
+
+    it('does not flag a probe whose top hit really matched', () => {
+      expect(isSemanticOnlyResponse({ hits: [hit('108353', 578730123365189800)] }, 'imam')).toBe(
+        false,
+      );
+    });
+
+    it('does not flag a browse probe, which carries no hits at all', () => {
+      expect(isSemanticOnlyResponse({ hits: [] }, '')).toBe(false);
+      expect(isSemanticOnlyResponse({}, '')).toBe(false);
+    });
+  });
 });

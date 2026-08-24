@@ -1,4 +1,15 @@
-import type { IwacHit, IwacSearchResponse } from './types';
+import type { IwacHit } from './types';
+
+/**
+ * All this predicate reads is the hit list, so that is all it asks for. A
+ * full `IwacSearchResponse` would exclude the one-hit probe `countAcross`
+ * uses to keep a tab badge honest, which is the same question about the same
+ * wire field — and answering it twice, differently, is how the browse
+ * surface and its own tab badge would come to disagree.
+ */
+export interface KeywordScorable {
+  hits?: IwacHit[];
+}
 
 /**
  * Detecting a result set that ONLY the vector leg produced.
@@ -40,7 +51,7 @@ function hasKeywordMatch(hit: IwacHit): boolean {
  * @param query The query the response was fetched for — NOT `*`.
  */
 export function isSemanticOnlyResponse(
-  response: IwacSearchResponse | null | undefined,
+  response: KeywordScorable | null | undefined,
   query: string,
 ): boolean {
   if (!response || query.trim() === '') return false;

@@ -28,10 +28,24 @@
     /** Remove one chip (the parent decides facet-toggle vs year-clear). */
     onRemoveChip: (chip: ActiveFilterChip) => void;
     onClearAll: () => void;
+    /**
+     * True when the set below is the vector leg's near-neighbours, shown
+     * because the reader opted in after a query the keyword leg didn't match.
+     * The count is then not a count of results, and must not say it is.
+     */
+    semantic?: boolean;
   }
 
-  const { found, searchTimeMs, filters, yearRange, sort, onRemoveChip, onClearAll }: Props =
-    $props();
+  const {
+    found,
+    searchTimeMs,
+    filters,
+    yearRange,
+    sort,
+    onRemoveChip,
+    onClearAll,
+    semantic = false,
+  }: Props = $props();
 
   const { locale, card, t } = useI18n();
 
@@ -56,7 +70,13 @@
     <span class="iwac-summary__count-block">
       <span class="iwac-summary__count">{found.toLocaleString()}</span>
       <span class="iwac-summary__count-label">
-        {found === 1 ? t('result_one') : t('result_other')}
+        {semantic
+          ? found === 1
+            ? t('semantic_result_one')
+            : t('semantic_result_other')
+          : found === 1
+            ? t('result_one')
+            : t('result_other')}
       </span>
       {#if searchTimeMs > 0}
         <span class="iwac-summary__timing">· {searchTimeMs} ms</span>

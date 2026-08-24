@@ -7,6 +7,7 @@
   } from '../lib/types';
   import { TypesenseClient } from '../lib/typesense';
   import { isAbortError } from '../lib/transport';
+  import { isSemanticOnlyResponse } from '../lib/semanticFallback';
   import { provideI18n, normalizeLocale, type Locale } from '../lib/i18n';
   import App from '../App.svelte';
   import ResultItem from './ResultItem.svelte';
@@ -159,6 +160,21 @@
         unionLoading = false;
       });
   });
+
+  /**
+   * The union carries the same vector-fabrication exposure the per-collection
+   * surfaces closed in 3.14.0, by the same mechanism: the content leg's
+   * `query_by` ends in `embedding`, so a query the keyword leg matches
+   * nowhere still comes back full of the vector leg's fixed top-k. Merged
+   * with the entity collection and labelled "N results", that reads as a
+   * federated finding — the strongest claim on the site.
+   *
+   * Same contract as App.svelte, keyed to the query so the opt-in belongs to
+   * ONE dead query and pages within it without carrying over to the next.
+   */
+  let unionSemanticOptInFor = $state<string | null>(null);
+  const unionSemanticOnly = $derived(isSemanticOnlyResponse(unionResponse, query));
+  const unionSemanticHidden = $derived(unionSemanticOnly && unionSemanticOptInFor !== query);
 
   /**
    * The merged ranking is capped rather than fully pageable. Deep paging a
@@ -374,12 +390,44 @@
         {:else if unionLoading && !unionResponse}
           <p class="iwac-fed__union-status" aria-live="polite">{t('searching')}</p>
         {:else if unionResponse}
-          {#if unionResponse.found === 0}
+          {#if unionResponse.found === 0 || unionSemanticHidden}
+            <!-- Withheld exactly as the per-collection surfaces withhold: say
+                 nothing matched, then offer the near neighbours as an offer. -->
             <p class="iwac-fed__union-status">{t('results_empty_list')}</p>
+            {#if unionSemanticHidden}
+              <div class="iwac-fed__union-offer">
+                <button
+                  type="button"
+                  class="iwac-fed__semantic-btn"
+                  onclick={() => (unionSemanticOptInFor = query)}
+                >
+                  {t(unionResponse.found === 1 ? 'show_semantic_one' : 'show_semantic_other', {
+                    n: unionResponse.found.toLocaleString(),
+                  })}
+                </button>
+              </div>
+            {/if}
           {:else}
+            {#if unionSemanticOnly}
+              <!-- Opted in: rendered, but never unlabelled. -->
+              <div class="iwac-fed__semantic-banner" role="status">
+                <p class="iwac-fed__union-status">{t('semantic_only_banner', { q: query })}</p>
+                <button
+                  type="button"
+                  class="iwac-fed__semantic-btn"
+                  onclick={() => (unionSemanticOptInFor = null)}
+                >
+                  {t('hide_semantic')}
+                </button>
+              </div>
+            {/if}
             <p class="iwac-fed__union-count">
               {unionResponse.found.toLocaleString()}
-              {t(unionResponse.found === 1 ? 'result_one' : 'result_other')}
+              {#if unionSemanticOnly}
+                {t(unionResponse.found === 1 ? 'semantic_result_one' : 'semantic_result_other')}
+              {:else}
+                {t(unionResponse.found === 1 ? 'result_one' : 'result_other')}
+              {/if}
             </p>
             <ol class="iwac-fed__union-list">
               {#each unionResponse.hits as hit (hit.document.id)}
@@ -518,6 +566,54 @@
     color: var(--muted, #66696e);
     font-size: var(--text-sm, 0.9375rem);
   }
+  /*
+   * Semantic fallback — same quiet vocabulary as App.svelte's: this offers a
+   * weaker kind of answer, so it must not out-shout the surface around it.
+   */
+  .iwac-fed__union-offer {
+    display: flex;
+    justify-content: center;
+  }
+  .iwac-fed__semantic-banner {
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: var(--space-xs, 0.25rem) var(--space-md, 1rem);
+    padding-block-end: var(--space-sm, 0.5rem);
+    border-block-end: 1px solid var(--border-light, #e2e5e8);
+  }
+  .iwac-fed__semantic-banner .iwac-fed__semantic-btn {
+    margin-inline-start: auto;
+  }
+  .iwac-fed__semantic-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-xs, 0.25rem);
+    padding: 0.4rem 0.75rem;
+    /* The IWAC theme paints every <button>; the resets keep this an outline. */
+    border: 1px solid var(--border, #ced1d6) !important;
+    border-radius: var(--radius-md, 0.5rem);
+    background: var(--surface, #fdfcfb) !important;
+    color: var(--ink, #13161c) !important;
+    box-shadow: none !important;
+    transform: none !important;
+    font: inherit;
+    font-size: var(--text-sm, 0.9375rem);
+    font-weight: 500;
+    cursor: pointer;
+    transition:
+      border-color var(--transition-fast, 150ms cubic-bezier(0.25, 1, 0.5, 1)),
+      color var(--transition-fast, 150ms cubic-bezier(0.25, 1, 0.5, 1));
+  }
+  .iwac-fed__semantic-btn:hover {
+    border-color: var(--primary, #ce4115) !important;
+    color: var(--primary, #ce4115) !important;
+  }
+  .iwac-fed__semantic-btn:focus-visible {
+    outline: var(--focus-outline, 2px solid #ce4115);
+    outline-offset: 2px;
+  }
+
   .iwac-fed__union-error {
     background: color-mix(in oklab, var(--error, #c9222b) 12%, var(--surface, #fdfcfb));
     border: 1px solid color-mix(in oklab, var(--error, #c9222b) 35%, transparent);

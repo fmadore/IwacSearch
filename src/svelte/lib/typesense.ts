@@ -3,6 +3,7 @@ import type {
   IwacBootstrap,
   IwacDoc,
   IwacFacetCount,
+  IwacHit,
   IwacSearchResponse,
   ScopedKeyResponse,
   SuggestResult,
@@ -28,6 +29,7 @@ import {
   postJson,
   validateSearchResult,
 } from './transport';
+import { isSemanticOnlyResponse } from './semanticFallback';
 import { getScopedKey } from './scopedKey';
 import { runSuggest } from './suggestQuery';
 
@@ -632,6 +634,16 @@ export class TypesenseClient {
    * applies stopwords to the actual results). A collection that errors
    * resolves to `null` (blank badge) rather than throwing — one bad
    * collection must not blank the whole page.
+   *
+   * A badge is a claim too. `found` on a hybrid collection includes the
+   * vector leg's fixed top-k, so a query nothing matched used to badge the
+   * Content tab "100" — and clicking it landed on the empty state the 3.14.0
+   * withhold shows, the badge contradicting the tab it labelled. For a real
+   * query the probe therefore asks for ONE hit, ordered by `_text_match:desc`
+   * so that hit is the best keyword match there is: if it scores zero,
+   * nothing matched and the honest count is 0. (Browse mode keeps `per_page:
+   * 0` — `q=*` has no keyword leg to fail, and Typesense omits `text_match`
+   * entirely.)
    */
   async countAcross(
     q: string,
@@ -641,26 +653,30 @@ export class TypesenseClient {
       return [];
     }
     const key = await this.getKey();
-    const qParam = q.trim() ? q : '*';
+    const isBrowse = !q.trim();
+    const qParam = isBrowse ? '*' : q;
     const searches = collections.map((c) => ({
       collection: c.collection,
       q: qParam,
       query_by: c.queryBy,
       filter_by: c.filterBy?.trim() || undefined,
-      // Only `found` is read — no hits, facets, or highlights.
-      per_page: 0,
+      // `found`, plus (on a real query) one hit to read text_match from.
+      per_page: isBrowse ? 0 : 1,
+      ...(isBrowse
+        ? {}
+        : { sort_by: '_text_match:desc', exclude_fields: 'ocr_text,toc_txt,embedding' }),
     }));
 
-    const json = await postJson<{ results: Array<{ found?: number; error?: string }> }>(
-      this.bootstrap.endpoints.search,
-      key.key,
-      { searches },
-      'Counts',
-    );
+    const json = await postJson<{
+      results: Array<{ found?: number; error?: string; hits?: IwacHit[] }>;
+    }>(this.bootstrap.endpoints.search, key.key, { searches }, 'Counts');
     return collections.map((_, i) => {
       const r = json.results?.[i];
       if (!r || r.error || typeof r.found !== 'number') {
         return null;
+      }
+      if (r.found > 0 && isSemanticOnlyResponse({ ...r, hits: r.hits ?? [] }, qParam)) {
+        return 0;
       }
       return r.found;
     });

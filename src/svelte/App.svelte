@@ -879,6 +879,7 @@
               sort={effectiveSort}
               onRemoveChip={(c) => filterState.removeChip(c)}
               onClearAll={() => filterState.clearAll()}
+              semantic={semanticOnly}
             />
           {/if}
         {/if}

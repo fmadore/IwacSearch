@@ -122,6 +122,10 @@ const STRINGS: Record<Locale, Record<string, string>> = {
     semantic_only_banner:
       'Aucune correspondance exacte pour « {q} » — voici des documents sémantiquement proches.',
     hide_semantic: 'Masquer ces résultats',
+    // Count-line noun for the opted-in semantic set. "N résultats" would
+    // re-assert as findings the very thing the opt-in exists to qualify.
+    semantic_result_one: 'document sémantiquement proche',
+    semantic_result_other: 'documents sémantiquement proches',
     recent_searches: 'Recherches récentes',
     clear_history: "Effacer l'historique",
     tab_all: 'Tout',
@@ -240,6 +244,8 @@ const STRINGS: Record<Locale, Record<string, string>> = {
     show_semantic_other: 'Show {n} semantically related items',
     semantic_only_banner: 'No exact matches for “{q}” — showing semantically related items.',
     hide_semantic: 'Hide these results',
+    semantic_result_one: 'semantically related item',
+    semantic_result_other: 'semantically related items',
     recent_searches: 'Recent searches',
     clear_history: 'Clear history',
     tab_all: 'All',
