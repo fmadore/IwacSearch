@@ -43,7 +43,15 @@
   const sortLabel = $derived(sortOptions(locale, card).find((o) => o.value === sort)?.label ?? '');
 </script>
 
-<section class="iwac-summary" aria-label={t('active_filters')} aria-live="polite">
+<!--
+  NOT a live region any more. It was the surface's only one, and a bad one:
+  being inside `{#if response}` it was destroyed for every skeleton and
+  re-created already populated, which announces nothing — while the ms figure
+  changing on an otherwise identical search re-read all 78 characters aloud.
+  App.svelte now owns one persistent, debounced region; this is just the
+  visible strip.
+-->
+<section class="iwac-summary" aria-label={t('active_filters')}>
   <div class="iwac-summary__line">
     <span class="iwac-summary__count-block">
       <span class="iwac-summary__count">{found.toLocaleString()}</span>

@@ -540,6 +540,12 @@
   function handlePageChange(next: number): void {
     if (next === page) return;
     page = next;
+    // Focus follows the navigation. The pager button the user pressed is
+    // about to be re-rendered (the window shifts, the current page moves), so
+    // focus was landing on <body> and the next Tab restarted at the top of
+    // the document. preventScroll because the smooth scroll below owns the
+    // movement — letting focus() jump first would cancel it.
+    resultsRegion?.focus({ preventScroll: true });
     if (resultsAnchor) {
       const reduced =
         typeof window !== 'undefined' &&
@@ -550,6 +556,16 @@
       });
     }
   }
+
+  // ── Announcements + the keyboard bypass ─────────────────────────────
+  // Ids are per-mount: several full-mode blocks can share one page, and a
+  // skip link that jumped to another block's results would be worse than
+  // none. block_id never changes post-mount (server-emitted).
+  const resultsId = $derived(`iwac-results-${bootstrap.block_id}`);
+  const resultsHeadingId = $derived(`iwac-results-heading-${bootstrap.block_id}`);
+
+  /** The results landmark, focused by the skip link and by pagination. */
+  let resultsRegion: HTMLElement | null = $state(null);
 
   // ── Semantic-only fallback ──────────────────────────────────────────
   // Did the keyword leg match nothing at all? (See lib/semanticFallback.ts.)
@@ -569,6 +585,58 @@
   const facets = $derived(semanticHidden ? [] : (response?.facet_counts ?? []));
   const perPage = $derived(response?.request_params?.per_page ?? bootstrap.results_per_page ?? 20);
   const searchTimeMs = $derived(response?.search_time_ms ?? 0);
+  const totalPages = $derived(
+    response ? Math.max(1, Math.ceil(response.found / Math.max(1, perPage))) : 1,
+  );
+
+  /**
+   * What a screen reader should be told once the surface settles.
+   *
+   * Nothing announced the result count before. The one polite region on the
+   * surface was ResultSummary's own <section>, which is inside the `{#if
+   * response}` — so it was torn down for the skeleton and re-mounted with its
+   * text already in place, and a live region that arrives populated never
+   * announces. The count changed silently under every query, facet toggle and
+   * page turn.
+   *
+   * Composed only from settled state (never from `isLoading`), so a
+   * mid-flight response can't produce a claim that is about to be replaced.
+   * The empty string while loading is deliberate — silence, then one sentence.
+   */
+  const announcement = $derived.by(() => {
+    if (!response) return '';
+    if (semanticHidden) {
+      return t(response.found === 1 ? 'announce_semantic_one' : 'announce_semantic_other', {
+        n: response.found.toLocaleString(),
+      });
+    }
+    if (response.found === 0) return t('announce_no_results');
+    const count = t(response.found === 1 ? 'announce_results_one' : 'announce_results_other', {
+      n: response.found.toLocaleString(),
+    });
+    // The page is only worth saying when there is more than one of them.
+    return totalPages > 1
+      ? `${count} ${t('announce_page', { p: page.toLocaleString(), total: totalPages.toLocaleString() })}`
+      : count;
+  });
+
+  /**
+   * The text actually in the DOM, held one beat behind {@link announcement}.
+   *
+   * The search itself is already debounced, but a fast typist still settles
+   * several searches in a row, and a live region that changes three times in
+   * a second is read as an interruption of itself. 600ms of quiet before
+   * committing means one sentence per pause in typing.
+   */
+  let announced = $state('');
+  $effect(() => {
+    const next = announcement;
+    if (next === announced) return;
+    const id = setTimeout(() => {
+      announced = next;
+    }, 600);
+    return () => clearTimeout(id);
+  });
 
   /**
    * The sort order actually in force, which is not always the one in `sort`:
@@ -662,8 +730,27 @@
     </div>
   {/if}
 
+  <!--
+    The one place the result count is announced. Persistent and OUTSIDE every
+    conditional, because a live region that is created already populated
+    announces nothing — which is exactly how the old region inside
+    ResultSummary managed to be torn down for each skeleton and re-mounted
+    silently. Empty at mount, filled 600ms after the surface settles.
+  -->
+  <p class="iwac-search__sr-only" role="status" aria-live="polite" aria-atomic="true">
+    {announced}
+  </p>
+
   {#if bootstrap.mode === 'full'}
     <div class="iwac-search__layout">
+      <!--
+        In-module bypass. The theme's own skipnav lands ABOVE the facet
+        column, so from there the first result is still ~120 Tab presses away
+        (measured: 97 of them facet stops). This one is the first thing in the
+        layout, so it is the first stop after the search box.
+      -->
+      <a class="iwac-search__skip" href="#{resultsId}">{t('skip_to_results')}</a>
+
       {#if drawer.isNarrow}
         <!-- Narrow viewport: facets live behind the Filters trigger,
              rendered into the shared Drawer when opened. -->
@@ -706,7 +793,21 @@
         </aside>
       {/if}
 
-      <div class="iwac-search__results" aria-busy={isLoading}>
+      <!--
+        A landmark with a name, and tabindex="-1" so the skip link and the
+        pager can put focus here. The heading is visually hidden but real:
+        without it the page's only <h2> is "Filters", so every result <h3>
+        nested under the filter sidebar in the document outline.
+      -->
+      <section
+        class="iwac-search__results"
+        id={resultsId}
+        bind:this={resultsRegion}
+        tabindex="-1"
+        aria-labelledby={resultsHeadingId}
+        aria-busy={isLoading}
+      >
+        <h2 id={resultsHeadingId} class="iwac-search__sr-only">{t('results_heading')}</h2>
         {#if response}
           <!-- Result controls. On desktop one row: view toggle (left), then
                copy-link + export + sort (right). On a phone the bar wraps —
@@ -855,10 +956,12 @@
             view={view.mode}
           />
         {/if}
-      </div>
+      </section>
     </div>
   {:else if isLoading && !response}
-    <p class="iwac-search__status" aria-live="polite">{t('searching')}</p>
+    <!-- No aria-live: the persistent region above already owns announcements,
+         and two polite regions on one surface talk over each other. -->
+    <p class="iwac-search__status">{t('searching')}</p>
   {:else if response && semanticHidden}
     <!-- Compact / results-only blocks have no facet panel or summary strip, but
          they run the same hybrid query and so could present the same vector-only
@@ -911,6 +1014,56 @@
   /* Anchors the floating SuggestDropdown — must be positioned. */
   .iwac-search__searchbox {
     position: relative;
+  }
+
+  /*
+   * Visually hidden, still announced. The module had no such utility, which
+   * is why the live region and the results heading did not exist: there was
+   * nowhere to put text that only assistive tech reads. `clip-path` rather
+   * than the legacy `clip`, and a 1px box rather than `display: none`, which
+   * would take it out of the accessibility tree entirely.
+   */
+  .iwac-search__sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  /*
+   * Skip link — hidden until focused, then a real control at the top of the
+   * results column. It is the first tabbable thing in the layout, ahead of
+   * the ~97 facet stops, so the keyboard route to the results is two presses
+   * rather than a hundred.
+   */
+  .iwac-search__skip {
+    position: absolute;
+    inset-inline-start: -9999px;
+    inset-block-start: auto;
+    z-index: 402;
+  }
+  .iwac-search__skip:focus,
+  .iwac-search__skip:focus-visible {
+    position: static;
+    display: inline-block;
+    align-self: start;
+    grid-column: 1 / -1;
+    margin-block-end: var(--space-sm, 0.5rem);
+    padding: var(--space-xs, 0.25rem) var(--space-md, 1rem);
+    border: 1px solid var(--border, #ced1d6);
+    border-radius: var(--radius-md, 0.5rem);
+    background: var(--surface, #fdfcfb);
+    color: var(--ink-strong, #05070c);
+    font-size: var(--text-sm, 0.9375rem);
+    font-weight: 500;
+    text-decoration: none;
+    outline: var(--focus-outline, 2px solid #ce4115);
+    outline-offset: 2px;
   }
   .iwac-search__layout {
     display: grid;
@@ -1252,9 +1405,15 @@
     flex-direction: column;
     gap: var(--space-md, 1rem);
     min-width: 0; /* allow snippet wrap */
+    /* Focused programmatically by the skip link and the pager; the ring would
+       be a full-column outline saying nothing about where the next Tab goes.
+       :focus-visible is untouched. */
     /* No opacity dim while paging — the ResultSkeleton provides the loading
        feedback now, keeping row geometry stable (punch-list item 2). aria-busy
        stays on the container for assistive tech. */
+  }
+  .iwac-search__results:focus:not(:focus-visible) {
+    outline: none;
   }
   /*
    * Result controls. Desktop: one row — the view toggle sits at the left of a

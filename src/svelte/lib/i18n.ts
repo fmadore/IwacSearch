@@ -144,6 +144,21 @@ const STRINGS: Record<Locale, Record<string, string>> = {
     duration: 'Durée',
     watch_on_youtube: 'Voir sur YouTube',
     view_source: 'Voir la source',
+    // Skip link + the results landmark's own heading: without them the only
+    // <h2> on the page is "Filtres", so every result <h3> nests under the
+    // filter sidebar, and reaching the first result costs ~120 Tab presses.
+    skip_to_results: 'Aller aux résultats',
+    results_heading: 'Résultats',
+    // Polite announcements for the persistent live region. Kept to one short
+    // sentence: this is read aloud after every settled search.
+    announce_results_one: '1 résultat trouvé.',
+    announce_results_other: '{n} résultats trouvés.',
+    announce_no_results: 'Aucun résultat.',
+    announce_page: 'Page {p} sur {total}.',
+    announce_semantic_one:
+      'Aucune correspondance exacte. 1 document sémantiquement proche peut être affiché.',
+    announce_semantic_other:
+      'Aucune correspondance exacte. {n} documents sémantiquement proches peuvent être affichés.',
   },
   en: {
     search_placeholder: 'Search the IWAC…',
@@ -247,6 +262,14 @@ const STRINGS: Record<Locale, Record<string, string>> = {
     duration: 'Duration',
     watch_on_youtube: 'Watch on YouTube',
     view_source: 'View the source',
+    skip_to_results: 'Skip to results',
+    results_heading: 'Results',
+    announce_results_one: '1 result found.',
+    announce_results_other: '{n} results found.',
+    announce_no_results: 'No results.',
+    announce_page: 'Page {p} of {total}.',
+    announce_semantic_one: 'No exact matches. 1 semantically related item can be shown.',
+    announce_semantic_other: 'No exact matches. {n} semantically related items can be shown.',
   },
 };
 
