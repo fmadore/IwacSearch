@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
+  import { focusFirstWithin, handleTrapKeydown, restoreFocus } from '../lib/focusTrap';
 
   /**
    * Slide-in overlay panel — the canonical shape used by:
@@ -23,14 +24,16 @@
    *     consumer). Pass an empty string in `title` to hide the header.
    *   - Sensible default ARIA wiring (role=dialog + aria-modal +
    *     aria-labelledby pointed at the auto-generated title id).
+   *   - The whole focus contract that `aria-modal` promises but the
+   *     browser does not keep: focus moves in on open, Tab/Shift+Tab
+   *     cycle inside, Esc closes, focus returns to the invoker. The
+   *     mechanics live in ../lib/focusTrap.ts, where they are
+   *     unit-tested; this component only decides when to call them.
    *
    * What it does NOT own:
    *
    *   - Form submission, validation, internal state. Consumer is just
    *     given a body slot via `children` and decides what to render.
-   *   - Focus trap — Svelte 5 doesn't ship one in core, and the existing
-   *     code didn't have one either. Future enhancement; out of scope
-   *     for this extraction pass to avoid a behaviour change.
    *
    * Both bundles (public + admin) import from src/svelte-shared/, so
    * adding a new shared widget is just dropping a file here.
@@ -47,6 +50,13 @@
     width?: string;
     /** ARIA label override — only useful when `title` is empty. */
     ariaLabel?: string;
+    /**
+     * Accessible name for the close ×. Defaults to English because the admin
+     * bundle has no translator; every public caller passes a localised
+     * string, and until one did, the French filter drawer closed with a
+     * button that announced itself as "Close".
+     */
+    closeLabel?: string;
     /** Custom CSS class on the root for one-off tweaks. */
     panelClass?: string;
     children: Snippet;
@@ -59,6 +69,7 @@
     side = 'right',
     width = 'min(42rem, 100vw)',
     ariaLabel,
+    closeLabel = 'Close',
     panelClass = '',
     children,
   }: Props = $props();
@@ -80,6 +91,44 @@
       onClose();
     }
   }
+
+  // ── Focus contract ──────────────────────────────────────────────────
+  // The panel element, bound below. Null while closed (the panel is inside
+  // an {#if}), which is what makes the $effect's `open` dependency enough.
+  let panelEl: HTMLElement | null = $state(null);
+
+  /**
+   * Whatever had focus when the drawer opened, so it can be handed back on
+   * close. Deliberately NOT $state: it is read only inside the effect's
+   * teardown, and making it reactive would re-run the effect that sets it.
+   */
+  let invoker: HTMLElement | null = null;
+
+  function onPanelKeydown(e: KeyboardEvent): void {
+    if (panelEl) handleTrapKeydown(panelEl, e);
+  }
+
+  $effect(() => {
+    const panel = panelEl;
+    if (!open || !panel) return;
+
+    // Capture BEFORE moving focus, or the invoker is the panel itself.
+    invoker = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    focusFirstWithin(panel);
+
+    return () => {
+      // Only take focus back if it is still ours to give. A user who clicked
+      // a link behind the drawer (or whose click closed it and landed
+      // elsewhere) has already chosen where focus should be; yanking it back
+      // to the trigger would be the bug this exists to fix, inverted.
+      const active = document.activeElement;
+      const focusStillInside = active instanceof HTMLElement && panel.contains(active);
+      if (focusStillInside || active === document.body || active === null) {
+        restoreFocus(invoker);
+      }
+      invoker = null;
+    };
+  });
 
   // Body scroll lock — single source of truth, restores on close OR
   // on component unmount (so a parent that yanks the drawer mid-open
@@ -105,6 +154,9 @@
     onkeydown={onBackdropKeydown}
   ></div>
 
+  <!-- tabindex="-1" so the panel itself can hold focus when it opens with
+       nothing focusable inside it — a trap needs somewhere to put focus, or
+       the first Tab escapes to the page behind the backdrop. -->
   <div
     class="iwac-drawer iwac-drawer--{side} {panelClass}"
     role="dialog"
@@ -112,6 +164,9 @@
     aria-labelledby={title ? titleId : undefined}
     aria-label={!title ? ariaLabel : undefined}
     style:--iwac-drawer-width={width}
+    tabindex="-1"
+    bind:this={panelEl}
+    onkeydown={onPanelKeydown}
   >
     {#if title}
       <!--
@@ -122,7 +177,7 @@
       -->
       <div class="iwac-drawer__header">
         <h2 id={titleId} class="iwac-drawer__title">{title}</h2>
-        <button type="button" class="iwac-drawer__close" aria-label="Close" onclick={onClose}>
+        <button type="button" class="iwac-drawer__close" aria-label={closeLabel} onclick={onClose}>
           ×
         </button>
       </div>
@@ -153,6 +208,14 @@
     z-index: 401;
     display: flex;
     flex-direction: column;
+  }
+  /* The panel takes focus programmatically when it opens (see the trap), and
+     a tabindex="-1" container is one of the few places a UA outline is pure
+     noise: it is not a control, and the ring says nothing about where the
+     next Tab goes. :focus-visible is untouched, so a keyboard user who
+     lands here still sees it. */
+  .iwac-drawer:focus:not(:focus-visible) {
+    outline: none;
   }
   .iwac-drawer--right {
     inset-inline-end: 0;

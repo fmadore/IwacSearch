@@ -664,6 +664,7 @@
           open={drawer.open}
           onClose={() => drawer.close()}
           title={t('filters')}
+          closeLabel={t('close_filters')}
           side="right"
           width="min(22rem, 92vw)"
         >
