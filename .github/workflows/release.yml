@@ -40,11 +40,16 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      # The tag is the single source of truth for the version, but Omeka reads
-      # config/module.ini and the client build reads package.json. A tag that
-      # disagrees with either would ship a module that reports the wrong
-      # version in the admin module list — catch it before anything is built.
-      - name: Resolve version and check it against module.ini + package.json
+      # The tag is the single source of truth for the version, but four files
+      # restate it: Omeka reads config/module.ini, the client build reads
+      # package.json, `npm ci` reads package-lock.json, and citation tooling
+      # reads CITATION.cff. A tag that disagrees with any of them ships a
+      # module that reports the wrong version — catch it before anything is
+      # built. The lockfile is checked here because it is the one that
+      # actually drifted: it sat at 3.13.1 across the 3.14.0, 3.15.0, 3.16.0
+      # and 3.16.1 releases, each of whose commits claimed to bump every
+      # version declaration, because nothing verified the claim.
+      - name: Resolve version and check every declaration agrees
         id: version
         run: |
           if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
@@ -56,10 +61,19 @@ jobs:
 
           INI="$(sed -n 's/^version *= *"\(.*\)"/\1/p' config/module.ini)"
           PKG="$(node -p "require('./package.json').version")"
+          # Both places npm writes it: the top-level field and the root package
+          # entry. `npm install --package-lock-only` keeps them in step, but a
+          # hand-edit of one and not the other should still fail loudly.
+          LOCK="$(node -p "require('./package-lock.json').version")"
+          LOCK_ROOT="$(node -p "require('./package-lock.json').packages[''].version")"
+          CFF="$(sed -n 's/^version: *//p' CITATION.cff | tr -d '"' | head -1)"
 
-          echo "tag=$VERSION  module.ini=$INI  package.json=$PKG"
+          echo "tag=$VERSION  module.ini=$INI  package.json=$PKG  package-lock.json=$LOCK/$LOCK_ROOT  CITATION.cff=$CFF"
           [ "$VERSION" = "$INI" ] || { echo "::error::tag $VERSION != config/module.ini $INI"; exit 1; }
           [ "$VERSION" = "$PKG" ] || { echo "::error::tag $VERSION != package.json $PKG"; exit 1; }
+          [ "$VERSION" = "$LOCK" ] || { echo "::error::tag $VERSION != package-lock.json $LOCK — run 'npm install --package-lock-only'"; exit 1; }
+          [ "$VERSION" = "$LOCK_ROOT" ] || { echo "::error::tag $VERSION != package-lock.json packages[''] $LOCK_ROOT — run 'npm install --package-lock-only'"; exit 1; }
+          [ "$VERSION" = "$CFF" ] || { echo "::error::tag $VERSION != CITATION.cff $CFF"; exit 1; }
 
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "zip=IwacSearch-v$VERSION.zip" >> "$GITHUB_OUTPUT"
