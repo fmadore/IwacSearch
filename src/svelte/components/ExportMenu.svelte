@@ -211,9 +211,15 @@
     background: var(--surface, #fdfcfb);
     border: 1px solid var(--border, #ced1d6);
     border-radius: var(--radius-md, 0.5rem);
-    box-shadow:
-      0 4px 12px rgba(0, 0, 0, 0.08),
-      0 1px 3px rgba(0, 0, 0, 0.05);
+    /* The theme's floating-panel shadow. It used to be a hand-rolled neutral
+       black pair, copy-pasted into three files and warm-blind in both themes;
+       --shadow-lg is the published overlay step and carries its own dark
+       variant. */
+    box-shadow: var(
+      --shadow-lg,
+      0 10px 15px -3px rgba(9, 11, 15, 0.12),
+      0 4px 6px -4px rgba(20, 22, 27, 0.06)
+    );
     overflow: hidden;
   }
   .iwac-export__item {

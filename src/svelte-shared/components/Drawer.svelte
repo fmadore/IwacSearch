@@ -193,7 +193,10 @@
   .iwac-drawer-backdrop {
     position: fixed;
     inset: 0;
-    background: rgba(0, 0, 0, 0.35);
+    /* Modal scrim. Deliberately neutral in BOTH themes — a warm scrim over the
+       lamplit dark ground reads as a tint, not as "the page behind is
+       inert" — but sourced from the published --black rather than a literal. */
+    background: color-mix(in oklab, var(--black, #000000) 35%, transparent);
     /* Above the IWAC-theme sticky header (z-index 200) and its menu-drawer
        (300) so the filter drawer overlays the page chrome instead of sliding
        in behind the sticky header (it appeared cut off under it on mobile). */
@@ -219,12 +222,15 @@
   }
   .iwac-drawer--right {
     inset-inline-end: 0;
-    box-shadow: -12px 0 32px rgba(0, 0, 0, 0.12);
+    /* Custom offsets (the panel casts inward from one edge), so this can't be a
+       --shadow-* step — but the COLOUR is the published one, which means the
+       drawer's edge deepens with the dark theme like everything else. */
+    box-shadow: -12px 0 32px var(--shadow-color, rgba(9, 11, 15, 0.12));
     animation: iwac-drawer-slide-from-right 200ms cubic-bezier(0.2, 0, 0, 1);
   }
   .iwac-drawer--left {
     inset-inline-start: 0;
-    box-shadow: 12px 0 32px rgba(0, 0, 0, 0.12);
+    box-shadow: 12px 0 32px var(--shadow-color, rgba(9, 11, 15, 0.12));
     animation: iwac-drawer-slide-from-left 200ms cubic-bezier(0.2, 0, 0, 1);
   }
 

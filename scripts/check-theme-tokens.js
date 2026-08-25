@@ -34,11 +34,19 @@
  *      drifted a generation (`--panel-radius` 0.75rem vs 0.5rem,
  *      `--panel-shadow: none`, `--transition-base: 200ms ease`,
  *      `--ring-focus` as a neutral black ring).
- *   4. No bare hex outside a var() fallback slot, in any CSS context — `.css`
- *      files AND the `<style>` block of a `.svelte` SFC (the module's CSS).
- *      Svelte TEMPLATE markup (SVG fills, inline attrs) is exempt — only the
- *      `<style>` region is scanned. So is any line touching a sanctioned
+ *   4. No raw colour outside a var() fallback slot, in any CSS context —
+ *      `.css` files AND the `<style>` block of a `.svelte` SFC (the module's
+ *      CSS). Svelte TEMPLATE markup (SVG fills, inline attrs) is exempt — only
+ *      the `<style>` region is scanned. So is any line touching a sanctioned
  *      `--iwac-vis-*` data colour.
+ *      "Raw colour" is hex AND the functional notations — `rgb()` / `rgba()` /
+ *      `hsl()` / `hsla()` / `hwb()` / `lab()` / `lch()` / `oklab()` /
+ *      `oklch()` / `color()`. Until 2026-08 the rule was hex-only, which made
+ *      the notation the exemption: eight hand-authored neutral-black shadows
+ *      and one modal scrim sat in `src/` unseen, including a forked panel
+ *      shadow copy-pasted into three files while the theme published a warm
+ *      `--shadow-lg`. A guard that only recognises one spelling of a colour
+ *      does not forbid authoring colour; it forbids one way of typing it.
  *   5. Every `var(--…)` must NAME a token that exists: one published in
  *      `tokens.json`'s `names` (the theme's full vocabulary), one this module
  *      declares itself, or one in the module-owned `--iwac-` namespace.
@@ -56,7 +64,25 @@
  *      half of the rule is not stylistic: tokens.json publishes px, and a
  *      rem/em width resolves against a root font-size no linter can know, so
  *      requiring px is what makes the breakpoint check possible at all.
- * Lines carrying an `allow-hex` marker comment are exempt from 3 and 4.
+ *   7. No absolute font-size literal — including one HIDDEN INSIDE a function.
+ *      Rule 6's sibling (see ABS_FONT_SIZE) matched `font-size: 15px` but not
+ *      `font-size: clamp(0.9375rem, 2vw, 1.1875rem)`, so the one property the
+ *      contract pins to a published scale could be forked wholesale by
+ *      wrapping it in `clamp()` / `calc()` / `min()` / `max()`. The check now
+ *      reads the whole declaration value with `var()` fallback slots blanked
+ *      out (those are rule 3/3b's business) and rejects any px/rem/pt/… length
+ *      left standing. Relative units (`em`, `%`, `ex`, `ch`, `vw`) stay legal,
+ *      and so does any amount of arithmetic over `var(--text-*)`.
+ * Lines carrying an `allow-hex` marker comment are exempt from 3 and 4 — the
+ * marker predates rule 4's widening and covers raw colour in every notation.
+ *
+ * Scanning unit: a LOGICAL line — source lines are joined while their
+ * parentheses are unbalanced (capped at 12). A `box-shadow: var(--shadow-md,
+ * 0 4px 6px -1px rgba(…), …)` wrapped by the formatter across four lines used
+ * to be invisible to every fallback rule and, once rule 4 learned to read
+ * `rgba()`, would have been reported as bare chrome on the line the literal
+ * happened to land on. Both problems are the same problem: a CSS declaration
+ * is not a line.
  *
  * Usage: node scripts/check-theme-tokens.js   (npm run lint:theme)
  * Exit 1 on any violation, else 0. If tokens.json is missing, value checks
@@ -121,11 +147,23 @@ const MEDIA_WIDTH = /\((min|max)-width\s*:\s*([\d.]+)px\)/g;
 // ON 768px, taking the narrow branch at the 768 viewport where the min-width
 // half of the pair also matched.
 const MEDIA_WIDTH_NON_PX = /\((min|max)-width\s*:\s*[\d.]+(?!px)([a-z%]+)\)/gi;
-// Absolute font-size literals only: em / % / unitless scale WITH whatever token
-// the cascade already set, so they don't fork the scale. This module is already
-// clean — >75 declarations all reading var(--text-*, …), the seven literals all
-// relative — and the rule is here to keep it that way rather than to fix it.
-const ABS_FONT_SIZE = /font-size:\s*(-?[\d.]+(?:px|rem|pt))\b/i;
+// The whole `font-size:` declaration value, up to the `;`, the closing brace,
+// or the end of the logical line. Matching the VALUE rather than a leading
+// literal is what lets rule 7 see inside clamp() / calc() / min() / max():
+// `font-size: clamp(0.9375rem, 2vw, 1.1875rem)` forks the type scale exactly as
+// `font-size: 15px` does, and the old anchored regex read the `clamp` and
+// stopped. Relative units scale WITH whatever token the cascade already set, so
+// they don't fork anything and stay legal.
+const FONT_SIZE_DECL = /font-size:\s*([^;}]+)/i;
+const ABS_LENGTH = /(-?[\d.]+)(px|rem|pt|cm|mm|in|pc|q)\b/i;
+/**
+ * Raw colour in any notation. Hex is matched separately (HEX above, which the
+ * fallback rules also consume); this is the functional half — the one the guard
+ * could not see until 2026-08. `color-mix(` is deliberately NOT matched: the
+ * `\b…\(` anchor requires the paren to follow the function name, and `color-mix`
+ * puts a hyphen there. `in oklab` inside a color-mix is likewise safe.
+ */
+const RAW_COLOR_FN = /\b(rgba?|hsla?|hwb|lab|lch|oklab|oklch|color)\(/gi;
 
 /**
  * Every `var(--token, <fallback>)` on a line, with the fallback text extracted
@@ -201,7 +239,14 @@ const MODULE_PREFIX = /^--iwac-/;
 
 const violations = [];
 function flag(file, line, msg, snippet) {
-  violations.push({ file: relative(ROOT, file), line, msg, snippet: snippet.trim() });
+  // Logical lines can span several source lines; collapse the run of spaces the
+  // join left behind so the report stays one readable line.
+  violations.push({
+    file: relative(ROOT, file),
+    line,
+    msg,
+    snippet: snippet.replace(/\s+/g, ' ').trim(),
+  });
 }
 
 /**
@@ -397,84 +442,165 @@ function checkVarNames(file, raw, n) {
   }
 }
 
+/** Longest run of source lines a single logical line may absorb. */
+const MAX_JOIN = 12;
+
+/**
+ * Split a file into LOGICAL lines: source lines joined while their parentheses
+ * are unbalanced, so one CSS declaration is one unit however the formatter
+ * wrapped it. Returns `{ n, text }` where `n` is the first source line.
+ *
+ * The cap keeps a stray `(` in prose from swallowing the rest of the file; at
+ * 12 it is far above the longest wrapped declaration in the module (4) and far
+ * below anything that could hide a violation.
+ */
+function logicalLines(src) {
+  const lines = src.split('\n');
+  const out = [];
+  for (let i = 0; i < lines.length; i++) {
+    let text = lines[i];
+    let depth = parenDelta(text);
+    let joined = 0;
+    while (depth > 0 && i + 1 < lines.length && joined < MAX_JOIN) {
+      i++;
+      joined++;
+      text += ' ' + lines[i].trim();
+      depth += parenDelta(lines[i]);
+    }
+    out.push({ n: i - joined + 1, text });
+  }
+  return out;
+}
+
+function parenDelta(s) {
+  let d = 0;
+  for (const c of s) {
+    if (c === '(') d++;
+    else if (c === ')') d--;
+  }
+  return d;
+}
+
+/**
+ * Rule 7 — the font-size declaration must carry no absolute length of its own.
+ *
+ * `var()` fallback slots are blanked before the search: they are literals by
+ * construction and rule 3b already compares them against `values.light`.
+ */
+function checkFontSize(file, raw, n) {
+  const decl = FONT_SIZE_DECL.exec(raw);
+  if (!decl) return;
+  const hit = ABS_LENGTH.exec(blankVarFallbacks(decl[1]));
+  if (!hit) return;
+  flag(
+    file,
+    n,
+    `font-size carries the absolute literal ${hit[0]} — use a --text-* token (--text-2xs is the floor); em/%/vw stay legal`,
+    raw,
+  );
+}
+
+/** Replace every `var()` fallback slot with spaces, preserving offsets. */
+function blankVarFallbacks(expr) {
+  const chars = [...expr];
+  for (let i = 0; (i = expr.indexOf('var(', i)) !== -1;) {
+    let depth = 0,
+      j = i + 3;
+    for (; j < expr.length; j++) {
+      if (expr[j] === '(') depth++;
+      else if (expr[j] === ')') {
+        depth--;
+        if (depth === 0) break;
+      }
+    }
+    const end = j >= expr.length ? expr.length : j;
+    const comma = splitTopLevelComma(expr.slice(i + 4, end));
+    if (comma !== -1) {
+      for (let k = i + 4 + comma; k < end; k++) chars[k] = ' ';
+    }
+    i = end + 1;
+  }
+  return chars.join('');
+}
+
+/**
+ * Rule 4 — raw colour outside a var() fallback slot, in a CSS context.
+ * Hex and the functional notations are one rule with one message: the point is
+ * that the module owns no colour, not which spelling was used.
+ */
+function checkRawColour(file, raw, n) {
+  const report = (what) =>
+    flag(
+      file,
+      n,
+      `raw colour ${what} outside a var() fallback (use a theme token, or mark /* allow-hex */)`,
+      raw,
+    );
+  HEX.lastIndex = 0;
+  let m;
+  while ((m = HEX.exec(raw)) !== null) {
+    if (!isInVarFallback(raw.slice(0, m.index))) return report(m[0]);
+  }
+  RAW_COLOR_FN.lastIndex = 0;
+  while ((m = RAW_COLOR_FN.exec(raw)) !== null) {
+    if (!isInVarFallback(raw.slice(0, m.index))) return report(`${m[1]}()`);
+  }
+}
+
 function scan(file) {
   const isCss = file.endsWith('.css');
   const isSvelte = file.endsWith('.svelte');
-  // Track the <style> region of a Svelte SFC so the bare-hex rule scans the
+  // Track the <style> region of a Svelte SFC so the raw-colour rule scans the
   // module's CSS but not its template markup (SVG fills, inline attrs).
   let inStyle = false;
-  readFileSync(file, 'utf8')
-    .split('\n')
-    .forEach((raw, i) => {
-      const n = i + 1;
-      if (isSvelte && /<style\b/.test(raw)) inStyle = true;
-      const cssContext = isCss || (isSvelte && inStyle);
+  for (const { n, text: raw } of logicalLines(readFileSync(file, 'utf8'))) {
+    if (isSvelte && /<style\b/.test(raw)) inStyle = true;
+    const cssContext = isCss || (isSvelte && inStyle);
 
-      if (REMOVED_TOKEN.test(raw)) {
-        flag(
-          file,
-          n,
-          'removed token --primary-hue/--primary-sat (derive via color-mix from --primary)',
-          raw,
-        );
-      }
-      if (SRGB_MIX.test(raw)) {
-        flag(file, n, 'color-mix(in srgb …) — use `in oklab`', raw);
-      }
-      checkVarNames(file, raw, n);
-      checkBreakpoints(file, raw, n);
-      if (cssContext) {
-        const fs = ABS_FONT_SIZE.exec(raw);
-        if (fs) {
-          flag(
-            file,
-            n,
-            `font-size: ${fs[1]} — use a --text-* token (--text-2xs is the floor)`,
-            raw,
-          );
-        }
-      }
-      if (!/allow-hex/.test(raw)) {
-        checkNonColourFallbacks(file, raw, n);
-        // Rule 3 — fallback value must equal canonical light token.
-        if (TOKENS) {
-          let m;
-          VAR_FALLBACK.lastIndex = 0;
-          while ((m = VAR_FALLBACK.exec(raw)) !== null) {
-            const canon = TOKENS.light[m[1]];
-            if (canon && normHex(m[2]) !== canon.toLowerCase()) {
-              flag(
-                file,
-                n,
-                `fallback ${m[2]} for ${m[1]} ≠ canonical light ${canon} (tokens.json)`,
-                raw,
-              );
-            }
-          }
-        }
-        // Rule 4 — bare hex in any CSS context (a .css file, or a Svelte
-        // <style> block). A var() fallback slot is fine (Rule 3 vets it);
-        // a sanctioned --iwac-vis-* data colour is exempt.
-        if (cssContext && !/--iwac-vis-/.test(raw)) {
-          let m;
-          HEX.lastIndex = 0;
-          while ((m = HEX.exec(raw)) !== null) {
-            const before = raw.slice(0, m.index);
-            if (!isInVarFallback(before)) {
-              flag(
-                file,
-                n,
-                'bare hex outside a var() fallback (use a theme token, or mark /* allow-hex */)',
-                raw,
-              );
-              break;
-            }
+    if (REMOVED_TOKEN.test(raw)) {
+      flag(
+        file,
+        n,
+        'removed token --primary-hue/--primary-sat (derive via color-mix from --primary)',
+        raw,
+      );
+    }
+    if (SRGB_MIX.test(raw)) {
+      flag(file, n, 'color-mix(in srgb …) — use `in oklab`', raw);
+    }
+    checkVarNames(file, raw, n);
+    checkBreakpoints(file, raw, n);
+    if (cssContext) {
+      checkFontSize(file, raw, n);
+    }
+    if (!/allow-hex/.test(raw)) {
+      checkNonColourFallbacks(file, raw, n);
+      // Rule 3 — fallback value must equal canonical light token.
+      if (TOKENS) {
+        let m;
+        VAR_FALLBACK.lastIndex = 0;
+        while ((m = VAR_FALLBACK.exec(raw)) !== null) {
+          const canon = TOKENS.light[m[1]];
+          if (canon && normHex(m[2]) !== canon.toLowerCase()) {
+            flag(
+              file,
+              n,
+              `fallback ${m[2]} for ${m[1]} ≠ canonical light ${canon} (tokens.json)`,
+              raw,
+            );
           }
         }
       }
+      // Rule 4 — raw colour in any CSS context (a .css file, or a Svelte
+      // <style> block). A var() fallback slot is fine (Rules 3/3b vet it);
+      // a sanctioned --iwac-vis-* data colour is exempt.
+      if (cssContext && !/--iwac-vis-/.test(raw)) {
+        checkRawColour(file, raw, n);
+      }
+    }
 
-      if (isSvelte && /<\/style>/.test(raw)) inStyle = false;
-    });
+    if (isSvelte && /<\/style>/.test(raw)) inStyle = false;
+  }
 }
 
 const sources = SRC_DIRS.flatMap((d) => walk(d));
