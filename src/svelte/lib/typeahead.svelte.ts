@@ -12,24 +12,40 @@ import type SuggestDropdown from '../components/SuggestDropdown.svelte';
  * ── The panel's life, and why it ends where it does ──────────────────────
  *
  * The dropdown floats over the toolbar, the summary strip and the first
- * result. That is fine while it is answering a question and intolerable once
- * it isn't, so its life is bounded at both ends:
+ * result, so its life is bounded at both ends:
  *
- *   opens   on focus, on every RAW keystroke, and on ArrowDown
- *   closes  when the debounced search commits and its results land, on a
- *           pointer press outside it, on blur, on Escape, on picking a row
+ *   opens   on focus, on a RAW keystroke that leaves text in the box, and on
+ *           ArrowDown
+ *   closes  on a pointer press outside it, on blur, on Escape, on picking a
+ *           row, and when the box is emptied
  *
- * The commit rule is the one that changed in 3.16. `armForQuery()` used to
- * fire from the DEBOUNCED handler — i.e. the panel was re-opened at the exact
- * moment the results underneath it became the answer, and then sat over them
- * until the reader pressed Escape or spent a click dismissing it. Worse, the
- * panel was fed the committed query, so on a surface with a live result list
- * every row it could show was a restatement of a row already on screen.
+ * Committing a search is deliberately in NEITHER column, and that is the rule
+ * 3.16.1 restores. 3.16.0 put it in the closing one — the panel yielded the
+ * moment the debounced results landed — on the argument that every row it
+ * could show restated a result already rendered below. That was true of the
+ * panel as it existed BEFORE 3.16.0: fed the COMMITTED query, it ran 250 ms
+ * behind the text on screen and could only appear at the moment it became
+ * redundant. Fed the raw box contents, the argument inverts. A suggestion is
+ * not a result: an entity row applies a facet filter, a title row jumps
+ * straight to one document out of hundreds — neither is a row on the list
+ * underneath. And the reader who pauses to READ the suggestions is doing the
+ * one thing the panel exists for, so treating that pause as "done with them"
+ * gave them roughly a second (the 250 ms debounce plus the round trip) between
+ * typing and the panel vanishing. That is no time at all to aim at a row, and
+ * it is what the owner reported against 3.16.0.
  *
- * It now tracks the raw box contents instead, which is both fresher and what
- * makes yielding on commit affordable: suggestions are live for the whole time
- * the reader is composing, and the moment they stop and the answer arrives,
- * the panel gets out of its way. ArrowDown brings it back.
+ * What 3.16.0 got right is kept, because all of it bounds the panel without
+ * guessing at intent: an outside press closes it — so it can never
+ * PERMANENTLY occlude the toolbar it floats over, which was the Wave-2 bug —
+ * blur closes it, Escape closes it, and each row (not the container) suppresses
+ * its own blur, so a press on the panel's dead space or on an occluded control
+ * lands first-press.
+ *
+ * Nothing re-opens the panel on its own. In particular the commit must not
+ * re-arm one the reader dismissed: `armForQuery()` used to fire from the
+ * DEBOUNCED handler, re-opening the panel at the exact moment the results
+ * underneath it became the answer. Re-opening takes new typing, a new focus,
+ * or ArrowDown.
  */
 
 /** Grace period so a click on a dropdown row registers before it closes. */
@@ -87,19 +103,19 @@ export function createTypeahead(blockId: string | number, callbacks: TypeaheadCa
       open = false;
     },
     /**
-     * Re-arm on every RAW keystroke — including after a blur, a pick, or the
-     * commit dismissal below, all of which leave focus in the box.
+     * Every RAW keystroke, undebounced.
+     *
+     * Text in the box arms the panel — including after a blur, a pick or an
+     * Escape, all of which leave focus in the box. An EMPTY box closes it:
+     * there is nothing to suggest against, and the recent-searches list would
+     * otherwise pop open over the results the moment the reader backspaced the
+     * last character or hit the clear button.
+     *
+     * Focusing an already-empty box is the other case, and it deliberately
+     * does still offer the recent searches — that press is a request for them.
      */
-    armForTyping(): void {
-      open = true;
-    },
-    /**
-     * The debounced search committed and its results are on screen. The panel
-     * is now covering the answer it was helping to ask for, so it yields.
-     * ArrowDown (or another keystroke) brings it back.
-     */
-    dismissForResults(): void {
-      open = false;
+    handleInput(raw: string): void {
+      open = raw.trim() !== '';
     },
     handleFocus(): void {
       open = true;
@@ -111,8 +127,8 @@ export function createTypeahead(blockId: string | number, callbacks: TypeaheadCa
     },
     /**
      * Let the dropdown consume arrow / enter / escape first — except when it
-     * is closed, where ArrowDown is the way back to a panel that yielded on
-     * commit (the same affordance the masthead enhancer offers).
+     * is closed, where ArrowDown is the way back to a panel the reader
+     * dismissed (the same affordance the masthead enhancer offers).
      */
     handleKeydown(e: KeyboardEvent): void {
       if (!open && e.key === 'ArrowDown') {

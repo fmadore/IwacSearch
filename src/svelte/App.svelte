@@ -155,9 +155,12 @@
 
   /**
    * What the search box currently SAYS, as opposed to what has been searched
-   * for. They differ for the 250 ms of the input debounce, which is exactly
-   * the window the typeahead exists to fill — so the dropdown reads this and
-   * the search effect reads `query`.
+   * for. They differ for the 250 ms of the input debounce — so the dropdown
+   * reads this and the search effect reads `query`, and the rows stay
+   * describing the text on screen rather than trailing it. That still holds
+   * after the commit: the panel survives it (see lib/typeahead.svelte.ts), and
+   * a row it offers must always match what the reader can see themselves
+   * having typed.
    *
    * Kept in step by {@link setQuery}, which every PROGRAMMATIC assignment to
    * `query` goes through (URL pop, a picked suggestion, a federated parent's
@@ -398,10 +401,13 @@
       })
       .then(({ response: r, years }) => {
         response = r;
-        // The answer is on screen. Whatever the typeahead was offering, it is
-        // now floating over the thing it was helping to find — so it yields.
-        // (ArrowDown, or another keystroke, brings it straight back.)
-        suggest.dismissForResults();
+        // The typeahead is deliberately NOT touched here — neither closed nor
+        // re-armed. Search-as-you-type means results land while the reader is
+        // still composing and still reading the suggestions; closing the panel
+        // on the commit (3.16.0) made a two-second pause enough to lose the row
+        // they were aiming at, and re-opening it (pre-3.16.0) put it back over
+        // its own answer. It closes on an outside press, blur, Escape, a pick,
+        // or an emptied box — all of which are the reader saying so.
         if (years !== undefined) {
           yearDistribution = years;
           lastHistogramKey = histogramKey;
@@ -776,7 +782,7 @@
         onChange={handleQueryChange}
         onInput={(raw) => {
           typedQuery = raw;
-          suggest.armForTyping();
+          suggest.handleInput(raw);
         }}
         listboxId={suggest.listboxId}
         expanded={suggest.expanded}

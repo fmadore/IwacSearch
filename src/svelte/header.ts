@@ -163,6 +163,23 @@ class HeaderSearch {
     return host;
   }
 
+  /**
+   * The panel's life — the same contract the in-app dropdown keeps
+   * (lib/typeahead.svelte.ts), expressed in plain listeners:
+   *
+   *   opens   on a keystroke that leaves >= MIN_CHARS in the box, on focus
+   *           with that much already there, and on ArrowDown
+   *   closes  on a pointer press outside it, on blur, on Escape, on picking a
+   *           row, and when the box drops below MIN_CHARS (emptying included)
+   *
+   * A typing PAUSE is in neither column, and never has been here: the debounce
+   * below fetches suggestions and re-renders the rows, and that is all it does.
+   * Nothing on this surface navigates without an explicit act — Enter (native
+   * submit, or the highlighted row) or a click on a row. The masthead sits on
+   * every public page of the site, so a pause-triggered page load would be the
+   * worst version of the bug 3.16.1 fixes in the search block; the assertion
+   * is worth writing down even though the code has always honoured it.
+   */
   private wire(): void {
     this.input.addEventListener('input', () => this.onInput());
     this.input.addEventListener('keydown', (e) => this.onKeydown(e));
