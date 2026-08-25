@@ -55,6 +55,18 @@ const LEGACY_FILTER_FIELDS: Readonly<Record<string, string>> = {
 export const FALLBACK_SORT = '_text_match:desc';
 
 /**
+ * Page sizes the reader may choose, and the allowlist `?per=` decodes against.
+ *
+ * ONE list, because the control and the codec have to agree: an option the
+ * decoder rejects is a control that silently does nothing, and a value the
+ * decoder accepts but the control never offers is a URL the UI can't display.
+ * (The surface's own configured `results_per_page` — a page-block admin may
+ * set any 1–50 — is offered alongside these by the control; it needs no entry
+ * here because it is what an ABSENT `?per=` already means.)
+ */
+export const PAGE_SIZES: readonly number[] = [10, 20, 50];
+
+/**
  * Decode the state a URL carries under `prefix`.
  *
  * `defaultSort` is the SURFACE's default (the preset's sort for a page block,
@@ -109,8 +121,21 @@ export function readUrlState(
     sort: parseSort(params.get(`${prefix}sort`), defaultSort),
     filters,
     yearRange: parseYearRange(params, prefix),
+    perPage: parsePerPage(params.get(`${prefix}per`)),
     view: parseView(params.get(`${prefix}view`)),
   };
+}
+
+/**
+ * Decode `?per=`. Allowlisted like `?sort=` and `?view=`: the value becomes a
+ * Typesense `per_page`, where anything outside 1–250 is a 422 rather than a
+ * bad page size. An unrecognised value falls back to null — "the surface's
+ * default" — which is exactly what an absent param means.
+ */
+function parsePerPage(raw: string | null): number | null {
+  if (!raw) return null;
+  const n = Number(raw);
+  return PAGE_SIZES.includes(n) ? n : null;
 }
 
 /**
@@ -181,6 +206,7 @@ function clearPrefixedKeys(params: URLSearchParams, prefix: string): void {
     `${prefix}sort`,
     `${prefix}date.from`,
     `${prefix}date.to`,
+    `${prefix}per`,
     `${prefix}view`,
   ]);
   // Collect first, then delete — mutating while iterating keys() is unsafe.
@@ -225,6 +251,11 @@ function applyState(
     if (typeof state.yearRange.to === 'number') {
       params.set(`${prefix}date.to`, String(state.yearRange.to));
     }
+  }
+  // Null means "whatever this surface is configured for", which is what an
+  // absent param decodes back to — so only an explicit choice is written.
+  if (state.perPage !== null) {
+    params.set(`${prefix}per`, String(state.perPage));
   }
   // Every EXPLICIT view is written, `list` included — the param's job is to
   // reproduce what the sharer was looking at, and "List" is as much a choice

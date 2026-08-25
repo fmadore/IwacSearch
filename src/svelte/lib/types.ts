@@ -321,6 +321,15 @@ export interface SearchState {
   filters: ActiveFilters;
   yearRange: YearRange | null;
   /**
+   * Results per page, or null for "the surface's configured default".
+   *
+   * Null rather than the resolved number, for the same reason `view` is
+   * nullable: a page block's admin sets its own `results_per_page`, so writing
+   * the resolved value into the URL would freeze a shared link to whatever the
+   * sharer's surface happened to be configured with at the time.
+   */
+  perPage: number | null;
+  /**
    * Presentation mode (does not affect the query), or null for "the reader
    * never said".
    *

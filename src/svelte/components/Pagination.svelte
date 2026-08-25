@@ -44,17 +44,28 @@
    */
 
   import { useI18n } from '../lib/i18n';
+  import { PAGE_SIZES } from '../lib/urlState';
   import Icon from './Icon.svelte';
 
   interface Props {
     currentPage: number;
     totalPages: number;
     onPageChange: (next: number) => void;
+    /**
+     * Results per page, and the handler that changes it. Omitted on surfaces
+     * that don't own the setting (the federated union tabs), where the bar
+     * renders exactly as before.
+     */
+    perPage?: number;
+    onPerPageChange?: (next: number) => void;
   }
 
-  const { currentPage, totalPages, onPageChange }: Props = $props();
+  const { currentPage, totalPages, onPageChange, perPage, onPerPageChange }: Props = $props();
 
   const { t } = useI18n();
+  // Unique per mount: several search blocks can share one page, and a
+  // duplicated `for`/`id` pair points every label at the first control.
+  const uid = $props.id();
 
   const items = $derived(pageWindow(currentPage, totalPages));
   const hasPrev = $derived(currentPage > 1);
@@ -63,6 +74,39 @@
   function go(n: number): void {
     if (n < 1 || n > totalPages || n === currentPage) return;
     onPageChange(n);
+  }
+
+  /**
+   * ── Deep sets need more than a window ────────────────────────────────
+   *
+   * 16,544 results at ten a page is 1,655 pages, and the windowed bar
+   * (1 … 4 [5] 6 … 1655) offers exactly four of them plus the two ends. Two
+   * controls close that gap, and both belong HERE rather than in the toolbar:
+   * the pager is where the reader learns how deep the set is.
+   *
+   *   - a page-size select, so 1,655 pages can become 331;
+   *   - a jump box, shown only once the window actually elides pages
+   *     (> 7 of them), so a shallow set keeps the bar it already had.
+   */
+  const showJump = $derived(totalPages > 7);
+  /**
+   * The offered sizes plus whatever this surface is configured with — a page
+   * block's admin may set any 1–50, and a select that cannot show the current
+   * value would silently change it the moment the reader touched it.
+   */
+  const sizeOptions = $derived(
+    perPage === undefined
+      ? []
+      : Array.from(new Set([...PAGE_SIZES, perPage])).sort((a, b) => a - b),
+  );
+
+  let jumpValue = $state('');
+  function submitJump(e: SubmitEvent): void {
+    e.preventDefault();
+    const n = Number(jumpValue);
+    if (!Number.isFinite(n)) return;
+    jumpValue = '';
+    go(Math.max(1, Math.min(totalPages, Math.trunc(n))));
   }
 </script>
 
@@ -111,6 +155,43 @@
       <span aria-hidden="true"><Icon name="chevron-right" /></span>
     </button>
   </nav>
+
+  {#if showJump || sizeOptions.length > 1}
+    <div class="iwac-pager__tools">
+      {#if showJump}
+        <form class="iwac-pager__jump" onsubmit={submitJump}>
+          <label class="iwac-pager__jump-label" for="{uid}-jump">{t('jump_to_page')}</label>
+          <input
+            id="{uid}-jump"
+            class="iwac-pager__jump-input"
+            type="number"
+            inputmode="numeric"
+            min="1"
+            max={totalPages}
+            placeholder={String(currentPage)}
+            bind:value={jumpValue}
+          />
+          <span class="iwac-pager__jump-total">{t('jump_of_total', { total: totalPages })}</span>
+          <button type="submit" class="iwac-pager__jump-go">{t('jump_go')}</button>
+        </form>
+      {/if}
+      {#if sizeOptions.length > 1 && onPerPageChange}
+        <div class="iwac-pager__size">
+          <label class="iwac-pager__size-label" for="{uid}-size">{t('per_page_label')}</label>
+          <select
+            id="{uid}-size"
+            class="iwac-pager__size-select"
+            value={perPage}
+            onchange={(e) => onPerPageChange(Number(e.currentTarget.value))}
+          >
+            {#each sizeOptions as n (n)}
+              <option value={n}>{t('per_page_n', { n })}</option>
+            {/each}
+          </select>
+        </div>
+      {/if}
+    </div>
+  {/if}
 {/if}
 
 <style>
@@ -139,6 +220,9 @@
     align-items: center;
     justify-content: center;
     gap: var(--space-xs, 0.25rem);
+    /* Explicit, because the current page carries a 2px border where the rest
+       carry 1px and the row must not step up by a pixel around it. */
+    box-sizing: border-box;
     min-width: var(--size-control-md, 2.5rem);
     height: var(--size-control-md, 2.5rem);
     padding-inline: var(--space-sm, 0.5rem);
@@ -170,9 +254,20 @@
     outline-offset: 2px;
   }
   .iwac-pager__page.is-current {
-    background: var(--primary, #ce4115);
+    /*
+     * Outlined, not filled. A --primary fill with a --white label measures
+     * 4.78:1 in light mode and 3.23:1 in dark, because the dark theme's
+     * --primary is a LIGHTER orange — fill and label converge. No single ink
+     * passes on both fills (a dark ink on the light-mode fill is 3.92:1), and
+     * the module may not define theme tokens, so the fill is the thing that
+     * had to go. A 2px brand border under an ink-strong bold numeral reads as
+     * "you are here" at 15.7:1 light and ~16:1 dark, and matches the
+     * ViewToggle's ruled current-state grammar.
+     */
+    background: var(--surface, #fdfcfb);
     border-color: var(--primary, #ce4115);
-    color: var(--white, #fff);
+    border-width: 2px;
+    color: var(--ink-strong, #05070c);
     /* NO `box-shadow: none` here. It used to sit after the :focus-visible rule
        at equal specificity (class + pseudo-class are both 0,2,0), so it won
        on source order and the CURRENT page was the one control on the surface
@@ -202,6 +297,105 @@
     min-width: 1.5rem;
     color: var(--muted, #66696e);
     font-size: var(--text-sm, 0.9375rem);
+  }
+
+  /*
+   * Below the bar, quieter than it: a dateline-weight row of two utilities,
+   * not a second navigation. Both read as running text with an inset field —
+   * "Go to page [   ] of 1,655" — so the pager keeps one visual centre.
+   */
+  .iwac-pager__tools {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: var(--space-sm, 0.5rem) var(--space-lg, 1.5rem);
+    padding-block-end: var(--space-md, 1rem);
+    color: var(--muted, #66696e);
+    font-size: var(--text-xs, 0.8125rem);
+  }
+  .iwac-pager__jump,
+  .iwac-pager__size {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-xs, 0.25rem);
+  }
+  .iwac-pager__jump-input {
+    /* Theme global field rule adds margin-bottom — this row owns its rhythm. */
+    margin: 0;
+    box-sizing: border-box;
+    width: 5rem;
+    height: var(--size-control-sm, 2.25rem);
+    padding-inline: var(--space-sm, 0.5rem);
+    background: var(--surface, #fdfcfb);
+    color: var(--ink, #13161c);
+    border: 1px solid var(--border, #ced1d6);
+    border-radius: var(--radius-md, 0.5rem);
+    box-shadow: none;
+    font: inherit;
+    font-size: var(--text-sm, 0.9375rem);
+    font-variant-numeric: tabular-nums;
+  }
+  .iwac-pager__jump-input:focus {
+    border-color: var(--primary, #ce4115);
+    outline: var(--focus-outline, 2px solid #ce4115);
+    outline-offset: 2px;
+  }
+  .iwac-pager__jump-go {
+    height: var(--size-control-sm, 2.25rem);
+    padding-inline: var(--space-md, 1rem);
+    /* A SUBMIT control, which the theme paints filled-and-glowing by default
+       (see IWAC-theme CLAUDE.md, "the loud one opts in" — submit opts in
+       implicitly). This is a utility beside a pager, not the page's primary
+       action, so it is quieted back to the toolbar's outlined vocabulary. */
+    background: var(--surface, #fdfcfb);
+    color: var(--ink, #13161c);
+    border: 1px solid var(--border, #ced1d6);
+    border-radius: var(--radius-md, 0.5rem);
+    box-shadow: none;
+    font: inherit;
+    font-size: var(--text-sm, 0.9375rem);
+    font-weight: 500;
+    cursor: pointer;
+    transition:
+      border-color var(--transition-fast, 150ms cubic-bezier(0.25, 1, 0.5, 1)),
+      color var(--transition-fast, 150ms cubic-bezier(0.25, 1, 0.5, 1));
+  }
+  .iwac-pager__jump-go:hover {
+    background: var(--surface, #fdfcfb);
+    border-color: var(--primary, #ce4115);
+    color: var(--primary, #ce4115);
+    box-shadow: none;
+    transform: none;
+  }
+  .iwac-pager__jump-go:focus-visible,
+  .iwac-pager__size-select:focus-visible {
+    outline: var(--focus-outline, 2px solid #ce4115);
+    outline-offset: 2px;
+  }
+  .iwac-pager__jump-total {
+    font-variant-numeric: tabular-nums;
+  }
+  .iwac-pager__size-select {
+    margin: 0;
+    box-sizing: border-box;
+    height: var(--size-control-sm, 2.25rem);
+    padding-inline: var(--space-sm, 0.5rem);
+    background: var(--surface, #fdfcfb);
+    color: var(--ink, #13161c);
+    border: 1px solid var(--border, #ced1d6);
+    border-radius: var(--radius-md, 0.5rem);
+    box-shadow: none;
+    font: inherit;
+    font-size: var(--text-sm, 0.9375rem);
+    cursor: pointer;
+  }
+  /* The visible labels ARE the accessible names; nothing is hidden here — a
+     select whose only name is a placeholder option is a select you have to
+     open to understand. */
+  .iwac-pager__jump-label,
+  .iwac-pager__size-label {
+    color: var(--muted, #66696e);
   }
 
   @media (max-width: 599px) {

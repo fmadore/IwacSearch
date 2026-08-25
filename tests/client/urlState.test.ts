@@ -24,6 +24,9 @@ function state(overrides: Partial<SearchState> = {}): SearchState {
     sort: FALLBACK_SORT,
     filters: {},
     yearRange: null,
+    // null, not the resolved number: the pristine state is "use whatever this
+    // surface is configured for", which a page block's admin owns.
+    perPage: null,
     // null, not 'list': the pristine state is "the reader has not chosen a
     // view", which is a different thing from having chosen the list.
     view: null,
@@ -163,6 +166,30 @@ describe('readUrlState', () => {
     });
   });
 
+  describe('page size', () => {
+    it('decodes an offered size', () => {
+      expect(readUrlState(`${base}?per=50`).perPage).toBe(50);
+    });
+
+    it('falls back to the surface default for a size nobody offers', () => {
+      // Straight into a Typesense per_page, where 0 and 9999 are 422s rather
+      // than odd page sizes — so an unoffered value must not reach the wire.
+      for (const raw of ['0', '9999', '15', '-10', 'banana', '']) {
+        expect(readUrlState(`${base}?per=${raw}`).perPage).toBeNull();
+      }
+    });
+
+    it('is absent from a pristine URL', () => {
+      expect(readUrlState(`${base}`).perPage).toBeNull();
+      expect(writeUrlState(state(), '', '', FALLBACK_SORT)).toBe('');
+    });
+
+    it('is namespaced under a block prefix', () => {
+      expect(writeUrlState(state({ perPage: 20 }), 'b42.', '', FALLBACK_SORT)).toBe('?b42.per=20');
+      expect(readUrlState(`${base}?per=50&b42.per=20`, 'b42.').perPage).toBe(20);
+    });
+  });
+
   describe('block prefixes', () => {
     it('reads only its own prefix', () => {
       const url = `${base}?b42.q=ramadan&b42.page=2&b7.q=autre&q=global`;
@@ -226,6 +253,7 @@ describe('round trip', () => {
     // The case the old encoder dropped on the floor: choosing List wrote
     // nothing, so the link could not carry the choice.
     ['explicit list view', state({ view: 'list' })],
+    ['explicit page size', state({ perPage: 50 })],
     [
       'everything at once',
       state({
@@ -234,6 +262,7 @@ describe('round trip', () => {
         sort: 'date:asc',
         filters: { country_ss: ['Niger'], topics_ss: ['Éducation'] },
         yearRange: { from: 1980, to: 2000 },
+        perPage: 20,
         view: 'map',
       }),
     ],
