@@ -52,6 +52,38 @@
   const chips = $derived(deriveActiveChips({ selected: filters, yearRange, locale, t }));
   const hasChips = $derived(chips.length > 0);
 
+  /**
+   * Where focus goes after a chip removes itself.
+   *
+   * The chip IS the button, so removing a filter destroys the focused element
+   * and focus fell to <body> — the next Tab restarted at the top of the
+   * document, which on this surface is ~100 stops from where the reader was.
+   * Land on the chip that took its place, else the last one, else the strip's
+   * own container (a real landmark with a name), so the reader stays put.
+   */
+  let stripEl: HTMLElement | null = $state(null);
+  let chipsEl: HTMLElement | null = $state(null);
+  let focusAfterRemoval: number | null = null;
+
+  function handleRemove(chip: ActiveFilterChip, index: number): void {
+    focusAfterRemoval = index;
+    onRemoveChip(chip);
+  }
+
+  $effect(() => {
+    // Track the chip list so this runs on the render that followed the removal.
+    const n = chips.length;
+    if (focusAfterRemoval === null) return;
+    const index = focusAfterRemoval;
+    focusAfterRemoval = null;
+    if (n === 0) {
+      stripEl?.focus();
+      return;
+    }
+    const buttons = chipsEl?.querySelectorAll<HTMLElement>('.iwac-chip') ?? [];
+    (buttons[Math.min(index, n - 1)] ?? stripEl)?.focus();
+  });
+
   // Human label for the active sort (e.g. "Newest first"); empty if the value
   // isn't in this surface's option set, in which case the readout is hidden.
   const sortLabel = $derived(sortOptions(locale, card).find((o) => o.value === sort)?.label ?? '');
@@ -65,7 +97,7 @@
   App.svelte now owns one persistent, debounced region; this is just the
   visible strip.
 -->
-<section class="iwac-summary" aria-label={t('active_filters')}>
+<section class="iwac-summary" aria-label={t('active_filters')} bind:this={stripEl} tabindex="-1">
   <div class="iwac-summary__line">
     <span class="iwac-summary__count-block">
       <span class="iwac-summary__count">{found.toLocaleString()}</span>
@@ -85,10 +117,10 @@
     </span>
 
     {#if hasChips}
-      <ul class="iwac-summary__chips">
-        {#each chips as chip (chip.field + '|' + chip.value)}
+      <ul class="iwac-summary__chips" bind:this={chipsEl}>
+        {#each chips as chip, i (chip.field + '|' + chip.value)}
           <li>
-            <FilterChip {chip} onRemove={onRemoveChip} />
+            <FilterChip {chip} onRemove={(c) => handleRemove(c, i)} />
           </li>
         {/each}
       </ul>
@@ -113,6 +145,12 @@
        outline, no block-level wash. */
     border-block-end: 2px solid var(--ink-strong, #05070c);
     padding-block-end: var(--space-sm, 0.5rem);
+  }
+  /* Focused only programmatically (last chip removed). A ring around the whole
+     strip would say nothing about where the next Tab goes; :focus-visible is
+     untouched, so a keyboard user who lands here still sees one. */
+  .iwac-summary:focus:not(:focus-visible) {
+    outline: none;
   }
   .iwac-summary__line {
     display: flex;

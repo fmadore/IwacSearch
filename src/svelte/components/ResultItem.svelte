@@ -192,9 +192,9 @@
   {#if cardData.titleMarkup}
     <!-- sanitizeHighlight escaped everything but literal mark tags -->
     <!-- eslint-disable-next-line svelte/no-at-html-tags -->
-    <a href={cardData.itemUrl}>{@html cardData.titleMarkup}</a>
+    <a href={cardData.itemUrl} lang={cardData.langTag}>{@html cardData.titleMarkup}</a>
   {:else}
-    <a href={cardData.itemUrl}>{cardData.title}</a>
+    <a href={cardData.itemUrl} lang={cardData.langTag}>{cardData.title}</a>
   {/if}
 {/snippet}
 
@@ -338,9 +338,9 @@
         {#if cardData.snippet}
           <!-- cardData.snippet was HTML-escaped client-side; only literal mark tags survive -->
           <!-- eslint-disable-next-line svelte/no-at-html-tags -->
-          <p class="iwac-card__snippet">{@html cardData.snippet}</p>
+          <p class="iwac-card__snippet" lang={cardData.langTag}>{@html cardData.snippet}</p>
         {:else if cardData.abstract}
-          <p class="iwac-card__snippet iwac-card__snippet--cardData.abstract">
+          <p class="iwac-card__snippet iwac-card__snippet--abstract" lang={cardData.langTag}>
             {cardData.abstract}
           </p>
         {/if}
@@ -602,10 +602,19 @@
    * Clickable type badge. The IWAC theme paints every <button> primary + glow +
    * hover-translate; we zero box-shadow/transform explicitly so it can't leak.
    */
+  /*
+   * SC 2.5.8: the card's facet toggles measured 20–21px tall at 375. They sit
+   * INSIDE running text — a dateline, a byline, a source line, each with
+   * non-target interpuncts between them — so the Inline exception arguably
+   * covers them; but the block padding below buys the 24px outright and costs
+   * nothing, because vertical padding on an inline box grows the hit area (and
+   * the focus ring) without touching the line box.
+   */
   .iwac-card__type--filter {
     cursor: pointer;
     font-family: inherit;
     box-shadow: none;
+    padding-block: 0.15rem;
     transition: color var(--transition-fast, 150ms cubic-bezier(0.25, 1, 0.5, 1));
   }
   .iwac-card__type--filter:hover {
@@ -667,7 +676,8 @@
   .iwac-card__author {
     display: inline;
     margin: 0;
-    padding: 0;
+    /* See the SC 2.5.8 note on .iwac-card__type--filter. */
+    padding: 0.15rem 0;
     border: none;
     background: none;
     box-shadow: none;
@@ -867,6 +877,11 @@
     font: inherit;
     font-weight: 500;
     vertical-align: baseline;
+  }
+  .iwac-card__chip--filter,
+  .iwac-card__chip--external {
+    /* See the SC 2.5.8 note on .iwac-card__type--filter. */
+    padding-block: 0.15rem;
   }
   .iwac-card__chip--filter {
     cursor: pointer;

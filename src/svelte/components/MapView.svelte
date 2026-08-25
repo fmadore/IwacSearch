@@ -15,9 +15,11 @@
   import { escapeHtml } from '../lib/sanitize';
   import { MAP_MAX_HITS } from '../lib/typesense';
   import {
-    BASEMAP_STYLE_URL,
+    basemapStyleUrl,
     loadMapLibre,
     normalizeColor,
+    readTheme,
+    watchTheme,
     type MapLibreGlobal,
     type MapLibreMapLike,
   } from '../lib/maplibreLoader';
@@ -39,6 +41,21 @@
   let loadError = $state<string | null>(null);
 
   const SOURCE_ID = 'iwac-entities';
+
+  /**
+   * The page's theme, watched rather than sampled.
+   *
+   * MapLibre can't read `var()`, so its basemap and every marker colour are
+   * resolved imperatively at mount — which used to mean the map kept whatever
+   * palette the page was in the first time the Map view opened, and rendered a
+   * white-paper basemap under the dark theme forever after. Re-keying the
+   * mount effect on this rebuilds the map on a theme flip. The viewport is not
+   * preserved, but the data effect re-fits the bounds and a theme change is a
+   * deliberate, rare act; setStyle() would keep the camera at the cost of
+   * re-installing every source and layer on `styledata`.
+   */
+  let theme = $state(readTheme());
+  $effect(() => watchTheme((next) => (theme = next)));
 
   // West Africa initial framing — same viewport IwacVisualizations uses for
   // its spatial-exploration panel ([lng, lat] — MapLibre order).
@@ -74,19 +91,30 @@
   $effect(() => {
     const el = container;
     if (!el) return;
+    // Tracked so a theme flip tears this map down and builds the other one.
+    const mode = theme;
     let cancelled = false;
+
+    // Read once per (re)mount, from the live cascade — the hex literals are the
+    // degraded-mode fallbacks for a page without the theme, never the values a
+    // themed page paints with. `--surface` is the page ground, so the marker
+    // stroke and the cluster numeral track the basemap: near-white on positron,
+    // near-black on dark-matter. It is also the one choice that keeps the
+    // numeral legible on the marker fill in both themes (white on the dark
+    // theme's lighter --primary measures 3.23:1; --surface measures 6.1:1).
+    const css = getComputedStyle(el);
+    const readColor = (name: string, fallback: string): string =>
+      normalizeColor(css.getPropertyValue(name).trim() || fallback, fallback);
+    const primary = readColor('--primary', '#ce4115');
+    const ground = readColor('--surface', '#fdfcfb');
 
     loadMapLibre()
       .then((maplibre) => {
         if (cancelled || !el.isConnected) return;
         lib = maplibre;
-        const primary = normalizeColor(
-          getComputedStyle(el).getPropertyValue('--primary').trim() || '#ce4115',
-          '#ce4115',
-        );
         map = new maplibre.Map({
           container: el,
-          style: BASEMAP_STYLE_URL,
+          style: basemapStyleUrl(mode),
           center: DEFAULT_CENTER,
           zoom: DEFAULT_ZOOM,
           // Scroll shouldn't hijack the page — require ctrl/cmd (or two
@@ -116,7 +144,7 @@
               'circle-opacity': 0.85,
               'circle-radius': ['step', ['get', 'point_count'], 14, 25, 20, 100, 26],
               'circle-stroke-width': 2,
-              'circle-stroke-color': '#ffffff',
+              'circle-stroke-color': ground,
             },
           });
           map.addLayer({
@@ -129,7 +157,7 @@
               'text-size': 12,
               'text-font': ['Montserrat Medium', 'Open Sans Regular', 'Noto Sans Regular'],
             },
-            paint: { 'text-color': '#ffffff' },
+            paint: { 'text-color': ground },
           });
           map.addLayer({
             id: 'unclustered-point',
@@ -152,7 +180,7 @@
               'circle-color': primary,
               'circle-opacity': 0.8,
               'circle-stroke-width': 1.5,
-              'circle-stroke-color': '#ffffff',
+              'circle-stroke-color': ground,
             },
           });
 

@@ -29,6 +29,8 @@
     response: IwacSearchResponse;
     perPage: number;
     onPageChange: (next: number) => void;
+    /** Change the page size. Absent on surfaces that don't own the setting. */
+    onPerPageChange?: (next: number) => void;
     /** Currently-active categorical filters — drives the cards' badge state. */
     activeFilters: ActiveFilters;
     /** Toggle a facet from a result-card badge (author, newspaper, type…). */
@@ -43,6 +45,7 @@
     response,
     perPage,
     onPageChange,
+    onPerPageChange,
     activeFilters,
     onFacetToggle,
     hideCountry = false,
@@ -58,13 +61,26 @@
   {#if response.hits.length === 0}
     <p class="iwac-results__empty">{t('results_empty_list')}</p>
   {:else if view === 'gallery'}
-    <div class="iwac-results__gallery">
+    <!-- An <ol>, like the List ledger. The gallery was a bare <div> of
+         <article>s: sighted readers get the extent from the grid, but assistive
+         tech was told nothing about how many tiles there were or where one
+         ended — on the view that is the browse default. Same markup contract in
+         both views; only the geometry differs. -->
+    <ol class="iwac-results__gallery">
       {#each response.hits as hit (hit.document.id)}
-        <ResultItem {hit} {activeFilters} {onFacetToggle} {hideCountry} layout="gallery" />
+        <li class="iwac-results__tile">
+          <ResultItem {hit} {activeFilters} {onFacetToggle} {hideCountry} layout="gallery" />
+        </li>
       {/each}
-    </div>
+    </ol>
 
-    <Pagination currentPage={response.page} {totalPages} {onPageChange} />
+    <Pagination
+      currentPage={response.page}
+      {totalPages}
+      {onPageChange}
+      {onPerPageChange}
+      {perPage}
+    />
   {:else}
     <ol class="iwac-results__list">
       {#each response.hits as hit (hit.document.id)}
@@ -74,7 +90,13 @@
       {/each}
     </ol>
 
-    <Pagination currentPage={response.page} {totalPages} {onPageChange} />
+    <Pagination
+      currentPage={response.page}
+      {totalPages}
+      {onPageChange}
+      {onPerPageChange}
+      {perPage}
+    />
   {/if}
 </div>
 
@@ -104,9 +126,21 @@
    * on desktop, two-up on a phone. Matches ResultSkeleton's gallery geometry.
    */
   .iwac-results__gallery {
+    list-style: none;
+    margin: 0;
+    padding: 0;
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
     gap: var(--space-lg, 1.5rem);
+  }
+  .iwac-results__tile {
+    margin: 0;
+    /* The <li> is now the grid item; let its card fill it so rows stay even. */
+    display: flex;
+  }
+  .iwac-results__tile > :global(.iwac-card) {
+    flex: 1 1 auto;
+    min-width: 0;
   }
   @media (max-width: 599px) {
     .iwac-results__gallery {

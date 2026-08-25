@@ -13,6 +13,7 @@ import {
   pickMatchedIn,
   pickSnippet,
   pickTitleMarkup,
+  resultLanguageTag,
   type CardChip,
 } from './resultCard';
 
@@ -35,6 +36,13 @@ export function createResultCard(input: () => { hit: IwacHit; hideCountry: boole
   const hideCountry = $derived(input().hideCountry);
 
   const title = $derived(doc.title || t('untitled', { id: doc.id }));
+  /**
+   * BCP-47 tag for this record's own text, or undefined when it names no
+   * language the map knows. The card stamps it on the title and the body
+   * text so a French headline is not read aloud in an English voice on the
+   * English site (and vice versa on the French one).
+   */
+  const langTag = $derived(resultLanguageTag(doc));
   const typeKey = $derived(doc.type_s ?? '');
   const typeLabel = $derived(typeKey ? typeLabelFor(typeKey, locale) : '');
   const isReference = $derived(typeKey === 'reference');
@@ -226,6 +234,9 @@ export function createResultCard(input: () => { hit: IwacHit; hideCountry: boole
     },
     get citationIcon() {
       return citationIcon;
+    },
+    get langTag() {
+      return langTag;
     },
   };
 }

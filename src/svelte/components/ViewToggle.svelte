@@ -3,10 +3,26 @@
    * Quiet segmented control toggling the result presentation — List ledger
    * (default) plus whatever the surface offers: Gallery on content surfaces
    * (design review §01), Map on the entity index. Mirrors the toolbar's
-   * control vocabulary (outlined, surface ground, primary on engagement);
-   * the active segment carries a primary wash + primary label, the inactive
-   * one stays muted. The IWAC theme paints every <button> primary + glow +
-   * hover-translate, so the resets below are deliberate.
+   * control vocabulary (outlined, surface ground, primary on engagement).
+   * The IWAC theme paints every <button> primary + glow + hover-translate, so
+   * the resets below are deliberate.
+   *
+   * ── Semantics ────────────────────────────────────────────────────────
+   * A RADIOGROUP, not a group of toggle buttons. `aria-pressed` on each
+   * segment described three independent switches that happen to be adjacent;
+   * what this actually is is one setting with N mutually exclusive values,
+   * which is what a radiogroup means and what the sibling FederatedApp
+   * tablist already models correctly. Roving tabindex + arrow keys come with
+   * that pattern: the control is ONE Tab stop, and Left/Right (or Up/Down)
+   * move between and select the segments.
+   *
+   * ── Colour ───────────────────────────────────────────────────────────
+   * The active segment used to be a primary label on a 12% primary wash,
+   * which measured 3.72:1 in light mode — the wash lifts the ground toward
+   * the label. It now carries ink-strong text with a 2px primary rule under
+   * it: the brand still marks the current view, but the part that has to be
+   * READ is the part that stays at full contrast. (Neither `--primary` on
+   * `--surface`, 4.67:1, nor on `--background`, 4.40:1, leaves any headroom.)
    */
   import type { ViewMode } from '../lib/types';
   import { useI18n } from '../lib/i18n';
@@ -27,15 +43,58 @@
     gallery: { icon: 'grid', label: 'view_gallery' },
     map: { icon: 'map', label: 'view_map' },
   };
+
+  let groupEl: HTMLDivElement | null = $state(null);
+
+  /**
+   * Arrow keys move the selection (APG radiogroup: selection follows focus),
+   * Home/End jump to the ends. Focus is moved explicitly because the newly
+   * selected segment is the only one that will still be tabbable.
+   */
+  function handleKeydown(e: KeyboardEvent): void {
+    const delta =
+      e.key === 'ArrowRight' || e.key === 'ArrowDown'
+        ? 1
+        : e.key === 'ArrowLeft' || e.key === 'ArrowUp'
+          ? -1
+          : 0;
+    let next: ViewMode | undefined;
+    if (delta !== 0) {
+      const i = modes.indexOf(value);
+      next = modes[(i + delta + modes.length) % modes.length];
+    } else if (e.key === 'Home') {
+      next = modes[0];
+    } else if (e.key === 'End') {
+      next = modes[modes.length - 1];
+    }
+    if (next === undefined || next === value) return;
+    e.preventDefault();
+    onChange(next);
+    // The DOM still holds the previous selection this tick; focus after the
+    // update so the ring lands on the segment that just became current.
+    queueMicrotask(() => groupEl?.querySelector<HTMLElement>('[tabindex="0"]')?.focus());
+  }
 </script>
 
-<div class="iwac-view" role="group" aria-label={t('view')}>
+<!-- Focus lives on the radios (roving tabindex); the group itself only routes
+     arrow keys, so it needs no tabindex of its own — same shape as the
+     FederatedApp tablist. -->
+<!-- svelte-ignore a11y_interactive_supports_focus -->
+<div
+  class="iwac-view"
+  role="radiogroup"
+  aria-label={t('view')}
+  bind:this={groupEl}
+  onkeydown={handleKeydown}
+>
   {#each modes as mode (mode)}
     <button
       type="button"
+      role="radio"
       class="iwac-view__btn"
       class:is-active={value === mode}
-      aria-pressed={value === mode}
+      aria-checked={value === mode}
+      tabindex={value === mode ? 0 : -1}
       onclick={() => onChange(mode)}
     >
       <span class="iwac-view__icon" aria-hidden="true"><Icon name={SEGMENTS[mode].icon} /></span>
@@ -89,12 +148,13 @@
     transform: none;
   }
   .iwac-view__btn.is-active {
-    /* Current state = brand wash + brand label (the toggle reads as a tab, not
-       a filled pill — restraint with colour). */
-    background: color-mix(in oklab, var(--primary, #ce4115) 12%, transparent);
-    color: var(--primary, #ce4115);
+    /* Current state = full-contrast label under a 2px brand rule (the toggle
+       reads as a tab, not a filled pill — restraint with colour). The rule is
+       an INSET shadow because .iwac-view clips; see the focus note below. */
+    background: transparent;
+    color: var(--ink-strong, #05070c);
     font-weight: 600;
-    box-shadow: none;
+    box-shadow: inset 0 -2px 0 0 var(--primary, #ce4115);
     transform: none;
     cursor: default;
   }

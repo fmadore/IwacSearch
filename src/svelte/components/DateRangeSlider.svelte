@@ -460,6 +460,25 @@
     /* Above the filled segment so it stays interactive. */
     z-index: 1;
   }
+  /*
+   * WCAG 2.2 SC 2.5.8 target size. The visible thumb is 20×20 — small enough
+   * to sit on a 6px track without swallowing it, and no exception applies to a
+   * role=slider handle. This pseudo-element extends the POINTER target to
+   * 24×24 without touching the geometry the track and the fill are aligned to
+   * (both are inset by one visible thumb-radius, 0.625rem).
+   *
+   * -4px, not -2px: an absolutely-positioned child is inset from its
+   * containing block's PADDING box, and the thumb is border-box with a 2px
+   * border — so its padding box is 16px, and -2px produced a 20×20 target
+   * identical to the visible one. Measured by hit-test, not by arithmetic:
+   * elementFromPoint 11px above the thumb's centre returned the track.
+   */
+  .iwac-daterange__thumb::before {
+    content: '';
+    position: absolute;
+    inset: -4px;
+    border-radius: inherit;
+  }
   .iwac-daterange__thumb:hover {
     transform: translateX(-50%) scale(1.08);
     box-shadow: var(

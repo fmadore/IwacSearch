@@ -322,6 +322,10 @@
     align-items: center;
     gap: var(--space-xs, 0.25rem);
     width: 100%;
+    /* SC 2.5.8: the collapse/expand target measured 261×20.8. The label is an
+       uppercase 13px eyebrow, so height came from the line box alone; this
+       floors it at 24 without adding a padding box around the eyebrow. */
+    min-height: 1.5rem;
     padding: 0;
     background: none;
     border: none;

@@ -10,6 +10,7 @@ import {
   pickMatchedIn,
   pickSnippet,
   pickTitleMarkup,
+  resultLanguageTag,
 } from '../../src/svelte/lib/resultCard';
 
 /**
@@ -302,5 +303,45 @@ describe('pickExternalLink', () => {
   it('rejects any scheme that is not http(s)', () => {
     expect(pickExternalLink(doc({ source_url: 'javascript:alert(1)' }))).toBeNull();
     expect(pickExternalLink(doc({ source_url: 'data:text/html,<script>' }))).toBeNull();
+  });
+});
+
+describe('resultLanguageTag', () => {
+  const doc = (d: Partial<IwacDoc>): IwacDoc => ({ id: '1', title: 'T', ...d }) as IwacDoc;
+
+  /**
+   * The corpus stores dcterms:language as French DISPLAY names — a live facet
+   * count over the article subset returns Français 12,291 · Ewé 32 · Kabyè 11
+   * · Anglais 7 · Dendi 2 — so the accented French spellings are the ones that
+   * have to work, not the ISO codes.
+   */
+  it('maps the display names the corpus actually carries', () => {
+    expect(resultLanguageTag(doc({ language_ss: ['Français'] }))).toBe('fr');
+    expect(resultLanguageTag(doc({ language_ss: ['Anglais'] }))).toBe('en');
+    expect(resultLanguageTag(doc({ language_ss: ['Ewé'] }))).toBe('ee');
+    expect(resultLanguageTag(doc({ language_ss: ['Kabyè'] }))).toBe('kbp');
+    expect(resultLanguageTag(doc({ language_ss: ['Dendi'] }))).toBe('ddn');
+  });
+
+  it('also accepts English names and ISO codes a future record might use', () => {
+    expect(resultLanguageTag(doc({ language_ss: ['French'] }))).toBe('fr');
+    expect(resultLanguageTag(doc({ language_ss: ['ara'] }))).toBe('ar');
+    expect(resultLanguageTag(doc({ language_ss: ['  EN  '] }))).toBe('en');
+  });
+
+  /**
+   * The point of the whole helper: a WRONG lang is worse than none, because it
+   * changes a screen reader's pronunciation with confidence. Anything the map
+   * doesn't recognise leaves the element inheriting the document language.
+   */
+  it('returns undefined rather than guessing', () => {
+    expect(resultLanguageTag(doc({}))).toBeUndefined();
+    expect(resultLanguageTag(doc({ language_ss: [] }))).toBeUndefined();
+    expect(resultLanguageTag(doc({ language_ss: ['Gulmancema'] }))).toBeUndefined();
+  });
+
+  /** `lang` takes exactly one tag; a multilingual record has no single one. */
+  it('reads the first value only', () => {
+    expect(resultLanguageTag(doc({ language_ss: ['Arabe', 'Français'] }))).toBe('ar');
   });
 });

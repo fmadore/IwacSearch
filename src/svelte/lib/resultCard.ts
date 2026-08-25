@@ -245,3 +245,93 @@ export function buildSourceChips(
   }
   return out;
 }
+
+/**
+ * `dcterms:language` display value → BCP-47 subtag, for the `lang` attribute
+ * on a result's title and body text.
+ *
+ * The archive is francophone: `<html lang="en-US">` on the English site sits
+ * over result titles that are overwhelmingly French, and a screen reader
+ * reads them in an English voice — "Ouagadougou" and "Côte d'Ivoire" come out
+ * as noise. Only a per-result `lang` fixes that, and only the indexed value
+ * can supply it, so this maps the display strings the corpus actually carries
+ * (French names, plus the English names and ISO codes a future record might).
+ *
+ * Deliberately NOT a guess: an unrecognised value returns undefined and the
+ * element inherits the document language, which is what it does today. A
+ * wrong `lang` is worse than none — it changes pronunciation with confidence.
+ */
+const LANGUAGE_TAGS: Readonly<Record<string, string>> = {
+  // French display names (what the corpus uses), accents stripped by norm().
+  francais: 'fr',
+  anglais: 'en',
+  arabe: 'ar',
+  allemand: 'de',
+  espagnol: 'es',
+  portugais: 'pt',
+  italien: 'it',
+  neerlandais: 'nl',
+  russe: 'ru',
+  turc: 'tr',
+  persan: 'fa',
+  ewe: 'ee',
+  kabye: 'kbp',
+  dendi: 'ddn',
+  haoussa: 'ha',
+  peul: 'ff',
+  fulfulde: 'ff',
+  moore: 'mos',
+  dioula: 'dyu',
+  bambara: 'bm',
+  yoruba: 'yo',
+  wolof: 'wo',
+  haussa: 'ha',
+  swahili: 'sw',
+  zarma: 'dje',
+  // English names + ISO 639-1/2 codes.
+  french: 'fr',
+  english: 'en',
+  arabic: 'ar',
+  german: 'de',
+  spanish: 'es',
+  portuguese: 'pt',
+  italian: 'it',
+  dutch: 'nl',
+  hausa: 'ha',
+  fula: 'ff',
+  jula: 'dyu',
+  fr: 'fr',
+  fra: 'fr',
+  fre: 'fr',
+  en: 'en',
+  eng: 'en',
+  ar: 'ar',
+  ara: 'ar',
+  de: 'de',
+  ger: 'de',
+  deu: 'de',
+  es: 'es',
+  spa: 'es',
+  pt: 'pt',
+  por: 'pt',
+};
+
+/** Lowercase, strip accents and surrounding punctuation, for table lookup. */
+function normLanguage(raw: string): string {
+  return raw
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z]/g, '');
+}
+
+/**
+ * BCP-47 tag for a result's text, or undefined when the record names no
+ * language this table knows. Reads the FIRST value only: a multilingual
+ * record has no single tag for its title, and `lang` takes exactly one.
+ */
+export function resultLanguageTag(d: IwacDoc): string | undefined {
+  const raw = d.language_ss?.[0];
+  if (!raw) return undefined;
+  return LANGUAGE_TAGS[normLanguage(raw)];
+}
