@@ -41,6 +41,19 @@ import type SuggestDropdown from '../components/SuggestDropdown.svelte';
  * its own blur, so a press on the panel's dead space or on an occluded control
  * lands first-press.
  *
+ * The occlusion itself is accepted, reviewed against measurements, not
+ * assumed: while open, the panel covers the whole control row (view toggle,
+ * copy link, export, sort), the summary line and the first result — at 1440
+ * and at 375 alike. It could not be otherwise: the toolbar starts ~13px
+ * below the box, so no height cap spares it, and the remedies all cost more
+ * than the idiom they'd buy back. Re-anchoring the listbox away from its
+ * combobox breaks the one convention every reader arrives holding; reserving
+ * room for the panel would shift the entire results column on each open and
+ * close. So the price stays where every search box on the web puts it: the
+ * cover lasts only while composing, a toolbar press costs one dismissing
+ * press first, and the keyboard path costs nothing (Tab's blur closes the
+ * panel as focus leaves).
+ *
  * Nothing re-opens the panel on its own. In particular the commit must not
  * re-arm one the reader dismissed: `armForQuery()` used to fire from the
  * DEBOUNCED handler, re-opening the panel at the exact moment the results
