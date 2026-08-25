@@ -580,7 +580,7 @@
     --iwac-type-dot: var(--type-publication, #394f68);
   }
   .iwac-card__type[data-type='document'] {
-    --iwac-type-dot: var(--type-document, #de7000);
+    --iwac-type-dot: var(--type-document, #d66800);
   }
   .iwac-card__type[data-type='photograph'] {
     --iwac-type-dot: var(--type-photograph, #2e9052);
@@ -595,7 +595,7 @@
     --iwac-type-dot: var(--type-entity-lieux, #2e9052);
   }
   .iwac-card__type[data-entity-type='Organisations'] {
-    --iwac-type-dot: var(--type-entity-organisations, #de7000);
+    --iwac-type-dot: var(--type-entity-organisations, #d66800);
   }
 
   /*
@@ -843,7 +843,7 @@
     color: var(--type-entity-lieux, #2e9052);
   }
   .iwac-card__spark[data-entity-type='Organisations'] {
-    color: var(--type-entity-organisations, #de7000);
+    color: var(--type-entity-organisations, #d66800);
   }
 
   /*
