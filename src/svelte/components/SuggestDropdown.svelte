@@ -31,8 +31,14 @@
    * UX details that matter:
    *   - 120 ms debounce so a fast typist doesn't fire one suggest per
    *     keystroke. Shorter than the main search debounce (250 ms).
-   *   - Pointerdown inside the dropdown does NOT blur the parent input
-   *     (intercepted via onmousedown) so a click registers before close.
+   *   - `query` is the RAW box contents, not the committed search query, so
+   *     the rows describe what is on screen rather than trailing it by the
+   *     250 ms main debounce.
+   *   - Pointerdown on a ROW does not blur the parent input (intercepted via
+   *     onmousedown) so its click registers before close. This used to sit on
+   *     the panel CONTAINER, which meant a press on the panel's dead space —
+   *     over the toolbar it covers — also held focus and kept the panel open,
+   *     so the occluded control could not be reached by clicking at all.
    *   - The same scoped key + locked_filters apply, so suggestions respect
    *     the surface's curatorial scope.
    */
@@ -222,8 +228,11 @@
     return row.kind === 'article' ? (urlOf(row.hit) ?? '#') : '#';
   }
 
-  // Stop pointerdown from blurring the input — otherwise the parent's
-  // onblur handler closes the dropdown before our click can register.
+  // Stop pointerdown on a ROW from blurring the input — otherwise the parent's
+  // onblur handler closes the dropdown before the click can register. Bound
+  // per row, never on the container: the container's dead space is precisely
+  // where a press aimed at the occluded toolbar lands, and suppressing the
+  // blur there is what made the panel un-dismissable by pointer.
   function preventBlur(e: MouseEvent): void {
     e.preventDefault();
   }
@@ -236,7 +245,6 @@
     role="listbox"
     aria-label={isPrefixMode ? t('suggestions') : t('recent_searches')}
     tabindex="-1"
-    onmousedown={preventBlur}
   >
     {#if !isPrefixMode}
       <div class="iwac-suggest__heading" role="presentation">
@@ -255,6 +263,7 @@
           id={optionId(i)}
           class="iwac-suggest__item iwac-suggest__item--search"
           class:iwac-suggest__item--active={i === highlightedIndex}
+          onmousedown={preventBlur}
           onclick={(e) => onRowClick(row, i, e)}
           onmouseenter={() => (highlightedIndex = i)}
           role="option"
@@ -269,6 +278,7 @@
           id={optionId(i)}
           class="iwac-suggest__item iwac-suggest__item--history"
           class:iwac-suggest__item--active={i === highlightedIndex}
+          onmousedown={preventBlur}
           onclick={(e) => onRowClick(row, i, e)}
           onmouseenter={() => (highlightedIndex = i)}
           role="option"
@@ -285,6 +295,7 @@
           class="iwac-suggest__item"
           class:iwac-suggest__item--active={i === highlightedIndex}
           href={hrefOf(row)}
+          onmousedown={preventBlur}
           onclick={(e) => onRowClick(row, i, e)}
           onmouseenter={() => (highlightedIndex = i)}
           role="option"
@@ -301,6 +312,7 @@
           id={optionId(i)}
           class="iwac-suggest__item iwac-suggest__item--entity"
           class:iwac-suggest__item--active={i === highlightedIndex}
+          onmousedown={preventBlur}
           onclick={(e) => onRowClick(row, i, e)}
           onmouseenter={() => (highlightedIndex = i)}
           role="option"
@@ -329,11 +341,17 @@
     background: var(--surface, #fdfcfb);
     border: 1px solid var(--border, #ced1d6);
     border-radius: var(--radius-md, 0.5rem);
-    box-shadow:
-      0 4px 12px rgba(0, 0, 0, 0.08),
-      0 1px 3px rgba(0, 0, 0, 0.05);
+    /* Published overlay shadow (dark-variant aware), not a hand-rolled pair. */
+    box-shadow: var(
+      --shadow-lg,
+      0 10px 15px -3px rgba(9, 11, 15, 0.12),
+      0 4px 6px -4px rgba(20, 22, 27, 0.06)
+    );
     overflow: hidden;
-    max-height: 24rem;
+    /* Bounded against the VIEWPORT too, not just an absolute cap: 24rem is two
+       thirds of a 375×812 phone screen, and the panel is floating over the
+       results the reader came for. Matches the masthead enhancer's clamp. */
+    max-height: min(24rem, 60vh);
     overflow-y: auto;
     animation: iwac-suggest-in 120ms ease;
   }

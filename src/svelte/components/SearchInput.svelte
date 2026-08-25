@@ -17,6 +17,14 @@
     placeholder?: string;
     onChange: (next: string) => void;
     /**
+     * Every keystroke, UNDEBOUNCED. `onChange` is the search commit; this is
+     * what the box currently says. The typeahead needs the latter — fed the
+     * committed query it was always 250 ms behind the text the reader was
+     * looking at, and it could only ever open at the moment the results
+     * rendered underneath it.
+     */
+    onInput?: (raw: string) => void;
+    /**
      * ARIA combobox wiring. The parent (App.svelte) owns the suggestion
      * dropdown, so it passes the listbox id, whether it's expanded, and the
      * id of the active option so this input can advertise itself as a proper
@@ -38,6 +46,7 @@
     value,
     placeholder = '',
     onChange,
+    onInput,
     listboxId,
     expanded = false,
     activeDescendant = null,
@@ -67,6 +76,7 @@
   function handleInput(e: Event): void {
     const target = e.target as HTMLInputElement;
     local = target.value;
+    onInput?.(local);
     if (timer !== null) {
       clearTimeout(timer);
     }
@@ -82,6 +92,7 @@
       clearTimeout(timer);
       timer = null;
     }
+    onInput?.('');
     onChange('');
   }
 </script>

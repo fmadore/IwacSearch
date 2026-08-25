@@ -17,7 +17,7 @@
   import { createViewMode } from './lib/viewMode.svelte';
   import { createFilterDrawer } from './lib/filterDrawer.svelte';
   import { createFilterState } from './lib/filterState.svelte';
-  import { createTypeahead, slashShortcut } from './lib/typeahead.svelte';
+  import { createTypeahead, dismissOnOutsidePointer, slashShortcut } from './lib/typeahead.svelte';
   import { createCopyState } from './lib/clipboard.svelte';
   import { recordSearch } from './lib/searchHistory';
   import SearchInput from './components/SearchInput.svelte';
@@ -136,12 +136,40 @@
         sort: defaultSort,
         filters: bootstrap.initial_filters ?? {},
         yearRange: null,
+        perPage: null,
         view: null,
       };
 
   let query = $state(initial.q);
   let page = $state(initial.page);
   let sort = $state(initial.sort);
+  /**
+   * The reader's page-size choice, or null for the surface's configured one.
+   *
+   * Kept nullable all the way through to the URL: a page block's admin sets
+   * `results_per_page`, and a shared link that froze the sharer's surface
+   * default into `?per=` would override the recipient's block config with a
+   * number nobody chose.
+   */
+  let perPageChoice = $state<number | null>(initial.perPage);
+
+  /**
+   * What the search box currently SAYS, as opposed to what has been searched
+   * for. They differ for the 250 ms of the input debounce, which is exactly
+   * the window the typeahead exists to fill — so the dropdown reads this and
+   * the search effect reads `query`.
+   *
+   * Kept in step by {@link setQuery}, which every PROGRAMMATIC assignment to
+   * `query` goes through (URL pop, a picked suggestion, a federated parent's
+   * query). Typing is the one path that writes it directly, from SearchInput's
+   * undebounced `onInput`.
+   */
+  let typedQuery = $state(initial.q);
+
+  function setQuery(next: string): void {
+    query = next;
+    typedQuery = next;
+  }
 
   // Adopt the parent's query whenever it changes. Guarded by the last value
   // ADOPTED (not by comparing to `query`), so a query the user then edits
@@ -153,7 +181,7 @@
     const next = sharedQuery;
     if (next === undefined || next === adoptedQuery) return;
     adoptedQuery = next;
-    query = next;
+    setQuery(next);
     page = 1;
   });
 
@@ -247,7 +275,8 @@
     initial.page === 1 &&
     initial.sort === defaultSort &&
     Object.keys(initial.filters).length === 0 &&
-    initial.yearRange === null;
+    initial.yearRange === null &&
+    initial.perPage === null;
 
   // Previous snapshot for URL-sync diffing (pushState vs replaceState).
   let prevState: SearchState | null = null;
@@ -269,6 +298,7 @@
       sort,
       filters,
       yearRange,
+      perPage: perPageChoice,
       view: view.explicit ? view.mode : null,
     };
     syncToUrl(next, prevState, urlPrefix, defaultSort);
@@ -282,6 +312,7 @@
       sort: next.sort,
       filters: Object.fromEntries(Object.entries(next.filters).map(([k, v]) => [k, [...v]])),
       yearRange: next.yearRange ? { ...next.yearRange } : null,
+      perPage: next.perPage,
       view: next.view,
     };
   });
@@ -291,9 +322,10 @@
     if (!syncUrl) return;
     return onUrlPop(
       (s) => {
-        query = s.q;
+        setQuery(s.q);
         page = s.page;
         sort = s.sort;
+        perPageChoice = s.perPage;
         filterState.hydrate(s.filters, s.yearRange);
         view.applyPop(s.view);
       },
@@ -327,6 +359,7 @@
     const s = sort;
     const f = filters;
     const y = yearRange;
+    const pp = perPageChoice;
 
     // Facet union: always request counts for prominent facets + any
     // facet the user has currently selected, so selected values don't
@@ -359,11 +392,16 @@
         sortBy: s,
         activeFilters: f,
         yearRange: y,
+        perPage: pp ?? undefined,
         facetBy,
         withYearDistribution: needHistogram,
       })
       .then(({ response: r, years }) => {
         response = r;
+        // The answer is on screen. Whatever the typeahead was offering, it is
+        // now floating over the thing it was helping to find — so it yields.
+        // (ArrowDown, or another keystroke, brings it straight back.)
+        suggest.dismissForResults();
         if (years !== undefined) {
           yearDistribution = years;
           lastHistogramKey = histogramKey;
@@ -445,12 +483,11 @@
       });
   });
 
+  /** The debounce fired: this is the search commit. `typedQuery` already
+      matches (SearchInput wrote it on the keystroke), so no setQuery here. */
   function handleQueryChange(next: string): void {
     query = next;
     page = 1; // any new query resets pagination
-    // Re-arm the dropdown whenever the query mutates — even if the user has
-    // just blurred the input, fresh keystrokes should reopen suggestions.
-    suggest.armForQuery();
   }
 
   // ── Typeahead ───────────────────────────────────────────────────────
@@ -463,12 +500,12 @@
   const suggest = createTypeahead(bootstrap.block_id, {
     onCommitQuery: (text) => {
       if (text !== query) {
-        query = text;
+        setQuery(text);
         page = 1;
       }
     },
     onPickEntity: (field, value) => {
-      query = '';
+      setQuery('');
       filterState.toggle(field, value, true);
     },
   });
@@ -479,6 +516,18 @@
   $effect(() => {
     if (!showSearchBox) return;
     return slashShortcut(() => searchFormEl);
+  });
+
+  // A pointer press that isn't for the typeahead closes it — including one on
+  // the panel's own dead space, which is where a reader aiming at the toolbar
+  // it covers actually lands.
+  $effect(() => {
+    if (!showSearchBox) return;
+    return dismissOnOutsidePointer(
+      () => suggest.open,
+      () => searchFormEl,
+      () => suggest.close(),
+    );
   });
 
   // ── Copy link ───────────────────────────────────────────────────────
@@ -495,6 +544,17 @@
 
   function handleSortChange(next: string): void {
     sort = next;
+    page = 1;
+  }
+
+  /**
+   * Page-size change. Resets to page 1 for the same reason a filter does: page
+   * 40 of a ten-per-page set is page 8 of a fifty-per-page one, and silently
+   * re-anchoring the reader somewhere they didn't ask for is worse than
+   * starting them at the top of the set they just re-sized.
+   */
+  function handlePerPageChange(next: number): void {
+    perPageChoice = next;
     page = 1;
   }
 
@@ -583,7 +643,9 @@
   // claim the summary strip no longer makes, so the panel falls back to its
   // "Search to see filter options." state.
   const facets = $derived(semanticHidden ? [] : (response?.facet_counts ?? []));
-  const perPage = $derived(response?.request_params?.per_page ?? bootstrap.results_per_page ?? 20);
+  const perPage = $derived(
+    perPageChoice ?? response?.request_params?.per_page ?? bootstrap.results_per_page ?? 20,
+  );
   const searchTimeMs = $derived(response?.search_time_ms ?? 0);
   const totalPages = $derived(
     response ? Math.max(1, Math.ceil(response.found / Math.max(1, perPage))) : 1,
@@ -712,13 +774,17 @@
         value={query}
         placeholder={t('search_placeholder')}
         onChange={handleQueryChange}
+        onInput={(raw) => {
+          typedQuery = raw;
+          suggest.armForTyping();
+        }}
         listboxId={suggest.listboxId}
         expanded={suggest.expanded}
         activeDescendant={suggest.activeId}
       />
       <SuggestDropdown
         bind:this={suggest.ref}
-        {query}
+        query={typedQuery}
         {client}
         enabled={suggest.open}
         listboxId={suggest.listboxId}
@@ -827,10 +893,16 @@
                 <ViewToggle value={view.mode} modes={view.modes} onChange={(m) => view.set(m)} />
               {/if}
               <div class="iwac-search__controls-actions">
+                <!-- aria-expanded, even though the drawer is a proper
+                     aria-modal dialog: the trigger stays in the accessibility
+                     tree behind the backdrop, and without it a reader who
+                     lands back on it cannot tell whether the panel it opens is
+                     already open. -->
                 <button
                   type="button"
                   class="iwac-search__filters-trigger"
                   onclick={() => drawer.show()}
+                  aria-expanded={drawer.open}
                   aria-label={t('open_filters')}
                 >
                   <span class="iwac-search__filters-trigger-icon" aria-hidden="true">
@@ -959,6 +1031,7 @@
             {response}
             {perPage}
             onPageChange={handlePageChange}
+            onPerPageChange={handlePerPageChange}
             activeFilters={filters}
             onFacetToggle={(f, v, c) => filterState.toggle(f, v, c)}
             {hideCountry}

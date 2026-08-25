@@ -173,6 +173,24 @@ class HeaderSearch {
       // Defer so a click on a row lands before the dropdown is hidden.
       window.setTimeout(() => this.close(), BLUR_CLOSE_MS);
     });
+    // A pointer press that isn't for the typeahead closes it immediately —
+    // including one on the panel's own dead space, which is where a reader
+    // aiming at the masthead or page content underneath actually lands. The
+    // blur handler alone waits BLUR_CLOSE_MS and doesn't fire at all for a
+    // press on a non-focusable region of the panel itself.
+    document.addEventListener(
+      'pointerdown',
+      (e) => {
+        if (!this.isOpen) return;
+        const target = e.target;
+        if (target instanceof Node && (this.input.contains(target) || target === this.input)) {
+          return;
+        }
+        if (target instanceof Element && target.closest('.iwac-header-suggest__item')) return;
+        this.close();
+      },
+      true,
+    );
     // Re-clamp to the viewport on resize/rotate while the panel is open.
     window.addEventListener(
       'resize',

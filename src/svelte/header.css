@@ -29,9 +29,13 @@
   background: var(--surface, #fdfcfb);
   border: 1px solid var(--border, #ced1d6);
   border-radius: var(--radius-md, 0.5rem);
-  box-shadow:
-    0 4px 12px rgba(0, 0, 0, 0.08),
-    0 1px 3px rgba(0, 0, 0, 0.05);
+  /* Published overlay shadow (dark-variant aware), not the hand-rolled neutral
+     black pair this used to carry in common with two other files. */
+  box-shadow: var(
+    --shadow-lg,
+    0 10px 15px -3px rgba(9, 11, 15, 0.12),
+    0 4px 6px -4px rgba(20, 22, 27, 0.06)
+  );
   max-height: min(24rem, 70vh);
   overflow: hidden auto;
   display: none;
