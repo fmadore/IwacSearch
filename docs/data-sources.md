@@ -266,9 +266,29 @@ as weak evidence.
 | entity collection | 94, 9, 96, 54, 244                   | (separate `iwac_index`) |    —     | `Mapper\IndexEntityMapper` |
 
 The entity collection (`iwac_index`) carries occurrence metrics — `frequency`,
-`first_year` / `last_year`, `country_ss` — accumulated by `EntityOccurrences`
-during the content pass (a reverse scan of the public content that references
-each entity), so it needs no second database pass.
+`authored_count`, `first_year` / `last_year`, `country_ss` — accumulated by
+`EntityOccurrences` during the content pass (a reverse scan of the public
+content that references each entity), so it needs no second database pass.
+
+**What counts as an occurrence.** `frequency` counts every ROLE an entity can
+play in a document: subject and spatial headings, authorship
+(`dcterms:creator`; `bibo:authorList` + `bibo:editorList` on references), and
+the publisher on references + audiovisual. One item counts once however many
+roles it plays there, so it is a document count. This mirrors
+`FREQUENCY_SOURCE_FIELDS` in IWAC-Hugging-Face's `index/upload_index_hf.py`,
+which defines the published `index` subset and what the IWAC MCP serves — the
+two figures are meant to agree, and a divergence is a bug in this repo.
+
+It was one, from v2.0.0 to v3.17.0: the HF→MySQL migration narrowed the count
+to subject + spatial while the code kept claiming HF parity. ~3,045 authority
+records — every newspaper and YouTube channel among them — rendered "0
+mentions" on the search page, in one case directly above the four articles the
+person had signed. `dcterms:contributor` is the one link deliberately left
+out: on this archive it holds the curator, not an author.
+
+`authored_count` is a **breakdown** of `frequency`, not an addition to it —
+the signed subset, so a card can distinguish being written about from having
+written. Publishers are excluded from it.
 
 Adding a content subset = drop a `MyMapper extends AbstractMapper` declaring
 its `classIds()` + `readTerms()`, and register it in

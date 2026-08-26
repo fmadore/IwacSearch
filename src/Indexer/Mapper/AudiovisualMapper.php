@@ -95,7 +95,10 @@ final class AudiovisualMapper extends AbstractMapper
                 $this->countries->forPlaces($values->displays('dcterms:spatial'))
             );
         }
-        $this->addAuthorityEntities($doc, $values);
+        // countPublisher: the producing channel is an occurrence here (HF
+        // counts it), which is what gives a YouTube channel a real figure
+        // instead of the 0 it showed while only subject/spatial counted.
+        $this->addAuthorityEntities($doc, $values, ['dcterms:creator'], true);
         $this->addDateFields($doc, $values);
         $this->addDescription($doc, $values);
         // Records with a transcript get a real ocr_text + has_fulltext; the

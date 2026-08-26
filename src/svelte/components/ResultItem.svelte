@@ -283,6 +283,9 @@
                 <span class="iwac-card__mentions-label">{cardData.mentionsWord}</span>
               </span>
             {/if}
+            {#if cardData.authoredCount != null}
+              <span class="iwac-card__authored">{cardData.authoredLabel}</span>
+            {/if}
             {#if cardData.mentionsSeries.length >= 2}
               <span
                 class="iwac-card__spark"
@@ -828,6 +831,14 @@
   .iwac-card__mentions-label {
     font-size: var(--text-xs, 0.8125rem);
     color: var(--muted, #66696e);
+  }
+  /* Authorship breakdown ("dont 8 signés"). Deliberately in the LABEL
+     register, not the numeral one: it qualifies the count beside it rather
+     than competing with it, so it gets no display figure of its own. */
+  .iwac-card__authored {
+    font-size: var(--text-xs, 0.8125rem);
+    color: var(--muted, #66696e);
+    font-style: italic;
   }
   .iwac-card__spark {
     display: inline-flex;

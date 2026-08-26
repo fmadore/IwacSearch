@@ -97,8 +97,13 @@ const STRINGS: Record<Locale, Record<string, string>> = {
     sentiment: 'Sentiment',
     mention_one: '{n} mention',
     mention_other: '{n} mentions',
+    // Ventilation du compte ci-dessus : « dont 8 signés » — l'entité est
+    // l'AUTEUR de ces documents, elle n'y est pas seulement citée.
+    authored_one: 'dont {n} signé',
+    authored_other: 'dont {n} signés',
     sort_most_mentioned: 'Plus mentionné',
     sort_least_mentioned: 'Moins mentionné',
+    sort_most_authored: 'Plus signé',
     sort_az: 'A–Z',
     sort_most_recent: 'Plus récent',
     cite_eds: 'dir.',
@@ -229,8 +234,13 @@ const STRINGS: Record<Locale, Record<string, string>> = {
     sentiment: 'Sentiment',
     mention_one: '{n} mention',
     mention_other: '{n} mentions',
+    // Breakdown of the count above: "8 as author" — the entity WROTE these,
+    // it is not merely cited in them.
+    authored_one: '{n} as author',
+    authored_other: '{n} as author',
     sort_most_mentioned: 'Most mentioned',
     sort_least_mentioned: 'Least mentioned',
+    sort_most_authored: 'Most authored',
     sort_az: 'A–Z',
     sort_most_recent: 'Most recent',
     cite_eds: 'eds.',
@@ -613,6 +623,10 @@ export function sortOptions(
     return [
       { value: 'frequency:desc', label: translate(locale, 'sort_most_mentioned') },
       { value: 'frequency:asc', label: translate(locale, 'sort_least_mentioned') },
+      // "Most authored" — the question frequency:desc cannot answer, since it
+      // ranks by every role at once. Entities that signed nothing sort to the
+      // bottom on a 0, which is what the field stores for them.
+      { value: 'authored_count:desc', label: translate(locale, 'sort_most_authored') },
       { value: 'title:asc', label: translate(locale, 'sort_az') },
       { value: 'date:desc', label: translate(locale, 'sort_most_recent') },
     ];

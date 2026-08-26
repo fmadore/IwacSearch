@@ -35,6 +35,27 @@ abstract class AbstractMapper implements MapperInterface
         'fabio:hasURL',
     ];
 
+    /**
+     * Every property term that can carry an AUTHORITY LINK on a content row —
+     * the subject headings plus the non-subject occurrence roles (authorship,
+     * publisher). Individual mappers resolve subsets of this; the incremental
+     * indexer preloads the whole list so a mapper lookup can never miss.
+     *
+     * Shared deliberately. When these were two independent lists, the
+     * incremental preload stayed on subject+spatial after the mappers grew to
+     * resolve authorship — and because resolveAuthorIds() skips ids it has
+     * not loaded, the failure mode was a silently incomplete document rather
+     * than an error. Adding a role means adding it HERE.
+     */
+    public const ENTITY_LINK_TERMS = [
+        'dcterms:subject',
+        'dcterms:spatial',
+        'dcterms:creator',
+        'bibo:authorList',
+        'bibo:editorList',
+        'dcterms:publisher',
+    ];
+
     protected const BODY_TERMS = ['bibo:content'];
     protected const DESCRIPTION_TERMS = [
         'bibo:shortDescription',
@@ -280,10 +301,23 @@ abstract class AbstractMapper implements MapperInterface
      * persons_ss / places_ss / … buckets (+ entity_ids + alias FTS) via the
      * class-keyed EntityAuthority.
      *
+     * Also resolves AUTHORSHIP into the separate `author_entity_ids` list.
+     * `$authorTerms` is which properties carry it: `dcterms:creator` for the
+     * content subsets, `bibo:authorList` + `bibo:editorList` for references
+     * (which catalogue authorship there, not on dcterms:creator).
+     *
+     * `$countPublisher` adds the linked `dcterms:publisher` as an occurrence
+     * role — true on references and audiovisual only, matching HF.
+     *
      * @param array<string, mixed> $doc
+     * @param list<string> $authorTerms
      */
-    protected function addAuthorityEntities(array &$doc, PropertyValues $values): void
-    {
+    protected function addAuthorityEntities(
+        array &$doc,
+        PropertyValues $values,
+        array $authorTerms = ['dcterms:creator'],
+        bool $countPublisher = false
+    ): void {
         $ids = array_merge(
             $values->linkedIds('dcterms:subject'),
             $values->linkedIds('dcterms:spatial'),
@@ -298,6 +332,33 @@ abstract class AbstractMapper implements MapperInterface
         // list, regardless of which entity class it resolves to (persons,
         // organisations and topics together). dcterms:spatial stays out.
         $this->maybeAddList($doc, 'subjects_ss', $values->displays('dcterms:subject'));
+
+        // AUTHORSHIP → its own id list: counted as an occurrence, never
+        // added to the subject facet buckets above.
+        // `dcterms:contributor` is deliberately absent from the default terms:
+        // on this archive it holds the CURATOR, not an author (it points at
+        // the same person on every article), so counting it would credit one
+        // record with authoring the entire collection.
+        $authorIds = [];
+        foreach ($authorTerms as $term) {
+            $authorIds = array_merge($authorIds, $values->linkedIds($term));
+        }
+        $resolved = $this->authority->resolveAuthorIds($authorIds);
+        if ($resolved !== []) {
+            $doc['author_entity_ids'] = $resolved;
+        }
+
+        // The publisher as an OCCURRENCE, on the two subsets where the HF
+        // pipeline counts it (references, audiovisual — see the note in
+        // EntityOccurrences). Off elsewhere so the figures keep matching the
+        // published `index` subset; widening it to articles would give every
+        // newspaper a five-figure count that Hugging Face does not report.
+        if ($countPublisher) {
+            $publisherIds = $this->authority->resolveAuthorIds($values->linkedIds('dcterms:publisher'));
+            if ($publisherIds !== []) {
+                $doc['publisher_entity_ids'] = $publisherIds;
+            }
+        }
     }
 
     /**

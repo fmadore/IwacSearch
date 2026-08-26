@@ -41,6 +41,85 @@ final class EntityPipelineTest extends TestCase
         self::assertSame(0, $occ->aggregate(1)['frequency']);
     }
 
+    /**
+     * The regression this suite existed to miss. Between v2.0.0 and v3.17.0
+     * frequency counted subject/spatial ONLY, so an author-only authority
+     * record rendered "0 mentions" on the search page directly above its own
+     * signed articles — against a frequency of 8 for the same person on
+     * Hugging Face, whose FREQUENCY_SOURCE_FIELDS has always counted author,
+     * editor and publisher. ~3,045 entities were affected.
+     */
+    public function testAuthorshipAndPublisherRolesCountTowardFrequency(): void
+    {
+        $occ = new EntityOccurrences();
+        // Entity 7 only ever signs articles; entity 9 only ever publishes.
+        $occ->record(['is_public' => true, 'author_entity_ids' => [7], 'pub_year' => 2013]);
+        $occ->record(['is_public' => true, 'publisher_entity_ids' => [9], 'pub_year' => 2013]);
+
+        self::assertSame(1, $occ->aggregate(7)['frequency'], 'a byline is an occurrence');
+        self::assertSame(1, $occ->aggregate(9)['frequency'], 'a publisher is an occurrence');
+    }
+
+    public function testOneDocumentCountsOnceHoweverManyRolesTheEntityPlayed(): void
+    {
+        // Otherwise frequency mixes two quantities — how many documents
+        // mention the entity, and in how many fields — and inflates only the
+        // multi-role entities, which makes entities incomparable. Same
+        // dedupe the HF _accumulate_term_stats applies.
+        $occ = new EntityOccurrences();
+        $occ->record([
+            'is_public'            => true,
+            'entity_ids'           => [5],
+            'author_entity_ids'    => [5],
+            'publisher_entity_ids' => [5],
+            'pub_year'             => 2013,
+        ]);
+
+        self::assertSame(1, $occ->aggregate(5)['frequency']);
+    }
+
+    public function testAuthoredCountBreaksDownFrequencyWithoutInflatingIt(): void
+    {
+        $occ = new EntityOccurrences();
+        // Written about twice, signed once.
+        $occ->record(['is_public' => true, 'entity_ids' => [3], 'pub_year' => 1994]);
+        $occ->record(['is_public' => true, 'entity_ids' => [3], 'pub_year' => 1995]);
+        $occ->record(['is_public' => true, 'author_entity_ids' => [3], 'pub_year' => 1996]);
+
+        $agg = $occ->aggregate(3);
+        self::assertSame(3, $agg['frequency'], 'all three documents count');
+        self::assertSame(1, $agg['authored_count'], 'only the signed one is authorship');
+    }
+
+    public function testPublisherRoleIsNotCountedAsAuthorship(): void
+    {
+        // A newspaper does not write its articles.
+        $occ = new EntityOccurrences();
+        $occ->record(['is_public' => true, 'publisher_entity_ids' => [9], 'pub_year' => 2013]);
+
+        self::assertSame(0, $occ->aggregate(9)['authored_count']);
+    }
+
+    public function testAuthorOnlyEntityStillGetsItsYearSpanAndCountries(): void
+    {
+        // aggregate() early-returns for an entity with no subject/spatial
+        // occurrence; an author-only record must not fall into that hole and
+        // lose the eyebrow date range the card renders.
+        $occ = new EntityOccurrences();
+        $occ->record([
+            'is_public'         => true,
+            'author_entity_ids' => [7],
+            'pub_year'          => 2013,
+            'country_ss'        => ['Burkina Faso'],
+        ]);
+        $occ->record(['is_public' => true, 'author_entity_ids' => [7], 'pub_year' => 2021]);
+
+        $agg = $occ->aggregate(7);
+        self::assertSame(2013, $agg['first_year']);
+        self::assertSame(2021, $agg['last_year']);
+        self::assertSame(['Burkina Faso'], $agg['countries']);
+    }
+
     public function testFirstAndLastYearSpanTheDatedOccurrences(): void
     {
         $occ = new EntityOccurrences();

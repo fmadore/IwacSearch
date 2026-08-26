@@ -5,6 +5,7 @@ namespace IwacSearch\Tests\Indexer;
 
 use IwacSearch\Indexer\CountryResolver;
 use IwacSearch\Indexer\EntityAuthority;
+use IwacSearch\Indexer\Mapper\AbstractMapper;
 use IwacSearch\Indexer\Mapper\MapperRegistry;
 use IwacSearch\Indexer\PropertyValues;
 use IwacSearch\IwacInstance;
@@ -146,6 +147,26 @@ final class MapperTest extends TestCase
         self::assertContains('bibo:content', $terms);
         self::assertContains('dcterms:description', $terms);
         self::assertContains('dcterms:tableOfContents', $terms);
+    }
+
+    public function testEveryEntityLinkTermIsActuallyLoadedFromTheDatabase(): void
+    {
+        // IncrementalIndexer preloads the authority targets of
+        // ENTITY_LINK_TERMS, reading them off a PropertyValues built with
+        // allReadTerms(). A term missing from that union yields no rows, so
+        // the preload silently skips it, resolveAuthorIds() then drops the
+        // ids it never loaded, and the document is written with a role
+        // missing — no error anywhere. Superset here, or nothing catches it.
+        $terms = $this->registry->allReadTerms();
+
+        foreach (AbstractMapper::ENTITY_LINK_TERMS as $term) {
+            self::assertContains(
+                $term,
+                $terms,
+                "ENTITY_LINK_TERMS declares {$term}, but no mapper reads it — the "
+                . 'incremental preload would silently resolve nothing for it.'
+            );
+        }
     }
 
     // ── Identity / base fields ───────────────────────────────────────────

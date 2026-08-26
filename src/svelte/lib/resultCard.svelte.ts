@@ -101,6 +101,21 @@ export function createResultCard(input: () => { hit: IwacHit; hideCountry: boole
   const mentionsWord = $derived(
     frequency != null ? t(frequency === 1 ? 'mention_one' : 'mention_other', { n: '' }).trim() : '',
   );
+  // "dont 8 signés" — the authorship breakdown of the mention count. Shown
+  // only when the entity actually signed something, so the overwhelming
+  // majority of entities (places, subjects, people only written about) keep
+  // the card exactly as it was. Absent field → no line, so a collection built
+  // before iwac_index_v4 degrades to the plain count.
+  const authoredCount = $derived(
+    typeof doc.authored_count === 'number' && doc.authored_count > 0 ? doc.authored_count : null,
+  );
+  const authoredLabel = $derived(
+    authoredCount != null
+      ? t(authoredCount === 1 ? 'authored_one' : 'authored_other', {
+          n: authoredCount.toLocaleString(),
+        })
+      : '',
+  );
   // Per-year mentions series for the sparkline. Empty until the entity
   // collection is rebuilt with mentions_by_year_s, so the card simply omits
   // the sparkline when the data isn't there.
@@ -201,6 +216,12 @@ export function createResultCard(input: () => { hit: IwacHit; hideCountry: boole
     },
     get mentionsWord() {
       return mentionsWord;
+    },
+    get authoredCount() {
+      return authoredCount;
+    },
+    get authoredLabel() {
+      return authoredLabel;
     },
     get mentionsSeries() {
       return mentionsSeries;

@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace IwacSearch\Indexer;
 
+use IwacSearch\Indexer\Mapper\AbstractMapper;
 use IwacSearch\Indexer\Mapper\MapperRegistry;
 use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
@@ -234,17 +235,28 @@ final class IncrementalIndexer
     }
 
     /**
-     * The authority ids one content row links to — the same two terms
+     * The authority ids one content row links to — EVERY term
      * AbstractMapper::addAuthorityEntities() resolves, so preloading these
      * means every mapper lookup hits the cache.
+     *
+     * The list must stay a superset of what the mappers read. An id missing
+     * here is not an error anywhere: EntityAuthority::resolveAuthorIds()
+     * skips ids it has not loaded, so the row would simply be written with
+     * its authorship silently dropped. That is exactly how this list fell
+     * behind once already — it covered only subject + spatial while the
+     * mappers had grown to resolve authorship and publisher too.
+     *
+     * Cheap to over-fetch: the ids are unioned across the batch and loaded in
+     * one round trip, and non-authority targets are ignored on arrival.
      *
      * @return list<int>
      */
     private function linkedEntityIds(PropertyValues $values): array
     {
-        return array_merge(
-            $values->linkedIds('dcterms:subject'),
-            $values->linkedIds('dcterms:spatial'),
-        );
+        $ids = [];
+        foreach (AbstractMapper::ENTITY_LINK_TERMS as $term) {
+            $ids[] = $values->linkedIds($term);
+        }
+        return array_merge(...$ids);
     }
 }

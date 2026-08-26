@@ -102,7 +102,10 @@ final class ReferenceMapper extends AbstractMapper
         $this->maybeAdd($doc, 'doi',        $values->firstScalar('bibo:doi'));
 
         // ── Shared: authority entities + dates ──────────────────────────────
-        $this->addAuthorityEntities($doc, $values);
+        // Authorship overrides the default `dcterms:creator`: a reference
+        // carries its authors and editors on the bibo lists (see the class
+        // docblock), and BOTH count as having produced the work.
+        $this->addAuthorityEntities($doc, $values, ['bibo:authorList', 'bibo:editorList'], true);
         $this->addDateFields($doc, $values);
 
         return $doc;

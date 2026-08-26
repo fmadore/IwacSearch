@@ -25,8 +25,8 @@ final class IndexEntityMapper
      *   thumbnail:?string, is_public:bool
      * } $entity
      * @param array{
-     *   frequency:int, countries:list<string>, first_year:?int, last_year:?int,
-     *   mentions_by_year?:array<int,int>
+     *   frequency:int, authored_count?:int, countries:list<string>,
+     *   first_year:?int, last_year:?int, mentions_by_year?:array<int,int>
      * } $aggregate
      * @return array<string, mixed>|null  null = skip (no title / type)
      */
@@ -44,6 +44,11 @@ final class IndexEntityMapper
             'title_txt'     => $title,
             'entity_type_s' => $entity['type'],
             'frequency'     => $aggregate['frequency'] ?? 0,
+            // Signed works, counted apart from frequency — a byline is not a
+            // mention. Always emitted (including 0) so the card can tell
+            // "this entity wrote nothing" from an older snapshot that predates
+            // the field and omits it entirely.
+            'authored_count' => $aggregate['authored_count'] ?? 0,
             'is_public'     => $entity['is_public'],
             'omeka_url'     => SiteUrls::itemUrl($oid),
         ];

@@ -61,8 +61,18 @@
 #      (normalised from the French dcterms:type + dcterms:medium headings, so
 #      a visitor can tell web video from a deposited DVD without reading raw
 #      localised strings), duration_seconds (parsed from the ISO-8601
-#      dcterms:extent) and rights_s.)
-#   - Schema changes ⇒ bump the name (`iwac_v6` → `iwac_v7`), atomic-swap
+#      dcterms:extent) and rights_s.
+#      v7 → v8: `author_entity_ids` + `publisher_entity_ids` — the resolved
+#      AUTHORSHIP and PUBLISHER links, which until now were indexed only as
+#      display strings (creator_ss, newspaper_ss/channel_ss). Without the ids
+#      the entity collection could not count those roles, so `frequency`
+#      silently meant subject+spatial only from v2.0.0 on — against Hugging
+#      Face, whose FREQUENCY_SOURCE_FIELDS has always counted author, editor
+#      and publisher too. ~3,045 authority records rendered a false "0
+#      mentions" on the search page, including every newspaper and YouTube
+#      channel; Wanlé Gérard Coulibaly read 0 on the site and 8 on HF.
+#      Restores that parity — see the note in EntityOccurrences.)
+#   - Schema changes ⇒ bump the name (`iwac_v7` → `iwac_v8`), atomic-swap
 #     the alias. The browser only ever queries the alias, so swaps are
 #     zero-downtime.
 #
@@ -72,7 +82,7 @@
 # both the bulk reindex and the M4 incremental path. No Hugging Face.
 # country_ss is derived (newspaper→country / item-set). See docs/data-sources.md.
 
-name: iwac_v7
+name: iwac_v8
 
 # Global curation set linked to this collection. The set itself is created
 # (idempotently) by src/Indexer/CurationSync.php during the bulk reindex.
@@ -192,6 +202,21 @@ fields:
   # facet groups read as noise. dcterms:spatial deliberately NOT included.
   - { name: subjects_ss,       type: "string[]", facet: true, optional: true }
   - { name: entity_ids,        type: "int32[]",  facet: false, optional: true }  # for outbound links
+  # OCCURRENCE-ROLE links, kept apart from entity_ids because they are NOT
+  # subject headings and must never reach persons_ss/topics_ss. Both feed the
+  # entity collection's `frequency` (union, deduped per item — see
+  # EntityOccurrences), matching the HF `index` definition.
+  #
+  #   author_entity_ids    ← dcterms:creator; bibo:authorList + bibo:editorList
+  #                          on references. dcterms:contributor is EXCLUDED:
+  #                          on this archive it holds the curator, so counting
+  #                          it would credit one record with the whole corpus.
+  #                          Also feeds `authored_count` on its own.
+  #   publisher_entity_ids ← dcterms:publisher, on references + audiovisual
+  #                          only (HF's scoping — it is what gives a YouTube
+  #                          channel a real figure).
+  - { name: author_entity_ids,    type: "int32[]", facet: false, optional: true }
+  - { name: publisher_entity_ids, type: "int32[]", facet: false, optional: true }
 
   # Alternative spellings of every resolved entity, indexed for FTS only.
   # Examples: typing "RCI" finds docs about "Radio Côte d'Ivoire";

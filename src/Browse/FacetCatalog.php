@@ -142,6 +142,10 @@ final class FacetCatalog
     public const SORT_OPTIONS_ENTITY = [
         'frequency:desc' => 'Most mentioned',
         'frequency:asc'  => 'Least mentioned',
+        // frequency counts every role at once, so it cannot answer "who wrote
+        // the most" — authored_count can. Entities that signed nothing carry
+        // a 0 and sort to the bottom.
+        'authored_count:desc' => 'Most authored',
         'title:asc'      => 'Title (A–Z)',
         'date:desc'      => 'Newest first',
     ];

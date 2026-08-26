@@ -159,8 +159,20 @@ export interface IwacDoc {
   // ── Index/authority entity fields (entity collection only) ──
   /** Entity kind: "Personnes" | "Lieux" | "Organisations" | … (raw data value). */
   entity_type_s?: string;
-  /** Occurrence count — how many content items reference this entity. */
+  /**
+   * Occurrence count — how many content items reference this entity in ANY
+   * role: subject/spatial heading, author or editor, and (on references and
+   * audiovisual) publisher. One item counts once however many roles it played.
+   * Matches the `frequency` of the published Hugging Face `index` subset.
+   */
   frequency?: number;
+  /**
+   * How many of those items the entity SIGNED — a breakdown of `frequency`,
+   * not an addition to it. Lets the card distinguish being written about from
+   * having written. Absent on collections built before iwac_index_v4, in
+   * which case the card shows the mention count alone.
+   */
+  authored_count?: number;
   /** Mention span (years), shown as the entity card eyebrow. */
   first_year?: number;
   last_year?: number;
@@ -179,7 +191,7 @@ export interface IwacDoc {
    * Geopoint of an index entity, [lat, lng] (Typesense order — MapLibre
    * wants [lng, lat], swap before rendering). Set with has_coords=true when
    * the curated coordinates parsed; absent otherwise. Present only after
-   * the iwac_index_v3 rebuild.
+   * the iwac_index_v4 rebuild.
    */
   geo?: [number, number];
   has_coords?: boolean;

@@ -195,6 +195,41 @@ final class EntityAuthority
     }
 
     /**
+     * Resolve linked NON-SUBJECT role targets — authorship (dcterms:creator;
+     * bibo:authorList / bibo:editorList on references) and the publisher — to
+     * the flat id lists behind `author_entity_ids` / `publisher_entity_ids`.
+     *
+     * Deliberately NOT part of resolve(): a byline is not a subject heading.
+     * These must never reach the persons_ss / topics_ss FACETS, which answer
+     * "who is this document ABOUT" — folding writers in there would make every
+     * prolific journalist a top subject of the archive. They do, however,
+     * count toward the entity's `frequency`, which is a document count across
+     * all roles (see EntityOccurrences). Separate facets, one occurrence
+     * figure.
+     *
+     * Unlike resolve(), a null bucket is NOT a reason to skip: "Notices
+     * d'autorité" records are absent from the content facets but are still
+     * rows in the entity collection, so an authored count on them displays
+     * fine. The only filter is that the target IS a known authority record.
+     *
+     * @param  list<int> $linkedIds
+     * @return list<int>
+     */
+    public function resolveAuthorIds(array $linkedIds): array
+    {
+        if ($linkedIds === [] || !$this->built) {
+            return [];
+        }
+        $out = [];
+        foreach ($linkedIds as $id) {
+            if (isset($this->byId[$id])) {
+                $out[$id] = true;
+            }
+        }
+        return array_keys($out);
+    }
+
+    /**
      * Yield every authority record for the entity collection build.
      *
      * @return iterable<int, array{
