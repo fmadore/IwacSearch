@@ -58,6 +58,23 @@ Defaults are omitted (clean URL on a fresh `/search`). Pagination uses
 Page blocks intentionally skip URL sync — multiple block instances on
 one page would clobber each other.
 
+### The retired query form
+
+Before 3.0.0 the surface filtered with `facet[dcterms_type_ss][9]=Article de
+presse` and sorted with `sort_by` / `sort_order`. Those parameters mean nothing
+to the client, so such a URL used to render the bare shell and answer **200** —
+which to a crawler is a distinct page per permutation. Google indexed roughly
+1,300 of them, and they are still the bulk of the site's Search Console
+structured-data report.
+
+`RetiredQuery` now recognises `facet`, `sort_by`, `sort_order` and
+`resource_property` and answers **301** to `/search` on the same language site,
+collapsing the whole crawl space onto one URL. `page` is *not* part of that
+test — both surfaces use it. The old facet values are French `dcterms:type`
+labels and the current field holds slugs (`type_s: article`), so there is no
+faithful translation and the filters are dropped rather than guessed at; a `q=`
+is carried across, being the one thing the visitor actually typed.
+
 ## Semantic search
 
 Every search is hybrid: the `query_by` includes the `embedding` field

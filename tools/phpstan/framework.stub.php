@@ -162,6 +162,7 @@ namespace Laminas\ServiceManager\Factory {
 namespace Laminas\Http {
     class Response
     {
+        public const STATUS_CODE_301 = 301;
         public const STATUS_CODE_503 = 503;
 
         public function getHeaders()

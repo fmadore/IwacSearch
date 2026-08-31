@@ -6,6 +6,7 @@ namespace IwacSearch\Controller;
 use IwacSearch\Indexer\CurationSync;
 use IwacSearch\Search\InitialResponseRenderer;
 use IwacSearch\Search\PresetCatalog;
+use IwacSearch\Search\RetiredQuery;
 use IwacSearch\Search\SearchDefaults;
 use IwacSearch\Search\SurfaceBootstrap;
 use IwacSearch\Search\TypesenseSearchKeyProvider;
@@ -45,9 +46,19 @@ class SearchController extends AbstractActionController
      * GET /search — HTML shell. Emits the same root + state script the
      * page block uses, so the Svelte bundle treats both surfaces
      * identically.
+     *
+     * Requests still carrying the pre-3.0 `facet[…]` / `sort_by` query form are
+     * answered with a permanent redirect instead: they resolve to this same
+     * shell, so serving them 200 leaves every permutation looking like its own
+     * page to a crawler. See {@see RetiredQuery}.
      */
-    public function indexAction(): ViewModel
+    public function indexAction(): ViewModel|Response
     {
+        $retired = RetiredQuery::redirectFor($this->params()->fromQuery());
+        if ($retired !== null) {
+            return $this->redirectToSearch($retired)->setStatusCode(Response::STATUS_CODE_301);
+        }
+
         $bootstrap = $this->contentBootstrap('standalone');
 
         // SSR the first page of results + facets so the Svelte client
@@ -292,7 +303,20 @@ class SearchController extends AbstractActionController
         // land on the bare /search shell.
         $query = $preset?->redirectQuery ?? [];
 
+        return $this->redirectToSearch($query);
+    }
+
+    /**
+     * Redirect to /search on the current language site, keeping $query. The
+     * site-slug is null on the site-less root route, which has its own name.
+     *
+     * @param array<string,mixed> $query
+     */
+    private function redirectToSearch(array $query): Response
+    {
+        $siteSlug = $this->params()->fromRoute('site-slug');
         $route   = $siteSlug !== null ? 'site/iwac-search' : 'iwac-search';
+        $params  = $siteSlug !== null ? ['site-slug' => $siteSlug] : [];
         $options = $query === [] ? [] : ['query' => $query];
         return $this->redirect()->toRoute($route, $params, $options);
     }
