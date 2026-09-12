@@ -25,6 +25,13 @@ final class ChangeJournal
             . 'alias_name VARCHAR(190) NOT NULL PRIMARY KEY, collection_name VARCHAR(190) NULL) ENGINE=InnoDB');
     }
 
+    /** Read-only readiness probe; never create tables during a page or catalog write. */
+    public function assertInstalled(): void
+    {
+        $this->connection->executeQuery('SELECT id FROM iwac_search_change LIMIT 0');
+        $this->connection->executeQuery('SELECT alias_name FROM iwac_search_rollback LIMIT 0');
+    }
+
     /** @param list<int> $ids */
     public function append(array $ids): void
     {

@@ -52,6 +52,10 @@ $analytics = $analytics ?? ['available' => false, 'reason' => null, 'popular' =>
     <?php echo $translate('Trigger Typesense maintenance tasks without dropping into the docker container. Both actions dispatch as Omeka background jobs; track progress in the Jobs admin page.'); ?>
 </p>
 
+<?php if (!empty($queueError)): ?>
+    <p role="alert"><?php echo $escape($translate($queueError)); ?></p>
+<?php endif; ?>
+<fieldset<?php echo !empty($queueError) ? ' disabled' : ''; ?> style="border:0;padding:0;margin:0;min-width:0;">
 <?php $statuses = $statuses ?? []; ?>
 <section class="iwac-maintenance-status" style="margin-top:1.5rem;border:1px solid #ddd;border-radius:6px;padding:1rem 1.5rem;background:#fff;">
     <h3 style="margin-top:0;"><?php echo $translate('Index status'); ?></h3>
@@ -240,7 +244,11 @@ $analytics = $analytics ?? ['available' => false, 'reason' => null, 'popular' =>
 
 <section>
     <h2><?php echo $translate('Pending index changes'); ?></h2>
-    <p><?php echo $escape(sprintf($translate('%d queued changes. Oldest: %s'), $queue['pending'] ?? 0, $queue['oldest'] ?? '—')); ?></p>
+    <?php if ($queue !== null): ?>
+        <p><?php echo $escape(sprintf($translate('%d queued changes. Oldest: %s'), $queue['pending'], $queue['oldest'] ?? '—')); ?></p>
+    <?php else: ?>
+        <p><?php echo $translate('Queue status unavailable.'); ?></p>
+    <?php endif; ?>
     <?php foreach ([['form' => $retryForm, 'route' => 'retry-changes', 'label' => 'Retry pending changes'], ['form' => $pruneForm, 'route' => 'prune-collections', 'label' => 'Clean up old index generations']] as $action):
         $form = $action['form'];
         $form->setAttribute('action', $this->url('admin/iwac-search/maintenance-' . $action['route']));
@@ -252,3 +260,5 @@ $analytics = $analytics ?? ['available' => false, 'reason' => null, 'popular' =>
         <button type="submit"><?php echo $translate($action['label']); ?></button>
     <?php echo $this->form()->closeTag(); endforeach; ?>
 </section>
+
+</fieldset>

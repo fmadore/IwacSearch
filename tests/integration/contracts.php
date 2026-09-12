@@ -32,7 +32,20 @@ foreach (explode(';', file_get_contents($omeka . '/application/data/install/sche
     if (trim($sql) !== '') $db->executeStatement($sql);
 }
 $db->executeStatement('SET FOREIGN_KEY_CHECKS=0'); // Sparse fixtures retain the official column/index contracts.
+$dashboard = new class(journal: new ChangeJournal($db)) extends \IwacSearch\Controller\Admin\MaintenanceController {
+    public function getForm($name, $options = []) { return new \Laminas\Form\Form(); }
+};
+$missing = $dashboard->indexAction();
+check($missing->getVariable('queue') === null && str_contains($missing->getVariable('queueError'), 'upgrade IWAC Search'), 'dashboard survives missing journal with upgrade guidance');
 ChangeJournal::install($db);
+$db->executeStatement('DROP TABLE iwac_search_rollback');
+check($dashboard->indexAction()->getVariable('queueError') !== null, 'dashboard detects partial schema installation');
+ChangeJournal::install($db);
+$db->insert('iwac_search_change', ['item_id' => 999999]);
+ChangeJournal::install($db);
+check((new ChangeJournal($db))->status()['pending'] === 1, 'repeated schema repair preserves queued work');
+$db->executeStatement('DELETE FROM iwac_search_change');
+check($dashboard->indexAction()->getVariable('queueError') === null, 'dashboard recovers after schema installation');
 $db->insert('vocabulary', ['id' => 1, 'namespace_uri' => 'http://purl.org/dc/terms/', 'prefix' => 'dcterms', 'label' => 'DC']);
 $db->insert('vocabulary', ['id' => 2, 'namespace_uri' => 'http://purl.org/ontology/bibo/', 'prefix' => 'bibo', 'label' => 'BIBO']);
 foreach ([1 => [1, 'title'], 2 => [1, 'subject'], 3 => [1, 'abstract'], 4 => [2, 'content'], 5 => [1, 'alternative']] as $id => [$vocab, $name]) {

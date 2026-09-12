@@ -417,3 +417,7 @@ namespace Doctrine\DBAL {
         }
     }
 }
+
+namespace Doctrine\DBAL\Exception {
+    class TableNotFoundException extends \Exception {}
+}

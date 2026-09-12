@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace IwacSearch\Controller\Admin;
 
 use Closure;
+use Doctrine\DBAL\Exception\TableNotFoundException;
 use IwacSearch\Form\MaintenanceForm;
 use IwacSearch\Indexer\AnalyticsSync;
 use IwacSearch\Job\BulkReindex;
@@ -92,8 +93,19 @@ class MaintenanceController extends AbstractActionController
      */
     public function indexAction(): ViewModel
     {
+        $queue = null;
+        $queueError = null;
+        try {
+            $this->journal?->assertInstalled();
+            $queue = $this->journal?->status();
+        } catch (TableNotFoundException) {
+            $queueError = 'IWAC Search database setup is incomplete. Open Modules and upgrade IWAC Search. If no upgrade is offered, ask your administrator to run php cli/repair-schema.php from the IwacSearch module directory, then reload this page. Run a full reindex after recovery.';
+        } catch (Throwable) {
+            $queueError = 'IWAC Search could not read its indexing queue. Check the Omeka database connection and permissions before running maintenance.';
+        }
         return new ViewModel([
-            'queue' => $this->journal?->status(),
+            'queue' => $queue,
+            'queueError' => $queueError,
             'retryForm' => $this->getForm(MaintenanceForm::class),
             'pruneForm' => $this->getForm(MaintenanceForm::class),
             'reindexForm'         => $this->getForm(MaintenanceForm::class),
@@ -296,6 +308,13 @@ class MaintenanceController extends AbstractActionController
         $form->setData($request->getPost()->toArray());
         if (!$form->isValid()) {
             $this->messenger()->addError('Invalid form submission. Please reload the page and try again.');
+            return $this->redirect()->toRoute('admin/iwac-search/maintenance');
+        }
+
+        try {
+            $this->journal?->assertInstalled();
+        } catch (Throwable) {
+            $this->messenger()->addError('IWAC Search database setup is unavailable. Open the maintenance page for recovery instructions before retrying.');
             return $this->redirect()->toRoute('admin/iwac-search/maintenance');
         }
 

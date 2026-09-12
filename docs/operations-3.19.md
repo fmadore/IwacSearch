@@ -2,6 +2,12 @@
 
 This release implements the September module review. It requires an Omeka module upgrade and a full reindex to apply the metadata projection to existing documents. The schema stays at `iwac_v8`; the mapped document fields have not changed.
 
+## Missing-table recovery (3.19.1)
+
+If the dashboard reports that iwac_search_change or iwac_search_rollback does not exist, complete **Modules → IWAC Search → Upgrade**. Copying new module files alone does not run the database migration. Version 3.19.1 keeps the dashboard accessible with recovery guidance and blocks maintenance dispatch while either table is missing.
+
+If Omeka already marks the module upgraded, run **php cli/repair-schema.php** from the module directory inside the PHP container. It uses the Omeka database configuration, creates only missing module tables and preserves existing rows. No Typesense key or connection is required. Complete any remaining module upgrade and run a full reindex afterward. Do not uninstall the module to repair this condition.
+
 ## Deployment
 
 1. Install the release files and run `composer install --no-dev --optimize-autoloader` from the committed lockfile. It resolves the existing supported dependency lines against PHP 8.2. New major releases that require a higher PHP floor are deliberately excluded. No Laminas or PSR package is a direct module requirement.
