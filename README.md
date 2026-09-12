@@ -108,17 +108,9 @@ reasoning behind each of those choices: [docs/search-behaviour.md](docs/search-b
 docker compose exec php php /var/www/html/modules/IwacSearch/cli/reindex.php
 ```
 
-Builds a versioned collection (`iwac_v7_<UTC timestamp>`), reads content
-directly from the Omeka MySQL database, batch-imports into Typesense, then
-atomic-swaps the `iwac_current` alias. Live search keeps serving the
-previous collection until the swap completes, so a failed reindex never
-affects production.
+Builds unique content and entity generations from Omeka, replays the durable change journal before cutover, verifies source/index counts, and switches both aliases under shared locks. Previous generations are retained for rollback; a failed replay prevents promotion. Changes and deletion tombstones are consumed by background jobs.
 
-Right after the swap it replays every item created or edited since the build
-began (`catch_up` in the stats output) — those saves went through the alias
-into the outgoing collection and would otherwise be reverted. The one case
-still not covered is an item DELETED mid-build after it was already
-streamed; its stale document survives until the next reindex.
+**Upgrading to 3.19:** run the module upgrade and full reindex, rotate older wide-scope parent keys, and schedule the queue recovery command. See [the operations guide](docs/operations-3.19.md) for the migration sequence, consistency limits, retry/cleanup commands, integration tests, and relevance benchmark.
 
 Same work is available from the maintenance page's reindex button and from
 `omeka-cli discovery:reindex`. Why the indexer reads MySQL rather than the

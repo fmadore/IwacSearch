@@ -219,7 +219,16 @@
   // malformed bootstraps that would otherwise crash ResultsList on its
   // first render with `Cannot read properties of undefined (reading 'length')`.
   // svelte-ignore state_referenced_locally
-  const initialResponse = initial.q === '' ? deriveInitialResponse(bootstrap) : null;
+  const initialResponse =
+    Object.keys(bootstrap.initial_filters ?? {}).length === 0 &&
+    initial.q === '' &&
+    initial.page === 1 &&
+    initial.sort === defaultSort &&
+    Object.keys(initial.filters).length === 0 &&
+    initial.yearRange === null &&
+    initial.perPage === null
+      ? deriveInitialResponse(bootstrap)
+      : null;
   let response = $state<IwacSearchResponse | null>(initialResponse);
   let isLoading = $state(false);
   let error = $state<string | null>(null);
@@ -229,6 +238,8 @@
   // stale — see the search effect. Empty until the first response resolves,
   // and on any surface without a facet panel.
   let yearDistribution = $state<YearBucket[]>([]);
+  let yearsUnavailable = $state(false);
+  let retryVersion = $state(0);
   // Query+filters signature the current bars were computed for. Plain `let`:
   // the search effect reads it without wanting a reactive dependency.
   let lastHistogramKey: string | null = null;
@@ -373,8 +384,26 @@
     // First run with a fresh SSR snapshot that matches the current
     // state? Don't refetch — we already have the right data. Any
     // subsequent state change falls through to the normal fetch.
+    void retryVersion;
     if (skipNextFetch) {
       skipNextFetch = false;
+      if (bootstrap.mode === 'full') {
+        let cancelled = false;
+        client
+          .yearDistribution(q)
+          .then((years) => {
+            if (!cancelled) {
+              yearDistribution = years;
+              lastHistogramKey = `${q}\u0000${JSON.stringify(f)}`;
+            }
+          })
+          .catch(() => {
+            if (!cancelled) yearsUnavailable = true;
+          });
+        return () => {
+          cancelled = true;
+        };
+      }
       return;
     }
 
@@ -399,7 +428,11 @@
         facetBy,
         withYearDistribution: needHistogram,
       })
-      .then(({ response: r, years }) => {
+      .then(({ response: r, years, yearsUnavailable: unavailable }) => {
+        if (needHistogram) {
+          yearsUnavailable = unavailable ?? false;
+          if (unavailable) yearDistribution = [];
+        }
         response = r;
         // The typeahead is deliberately NOT touched here — neither closed nor
         // re-armed. Search-as-you-type means results land while the reader is
@@ -417,7 +450,19 @@
           // list, so it takes the zero-result path on BOTH counts: it never
           // enters the recent-searches history, and it gets the spelling
           // suggestions that used to be unreachable behind it.
-          const foundNothing = r.found === 0 || isSemanticOnlyResponse(r, q);
+          const semanticOnly = isSemanticOnlyResponse(r, q);
+          window.dispatchEvent(
+            new CustomEvent('iwac-search:outcome', {
+              detail: {
+                query: q,
+                collection: bootstrap.collection_alias,
+                found: r.found,
+                keywordFound: r.keyword_found,
+                semanticOnly,
+              },
+            }),
+          );
+          const foundNothing = r.found === 0 || semanticOnly;
           if (!foundNothing) {
             // Only fruitful queries enter the recent-searches history, so
             // typo dead-ends don't pollute the dropdown.
@@ -462,10 +507,7 @@
   // matching the current query + filters (year range included — unlike the
   // histogram, the map should reflect the selected window).
   //
-  // Sequence-guarded: fetchForMap is a multi-page loop with no
-  // AbortController, so without the guard two quick filter toggles could
-  // let the slower (stale) loop finish last and overwrite the newer
-  // markers.
+  // One abort signal cancels the complete loop; the ticket also guards cleanup.
   const mapSeq = new SeqGuard();
   $effect(() => {
     if (view.mode !== 'map') return;
@@ -473,20 +515,25 @@
     const f = filters;
     const y = yearRange;
     const ticket = mapSeq.start();
+    const controller = new AbortController();
     mapLoading = true;
     client
-      .fetchForMap({ q, activeFilters: f, yearRange: y })
+      .fetchForMap({ q, activeFilters: f, yearRange: y, signal: controller.signal })
       .then((docs) => {
         if (mapSeq.isStale(ticket)) return; // superseded — newer fetch in flight
         mapDocs = docs;
         mapLoading = false;
       })
       .catch((e: unknown) => {
-        if (mapSeq.isStale(ticket)) return;
+        if (mapSeq.isStale(ticket) || isAbortError(e)) return;
         console.warn('[iwac-search] map fetch failed', e);
         mapDocs = [];
         mapLoading = false;
       });
+    return () => {
+      controller.abort();
+      mapSeq.start();
+    };
   });
 
   /** The debounce fired: this is the search commit. `typedQuery` already
@@ -803,6 +850,17 @@
     </form>
   {/if}
 
+  {#if yearsUnavailable}
+    <p role="status">
+      {t('histogram_unavailable')}
+      <button
+        type="button"
+        onclick={() => {
+          retryVersion += 1;
+        }}>{t('retry_search')}</button
+      >
+    </p>
+  {/if}
   {#if error}
     <div class="iwac-search__error" role="alert">
       <strong>{t('search_unavailable')}</strong>

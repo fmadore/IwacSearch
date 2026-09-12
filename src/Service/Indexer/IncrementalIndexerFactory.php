@@ -20,8 +20,7 @@ use Psr\Container\ContainerInterface;
  * re-map a single item on save: a DBAL-backed source reader (Omeka\Connection
  * from the container), the shared entity-authority cache, the country
  * resolver, and the mapper registry. The TypesenseClient stays lazy so a
- * down Typesense never blocks Omeka startup — failures surface at event time
- * and are swallowed inside the indexer's try/catch.
+ * down Typesense never blocks Omeka startup — failures propagate to the job and leave journal rows pending.
  */
 final class IncrementalIndexerFactory implements FactoryInterface
 {
@@ -61,6 +60,7 @@ final class IncrementalIndexerFactory implements FactoryInterface
             mappers:         $registry,
             authority:       $authority,
             collectionAlias: $alias,
+            indexAlias:      (string) ($config['index_collection_alias'] ?? 'iwac_index_current'),
             logger:          $logger
         );
     }

@@ -84,7 +84,7 @@ final class SchemaLoaderTest extends TestCase
         $base = (new SchemaLoader(self::CONTENT))->load()['name'];
 
         self::assertMatchesRegularExpression(
-            '/^' . preg_quote($base, '/') . '_\d{8}_\d{6}$/',
+            '/^' . preg_quote($base, '/') . '_\d{8}_\d{6}_[a-f0-9]{12}$/',
             $schema['name']
         );
         // The orphan sweep matches on `<base>_`, so the separator matters.

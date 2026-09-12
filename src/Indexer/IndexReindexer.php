@@ -18,7 +18,7 @@ use Throwable;
  * the shared authority and the occurrences) on the same job.
  *
  * Same safety property as Reindexer: fresh timestamped collection, atomic
- * alias swap only on success, previous collection dropped last.
+ * alias swap only on success, previous collection retained.
  */
 final class IndexReindexer
 {
@@ -40,7 +40,7 @@ final class IndexReindexer
     /**
      * @return array{collection: string, alias: string, indexed: int, errors: int, duration_seconds: float}
      */
-    public function run(): array
+    public function run(bool $promote = true): array
     {
         $start = microtime(true);
 
@@ -67,10 +67,13 @@ final class IndexReindexer
             throw $e;
         }
 
-        // Guarded swap: refuses (keeping the previous collection live) when the
-        // import was empty or mostly errors — e.g. Reindexer::run() never ran,
-        // leaving the authority empty — then sweeps stale iwac_index_vN_*.
-        $this->ops->promote($alias, $newName, $schema['_base_name'], $previous, $indexed, $errors);
+        // Every rejection blocks promotion; the orchestrator can defer the swap.
+        if ($errors > 0) {
+            throw new \RuntimeException('Reindex import rejected documents; refusing promotion.');
+        }
+        if ($promote) {
+            $this->ops->promote($alias, $newName, $schema['_base_name'], $previous, $indexed, $errors);
+        }
 
         return [
             'collection'       => $newName,

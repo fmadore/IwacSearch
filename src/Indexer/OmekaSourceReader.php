@@ -40,6 +40,8 @@ final class OmekaSourceReader
 {
     /** Items read per keyset page. */
     private const PAGE = 500;
+    /** @var array<int, string>|null */
+    private ?array $propertyTerms = null;
 
     public function __construct(
         private readonly Connection $connection,
@@ -104,7 +106,7 @@ final class OmekaSourceReader
             $ids = array_map(static fn(array $r): int => (int) $r['id'], $rows);
             $lastId = (int) end($ids);
 
-            $valuesByItem = $this->loadValues($ids, $terms);
+            $valuesByItem = $this->loadValues($ids, array_values(array_unique([...$terms, 'dcterms:title'])));
             $sets = $this->loadItemSets($ids);
             $thumbs = $withThumbnail ? $this->mediaThumbnails($ids) : [];
 
@@ -113,7 +115,7 @@ final class OmekaSourceReader
                 yield [
                     'item' => [
                         'id'        => $id,
-                        'title'     => (string) ($r['title'] ?? ''),
+                        'title'     => PropertyValues::fromRows($valuesByItem[$id] ?? [])->publicMetadata()->firstDisplay('dcterms:title'),
                         'is_public' => (bool) $r['is_public'],
                         'class'     => (int) $r['resource_class_id'],
                         'item_sets' => $sets[$id] ?? [],
@@ -155,7 +157,7 @@ final class OmekaSourceReader
         }
 
         $found = array_map(static fn(array $r): int => (int) $r['id'], $rows);
-        $valuesByItem = $this->loadValues($found, $terms);
+        $valuesByItem = $this->loadValues($found, array_values(array_unique([...$terms, 'dcterms:title'])));
         $sets = $this->loadItemSets($found);
         $thumbs = $this->mediaThumbnails($found);
 
@@ -165,7 +167,7 @@ final class OmekaSourceReader
             $out[$id] = [
                 'item' => [
                     'id'        => $id,
-                    'title'     => (string) ($r['title'] ?? ''),
+                    'title'     => PropertyValues::fromRows($valuesByItem[$id] ?? [])->publicMetadata()->firstDisplay('dcterms:title'),
                     'is_public' => (bool) $r['is_public'],
                     'class'     => (int) $r['resource_class_id'],
                     'item_sets' => $sets[$id] ?? [],
@@ -175,45 +177,6 @@ final class OmekaSourceReader
             ];
         }
         return $out;
-    }
-
-    /**
-     * The DATABASE's current timestamp, as a `Y-m-d H:i:s` string.
-     *
-     * Deliberately not PHP's `date()`: the watermark it produces is compared
-     * against `resource.modified`, which MySQL writes with its own clock. In
-     * a container split (php + mysql) those clocks can disagree by seconds,
-     * and a watermark that runs ahead of the database silently drops the very
-     * edits it exists to catch.
-     */
-    public function databaseNow(): string
-    {
-        return (string) $this->connection->executeQuery('SELECT NOW()')->fetchOne();
-    }
-
-    /**
-     * Ids of items created or modified at/after $since — the edits a bulk
-     * reindex has to replay because they landed in the outgoing collection
-     * while the new one was being built.
-     *
-     * No class filter on purpose: an item whose class was edited AWAY from a
-     * content class during the build must come back too, so the caller can
-     * delete the document it left behind. `modified` is NULL until a resource
-     * is first edited, hence the `created` leg.
-     *
-     * @return list<int> ascending
-     */
-    public function idsModifiedSince(string $since): array
-    {
-        $rows = $this->connection->executeQuery(
-            'SELECT id FROM resource'
-            . ' WHERE resource_type = :rt'
-            . ' AND (modified >= :since OR created >= :since)'
-            . ' ORDER BY id ASC',
-            ['rt' => Item::class, 'since' => $since],
-        )->fetchFirstColumn();
-
-        return array_map('intval', $rows);
     }
 
     /**
@@ -235,25 +198,29 @@ final class OmekaSourceReader
             return [];
         }
 
-        $sql = "SELECT v.resource_id AS rid, CONCAT(vo.prefix, ':', p.local_name) AS term,"
-            . ' v.value_resource_id AS vrid, v.value AS val, v.uri AS turi, v.is_public AS vpub,'
-            . ' t.title AS ttitle'
-            . ' FROM value v'
-            . ' JOIN property p ON v.property_id = p.id'
-            . ' JOIN vocabulary vo ON p.vocabulary_id = vo.id'
-            . ' LEFT JOIN resource t ON v.value_resource_id = t.id'
-            . ' WHERE v.resource_id IN (:ids)'
-            . " AND CONCAT(vo.prefix, ':', p.local_name) IN (:terms)"
-            // Preserve insertion order within a property (Omeka value id order).
+        if ($this->propertyTerms === null) {
+            $this->propertyTerms = [];
+            foreach ($this->connection->executeQuery("SELECT p.id, CONCAT(vo.prefix, ':', p.local_name) AS term FROM property p JOIN vocabulary vo ON p.vocabulary_id = vo.id")->fetchAllAssociative() as $property) {
+                $this->propertyTerms[(int) $property['id']] = (string) $property['term'];
+            }
+        }
+        $propertyIds = array_keys(array_intersect($this->propertyTerms, $terms));
+        if ($propertyIds === []) return [];
+        $titleId = array_search('dcterms:title', $this->propertyTerms, true);
+        $sql = 'SELECT v.resource_id AS rid, v.property_id AS pid,'
+            . ' v.value_resource_id AS vrid, v.value AS val, v.uri AS turi,'
+            . ' (v.is_public = 1 AND (v.value_resource_id IS NULL OR t.is_public = 1)) AS vpub,'
+            . ' (SELECT tv.value FROM `value` tv WHERE tv.resource_id = t.id AND tv.property_id = :title_id AND tv.is_public = 1 ORDER BY tv.id LIMIT 1) AS ttitle'
+            . ' FROM `value` v LEFT JOIN resource t ON v.value_resource_id = t.id'
+            . ' WHERE v.resource_id IN (:ids) AND v.property_id IN (:properties)'
             . ' ORDER BY v.resource_id ASC, v.id ASC';
-
-        $params = ['ids' => $ids, 'terms' => $terms];
-        $types  = ['ids' => Connection::PARAM_INT_ARRAY, 'terms' => Connection::PARAM_STR_ARRAY];
+        $params = ['ids' => $ids, 'properties' => $propertyIds, 'title_id' => $titleId === false ? 0 : $titleId];
+        $types = ['ids' => Connection::PARAM_INT_ARRAY, 'properties' => Connection::PARAM_INT_ARRAY];
 
         $out = [];
         foreach ($this->connection->executeQuery($sql, $params, $types)->fetchAllAssociative() as $row) {
             $rid = (int) $row['rid'];
-            $out[$rid][(string) $row['term']][] = [
+            $out[$rid][$this->propertyTerms[(int) $row['pid']]][] = [
                 'vrid'  => $row['vrid'] !== null ? (int) $row['vrid'] : null,
                 'value' => $row['val'] !== null ? (string) $row['val'] : null,
                 'uri'   => $row['turi'] !== null ? (string) $row['turi'] : null,
@@ -301,7 +268,11 @@ final class OmekaSourceReader
             return [];
         }
         $sql = 'SELECT m.item_id AS iid, m.storage_id AS sid FROM media m'
+            . ' JOIN resource mr ON mr.id = m.id AND mr.is_public = 1'
             . ' WHERE m.item_id IN (:ids) AND m.has_thumbnails = 1'
+            . ' AND NOT EXISTS (SELECT 1 FROM media earlier JOIN resource er ON er.id = earlier.id'
+            . ' WHERE earlier.item_id = m.item_id AND earlier.has_thumbnails = 1 AND er.is_public = 1'
+            . ' AND (earlier.position < m.position OR (earlier.position = m.position AND earlier.id < m.id)))'
             . ' ORDER BY m.item_id ASC, m.position ASC, m.id ASC';
 
         $out = [];

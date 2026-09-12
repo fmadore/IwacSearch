@@ -47,6 +47,7 @@ final class MaintenanceControllerFactory implements FactoryInterface
         $typesense = $container->get('Config')['iwac_search']['typesense'] ?? [];
 
         return new MaintenanceController(
+            journal: new \IwacSearch\Indexer\ChangeJournal($container->get('Omeka\Connection')),
             collectionBaseName: $baseName,
             clientFactory:      TypesenseClientLazy::fromContainer($container),
             contentAlias:       $typesense['collection_alias'] ?? 'iwac_current',

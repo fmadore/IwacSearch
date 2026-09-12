@@ -39,6 +39,6 @@ class BulkReindex extends AbstractTypesenseJob
         /** @var Connection $connection */
         $connection = $this->getServiceLocator()->get('Omeka\Connection');
 
-        return (new ReindexOrchestrator($typesense, $connection, $moduleRoot, $logger))->run();
+        return (new ReindexOrchestrator($typesense, $connection, $moduleRoot, $logger, fn(): bool => $this->shouldStop()))->run();
     }
 }

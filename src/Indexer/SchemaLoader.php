@@ -57,7 +57,7 @@ final class SchemaLoader
     {
         $schema = $this->load();
         $base   = $schema['name'];
-        $stamp  = gmdate('Ymd_His');
+        $stamp  = gmdate('Ymd_His') . '_' . bin2hex(random_bytes(6));
         $schema['name'] = "{$base}_{$stamp}";
         $schema['_alias_target'] = $aliasTarget;
         $schema['_base_name']    = $base;

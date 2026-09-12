@@ -44,6 +44,7 @@ final class PublicationMapper extends AbstractMapper
 
     public function map(array $item, PropertyValues $values, ?string $thumbnailUrl): array
     {
+        $values = $values->publicMetadata();
         $doc = $this->buildBase($item, $values, $thumbnailUrl);
 
         $this->addCommonFacets($doc, $values);

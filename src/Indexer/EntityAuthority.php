@@ -65,6 +65,16 @@ final class EntityAuthority
 
     private bool $built = false;
 
+    /** @var array<int, true> Includes absent and non-authority IDs. */
+    private array $loaded = [];
+
+    public function invalidate(): void
+    {
+        $this->byId = [];
+        $this->loaded = [];
+        $this->built = false;
+    }
+
     /**
      * Populate the cache by streaming the entity classes from MySQL.
      *
@@ -74,7 +84,7 @@ final class EntityAuthority
      */
     public function build(OmekaSourceReader $reader): self
     {
-        $this->byId = [];
+        $this->invalidate();
 
         foreach ($reader->streamDocs(self::CLASS_IDS, self::READ_TERMS, null, true) as $doc) {
             $this->addRecord($doc['item'], $doc['values'], $doc['thumbnail']);
@@ -96,9 +106,12 @@ final class EntityAuthority
     {
         $missing = array_values(array_filter(
             array_unique($ids),
-            fn(int $id): bool => !isset($this->byId[$id]),
+            fn(int $id): bool => !isset($this->loaded[$id]),
         ));
         if ($missing !== []) {
+            foreach ($missing as $id) {
+                $this->loaded[$id] = true;
+            }
             foreach ($reader->loadResources($missing, self::READ_TERMS) as $doc) {
                 if (in_array($doc['item']['class'], self::CLASS_IDS, true)) {
                     $this->addRecord($doc['item'], $doc['values'], $doc['thumbnail']);
@@ -115,6 +128,8 @@ final class EntityAuthority
      */
     private function addRecord(array $item, PropertyValues $values, ?string $thumbnail): void
     {
+        $values = $values->publicMetadata();
+        $this->loaded[$item['id']] = true;
         [$type, $bucket] = $this->classDefault($item['class']);
         // Refine authority files (class 244): an item in the Notices d'autorité
         // set (267) is browsable as its own type but is NEVER a content facet;
@@ -171,7 +186,7 @@ final class EntityAuthority
 
         foreach ($linkedIds as $id) {
             $e = $this->byId[$id] ?? null;
-            if ($e === null || $e['bucket'] === null) {
+            if ($e === null || !$e['is_public'] || $e['bucket'] === null) {
                 continue; // unknown target, or a "Notices d'autorité" (not a facet)
             }
             $buckets[$e['bucket']][] = $e['title'];
@@ -222,7 +237,7 @@ final class EntityAuthority
         }
         $out = [];
         foreach ($linkedIds as $id) {
-            if (isset($this->byId[$id])) {
+            if (($this->byId[$id]['is_public'] ?? false) === true) {
                 $out[$id] = true;
             }
         }

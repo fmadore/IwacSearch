@@ -1,0 +1,3 @@
+[
+  { "label": "Disposable fixture title", "q": "Public article", "filter_by": "is_public:=false", "expected_ids": ["1"] }
+]

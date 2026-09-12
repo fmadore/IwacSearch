@@ -1,6 +1,7 @@
 import type { EntitySuggestion, IwacBootstrap, IwacSearchResponse, SuggestResult } from './types';
+import { authenticatedSearch } from './authenticatedSearch';
 import { getScopedKey } from './scopedKey';
-import { type MultiSearchEnvelope, postJson, validateSearchResult } from './transport';
+import { type MultiSearchEnvelope, validateSearchResult } from './transport';
 
 /**
  * The typeahead/suggest request, as a free function over a bootstrap.
@@ -184,10 +185,16 @@ export async function runSuggest(
       ]
     : [];
 
-  const json = await postJson<MultiSearchEnvelope>(
+  const json = await authenticatedSearch<MultiSearchEnvelope>(
+    bootstrap.endpoints.token,
     bootstrap.endpoints.search,
     key.key,
-    { searches: [titleSearch, ...entitySearches, ...indexSearch] },
+    {
+      searches: [titleSearch, ...entitySearches, ...indexSearch].map((s) => ({
+        ...s,
+        enable_analytics: false,
+      })),
+    },
     'Suggest',
     signal,
   );

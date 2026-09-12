@@ -79,6 +79,7 @@ final class AudiovisualMapper extends AbstractMapper
 
     public function map(array $item, PropertyValues $values, ?string $thumbnailUrl): array
     {
+        $values = $values->publicMetadata();
         $doc = $this->buildBase($item, $values, $thumbnailUrl);
 
         // Set before addMediaFields — the platform derivation reads it to tell

@@ -44,6 +44,7 @@ final class FakeTypesense
      * @var ?Closure(array<string,mixed>): bool
      */
     public ?Closure $importDecision = null;
+    public ?string $importResponse = null;
 
     /** When set, listing collections throws — exercises the orphan-sweep guard. */
     public ?RuntimeException $listFailure = null;
@@ -187,7 +188,7 @@ final class FakeCollection extends Collection
     public function retrieve(): array
     {
         if (!isset($this->server->collections[$this->name])) {
-            throw new RuntimeException('Not found: no collection named ' . $this->name);
+            throw new \Typesense\Exceptions\ObjectNotFound('Not found: no collection named ' . $this->name);
         }
         return [
             'name' => $this->name,
@@ -205,7 +206,7 @@ final class FakeCollection extends Collection
             throw $this->server->dropFailure;
         }
         if (!isset($this->server->collections[$this->name])) {
-            throw new RuntimeException('Not found: no collection named ' . $this->name);
+            throw new \Typesense\Exceptions\ObjectNotFound('Not found: no collection named ' . $this->name);
         }
         unset($this->server->collections[$this->name]);
         $this->server->dropped[] = $this->name;
@@ -250,7 +251,7 @@ final class FakeDocuments extends Documents
                 $out[] = '{"success":false,"error":"Field `x` has been declared as a string"}';
             }
         }
-        return implode("\n", $out);
+        return $this->server->importResponse ?? implode("\n", $out);
     }
 
     /**
@@ -311,7 +312,7 @@ final class FakeDocument extends Document
                 return ['id' => $this->id];
             }
         }
-        throw new RuntimeException('Could not find a document with id: ' . $this->id);
+        throw new \Typesense\Exceptions\ObjectNotFound('Could not find a document with id: ' . $this->id);
     }
 }
 
@@ -364,7 +365,7 @@ final class FakeAlias extends \Typesense\Alias
     public function retrieve(): array
     {
         if (!isset($this->server->aliases[$this->name])) {
-            throw new RuntimeException('Not found: no alias named ' . $this->name);
+            throw new \Typesense\Exceptions\ObjectNotFound('Not found: no alias named ' . $this->name);
         }
         return ['name' => $this->name, 'collection_name' => $this->server->aliases[$this->name]];
     }

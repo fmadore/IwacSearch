@@ -1,4 +1,5 @@
 <?php
+
 declare(strict_types=1);
 
 namespace IwacSearch\Indexer;
@@ -8,189 +9,159 @@ use IwacSearch\Indexer\Mapper\IndexEntityMapper;
 use IwacSearch\Indexer\Mapper\MapperRegistry;
 use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
+use RuntimeException;
 use Throwable;
 use Typesense\Client as TypesenseClient;
 
-/**
- * Wires and runs the full bulk reindex: the content collection first, then a
- * catch-up pass that replays edits made while it was building, then the
- * entity index built from the authority + occurrence aggregates the content
- * pass populated.
- *
- * ONE home for the dependency graph that cli/reindex.php and Job\BulkReindex
- * used to copy-paste (and let drift — adding a mapper or a sync step meant
- * editing two files or silently desyncing the CLI from the admin button).
- * Both entry points now differ only in how they obtain the TypesenseClient,
- * the DBAL connection, and the logger.
- */
+/** Build independently, reconcile under the mutation gate, then promote both aliases. */
 final class ReindexOrchestrator
 {
-    /**
-     * Items per catch-up import. Smaller than the bulk batch (200) because
-     * each one costs a full value/entity load for a set of ids that is
-     * usually tiny — and because a long reindex on a busy day can turn up
-     * thousands, which shouldn't be loaded in one go.
-     */
-    private const CATCH_UP_BATCH = 100;
-
     public function __construct(
         private readonly TypesenseClient $typesense,
         private readonly Connection $connection,
-        /** Module root — the directory holding data/schema.yaml etc. */
         private readonly string $moduleRoot,
-        private readonly LoggerInterface $logger = new NullLogger()
+        private readonly LoggerInterface $logger = new NullLogger(),
+        /** @var ?\Closure(): bool */
+        private readonly ?\Closure $shouldStop = null,
     ) {
     }
 
-    /**
-     * @return array<string, mixed> Content-pass stats plus ['index' => entity-pass stats]
-     */
+    /** @return array<string,mixed> */
     public function run(): array
     {
-        // The orchestrator already holds a live client; CollectionOps takes a
-        // factory because the INCREMENTAL path needs the laziness (see its
-        // constructor). Wrapping it here costs one closure.
-        $typesense = $this->typesense;
-        $typesenseFactory = static fn(): TypesenseClient => $typesense;
+        $rebuild = new DatabaseLock($this->connection, 'rebuild');
+        $rebuild->acquire();
+        try {
+            return $this->build();
+        } finally {
+            $rebuild->release();
+        }
+    }
 
-        // Shared, mutable authority cache: Reindexer->run() builds it from
-        // MySQL, every mapper in the registry holds the same reference, and
-        // IndexReindexer reads it afterwards. EntityOccurrences is filled
-        // during the content pass and consumed by the entity pass.
-        $reader      = new OmekaSourceReader($this->connection);
-        $authority   = new EntityAuthority();
-        $countries   = new CountryResolver($this->moduleRoot . '/data/newspaper-countries.json');
+    /** @return array<string,mixed> */
+    private function build(): array
+    {
+        $started = microtime(true);
+        $journal = new ChangeJournal($this->connection);
+        $initialGate = new DatabaseLock($this->connection, 'mutation');
+        $initialGate->acquire(300);
+        try {
+            $watermark = $journal->watermark();
+        } finally {
+            $initialGate->release();
+        }
+        $reader = new OmekaSourceReader($this->connection);
+        $authority = new EntityAuthority();
         $occurrences = new EntityOccurrences();
-
-        $registry = MapperRegistry::default($authority, $countries);
-
-        // One CollectionOps per pass — same plumbing, different log label so
-        // the content-pass and index-pass lines stay tellable apart.
-        $reindexer = new Reindexer(
-            ops:           new CollectionOps($typesenseFactory, $this->logger, 'content'),
-            schemaLoader:  new SchemaLoader($this->moduleRoot . '/data/schema.yaml'),
-            reader:        $reader,
-            mappers:       $registry,
-            authority:     $authority,
-            occurrences:   $occurrences,
-            stopwordsSync: new StopwordsSync($this->typesense, $this->moduleRoot . '/data/stopwords-fr.json', $this->logger),
-            curationSync:  new CurationSync($this->typesense, $this->logger),
-            synonymsSync:  new SynonymsSync($this->typesense, $this->moduleRoot . '/data/synonyms-fr.json', $this->logger),
-            logger:        $this->logger
-        );
-
-        // Entity (index) collection — built on the same run from the shared,
-        // now-populated authority + occurrence aggregates. Independent alias swap.
-        $indexReindexer = new IndexReindexer(
-            ops:          new CollectionOps($typesenseFactory, $this->logger, 'index'),
-            schemaLoader: new SchemaLoader($this->moduleRoot . '/data/schema-index.yaml'),
-            authority:    $authority,
-            occurrences:  $occurrences,
-            mapper:       new IndexEntityMapper(),
-            logger:       $this->logger
-        );
-
-        // Watermark BEFORE the content pass starts — see catchUpEdits().
-        $startedAt = $reader->databaseNow();
-
-        $stats = $reindexer->run();
-        $stats['catch_up'] = $this->catchUpEdits(
-            $typesenseFactory,
+        $registry = MapperRegistry::default($authority, new CountryResolver($this->moduleRoot . '/data/newspaper-countries.json'));
+        $factory = fn (): TypesenseClient => $this->typesense;
+        $ops = new CollectionOps($factory, $this->logger, shouldStop: $this->shouldStop);
+        $contentSchema = new SchemaLoader($this->moduleRoot . '/data/schema.yaml');
+        $indexSchema = new SchemaLoader($this->moduleRoot . '/data/schema-index.yaml');
+        $oldContent = $ops->resolveAliasTarget('iwac_current');
+        $oldIndex = $ops->resolveAliasTarget('iwac_index_current');
+        $stats = (new Reindexer(
+            $ops,
+            $contentSchema,
             $reader,
             $registry,
             $authority,
-            (string) $stats['collection'],
-            $startedAt
-        );
+            $occurrences,
+            new StopwordsSync($this->typesense, $this->moduleRoot . '/data/stopwords-fr.json', $this->logger),
+            new CurationSync($this->typesense, $this->logger),
+            new SynonymsSync($this->typesense, $this->moduleRoot . '/data/synonyms-fr.json', $this->logger),
+            $this->logger,
+        ))->run(false);
 
-        $stats['index'] = $indexReindexer->run();
-
-        // Search analytics rules (popular + no-hit queries). NON-FATAL:
-        // requires server flags that may not be enabled yet — sync()
-        // swallows failure and reports enabled:false in the stats.
-        $stats['analytics'] = (new AnalyticsSync($this->typesense, $this->logger))->sync();
-
-        return $stats;
-    }
-
-    /**
-     * Replay the edits a bulk reindex would otherwise swallow.
-     *
-     * A reindex reads the corpus once, page by page, into a new collection
-     * while the site stays live. An item saved during that window is upserted
-     * by IncrementalIndexer through the ALIAS — which still points at the
-     * OUTGOING collection — so if its page had already been streamed, the
-     * edit is dropped at the swap and stays invisible until the next save or
-     * the next reindex. On a corpus this size the build takes long enough
-     * that a monthly reindex quietly reverting a curator's afternoon is a
-     * real outcome, not a theoretical one.
-     *
-     * The fix: note the DATABASE's clock before the build, and once the alias
-     * points at the new collection, re-index everything touched since. Edits
-     * made after this query need no help — the alias they write through is
-     * the new collection. The watermark is deliberately coarse: replaying an
-     * item that didn't need it costs one upsert of identical content.
-     *
-     * WHAT THIS DOES NOT COVER: an item DELETED mid-build after its page was
-     * streamed. Its row is gone, so no timestamp query can find it, and it
-     * survives in the new collection as a stale document. Closing that would
-     * mean dual-writing deletes into the in-flight collection (the indexer
-     * would have to learn a reindex is running, across processes). The next
-     * reindex clears it; until then the item is reachable only from search,
-     * not from Omeka. Documented rather than fixed because the cost of the
-     * machinery outweighs a rare, self-healing stale row — but it IS the
-     * remaining hole.
-     *
-     * Failure here is non-fatal: the reindex itself already succeeded and the
-     * new collection is live. A failed catch-up leaves exactly the behaviour
-     * this module had before it existed.
-     *
-     * @param \Closure(): TypesenseClient $typesenseFactory
-     * @return array{since: string, items: int, ok: bool}
-     */
-    private function catchUpEdits(
-        \Closure $typesenseFactory,
-        OmekaSourceReader $reader,
-        MapperRegistry $registry,
-        EntityAuthority $authority,
-        string $collection,
-        string $startedAt
-    ): array {
+        $mutation = new DatabaseLock($this->connection, 'mutation');
+        $publish = new DatabaseLock($this->connection, 'publish');
+        $mutation->acquire(300);
         try {
-            $ids = $reader->idsModifiedSince($startedAt);
-            if ($ids === []) {
-                return ['since' => $startedAt, 'items' => 0, 'ok' => true];
+            $publish->acquire(300);
+            try {
+                // Pre/post API events hold mutation through journal append. Deleted
+                // IDs remain here even after the corresponding source row is gone.
+                $changed = $journal->changedSince($watermark);
+                $indexer = new IncrementalIndexer(
+                    $ops,
+                    $reader,
+                    $registry,
+                    $authority,
+                    $stats['collection'],
+                    $this->logger,
+                    null
+                );
+                $indexer->reindexItems($changed);
+                $stats['catch_up'] = ['items' => count($changed), 'ok' => true];
+
+                // Build aggregates from the final source state. Metadata-only read
+                // avoids loading and tokenizing OCR a second time.
+                $authority->build($reader);
+                $occurrences = new EntityOccurrences();
+                $counts = [];
+                foreach ($registry->subsets() as $subset) {
+                    $mapper = $registry->get($subset);
+                    $terms = array_values(array_diff($mapper->readTerms(), ['bibo:content', 'dcterms:tableOfContents']));
+                    foreach ($reader->streamDocs($mapper->classIds(), $terms, $mapper->itemSetIds(), false) as $row) {
+                        $doc = $mapper->map($row['item'], $row['values'], null);
+                        if ($doc !== null) {
+                            $type = $doc['type_s'];
+                            $counts[$type] = ($counts[$type] ?? 0) + 1;
+                            $occurrences->record($doc);
+                        }
+                    }
+                }
+                $actualTotal = $ops->documentCount($stats['collection']);
+                if ($actualTotal !== array_sum($counts)) {
+                    throw new RuntimeException('Final source and content index document counts disagree.');
+                }
+                foreach ($counts as $type => $expected) {
+                    $found = $this->typesense->collections[$stats['collection']]->documents->search([
+                        'q' => '*', 'filter_by' => 'type_s:=' . $type, 'per_page' => 0, 'enable_analytics' => false,
+                    ])['found'];
+                    if ((int) $found !== $expected) {
+                        throw new RuntimeException('Source/index count mismatch for ' . $type);
+                    }
+                }
+                $stats['indexed'] = $actualTotal;
+                $stats['verified_counts'] = $counts;
+                $indexStats = (new IndexReindexer(
+                    $ops,
+                    $indexSchema,
+                    $authority,
+                    $occurrences,
+                    new IndexEntityMapper(),
+                    $this->logger
+                ))->run(false);
+                if ($ops->documentCount($indexStats['collection']) !== $indexStats['indexed']) {
+                    throw new RuntimeException('Entity index count mismatch.');
+                }
+                // The aliases are individual atomic operations, not a distributed
+                // transaction. Restore both on failure; never delete either build.
+                try {
+                    $ops->promote('iwac_current', $stats['collection'], $contentSchema->load()['name'], $oldContent, $actualTotal, 0);
+                    $ops->promote('iwac_index_current', $indexStats['collection'], $indexSchema->load()['name'], $oldIndex, $indexStats['indexed'], 0);
+                    $this->connection->executeStatement('INSERT INTO iwac_search_rollback (alias_name, collection_name) VALUES (?, ?), (?, ?) ON DUPLICATE KEY UPDATE collection_name = VALUES(collection_name)', ['iwac_current', $oldContent, 'iwac_index_current', $oldIndex]);
+                } catch (Throwable $e) {
+                    foreach (['iwac_current' => $oldContent, 'iwac_index_current' => $oldIndex] as $alias => $previous) {
+                        try {
+                            $ops->restoreAlias($alias, $previous);
+                        } catch (Throwable $rollback) {
+                            $this->logger->critical('Alias rollback failed; manual recovery required', ['alias' => $alias, 'previous' => $previous, 'error' => $rollback->getMessage()]);
+                        }
+                    }
+                    throw $e;
+                }
+                $stats['index'] = $indexStats;
+            } finally {
+                $publish->release();
             }
-
-            $this->logger->info('Replaying edits made during the reindex', [
-                'since'      => $startedAt,
-                'items'      => count($ids),
-                'collection' => $collection,
-            ]);
-
-            // Targets the new collection BY NAME, not through the alias: the
-            // swap has happened, but naming it directly keeps this correct
-            // even if another run swaps the alias underneath us.
-            $indexer = new IncrementalIndexer(
-                ops:             new CollectionOps($typesenseFactory, $this->logger, 'catch-up'),
-                reader:          $reader,
-                mappers:         $registry,
-                authority:       $authority,
-                collectionAlias: $collection,
-                logger:          $this->logger
-            );
-
-            foreach (array_chunk($ids, self::CATCH_UP_BATCH) as $chunk) {
-                $indexer->reindexItems($chunk);
-            }
-
-            return ['since' => $startedAt, 'items' => count($ids), 'ok' => true];
-        } catch (Throwable $e) {
-            $this->logger->error('Catch-up pass failed; the new collection is live but may be missing edits', [
-                'since' => $startedAt,
-                'error' => $e->getMessage(),
-            ]);
-            return ['since' => $startedAt, 'items' => 0, 'ok' => false];
+        } finally {
+            $mutation->release();
         }
+        $journal->prune();
+        $stats['analytics'] = (new AnalyticsSync($this->typesense, $this->logger))->sync();
+        $stats['duration_seconds'] = round(microtime(true) - $started, 2);
+        return $stats;
     }
 }

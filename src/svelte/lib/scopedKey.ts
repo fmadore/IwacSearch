@@ -27,10 +27,14 @@ const keyCache = new Map<
 /** Refresh this many seconds before the server-side expiry. */
 const RENEW_MARGIN_SECONDS = 60;
 
-export async function getScopedKey(endpoint: string): Promise<ScopedKeyResponse> {
+export async function getScopedKey(
+  endpoint: string,
+  rejectedKey?: string,
+): Promise<ScopedKeyResponse> {
   const slot = keyCache.get(endpoint) ?? { key: null, inflight: null };
   keyCache.set(endpoint, slot);
 
+  if (rejectedKey && slot.key?.key === rejectedKey) slot.key = null;
   const now = Math.floor(Date.now() / 1000);
   if (slot.key && slot.key.expires_at - RENEW_MARGIN_SECONDS > now) {
     return slot.key;
@@ -42,6 +46,7 @@ export async function getScopedKey(endpoint: string): Promise<ScopedKeyResponse>
     try {
       const res = await fetch(endpoint, {
         credentials: 'same-origin',
+        signal: AbortSignal.timeout(15000),
         headers: { Accept: 'application/json' },
       });
       if (!res.ok) {

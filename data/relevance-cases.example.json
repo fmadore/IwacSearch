@@ -1,0 +1,6 @@
+[
+  { "label": "French stopwords", "q": "le ramadan à Lomé", "expected_ids": [] },
+  { "label": "Transliteration", "q": "Tidjaniyya", "expected_ids": [] },
+  { "label": "Organisation name", "q": "Union musulmane du Togo", "expected_ids": [] },
+  { "label": "Long topical query", "q": "relations entre associations musulmanes et autorités publiques pendant le ramadan", "expected_ids": [] }
+]

@@ -65,6 +65,7 @@ class MaintenanceController extends AbstractActionController
         private readonly ?Closure $clientFactory = null,
         private readonly string $contentAlias = 'iwac_current',
         private readonly string $indexAlias = 'iwac_index_current',
+        private readonly ?\IwacSearch\Indexer\ChangeJournal $journal = null,
     ) {
     }
 
@@ -92,6 +93,9 @@ class MaintenanceController extends AbstractActionController
     public function indexAction(): ViewModel
     {
         return new ViewModel([
+            'queue' => $this->journal?->status(),
+            'retryForm' => $this->getForm(MaintenanceForm::class),
+            'pruneForm' => $this->getForm(MaintenanceForm::class),
             'reindexForm'         => $this->getForm(MaintenanceForm::class),
             'stopwordsForm'       => $this->getForm(MaintenanceForm::class),
             'synonymsForm'        => $this->getForm(MaintenanceForm::class),
@@ -268,8 +272,18 @@ class MaintenanceController extends AbstractActionController
      * the job, attach a flash message linking to the job log, redirect
      * back to the maintenance page.
      *
-     * @param class-string $jobClass
      */
+    public function retryChangesAction(): Response
+    {
+        return $this->dispatchJob(\IwacSearch\Job\DrainChanges::class, 'Pending index changes queued for retry.');
+    }
+
+    public function pruneCollectionsAction(): Response
+    {
+        return $this->dispatchJob(\IwacSearch\Job\PruneCollections::class, 'Old index generations queued for cleanup; live aliases and one previous generation are retained.');
+    }
+
+    /** @param class-string $jobClass */
     private function dispatchJob(string $jobClass, string $description): Response
     {
         $request = $this->getRequest();

@@ -57,6 +57,8 @@ final class InitialResponseRenderer
         // Short-lived, shared across visitors — safe because every snapshot
         // is public-only by construction. See SnapshotCache.
         private readonly ?SnapshotCacheInterface $cache = null,
+        /** @var ?Closure(): string */
+        private readonly ?Closure $cacheVersion = null,
     ) {
     }
 
@@ -111,7 +113,13 @@ final class InitialResponseRenderer
 
         // Every anonymous visitor of a landing page produces the identical
         // request, so the burst collapses to one Typesense round trip per TTL.
-        $cacheKey = $this->cache?->key($body);
+        try {
+            $cacheBody = $this->cacheVersion === null ? $body : [...$body, '_epoch' => ($this->cacheVersion)()];
+            $cacheKey = $this->cache?->key($cacheBody);
+        } catch (Throwable) {
+            // Cache metadata must never take down the public page.
+            $cacheKey = null;
+        }
         if ($cacheKey !== null) {
             $hit = $this->cache?->get($cacheKey);
             if ($hit !== null) {
@@ -186,7 +194,8 @@ final class InitialResponseRenderer
                 // Drop full body fields from the payload — same hard rule
                 // the scoped key enforces for the live client. Highlights
                 // still ship, but the inlined JSON stays lean.
-                'exclude_fields'        => 'ocr_text,toc_txt,embedding',
+                ...PublicSearchPolicy::parameters(),
+                'enable_analytics' => false,
                 'highlight_fields'      => 'title_txt',
                 'highlight_full_fields' => 'title_txt',
                 'snippet_threshold'     => 30,
@@ -401,7 +410,7 @@ final class InitialResponseRenderer
         if ($trimmed !== '') {
             $parts[] = $trimmed;
         }
-        return implode(' && ', $parts);
+        return ScopeFilters::combine(...$parts);
     }
 
 }

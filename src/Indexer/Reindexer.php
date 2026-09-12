@@ -79,7 +79,7 @@ final class Reindexer
      *     duration_seconds: float
      * }
      */
-    public function run(): array
+    public function run(bool $promote = true): array
     {
         $start = microtime(true);
 
@@ -125,11 +125,13 @@ final class Reindexer
             throw $e;
         }
 
-        // ── 5. Guarded alias swap + orphan cleanup ──────────────────────────
-        // Aborts (keeping the previous collection live) when the import was
-        // unhealthy; on success also sweeps stale iwac_vN_* collections left
-        // by crashed or overlapping runs.
-        $this->ops->promote($alias, $newName, $schema['_base_name'], $previous, $totalIndexed, $totalErrors);
+        // Every rejection blocks promotion. Orchestration may defer the swap for replay.
+        if ($totalErrors > 0) {
+            throw new \RuntimeException('Reindex import rejected documents; refusing promotion.');
+        }
+        if ($promote) {
+            $this->ops->promote($alias, $newName, $schema['_base_name'], $previous, $totalIndexed, $totalErrors);
+        }
 
         return [
             'collection'       => $newName,

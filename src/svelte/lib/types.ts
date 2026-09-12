@@ -274,6 +274,8 @@ export interface IwacFacet {
 }
 
 export interface IwacSearchResponse {
+  /** Query-wide keyword-only count, independent of sorting and pagination. */
+  keyword_found?: number;
   found: number;
   page: number;
   request_params: { q?: string; per_page?: number };

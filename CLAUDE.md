@@ -26,9 +26,9 @@ provides the Typesense container, nginx `/search-api/` proxy, and backups.
   the field→property map.
 
 - **OCR privacy is enforced by scoped keys, not frontend discipline.**
-  The public scoped key carries `exclude_fields: ocr_text,toc_txt` AND
+  The public scoped key carries `exclude_fields: ocr_text,toc_txt,embedding` AND
   `filter_by: is_public:=true`, hardcoded in
-  `TypesenseSearchKeyProvider::mintPublicScopedKey()` (the single source
+  `PublicSearchPolicy` and `TypesenseSearchKeyProvider::mintPublicScopedKey()` (the shared sources
   of truth — deliberately NOT config-driven). Both are belt-and-suspenders
   security controls. Loosening either requires sign-off. A page block's
   `locked_filters` are NOT part of this boundary — they are cosmetic
@@ -40,17 +40,17 @@ provides the Typesense container, nginx `/search-api/` proxy, and backups.
 
 ## Module lifecycle
 
-- `Module.php :: install` — empty; the module owns NO database tables
-  (the legacy `iwac_browse_config` table is dropped by `upgrade()` /
-  `uninstall()` if present). Never touches Typesense data.
+- `Module.php :: install` / `upgrade` — create the durable ID journal `iwac_search_change`. Uninstall drops it and the retired browse table, never Typesense collections.
 - `Module.php :: attachListeners` — injects the Svelte assets on the
   search routes + the site-wide header enhancer, and wires the
-  `api.*.post` incremental-indexing events. The indexer listener is
+  `api.execute.pre/post` change-journaling events. Background jobs perform indexing; pre/post hold the mutation gate around writes. The indexer listener is
   resolved lazily at event fire time — do not resolve it eagerly, or
   every anonymous GET pays for the full indexer graph.
 - `SearchControllerFactory` — injects the scoped-key provider, the SSR
   renderer and module config into the controller (deliberately NOT the
   Typesense client itself).
+
+The cutover, retention and retry contracts are documented in `docs/operations-3.19.md`. Run the real integration suite when editing these boundaries.
 
 ## Conventions
 

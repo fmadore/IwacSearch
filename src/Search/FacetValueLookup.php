@@ -96,7 +96,8 @@ final class FacetValueLookup
                     'query_by'         => SearchDefaults::CONTENT_QUERY_BY,
                     'filter_by'        => 'is_public:=true',
                     // Facet-only query: we want facet_counts, not hits.
-                    'per_page'         => 1,
+                    'per_page'         => 0,
+                    'enable_analytics' => false,
                     'include_fields'   => 'id',
                     'facet_by'         => implode(',', $fields),
                     'max_facet_values' => self::MAX_VALUES,

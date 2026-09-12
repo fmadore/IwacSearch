@@ -27,7 +27,7 @@ final class CollectionOps
      * mismatch) rejects every doc; without the guard the alias would swap
      * to an empty collection and the last good one would be dropped.
      */
-    private const MAX_ERROR_RATIO = 0.1;
+    private const MAX_ERROR_RATIO = 0.0;
 
     public function __construct(
         /**
@@ -41,8 +41,15 @@ final class CollectionOps
          */
         private readonly Closure $clientFactory,
         private readonly LoggerInterface $logger = new NullLogger(),
-        private readonly string $logLabel = 'content'
+        private readonly string $logLabel = 'content',
+        /** @var ?Closure(): bool */
+        private readonly ?Closure $shouldStop = null
     ) {
+    }
+
+    private function checkCancellation(): void
+    {
+        if ($this->shouldStop !== null && ($this->shouldStop)()) throw new RuntimeException('Reindex cancelled.');
     }
 
     private function client(): TypesenseClient
@@ -92,20 +99,9 @@ final class CollectionOps
     }
 
     /**
-     * Guarded alias promotion, then cleanup.
-     *
-     * 1. Refuse to promote (drop the new collection, keep the alias — live
-     *    search is untouched) when nothing was indexed or the error ratio
-     *    exceeds MAX_ERROR_RATIO.
-     * 2. Atomic-swap the alias to the new collection.
-     * 3. Drop the previous alias target, plus every other collection sharing
-     *    the schema's `<base>_<timestamp>` prefix — orphans left behind by a
-     *    crashed or overlapping run would otherwise hold Typesense RAM forever.
-     *
-     * @param  string  $baseName  Schema base name (SchemaLoader `_base_name`),
-     *                            e.g. `iwac_v3` — prefix for the orphan sweep.
-     * @param  ?string $previous  Alias target resolved before the build began.
-     * @throws RuntimeException when the import health check fails.
+     * Promote only a complete, nonempty generation. Previous generations are
+     * retained; CollectionRetention is the only cross-generation cleanup path.
+     * $baseName and $previous remain accepted for compatibility with callers.
      */
     public function promote(
         string $alias,
@@ -115,6 +111,7 @@ final class CollectionOps
         int $indexed,
         int $errors
     ): void {
+        $this->checkCancellation();
         $total = $indexed + $errors;
         if ($indexed === 0 || ($total > 0 && $errors / $total > self::MAX_ERROR_RATIO)) {
             $this->logger->error("Refusing alias swap — import health check failed ({$this->logLabel})", [
@@ -133,34 +130,34 @@ final class CollectionOps
         $this->logger->info("Swapping alias ({$this->logLabel})", ['alias' => $alias, 'to' => $newName]);
         $this->client()->aliases->upsert($alias, ['collection_name' => $newName]);
 
-        if ($previous !== null && $previous !== $newName) {
-            $this->logger->info("Dropping previous collection ({$this->logLabel})", ['name' => $previous]);
-            $this->safelyDropCollection($previous);
-        }
-        $this->dropOrphans($baseName, $newName);
+        // Retain previous generations for rollback. Cleanup is an explicit locked operation.
     }
 
-    /**
-     * Drop every collection named `<base>_<timestamp>` except the one just
-     * promoted. Self-heals leaks from crashed runs (created but never swapped)
-     * and overlapping runs (two builds racing for the same alias).
-     */
-    private function dropOrphans(string $baseName, string $keep): void
+    public function documentCount(string $collection): int
+    {
+        return (int) $this->client()->collections[$collection]->retrieve()['num_documents'];
+    }
+
+    /** @return array<string, mixed>|null */
+    public function document(string $collection, string $id): ?array
     {
         try {
-            $all = $this->client()->collections->retrieve();
-        } catch (Throwable $e) {
-            $this->logger->warning("Orphan sweep skipped — could not list collections ({$this->logLabel})", [
-                'error' => $e->getMessage(),
-            ]);
-            return;
+            return $this->client()->collections[$collection]->documents[$id]->retrieve();
+        } catch (\Typesense\Exceptions\ObjectNotFound $e) {
+            return null;
         }
+    }
 
-        foreach ($all as $collection) {
-            $name = (string) ($collection['name'] ?? '');
-            if ($name !== $keep && $name !== '' && str_starts_with($name, $baseName . '_')) {
-                $this->logger->info("Dropping orphaned collection ({$this->logLabel})", ['name' => $name]);
-                $this->safelyDropCollection($name);
+    /** Rollback an alias without deleting either generation. */
+    public function restoreAlias(string $alias, ?string $collection): void
+    {
+        if ($collection !== null) {
+            $this->client()->aliases->upsert($alias, ['collection_name' => $collection]);
+        } else {
+            try {
+                $this->client()->aliases[$alias]->delete();
+            } catch (\Typesense\Exceptions\ObjectNotFound) {
+                // First installation may not yet have an alias to restore.
             }
         }
     }
@@ -173,67 +170,64 @@ final class CollectionOps
      */
     public function flushBatch(string $collection, array $batch): array
     {
+        $this->checkCancellation();
+        if ($batch === []) {
+            return [0, 0];
+        }
         $jsonl = '';
         foreach ($batch as $doc) {
-            $jsonl .= json_encode($doc, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . "\n";
+            $jsonl .= json_encode($doc, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR) . "\n";
         }
 
         $response = $this->client()->collections[$collection]->documents->import(
             $jsonl,
-            ['action' => 'upsert', 'batch_size' => 100]
+            ['action' => 'upsert']
         );
 
+        $lines = trim((string) $response) === '' ? [] : preg_split("/\r?\n/", trim((string) $response));
+        if (count($lines) !== count($batch)) {
+            throw new RuntimeException('Import response count does not match submitted documents.');
+        }
         $ok = $err = 0;
-        foreach (preg_split("/\r?\n/", trim((string) $response)) as $line) {
+        foreach ($lines as $offset => $line) {
             if ($line === '') {
                 continue;
             }
-            $row = json_decode($line, true);
-            if (is_array($row) && ($row['success'] ?? false)) {
+            try { $row = json_decode($line, true, 512, JSON_THROW_ON_ERROR); }
+            catch (\JsonException) { throw new RuntimeException('Malformed import outcome JSON.'); }
+            if (!is_array($row) || !is_bool($row['success'] ?? null)) {
+                throw new RuntimeException('Malformed import outcome.');
+            }
+            if ($row['success']) {
                 $ok++;
             } else {
                 $err++;
                 if ($err <= 3) {
-                    $this->logger->warning("Document import failed ({$this->logLabel})", ['response' => $row]);
+                    $this->logger->warning("Document import failed ({$this->logLabel})", ['id' => $batch[$offset]['id'] ?? null, 'code' => $row['code'] ?? null]);
                 }
             }
         }
         return [$ok, $err];
     }
 
-    /**
-     * Delete one document by id.
-     *
-     * Returns false when the document wasn't there — Typesense's PHP SDK
-     * wraps HTTP errors in several exception classes, so a "did it exist"
-     * check matches on the message rather than importing all of them. Every
-     * OTHER failure throws, so callers can tell "nothing to do" from "the
-     * delete failed".
-     */
+    /** False only for a typed 404. Transport and other failures propagate. */
     public function deleteDocument(string $collection, string $documentId): bool
     {
         try {
             $this->client()->collections[$collection]->documents[$documentId]->delete();
             return true;
-        } catch (Throwable $e) {
-            $msg = strtolower($e->getMessage());
-            $absent = str_contains($msg, 'not found')
-                || str_contains($msg, '404')
-                || str_contains($msg, 'could not find');
-            if ($absent) {
-                return false;
-            }
-            throw $e;
+        } catch (\Typesense\Exceptions\ObjectNotFound) {
+            return false;
         }
     }
 
-    /** The collection an alias currently points at, or null if unresolvable. */
+    /** The collection an alias currently points at, or null if absent; transport failures propagate. */
     public function resolveAliasTarget(string $alias): ?string
     {
         try {
             $info = $this->client()->aliases[$alias]->retrieve();
             return $info['collection_name'] ?? null;
-        } catch (Throwable) {
+        } catch (\Typesense\Exceptions\ObjectNotFound) {
             return null;
         }
     }

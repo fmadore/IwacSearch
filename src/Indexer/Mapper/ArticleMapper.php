@@ -41,6 +41,7 @@ final class ArticleMapper extends AbstractMapper
 
     public function map(array $item, PropertyValues $values, ?string $thumbnailUrl): array
     {
+        $values = $values->publicMetadata();
         $doc = $this->buildBase($item, $values, $thumbnailUrl);
 
         $this->maybeAdd($doc, 'source_url', $values->firstScalar('fabio:hasURL'));

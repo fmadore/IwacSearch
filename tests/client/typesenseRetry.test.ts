@@ -78,7 +78,7 @@ describe('stopword recovery', () => {
     expect(sent).toHaveLength(2);
     // First attempt asks for stopwords; the retry drops the field entirely
     // (not just empties it — Typesense 404s on an unknown set name).
-    expect(sent[0].searches).toMatchObject([{ stopwords: 'fr_default' }]);
+    expect(sent[0].searches[0]).toMatchObject({ stopwords: 'fr_default' });
     expect(sent[1].searches[0]).not.toHaveProperty('stopwords');
   });
 
@@ -124,7 +124,7 @@ describe('stopword recovery', () => {
     });
 
     expect(result.found).toBe(0);
-    expect(sent).toHaveLength(2);
+    expect(sent).toHaveLength(3);
     // Union mode returns ONE merged object rather than {results: [...]}, and
     // pages via the URL — both must survive the retry.
     expect(sent[0].union).toBe(true);
@@ -264,7 +264,8 @@ describe('shared request preamble', () => {
 
     await new TypesenseClient(bootstrap()).search({ q: 'x', page: 3 });
 
-    expect(sent[0].searches as Sent[]).toHaveLength(1);
+    expect(sent[0].searches as Sent[]).toHaveLength(2);
+    expect((sent[0].searches as Sent[])[1]).toMatchObject({ per_page: 0, enable_analytics: false });
   });
 
   it('returns the year buckets ascending, dropping empty and non-numeric ones', async () => {

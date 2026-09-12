@@ -3,7 +3,6 @@ import type {
   IwacBootstrap,
   IwacDoc,
   IwacFacetCount,
-  IwacHit,
   IwacSearchResponse,
   ScopedKeyResponse,
   SuggestResult,
@@ -26,10 +25,10 @@ import {
   type MultiSearchEnvelope,
   type TypesensePerSearchError,
   perSearchError,
-  postJson,
   validateSearchResult,
 } from './transport';
-import { isSemanticOnlyResponse } from './semanticFallback';
+import { queryPolicy } from './queryPolicy';
+import { authenticatedSearch } from './authenticatedSearch';
 import { getScopedKey } from './scopedKey';
 import { runSuggest } from './suggestQuery';
 
@@ -104,21 +103,16 @@ const MAP_INCLUDE_FIELDS = [
 ].join(',');
 
 /**
- * Everything a request needs to know about "what is being searched", derived
- * once from the surface bootstrap + the caller's arguments.
- *
- * Five methods used to repeat this key→collection→filter→browse-mode→query_by
- * sequence verbatim, and had already drifted: `yearDistribution` deliberately
- * omits the year range from filter_by (the histogram must show the full span),
- * while `searchFacetValues` and `fetchForMap` deliberately do not apply exact
- * mode. Those variations are explicit parameters rather than accidents of
- * copying; export uses the same exact-query contract as the visible results.
- */
-/**
  * Does this message mean the server has no `fr_default` stopword set?
  * Typesense phrases it the same way at the HTTP layer and inside a
  * per-search error, which is why one predicate covers both.
  */
+function readCount(
+  result: IwacSearchResponse | TypesensePerSearchError | undefined,
+): number | undefined {
+  return result && 'found' in result && typeof result.found === 'number' ? result.found : undefined;
+}
+
 function isStopwordError(message: string): boolean {
   return /stopword set/i.test(message);
 }
@@ -128,6 +122,7 @@ export interface SearchOutcome {
   response: IwacSearchResponse;
   /** Present only when `withYearDistribution` was requested. */
   years?: YearBucket[];
+  yearsUnavailable?: boolean;
 }
 
 /**
@@ -136,6 +131,8 @@ export interface SearchOutcome {
  * facet came back empty — the slider still works without bars.
  */
 function readYearBuckets(result: unknown): YearBucket[] {
+  const error = perSearchError(result as IwacSearchResponse | TypesensePerSearchError | undefined);
+  if (!result || error) throw new Error(error?.error ?? 'Histogram response missing');
   const counts = (result as IwacSearchResponse | undefined)?.facet_counts?.find(
     (f) => f.field_name === 'pub_year',
   );
@@ -244,13 +241,12 @@ export class TypesenseClient {
       searches: [
         {
           collection,
-          q,
           // query_by is surface-specific (see queryBy above): content uses
           // title + ocr + abstract + aliases + embedding; the entity
           // collection uses only title + aliases. Typesense ignores
           // query_by when q=* so browse mode drops straight through. Exact
           // queries drop `embedding` (queryByEffective) for literal matching.
-          query_by: ctx.queryBy,
+          ...queryPolicy(q, ctx.queryBy, includeStopwords),
           // Stopwords keep "le", "la", "des" etc. from polluting matches.
           // Conditionally included so the recovery retry can drop it — and
           // never applied to an exact query, so a quoted phrase keeps its
@@ -293,15 +289,26 @@ export class TypesenseClient {
           ? [
               {
                 collection,
-                q,
-                query_by: ctx.queryBy,
+                ...queryPolicy(q, ctx.queryBy, includeStopwords),
                 ...(exact ? EXACT_MODE_PARAMS : {}),
                 filter_by: filterByWithoutYears || undefined,
+                enable_analytics: false,
                 facet_by: 'pub_year',
                 // pub_year spans the whole corpus; 200 buckets is comfortably
                 // above the distinct-year count, so no year is dropped.
                 max_facet_values: 200,
                 per_page: 0,
+              },
+            ]
+          : []),
+        ...(!isBrowse
+          ? [
+              {
+                collection,
+                ...queryPolicy(q, ctx.queryBy, includeStopwords, true),
+                filter_by: filterBy || undefined,
+                per_page: 0,
+                enable_analytics: false,
               },
             ]
           : []),
@@ -320,10 +327,20 @@ export class TypesenseClient {
       onRaw: (raw) => {
         lastEnvelope = raw as MultiSearchEnvelope;
       },
-    }).then((response) => ({
-      response,
-      years: args.withYearDistribution ? readYearBuckets(lastEnvelope?.results?.[1]) : undefined,
-    }));
+    }).then((response) => {
+      if (!isBrowse)
+        response.keyword_found = readCount(
+          lastEnvelope?.results?.[args.withYearDistribution ? 2 : 1],
+        );
+      if (args.withYearDistribution) {
+        try {
+          return { response, years: readYearBuckets(lastEnvelope?.results?.[1]) };
+        } catch {
+          return { response, yearsUnavailable: true };
+        }
+      }
+      return { response };
+    });
   }
 
   /**
@@ -337,6 +354,28 @@ export class TypesenseClient {
    *
    * Returns the matching facet counts (value + count). Blank query → [].
    */
+  async yearDistribution(q: string): Promise<YearBucket[]> {
+    const ctx = await this.resolveContext({ q, includeYearRange: false });
+    const json = await this.auxiliary(
+      ctx.key.key,
+      (stopwords) => ({
+        searches: [
+          {
+            collection: ctx.collection,
+            ...queryPolicy(q, ctx.queryBy, stopwords),
+            filter_by: ctx.filterBy || undefined,
+            facet_by: 'pub_year',
+            max_facet_values: 200,
+            per_page: 0,
+            enable_analytics: false,
+          },
+        ],
+      }),
+      'Histogram',
+    );
+    return readYearBuckets(json.results?.[0]);
+  }
+
   async searchFacetValues(args: {
     field: string;
     /** Text typed in the facet's search box. */
@@ -350,21 +389,14 @@ export class TypesenseClient {
     const text = args.query.trim();
     if (!text) return [];
 
-    // applyExact:false — a facet lookup is a value-name search inside the
-    // current scope, and narrowing the scope's own query to strict keyword
-    // mode would change which values are offered. Kept as it has always
-    // behaved; see the note in docs/engineering-roadmap.md.
-    const { key, collection, q, filterBy, queryBy } = await this.resolveContext({
-      ...args,
-      applyExact: false,
-    });
+    const { key, collection, q, filterBy, queryBy } = await this.resolveContext(args);
 
-    const body = {
+    const buildBody = (stopwords: boolean) => ({
       searches: [
         {
           collection,
-          q,
-          query_by: queryBy,
+          ...queryPolicy(q, queryBy, stopwords),
+          enable_analytics: false,
           filter_by: filterBy || undefined,
           facet_by: args.field,
           // Typo-tolerant prefix/substring match of facet values vs the typed
@@ -375,14 +407,9 @@ export class TypesenseClient {
           per_page: 0,
         },
       ],
-    };
+    });
 
-    const json = await postJson<MultiSearchEnvelope>(
-      this.bootstrap.endpoints.search,
-      key.key,
-      body,
-      'Facet',
-    );
+    const json = await this.auxiliary(key.key, buildBody, 'Facet');
     const first = json.results?.[0];
     if (!first) {
       throw new Error('Facet response missing results[0]');
@@ -459,8 +486,8 @@ export class TypesenseClient {
         searches: [
           {
             collection,
-            q,
-            query_by: queryBy,
+            ...queryPolicy(q, queryBy, useStopwords),
+            enable_analytics: false,
             ...(useStopwords ? { stopwords: 'fr_default' } : {}),
             ...(exact ? EXACT_MODE_PARAMS : {}),
             filter_by: filterBy || undefined,
@@ -474,7 +501,7 @@ export class TypesenseClient {
       };
       let json: MultiSearchEnvelope;
       try {
-        json = await postJson<MultiSearchEnvelope>(
+        json = await this.post<MultiSearchEnvelope>(
           this.bootstrap.endpoints.search,
           key.key,
           body,
@@ -519,9 +546,9 @@ export class TypesenseClient {
     q: string;
     activeFilters?: ActiveFilters;
     yearRange?: YearRange | null;
+    signal?: AbortSignal;
   }): Promise<IwacDoc[]> {
-    // applyExact:false — same as the export path (see the roadmap note).
-    const ctx = await this.resolveContext({ ...args, applyExact: false });
+    const ctx = await this.resolveContext(args);
     const { key, collection, q, queryBy, isBrowse } = ctx;
     // Markers only exist for entities that parsed a geopoint.
     const filterBy = combineFilters('has_coords:=true', ctx.filterBy);
@@ -529,12 +556,13 @@ export class TypesenseClient {
     const docs: IwacDoc[] = [];
     const pages = Math.ceil(MAP_MAX_HITS / 250);
     for (let page = 1; page <= pages; page++) {
-      const body = {
+      args.signal?.throwIfAborted();
+      const buildBody = (stopwords: boolean) => ({
         searches: [
           {
             collection,
-            q,
-            query_by: queryBy,
+            ...queryPolicy(q, queryBy, stopwords),
+            enable_analytics: false,
             filter_by: filterBy,
             // Most-mentioned first, so the cap keeps the important markers.
             sort_by: isBrowse ? 'frequency:desc' : '_text_match:desc',
@@ -544,13 +572,8 @@ export class TypesenseClient {
             highlight_fields: 'none',
           },
         ],
-      };
-      const json = await postJson<MultiSearchEnvelope>(
-        this.bootstrap.endpoints.search,
-        key.key,
-        body,
-        'Map',
-      );
+      });
+      const json = await this.auxiliary(key.key, buildBody, 'Map', args.signal);
       const result = validateSearchResult('Map', json.results?.[0]);
       docs.push(...result.hits.map((h) => h.document));
       if (docs.length >= result.found || docs.length >= MAP_MAX_HITS) {
@@ -613,38 +636,40 @@ export class TypesenseClient {
 
     // Union mode returns ONE merged result object, not {results: [...]},
     // so the payload IS the response — no `pick` needed.
-    return this.withStopwordRetry({
+    const signal = this.unionAbort.next();
+    const response = await this.withStopwordRetry({
       label: 'Everything',
       url: url.toString(),
       key: key.key,
-      signal: this.unionAbort.next(),
+      signal,
       buildBody,
     });
+    if (!isBrowse) {
+      const counts = await this.auxiliary(
+        key.key,
+        (stopwords) => ({
+          searches: args.searches.map((s) => ({
+            collection: s.collection,
+            ...queryPolicy(q, s.queryBy, stopwords, true),
+            filter_by: s.filterBy || undefined,
+            per_page: 0,
+            enable_analytics: false,
+          })),
+        }),
+        'Keyword counts',
+        signal,
+      );
+      const values = counts.results?.map(readCount);
+      if (
+        values?.length === args.searches.length &&
+        values.every((n): n is number => n !== undefined)
+      )
+        response.keyword_found = values.reduce((a, b) => a + b, 0);
+    }
+    return response;
   }
 
-  /**
-   * Run a counts-only multi_search across several collections for the same
-   * query, returning the `found` total per collection in input order.
-   *
-   * Powers the federated /search/everything tab badges. One scoped key
-   * covers every collection (the search-only parent key spans all of them)
-   * and already bakes in `is_public:=true`. Stopwords are deliberately
-   * omitted: a tab badge is an approximate count, and dropping the set keeps
-   * this resilient when the server lacks `fr_default` (the per-tab App still
-   * applies stopwords to the actual results). A collection that errors
-   * resolves to `null` (blank badge) rather than throwing — one bad
-   * collection must not blank the whole page.
-   *
-   * A badge is a claim too. `found` on a hybrid collection includes the
-   * vector leg's fixed top-k, so a query nothing matched used to badge the
-   * Content tab "100" — and clicking it landed on the empty state the 3.14.0
-   * withhold shows, the badge contradicting the tab it labelled. For a real
-   * query the probe therefore asks for ONE hit, ordered by `_text_match:desc`
-   * so that hit is the best keyword match there is: if it scores zero,
-   * nothing matched and the honest count is 0. (Browse mode keeps `per_page:
-   * 0` — `q=*` has no keyword leg to fail, and Typesense omits `text_match`
-   * entirely.)
-   */
+  /** Hybrid totals paired with explicit keyword counts. Failed counts become blank badges. */
   async countAcross(
     q: string,
     collections: Array<{ collection: string; queryBy: string; filterBy?: string }>,
@@ -653,33 +678,78 @@ export class TypesenseClient {
       return [];
     }
     const key = await this.getKey();
-    const isBrowse = !q.trim();
-    const qParam = isBrowse ? '*' : q;
-    const searches = collections.map((c) => ({
-      collection: c.collection,
-      q: qParam,
-      query_by: c.queryBy,
-      filter_by: c.filterBy?.trim() || undefined,
-      // `found`, plus (on a real query) one hit to read text_match from.
-      per_page: isBrowse ? 0 : 1,
-      ...(isBrowse
-        ? {}
-        : { sort_by: '_text_match:desc', exclude_fields: 'ocr_text,toc_txt,embedding' }),
-    }));
-
-    const json = await postJson<{
-      results: Array<{ found?: number; error?: string; hits?: IwacHit[] }>;
-    }>(this.bootstrap.endpoints.search, key.key, { searches }, 'Counts');
+    const json = await this.auxiliary(
+      key.key,
+      (stopwords) => ({
+        searches: collections.flatMap((c) => [
+          {
+            collection: c.collection,
+            ...queryPolicy(q, c.queryBy, stopwords),
+            filter_by: c.filterBy || undefined,
+            per_page: 0,
+            enable_analytics: false,
+          },
+          {
+            collection: c.collection,
+            ...queryPolicy(q, c.queryBy, stopwords, true),
+            filter_by: c.filterBy || undefined,
+            per_page: 0,
+            enable_analytics: false,
+          },
+        ]),
+      }),
+      'Counts',
+    );
     return collections.map((_, i) => {
-      const r = json.results?.[i];
-      if (!r || r.error || typeof r.found !== 'number') {
-        return null;
-      }
-      if (r.found > 0 && isSemanticOnlyResponse({ ...r, hits: r.hits ?? [] }, qParam)) {
-        return 0;
-      }
-      return r.found;
+      const total = readCount(json.results?.[i * 2]);
+      const keyword = readCount(json.results?.[i * 2 + 1]);
+      return total === undefined || keyword === undefined ? null : keyword === 0 ? 0 : total;
     });
+  }
+
+  /** Counts/facets share stopword degradation and validate each envelope. */
+  private async auxiliary(
+    key: string,
+    build: (stopwords: boolean) => object,
+    label: string,
+    signal?: AbortSignal,
+  ): Promise<MultiSearchEnvelope> {
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        const json = await this.post<MultiSearchEnvelope>(
+          this.bootstrap.endpoints.search,
+          key,
+          build(attempt === 0),
+          label,
+          signal,
+        );
+        if (
+          attempt === 0 &&
+          json.results?.some((r) => isStopwordError(perSearchError(r)?.error ?? ''))
+        ) {
+          this.warnStopwords();
+          continue;
+        }
+        return json;
+      } catch (error) {
+        if (attempt === 0 && error instanceof Error && isStopwordError(error.message)) {
+          this.warnStopwords();
+          continue;
+        }
+        throw error;
+      }
+    }
+    throw new Error(label + ' failed');
+  }
+
+  private post<T>(
+    url: string,
+    key: string,
+    body: unknown,
+    label: string,
+    signal?: AbortSignal,
+  ): Promise<T> {
+    return authenticatedSearch<T>(this.bootstrap.endpoints.token, url, key, body, label, signal);
   }
 
   private warnStopwords(): void {
@@ -693,8 +763,6 @@ export class TypesenseClient {
    *
    * @param includeYearRange  false only for the year histogram, which must
    *   show the full span regardless of the selected window.
-   * @param applyExact  whether a quoted / -excluded query switches to strict
-   *   keyword matching (drop `embedding`, no typo tolerance, no stopwords).
    */
   private async resolveContext(args: {
     q: string;
@@ -702,7 +770,6 @@ export class TypesenseClient {
     yearRange?: YearRange | null;
     sortBy?: string;
     includeYearRange?: boolean;
-    applyExact?: boolean;
   }): Promise<SearchContext> {
     const key = await this.getKey();
     const collection = this.bootstrap.collection_alias ?? key.collection;
@@ -729,7 +796,7 @@ export class TypesenseClient {
     // (but non-matching) document is blended in by hybrid rank-fusion; the
     // caller adds EXACT_MODE_PARAMS and skips stopwords. Browse mode is
     // never exact. See isExactQuery().
-    const exact = (args.applyExact ?? true) && !isBrowse && isExactQuery(q);
+    const exact = !isBrowse && isExactQuery(q);
 
     return {
       key,
@@ -781,7 +848,7 @@ export class TypesenseClient {
       const includeStopwords = attempt === 0;
       let raw: unknown;
       try {
-        raw = await postJson<unknown>(
+        raw = await this.post<unknown>(
           opts.url,
           opts.key,
           opts.buildBody(includeStopwords),
@@ -799,6 +866,13 @@ export class TypesenseClient {
       }
 
       opts.onRaw?.(raw);
+      const auxiliaryError = (raw as MultiSearchEnvelope).results
+        ?.map(perSearchError)
+        .find((e) => e && isStopwordError(e.error));
+      if (includeStopwords && auxiliaryError) {
+        this.warnStopwords();
+        continue;
+      }
       const payload = pick(raw);
       const err = perSearchError(payload);
       if (err && includeStopwords && isStopwordError(err.error)) {

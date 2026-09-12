@@ -61,6 +61,12 @@ final class TypesenseSearchKeyProviderTest extends TestCase
                 return ['id' => $n, 'value' => 'parent-key-' . $n];
             }
 
+            /** @return array<string, mixed> */
+            public function retrieve(): array
+            {
+                return ['keys' => [['value_prefix' => 'key-', 'collections' => ['*'], 'actions' => ['documents:search']]]];
+            }
+
             /** @param array<string, mixed> $parameters */
             public function generateScopedSearchKey(string $key, array $parameters): string
             {
@@ -85,7 +91,7 @@ final class TypesenseSearchKeyProviderTest extends TestCase
 
         $params = $this->signed->entries[0]['params'];
         self::assertSame('is_public:=true', $params['filter_by']);
-        self::assertSame('ocr_text,toc_txt', $params['exclude_fields']);
+        self::assertSame('ocr_text,toc_txt,embedding', $params['exclude_fields']);
     }
 
     public function testScopedKeyExpires(): void
@@ -132,7 +138,7 @@ final class TypesenseSearchKeyProviderTest extends TestCase
         $provider->mintPublicScopedKey();
 
         self::assertCount(1, $this->created->entries, 'second mint must reuse the cached parent key');
-        self::assertSame('parent-key-1', $settings->get('iwac_search_typesense_search_key'));
+        self::assertContains('parent-key-1', $settings->all());
     }
 
     public function testParentKeyIsSearchOnly(): void
@@ -150,7 +156,7 @@ final class TypesenseSearchKeyProviderTest extends TestCase
 
         $settings = new FakeSettings(['iwac_search_typesense_search_key' => 'key-from-settings']);
         try {
-            $this->provider($settings, searchKeyFile: $file)->mintPublicScopedKey();
+            $this->provider($settings, ['*'], searchKeyFile: $file)->mintPublicScopedKey();
         } finally {
             unlink($file);
         }
@@ -167,7 +173,7 @@ final class TypesenseSearchKeyProviderTest extends TestCase
 
         $settings = new FakeSettings(['iwac_search_typesense_search_key' => 'key-from-settings']);
         try {
-            $this->provider($settings, searchKeyFile: $file)->mintPublicScopedKey();
+            $this->provider($settings, ['*'], searchKeyFile: $file)->mintPublicScopedKey();
         } finally {
             unlink($file);
         }
@@ -177,17 +183,12 @@ final class TypesenseSearchKeyProviderTest extends TestCase
 
     // ---- collection scope ----
 
-    public function testDefaultScopeIsWideAndUsesTheHistoricalSettingsSlot(): void
+    public function testDefaultScopeRestrictsAliasesAndNeverReusesTheLegacyParent(): void
     {
-        $settings = new FakeSettings();
+        $settings = new FakeSettings(['iwac_search_typesense_search_key' => 'legacy-wide-key']);
         $this->provider($settings)->mintPublicScopedKey();
-
-        self::assertSame(['*'], $this->created->entries[0]['collections']);
-        self::assertSame(
-            ['iwac_search_typesense_search_key'],
-            array_keys($settings->all()),
-            'existing installs must not re-mint on upgrade'
-        );
+        self::assertSame(['^iwac_current$', '^iwac_index_current$'], $this->created->entries[0]['collections']);
+        self::assertSame('parent-key-1', $this->signed->entries[0]['key']);
     }
 
     public function testConfiguredScopeIsPassedToTypesense(): void
@@ -206,7 +207,7 @@ final class TypesenseSearchKeyProviderTest extends TestCase
     public function testTighteningTheScopeReMintsTheParentKey(): void
     {
         $settings = new FakeSettings();
-        $this->provider($settings)->mintPublicScopedKey();
+        $this->provider($settings, ['*'])->mintPublicScopedKey();
         $this->provider($settings, TypesenseSearchKeyProvider::TIGHTENED_COLLECTION_SCOPE)
             ->mintPublicScopedKey();
 
@@ -219,10 +220,10 @@ final class TypesenseSearchKeyProviderTest extends TestCase
     public function testRevertingTheScopeReusesTheOriginalKey(): void
     {
         $settings = new FakeSettings();
-        $this->provider($settings)->mintPublicScopedKey();
+        $this->provider($settings, ['*'])->mintPublicScopedKey();
         $this->provider($settings, TypesenseSearchKeyProvider::TIGHTENED_COLLECTION_SCOPE)
             ->mintPublicScopedKey();
-        $this->provider($settings)->mintPublicScopedKey();
+        $this->provider($settings, ['*'])->mintPublicScopedKey();
 
         self::assertCount(2, $this->created->entries, 'the reverted scope must hit its cached key');
         self::assertSame('parent-key-1', $this->signed->entries[2]['key']);

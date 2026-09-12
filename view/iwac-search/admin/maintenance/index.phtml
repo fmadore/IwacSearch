@@ -237,3 +237,18 @@ $analytics = $analytics ?? ['available' => false, 'reason' => null, 'popular' =>
     </section>
 
 </div>
+
+<section>
+    <h2><?php echo $translate('Pending index changes'); ?></h2>
+    <p><?php echo $escape(sprintf($translate('%d queued changes. Oldest: %s'), $queue['pending'] ?? 0, $queue['oldest'] ?? '—')); ?></p>
+    <?php foreach ([['form' => $retryForm, 'route' => 'retry-changes', 'label' => 'Retry pending changes'], ['form' => $pruneForm, 'route' => 'prune-collections', 'label' => 'Clean up old index generations']] as $action):
+        $form = $action['form'];
+        $form->setAttribute('action', $this->url('admin/iwac-search/maintenance-' . $action['route']));
+        $form->setAttribute('method', 'POST');
+        $form->prepare();
+        echo $this->form()->openTag($form);
+        echo $this->formElement($form->get('maintenance_csrf'));
+    ?>
+        <button type="submit"><?php echo $translate($action['label']); ?></button>
+    <?php echo $this->form()->closeTag(); endforeach; ?>
+</section>

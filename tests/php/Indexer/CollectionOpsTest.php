@@ -47,7 +47,7 @@ final class CollectionOpsTest extends TestCase
         $this->ops()->promote('iwac_current', 'iwac_v1_new', 'iwac_v1', 'iwac_v1_old', 14000, 0);
 
         self::assertSame('iwac_v1_new', $this->server->aliases['iwac_current']);
-        self::assertSame(['iwac_v1_old'], $this->server->dropped);
+        self::assertSame([], $this->server->dropped);
     }
 
     public function testPromoteRefusesWhenNothingWasIndexed(): void
@@ -80,14 +80,15 @@ final class CollectionOpsTest extends TestCase
         $this->ops()->promote('iwac_current', 'iwac_v1_new', 'iwac_v1', 'iwac_v1_old', 890, 110);
     }
 
-    public function testPromoteAcceptsAnErrorRatioAtTheCeiling(): void
+    public function testPromoteRefusesEvenOneRejectedDocument(): void
     {
         // Exactly 10 % — the guard rejects ABOVE the ratio, not at it, so a
         // corpus with a known bad tail still ships.
         $this->server->aliases['iwac_current'] = 'iwac_v1_old';
         $this->server->seedCollection('iwac_v1_new');
 
-        $this->ops()->promote('iwac_current', 'iwac_v1_new', 'iwac_v1', 'iwac_v1_old', 900, 100);
+        $this->expectException(RuntimeException::class);
+        $this->ops()->promote('iwac_current', 'iwac_v1_new', 'iwac_v1', 'iwac_v1_old', 999, 1);
 
         self::assertSame('iwac_v1_new', $this->server->aliases['iwac_current']);
     }
@@ -115,7 +116,7 @@ final class CollectionOpsTest extends TestCase
 
     // ── The orphan sweep ─────────────────────────────────────────────────
 
-    public function testPromoteSweepsOrphansLeftByCrashedRuns(): void
+    public function testPromotionRetainsOldGenerationsForExplicitCleanup(): void
     {
         // Typesense is RAM-resident, so a leaked collection is a permanent
         // memory cost until someone drops it by hand.
@@ -134,7 +135,7 @@ final class CollectionOpsTest extends TestCase
         );
 
         self::assertSame(
-            ['iwac_v1_20260101_000000', 'iwac_v1_20260201_000000'],
+            [],
             $this->server->dropped
         );
         self::assertArrayHasKey('iwac_v1_new', $this->server->collections);
@@ -163,7 +164,7 @@ final class CollectionOpsTest extends TestCase
 
         $this->ops()->promote('iwac_current', 'iwac_v1_new', 'iwac_v1', null, 10, 0);
 
-        self::assertSame(['iwac_v1_20260101_000000'], $this->server->dropped);
+        self::assertSame([], $this->server->dropped);
     }
 
     public function testTheSweepIsSkippedRatherThanFatalWhenListingFails(): void
@@ -269,5 +270,26 @@ final class CollectionOpsTest extends TestCase
         self::assertTrue($this->ops()->deleteDocument('c', '42'));
         self::assertFalse($this->ops()->deleteDocument('c', '42'));
         self::assertFalse($this->ops()->deleteDocument('c', '999'));
+    }
+
+    public function testTruncatedImportResponseCannotLookSuccessful(): void
+    {
+        $this->server->importResponse = '{"success":true}';
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('count does not match');
+        $this->ops()->flushBatch('c', [['id' => '1'], ['id' => '2']]);
+    }
+
+    public function testMalformedImportOutcomeCannotLookSuccessful(): void
+    {
+        $this->server->importResponse = '{"success":"true"}';
+        $this->expectException(RuntimeException::class);
+        $this->ops()->flushBatch('c', [['id' => '1']]);
+    }
+
+    public function testInvalidUtf8IsRejectedBeforeImport(): void
+    {
+        $this->expectException(\JsonException::class);
+        $this->ops()->flushBatch('c', [['id' => '1', 'ocr_text' => "\xB1\x31"]]);
     }
 }

@@ -55,6 +55,19 @@ final class PropertyValues
         return new self([]);
     }
 
+    /** Public metadata projection. OCR retains its explicit search-only exception. */
+    public function publicMetadata(): self
+    {
+        $terms = [];
+        foreach ($this->byTerm as $term => $rows) {
+            $terms[$term] = $term === 'bibo:content' ? $rows : array_values(array_filter(
+                $rows,
+                static fn(array $row): bool => $row['vpub']
+            ));
+        }
+        return new self($terms);
+    }
+
     /**
      * Display values: the linked-resource title when present, else the
      * literal. The multi-value facet primitive. Deduplicated, order preserved.

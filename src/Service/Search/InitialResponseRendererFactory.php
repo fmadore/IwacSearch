@@ -37,6 +37,7 @@ final class InitialResponseRendererFactory implements FactoryInterface
             logger:            LoggerResolver::fromContainer($container),
             defaultCollection: $defaultCollection,
             cache:             new SnapshotCache($ttl),
+            cacheVersion:      static fn(): string => (new \IwacSearch\Indexer\ChangeJournal($container->get('Omeka\Connection')))->cacheVersion(),
         );
     }
 }

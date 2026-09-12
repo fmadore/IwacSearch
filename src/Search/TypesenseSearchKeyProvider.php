@@ -28,7 +28,7 @@ use Typesense\Client as TypesenseClient;
  *      Still never sent to the browser directly — only used to sign
  *      scoped keys.
  *
- *   3. SCOPED key  — minted client-side by HMAC-signing a small JSON
+ *   3. SCOPED key  — minted server-side by HMAC-signing a small JSON
  *      payload (filter_by + exclude_fields + expires_at) with the
  *      parent search-only key. The browser receives THIS, valid for
  *      $expiresInSeconds (default 1h).
@@ -44,41 +44,10 @@ final class TypesenseSearchKeyProvider
     private const SETTINGS_KEY    = 'iwac_search_typesense_search_key';
     private const KEY_DESCRIPTION = 'IwacSearch public search-only parent (auto-created)';
 
-    /**
-     * Collection scope the parent key is created with when the deployment
-     * doesn't configure one. `*` = every collection, present and future.
-     *
-     * @var list<string>
-     */
-    public const DEFAULT_COLLECTION_SCOPE = ['*'];
-
-    /**
-     * The tightened scope this module would like to run with, offered as a
-     * ready-made value for `iwac_search.public_search_key.collections`.
-     *
-     * It names both aliases AND the versioned collections behind them
-     * (`iwac_v*` / `iwac_index_v*`, matched by Typesense's trailing-`*`
-     * prefix rule), because the Typesense docs don't say whether a key scope
-     * is matched against the alias the client requests or the collection the
-     * alias resolves to. Covering both makes the answer moot. What it leaves
-     * out is the point: the analytics collections, which hold visitor query
-     * logs and are today reachable by any public scoped key.
-     *
-     * Not the default because getting a key scope wrong takes down public
-     * search entirely, and this module cannot verify the match semantics
-     * without a live container. Set it in config, reload, search once — if
-     * the scope is wrong the key is re-minted by reverting the config line,
-     * with no code deploy and no manual settings surgery (see
-     * {@see settingsKey()}).
-     *
-     * @var list<string>
-     */
-    public const TIGHTENED_COLLECTION_SCOPE = [
-        'iwac_current',
-        'iwac_index_current',
-        'iwac_v*',
-        'iwac_index_v*',
-    ];
+    /** Alias-only authorization prevents reading retained generations directly. @var list<string> */
+    public const DEFAULT_COLLECTION_SCOPE = ['^iwac_current$', '^iwac_index_current$'];
+    /** @var list<string> */
+    public const TIGHTENED_COLLECTION_SCOPE = self::DEFAULT_COLLECTION_SCOPE;
 
     public function __construct(
         // Lazily-resolved, memoizing client factory (TypesenseClientLazy):
@@ -123,7 +92,7 @@ final class TypesenseSearchKeyProvider
 
         $scoped = ($this->clientFactory)()->keys->generateScopedSearchKey($parent, [
             'filter_by'      => 'is_public:=true',
-            'exclude_fields' => 'ocr_text,toc_txt',
+            ...PublicSearchPolicy::parameters(),
             'expires_at'     => $expiresAt,
         ]);
 
@@ -148,6 +117,7 @@ final class TypesenseSearchKeyProvider
         if (is_readable($this->searchKeyFile)) {
             $fromFile = trim((string) file_get_contents($this->searchKeyFile));
             if ($fromFile !== '') {
+                $this->validateSecretScope($fromFile);
                 return $fromFile;
             }
         }
@@ -171,14 +141,28 @@ final class TypesenseSearchKeyProvider
      * only worked if whoever tightened the scope remembered to do it — and
      * silently kept serving a wide-scope key if they didn't.
      *
-     * The default scope keeps the bare, historical slot name so existing
-     * installs don't re-mint on upgrade for a scope that hasn't changed.
+     * Only an explicitly configured legacy wildcard uses the old settings slot.
      */
+    /** Mounted secrets cannot silently bypass the configured collection/action restrictions. */
+    private function validateSecretScope(string $value): void
+    {
+        $keys = ($this->clientFactory)()->keys->retrieve()['keys'] ?? [];
+        $matches = array_values(array_filter($keys, static fn(array $key): bool => ($key['value_prefix'] ?? '') === substr($value, 0, 4)));
+        if (count($matches) !== 1) throw new RuntimeException('Cannot identify search-key secret uniquely; rotate it and retry.');
+        $key = $matches[0];
+        $actual = $key['collections'] ?? [];
+        $expected = $this->collectionScope;
+        sort($actual); sort($expected);
+        if ($actual !== $expected || ($key['actions'] ?? []) !== ['documents:search']) {
+            throw new RuntimeException('Search-key secret scope differs from public_search_key.collections; rotate the mounted parent key.');
+        }
+    }
+
     private function settingsKey(): string
     {
         $scope = $this->collectionScope;
         sort($scope); // order is not part of the scope's meaning
-        if ($scope === self::DEFAULT_COLLECTION_SCOPE) {
+        if ($scope === ['*']) {
             return self::SETTINGS_KEY;
         }
         return self::SETTINGS_KEY . '_' . substr(hash('xxh128', implode(',', $scope)), 0, 12);
@@ -198,14 +182,7 @@ final class TypesenseSearchKeyProvider
                 // from this one perform writes if a downstream signing call
                 // forgot to constrain them.
                 'actions'     => ['documents:search'],
-                // Scope defaults to '*': scoped keys derived from this one
-                // can address ANY collection, including the analytics ones
-                // holding visitor query logs. Today those are protected only
-                // incidentally, by the scoped filter `is_public:=true`
-                // erroring on collections that lack the field — which is a
-                // side effect, not a control. TIGHTENED_COLLECTION_SCOPE is
-                // the intended value; see its docblock for why it isn't the
-                // default and how to switch safely.
+                // Anchored live-alias regexes exclude old snapshots and analytics.
                 'collections' => $this->collectionScope,
             ]);
         } catch (Throwable $e) {

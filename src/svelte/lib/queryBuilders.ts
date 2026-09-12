@@ -78,6 +78,7 @@ export function combineFilters(...parts: Array<string | undefined | null>): stri
   return parts
     .map((p) => p?.trim())
     .filter((p): p is string => !!p)
+    .map((p) => (p.includes('||') ? `(${p})` : p))
     .join(' && ');
 }
 
@@ -114,6 +115,7 @@ export function withoutField(list: string, field: string): string {
 
 /** Typo/typing-fuzz parameters switched OFF for an exact query. */
 export const EXACT_MODE_PARAMS = {
+  prefix: false,
   num_typos: 0,
   typo_tokens_threshold: 0,
   drop_tokens_threshold: 0,

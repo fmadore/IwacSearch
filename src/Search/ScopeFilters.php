@@ -354,10 +354,9 @@ final class ScopeFilters
      * AND-join filter clauses, dropping the empty ones. The PHP twin of
      * combineFilters() in src/svelte/lib/typesense.ts.
      *
-     * A clause containing `||` is parenthesised first. Typesense binds `&&`
-     * tighter than `||`, so ANDing a picker selection onto a hand-written
-     * `a:=1 || b:=2` would otherwise silently regroup it as
-     * `a:=1 || (b:=2 && …)` — the OR branch escaping the lock. Clauses
+     * A clause containing `||` is parenthesised first. Typesense evaluates
+     * AND and OR left to right with equal precedence. Explicit grouping
+     * preserves each clause when another constraint is prepended. Clauses
      * without `||` are passed through untouched, so the output for every
      * preset scope is byte-identical to what it was before this existed.
      */

@@ -53,6 +53,7 @@ final class ReferenceMapper extends AbstractMapper
 
     public function map(array $item, PropertyValues $values, ?string $thumbnailUrl): array
     {
+        $values = $values->publicMetadata();
         $doc = $this->buildBase($item, $values, $thumbnailUrl);
 
         // ── Authorship (bibo:authorList, not dcterms:creator) ──────────────

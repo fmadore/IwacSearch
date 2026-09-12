@@ -29,6 +29,15 @@ export interface MultiSearchEnvelope {
  * on a non-2xx status. `signal` aborts superseded requests (fast typing) —
  * see isAbortError() for how callers distinguish that from a real failure.
  */
+export class HttpError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+  ) {
+    super(message);
+  }
+}
+
 export async function postJson<T>(
   url: string,
   apiKey: string,
@@ -36,6 +45,7 @@ export async function postJson<T>(
   label: string,
   signal?: AbortSignal,
 ): Promise<T> {
+  const deadline = AbortSignal.timeout(15000);
   const res = await fetch(url, {
     method: 'POST',
     headers: {
@@ -43,10 +53,10 @@ export async function postJson<T>(
       'X-TYPESENSE-API-KEY': apiKey,
     },
     body: JSON.stringify(body),
-    signal,
+    signal: signal ? AbortSignal.any([signal, deadline]) : deadline,
   });
   if (!res.ok) {
-    throw new Error(await formatHttpError(label, res));
+    throw new HttpError(await formatHttpError(label, res), res.status);
   }
   return (await res.json()) as T;
 }
@@ -76,12 +86,7 @@ export class AbortSlot {
   }
 }
 
-/**
- * Sequence guard for request loops that can't be aborted — `fetchForMap`
- * pages through several requests, so an AbortController on any single one
- * wouldn't stop the loop. Each start() takes a ticket; isStale() tells a
- * completing loop whether a newer one has started since.
- */
+/** Suppress stale completion callbacks, including after map-view cleanup. */
 export class SeqGuard {
   private seq = 0;
 

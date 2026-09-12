@@ -1,10 +1,6 @@
 # CI: lint, type-check, test and build both sides on every PR + push to main.
 #
-# Still NO integration tests: the indexer needs a live Typesense and a real
-# Omeka database. What the unit suites cover is the pure seams — the URL
-# codec, query builders and sanitiser on the client; the mappers,
-# CollectionOps' alias guard, and the catalogues on the PHP side. Those are
-# where the behaviour lives and where it has silently regressed before.
+# Real Omeka/Typesense contracts run in the integration job below.
 
 name: CI
 
@@ -96,3 +92,23 @@ jobs:
 
       - name: Static analysis (phpstan)
         run: vendor/bin/phpstan analyse --no-progress
+
+  integration:
+    name: Omeka 4.2.1 + Typesense 30.2 contracts
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: curl, mbstring, pdo_mysql
+          tools: composer:v2
+          coverage: none
+      - run: composer install --no-interaction --prefer-dist --no-progress
+      - name: Provision disposable services
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y mariadb-server unzip
+          sudo bash tests/integration/setup-local.sh
+      - name: Exercise SQL, events, public keys and guarded reindex
+        run: sudo php tests/integration/rebuild.php

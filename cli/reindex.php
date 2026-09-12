@@ -18,53 +18,24 @@ declare(strict_types=1);
  *
  * Exit codes:
  *   0  success
- *   1  reindex failed (collection dropped, alias unchanged — safe state)
+ *   1  reindex failed (inspect job output; previous generations are retained)
  *   2  setup error (missing composer deps, unreadable admin-key secret,
  *      missing database.ini) — bootstrap.php enforces the first two
  */
 
-use Doctrine\DBAL\DriverManager;
 use IwacSearch\Indexer\ReindexOrchestrator;
 
 ['logger' => $logger, 'typesense' => $typesense, 'moduleRoot' => $moduleRoot,
  'tsConfig' => $tsConfig, 'omekaVendor' => $omekaVendor] = require __DIR__ . '/bootstrap.php';
 
-// ── Omeka DB connection (DBAL) from database.ini ──────────────────────────
-// The CLI runs outside Omeka's HTTP bootstrap, so we build the DBAL
-// connection straight from Omeka's own config/database.ini rather than the
-// service container (the BulkReindex job, which has the container, pulls
-// 'Omeka\Connection' instead).
-$omekaRoot = dirname($omekaVendor, 2); // …/vendor/autoload.php → …
-$dbIni = getenv('IWAC_OMEKA_DB_INI') ?: $omekaRoot . '/config/database.ini';
-if (!is_readable($dbIni)) {
-    fwrite(STDERR, "ERROR: Omeka database.ini not readable at {$dbIni}. Set IWAC_OMEKA_DB_INI.\n");
-    exit(2);
-}
-
 try {
-    $ini = parse_ini_file($dbIni) ?: [];
-    $params = [
-        'driver'   => 'pdo_mysql',
-        'charset'  => 'utf8mb4',
-        'dbname'   => (string) ($ini['dbname'] ?? ''),
-        'user'     => (string) ($ini['user'] ?? ''),
-        'password' => (string) ($ini['password'] ?? ''),
-    ];
-    if (!empty($ini['unix_socket'])) {
-        $params['unix_socket'] = (string) $ini['unix_socket'];
-    } else {
-        $params['host'] = (string) ($ini['host'] ?? 'localhost');
-        if (!empty($ini['port'])) {
-            $params['port'] = (int) $ini['port'];
-        }
-    }
-    $connection = DriverManager::getConnection($params);
+    $connection = require __DIR__ . '/database.php';
 
     // ── Run — all indexer wiring lives in ReindexOrchestrator, shared with
     // the admin Job\BulkReindex path so the two can't drift.
     $logger->info('Starting reindex', [
         'typesense_host' => $tsConfig['host'],
-        'db'             => $params['dbname'],
+        'db'             => $connection->getDatabase(),
     ]);
     $stats = (new ReindexOrchestrator($typesense, $connection, $moduleRoot, $logger))->run();
     $logger->info('Reindex complete', $stats);

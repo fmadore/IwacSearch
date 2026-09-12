@@ -43,7 +43,12 @@ class TypesenseClientFactory implements FactoryInterface
                 'port'     => (string) $port,
                 'protocol' => $protocol,
             ]],
-            'connection_timeout_seconds' => 10,
+            'num_retries' => PHP_SAPI === 'cli' ? 2 : 0,
+            'retry_interval_seconds' => 0.5,
+            'client' => new \GuzzleHttp\Client([
+                'connect_timeout' => 2,
+                'timeout' => PHP_SAPI === 'cli' ? 120 : 4,
+            ]),
         ]);
     }
 

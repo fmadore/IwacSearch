@@ -9,7 +9,7 @@ declare(strict_types=1);
  * Omeka.
  *
  * Lifecycle:
- *  - install: nothing (the module owns no database tables)
+ *  - install/upgrade: create the durable ID-only change journal
  *  - upgrade: drop the retired iwac_browse_config table if present
  *  - bootstrap (attachListeners): inject Svelte assets on the search routes,
  *    plus wire api.*.post listeners so edits in Omeka propagate to Typesense
@@ -102,29 +102,11 @@ class Module extends AbstractModule
                 Acl::ROLE_GLOBAL_ADMIN,
             ],
             [Controller\Admin\MaintenanceController::class],
-            ['index', 'reindex', 'syncStopwords', 'syncSynonyms', 'provisionAnalytics']
+            ['index', 'reindex', 'syncStopwords', 'syncSynonyms', 'provisionAnalytics', 'retryChanges', 'pruneCollections']
         );
     }
 
-    /**
-     * Subscribe to Omeka events.
-     *
-     *   - view.layout on SearchController → asset injection for /search,
-     *     /browse, /browse/{slug} (M1).
-     *   - api.create.post / api.update.post on ItemAdapter → re-map the
-     *     full document from MySQL and upsert it to Typesense (M4).
-     *   - api.delete.post on ItemAdapter → remove the doc from Typesense
-     *     so stale hits don't survive a resource delete (M4).
-     *
-     * api.create.post IS now attached: since the indexer reads the same
-     * Omeka database the save just wrote to, a new item gets a complete
-     * document immediately — no longer the half-baked placeholder the old
-     * HF-only pipeline would have produced. Non-content items (authority
-     * records, unmapped classes) are skipped inside the indexer.
-     *
-     * The admin CRUD surface (M3.5) doesn't need event wiring; it loads
-     * its own bundle via the view template.
-     */
+    /** Wire public assets and lazily resolved pre/post write journaling. */
     public function attachListeners(SharedEventManagerInterface $sharedEventManager): void
     {
         // view.layout for the SearchController stays inline because
@@ -147,75 +129,28 @@ class Module extends AbstractModule
             [$this, 'injectHeaderSearchAssets']
         );
 
-        // M4 incremental indexing — handler bodies live in
-        // Indexer\ItemEventListener so they're testable + so Module.php
-        // doesn't accumulate listener logic.
-        //
-        // Resolution is DEFERRED to fire time: building the listener here
-        // would construct the whole indexer graph (six mappers,
-        // EntityAuthority, CountryResolver's newspaper-countries.json parse)
-        // on every request — including anonymous GETs where no api.*.post
-        // can ever fire. The memoized closure makes the first write event of
-        // a request pay the construction cost once; read requests pay nothing.
-        $listener = null;
-        $deferred = function (string $method) use (&$listener): callable {
-            return function (Event $event) use (&$listener, $method): void {
-                $listener ??= $this->resolveItemEventListener();
-                $listener?->$method($event);
-            };
-        };
-
-        $itemAdapter = \Omeka\Api\Adapter\ItemAdapter::class;
-        $sharedEventManager->attach($itemAdapter, 'api.create.post', $deferred('onItemCreate'));
-        $sharedEventManager->attach($itemAdapter, 'api.update.post', $deferred('onItemUpdate'));
-        $sharedEventManager->attach($itemAdapter, 'api.delete.post', $deferred('onItemDelete'));
-
-        // Batch operations hydrate entities directly — the per-item
-        // events above never fire for them. Privacy-relevant: a batch
-        // visibility flip must reach Typesense promptly, because the
-        // public key filters on the INDEXED is_public value.
-        $sharedEventManager->attach($itemAdapter, 'api.batch_create.post', $deferred('onItemBatchCreate'));
-        $sharedEventManager->attach($itemAdapter, 'api.batch_update.post', $deferred('onItemBatchUpdate'));
-        $sharedEventManager->attach($itemAdapter, 'api.batch_delete.post', $deferred('onItemBatchDelete'));
-
-        // Direct media edits (upload to an existing item via the API,
-        // replace file, toggle visibility, delete) fire no item event,
-        // yet thumbnail_url / iiif_manifest derive from the item's
-        // primary media — re-map the parent.
-        $mediaAdapter = \Omeka\Api\Adapter\MediaAdapter::class;
-        $sharedEventManager->attach($mediaAdapter, 'api.create.post', $deferred('onMediaWrite'));
-        $sharedEventManager->attach($mediaAdapter, 'api.update.post', $deferred('onMediaWrite'));
-        $sharedEventManager->attach($mediaAdapter, 'api.delete.post', $deferred('onMediaDelete'));
-
-        // Item-set deletion silently unlinks every member, and
-        // country_ss (references / documents / photographs) derives
-        // from those memberships. Capture members at .pre (join rows
-        // are gone by .post), re-map them at .post.
-        $itemSetAdapter = \Omeka\Api\Adapter\ItemSetAdapter::class;
-        $sharedEventManager->attach($itemSetAdapter, 'api.delete.pre', $deferred('onItemSetDeletePre'));
-        $sharedEventManager->attach($itemSetAdapter, 'api.delete.post', $deferred('onItemSetDeletePost'));
+        foreach ([
+            \Omeka\Api\Adapter\ItemAdapter::class => 'items',
+            \Omeka\Api\Adapter\MediaAdapter::class => 'media',
+            \Omeka\Api\Adapter\ItemSetAdapter::class => 'item_sets',
+        ] as $adapter => $resource) {
+            $sharedEventManager->attach($adapter, 'api.execute.pre', function (Event $event) use ($resource): void {
+                if (in_array($event->getParam('request')->getOperation(), ['create', 'update', 'delete', 'batch_create', 'batch_update', 'batch_delete'], true)) {
+                    $this->resolveItemEventListener()->onBeforeWrite($event, $resource);
+                }
+            }, 1000);
+            $sharedEventManager->attach($adapter, 'api.execute.post', function (Event $event) use ($resource): void {
+                if (in_array($event->getParam('request')->getOperation(), ['create', 'update', 'delete', 'batch_create', 'batch_update', 'batch_delete'], true)) {
+                    $this->resolveItemEventListener()->onAfterWrite($event, $resource);
+                }
+            }, -1000);
+        }
     }
 
-    /**
-     * Resolve the ItemEventListener from the service manager, returning
-     * null if the SL isn't available yet (extreme bootstrap edge cases).
-     * `attachListeners` runs after `init` and after the SL is built, so
-     * in normal operation this returns a real listener; the null branch
-     * is just defensive — a missing SL means we can't attach, full stop.
-     */
-    private function resolveItemEventListener(): ?Indexer\ItemEventListener
+    /** Write failures must remain visible; reads never resolve this service. */
+    private function resolveItemEventListener(): Indexer\ItemEventListener
     {
-        try {
-            $sl = $this->getServiceLocator();
-            if ($sl === null) {
-                return null;
-            }
-            /** @var Indexer\ItemEventListener $listener */
-            $listener = $sl->get(Indexer\ItemEventListener::class);
-            return $listener;
-        } catch (\Throwable) {
-            return null;
-        }
+        return $this->getServiceLocator()->get(Indexer\ItemEventListener::class);
     }
 
     /**
@@ -318,13 +253,10 @@ class Module extends AbstractModule
         );
     }
 
-    /**
-     * Install: nothing to do. The module owns no database tables — the former
-     * curated-browse system (iwac_browse_config) was retired and its scopes
-     * moved into PresetCatalog, now selected per page block.
-     */
+    /** Install the durable change journal. */
     public function install(ServiceLocatorInterface $services): void
     {
+        Indexer\ChangeJournal::install($services->get('Omeka\Connection'));
     }
 
     /**
@@ -347,16 +279,18 @@ class Module extends AbstractModule
      */
     public function upgrade($oldVersion, $newVersion, ServiceLocatorInterface $services): void
     {
-        if (version_compare((string) $oldVersion, self::BROWSE_CONFIG_RETIRED_IN, '>=')) {
-            return;
-        }
         $connection = $services->get('Omeka\Connection');
-        $connection->executeStatement('DROP TABLE IF EXISTS iwac_browse_config');
+        Indexer\ChangeJournal::install($connection);
+        if (version_compare((string) $oldVersion, self::BROWSE_CONFIG_RETIRED_IN, '<')) {
+            $connection->executeStatement('DROP TABLE IF EXISTS iwac_browse_config');
+        }
     }
 
     public function uninstall(ServiceLocatorInterface $services): void
     {
         $connection = $services->get('Omeka\Connection');
+        $connection->executeStatement('DROP TABLE IF EXISTS iwac_search_change');
+        $connection->executeStatement('DROP TABLE IF EXISTS iwac_search_rollback');
         // Drop the retired curated-browse table if an earlier version created
         // it. Never touches Typesense data (may be shared with another install).
         $connection->executeStatement('DROP TABLE IF EXISTS iwac_browse_config');

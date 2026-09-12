@@ -70,6 +70,24 @@ final class MapperTest extends TestCase
 
     // ── Registry ─────────────────────────────────────────────────────────
 
+    public function testPrivateMetadataIsExcludedButRestrictedOcrKeepsItsExplicitPolicy(): void
+    {
+        $values = self::values([
+            'dcterms:abstract' => [['value' => 'Private abstract', 'vpub' => false]],
+            'dcterms:creator' => [['value' => 'Private creator', 'vpub' => false]],
+            'bibo:content' => [['value' => 'Restricted OCR', 'vpub' => false]],
+        ]);
+        foreach ($this->registry->subsets() as $subset) {
+            $mapper = $this->registry->get($subset);
+            $doc = $mapper->map(self::item(['class' => $mapper->classIds()[0]]), $values, null);
+            self::assertStringNotContainsString('Private abstract', json_encode($doc));
+            self::assertStringNotContainsString('Private creator', json_encode($doc));
+        }
+        $doc = $this->registry->get('articles')->map(self::item(), $values, null);
+        self::assertSame('Restricted OCR', $doc['ocr_text']);
+        self::assertFalse($doc['has_fulltext']);
+    }
+
     public function testEveryContentClassResolvesToExactlyOneMapper(): void
     {
         $expected = [

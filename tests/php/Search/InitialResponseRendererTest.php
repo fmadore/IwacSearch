@@ -36,10 +36,12 @@ final class InitialResponseRendererTest extends TestCase
     /**
      * @param  list<mixed>|\Throwable $responses One perform() result per call,
      *   or a throwable to raise on every call.
+     * @param ?\Closure(): string $cacheVersion
      */
     private function renderer(
         array|\Throwable $responses,
-        ?SnapshotCacheInterface $cache = null
+        ?SnapshotCacheInterface $cache = null,
+        ?\Closure $cacheVersion = null,
     ): InitialResponseRenderer {
         $client = (new \ReflectionClass(TypesenseClient::class))->newInstanceWithoutConstructor();
         $client->multiSearch = new class ($responses, $this->sent) extends MultiSearch {
@@ -68,6 +70,7 @@ final class InitialResponseRendererTest extends TestCase
         return new InitialResponseRenderer(
             clientFactory: static fn(): TypesenseClient => $client,
             cache: $cache,
+            cacheVersion: $cacheVersion,
         );
     }
 
@@ -119,6 +122,26 @@ final class InitialResponseRendererTest extends TestCase
         $excluded = $this->sent->entries[0]['searches'][0]['exclude_fields'];
         self::assertStringContainsString('ocr_text', $excluded);
         self::assertStringContainsString('toc_txt', $excluded);
+    }
+
+    public function testOrScopeIsGroupedInsideThePublicGuard(): void
+    {
+        $this->renderer([['results' => [self::page()]]])
+            ->render(self::bootstrap(['locked_filters' => 'country_ss:=Bénin || country_ss:=Togo']));
+        self::assertSame('is_public:=true && (country_ss:=Bénin || country_ss:=Togo)', $this->sent->entries[0]['searches'][0]['filter_by']);
+    }
+
+    public function testAppliedChangesInvalidateAnOtherwiseIdenticalSsrSnapshot(): void
+    {
+        $version = 'before';
+        $renderer = $this->renderer([['results' => [self::page()]]], new MemorySnapshotCache(), static function () use (&$version): string { return $version; });
+        $renderer->render(self::bootstrap());
+        $renderer->render(self::bootstrap());
+        self::assertCount(1, $this->sent->entries);
+        $version = 'after';
+        $renderer->render(self::bootstrap());
+        self::assertCount(2, $this->sent->entries);
+        self::assertArrayNotHasKey('_epoch', $this->sent->entries[1]);
     }
 
     // ── Request shaping ─────────────────────────────────────────────────

@@ -1,14 +1,6 @@
 # IwacSearch module review — July 2026
 
-> **Status: implemented.** Everything in sections A–C below was applied in
-> the same branch as this document; see the "Done" table in
-> [engineering-roadmap.md](engineering-roadmap.md) for the per-item landing
-> record. The findings are kept here in full because they explain _why_ the
-> code now looks the way it does.
->
-> Section D followed: the **test harnesses are done and gating** (82 Vitest +
-> 139 PHPUnit cases), and **PHPStan is configured but never executed** — see
-> the roadmap's Phase 1 for the state and the three steps left to finish it.
+> **Historical report — implementation complete.** This preserves the July findings and rationale. Its original test totals and pending-action statements describe that review, not the current module. For the verified 3.19.0 implementation, see [operations-3.19.md](operations-3.19.md); remaining work is consolidated in [engineering-roadmap.md](engineering-roadmap.md).
 
 A read-through of the whole module (PHP + Svelte client + build wiring)
 looking for correctness bugs, duplication, modularity seams, and

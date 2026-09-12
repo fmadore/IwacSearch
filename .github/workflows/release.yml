@@ -12,11 +12,7 @@
 # to boot: Module.php, config/, src/ PHP, view/, data/, cli/, asset/ (with the
 # committed asset/dist bundles) and vendor/.
 #
-# NOTE ON REPRODUCIBILITY: composer.lock is gitignored in this repo, so the
-# vendor tree here is resolved fresh at release time rather than pinned. Two
-# builds of the same tag can therefore differ in transitive dependency
-# versions. Committing composer.lock would fix that, and is worth doing if
-# these zips ever become the primary distribution channel.
+# Release dependencies come from the committed PHP-8.2-compatible composer.lock.
 
 name: Release
 
@@ -119,6 +115,7 @@ jobs:
           rm -rf build/IwacSearch/src/svelte \
                  build/IwacSearch/src/svelte-shared \
                  build/IwacSearch/docs
+          test -f build/IwacSearch/composer.lock
           composer install \
             --working-dir=build/IwacSearch \
             --no-dev --optimize-autoloader \
