@@ -103,7 +103,6 @@ final class Reindexer
         $schema   = $this->schemaLoader->loadForReindex();
         $newName  = $schema['name'];
         $alias    = $schema['_alias_target'];
-        $previous = $this->ops->resolveAliasTarget($alias);
 
         $this->logger->info('Creating new collection', ['name' => $newName, 'alias' => $alias]);
         $this->ops->createVersioned($schema);
@@ -129,12 +128,15 @@ final class Reindexer
             throw $e;
         }
 
-        // Every rejection blocks promotion. Orchestration may defer the swap for replay.
+        // Every rejection blocks promotion, and a build that can never be
+        // promoted is dropped rather than left resident in Typesense memory.
+        // Orchestration may defer the swap for replay.
         if ($totalErrors > 0) {
+            $this->ops->safelyDropCollection($newName);
             throw new \RuntimeException('Reindex import rejected documents; refusing promotion.');
         }
         if ($promote) {
-            $this->ops->promote($alias, $newName, $schema['_base_name'], $previous, $totalIndexed, $totalErrors);
+            $this->ops->promote($alias, $newName, $totalIndexed, $totalErrors);
         }
 
         return [

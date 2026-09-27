@@ -22,6 +22,13 @@ final class MemorySnapshotCache implements SnapshotCacheInterface
     /** @var array<string, list<array<string, mixed>|null>> */
     public array $store = [];
 
+    public bool $enabled = true;
+
+    public function enabled(): bool
+    {
+        return $this->enabled;
+    }
+
     public function key(array $body): string
     {
         return hash('xxh128', json_encode($body) ?: '');

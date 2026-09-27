@@ -187,6 +187,22 @@ final class IwacInstance
     /** English site slug — drives the fr/en UI-locale heuristic. */
     public const SITE_SLUG_EN = 'westafrica';
 
+    // ────────────────────────────────────────────────────────────────────
+    // Typesense aliases
+    // ────────────────────────────────────────────────────────────────────
+
+    /**
+     * The alias every public content search addresses. A rebuild creates a
+     * timestamped collection and swaps this alias onto it. Web surfaces, the
+     * rebuild, the drain, analytics rules and the public key scope all read
+     * this constant — it used to be a config key that only the web factories
+     * honoured, so changing it split search from indexing.
+     */
+    public const CONTENT_ALIAS = 'iwac_current';
+
+    /** The alias of the entity (authority index) collection. */
+    public const INDEX_ALIAS = 'iwac_index_current';
+
     private function __construct()
     {
     }

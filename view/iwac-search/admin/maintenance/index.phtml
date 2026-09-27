@@ -2,9 +2,10 @@
 /**
  * Admin maintenance page for IwacSearch.
  *
- * POST forms (reindex / stopwords / synonyms / analytics), each carrying
- * a fresh CSRF token, plus the live index status and the search-analytics
- * digest. Plain server-rendered HTML; no Svelte bundle needed.
+ * POST forms (reindex / stopwords / synonyms / analytics / retry / cleanup),
+ * each carrying a fresh CSRF token, plus the live index status, the index
+ * generations with Typesense memory, and the search-analytics digest. Plain
+ * server-rendered HTML; no Svelte bundle needed.
  *
  * @var \Laminas\View\Renderer\PhpRenderer $this
  * @var \IwacSearch\Form\MaintenanceForm $reindexForm
@@ -16,6 +17,8 @@
  *   prose tracks schema bumps automatically.
  * @var list<array{alias: string, label: string, reachable: bool, documents: ?int, error: ?string}> $statuses
  *   Live Typesense status, one row per collection.
+ * @var array{available: bool, generations: list<array{name: string, documents: int, created: ?int, serves: list<string>}>, memory: ?array{active: ?int, used: ?int, total: ?int}} $generations
+ *   Every IWAC generation on the server and Typesense memory.
  * @var array{available: bool, reason: ?string, popular: list<array{q: string, count: int}>, nohits: list<array{q: string, count: int}>} $analytics
  *   Aggregated search analytics (top queries / no-hit queries), or a
  *   not-yet-provisioned marker.
@@ -49,7 +52,7 @@ $analytics = $analytics ?? ['available' => false, 'reason' => null, 'popular' =>
 <?php echo $this->pageTitle($translate('IWAC Search: maintenance'), 1); ?>
 
 <p class="description">
-    <?php echo $translate('Trigger Typesense maintenance tasks without dropping into the docker container. Both actions dispatch as Omeka background jobs; track progress in the Jobs admin page.'); ?>
+    <?php echo $translate('Trigger Typesense maintenance tasks without dropping into the docker container. Every action dispatches an Omeka background job; track progress in the Jobs admin page.'); ?>
 </p>
 
 <?php if (!empty($queueError)): ?>
@@ -93,6 +96,59 @@ $analytics = $analytics ?? ['available' => false, 'reason' => null, 'popular' =>
     <p class="description" style="margin-top:0.75rem;margin-bottom:0;">
         <?php echo $translate('Live counts read directly from Typesense. A reachable collection with 0 documents has never been built — run a full reindex.'); ?>
     </p>
+</section>
+
+<?php
+$generations = $generations ?? ['available' => false, 'generations' => [], 'memory' => null];
+$mib = static fn (?int $bytes): string => $bytes === null ? '—' : number_format($bytes / 1048576) . ' MiB';
+?>
+<section class="iwac-maintenance-generations" style="margin-top:1.5rem;border:1px solid #ddd;border-radius:6px;padding:1rem 1.5rem;background:#fff;">
+    <h3 style="margin-top:0;"><?php echo $translate('Index generations'); ?></h3>
+    <?php if (!$generations['available']): ?>
+        <p><?php echo $translate('Generation list unavailable — Typesense is unreachable.'); ?></p>
+    <?php else: ?>
+        <table style="width:100%;border-collapse:collapse;">
+            <thead>
+                <tr style="text-align:left;border-bottom:2px solid #eee;">
+                    <th style="padding:0.4rem 0.5rem;"><?php echo $translate('Collection'); ?></th>
+                    <th style="padding:0.4rem 0.5rem;"><?php echo $translate('Serves'); ?></th>
+                    <th style="padding:0.4rem 0.5rem;"><?php echo $translate('Created'); ?></th>
+                    <th style="padding:0.4rem 0.5rem;text-align:right;"><?php echo $translate('Documents'); ?></th>
+                </tr>
+            </thead>
+            <tbody>
+                <?php foreach ($generations['generations'] as $generation): ?>
+                    <tr style="border-bottom:1px solid #f0f0f0;">
+                        <td style="padding:0.4rem 0.5rem;"><code><?php echo $escape($generation['name']); ?></code></td>
+                        <td style="padding:0.4rem 0.5rem;">
+                            <?php echo $generation['serves'] === []
+                                ? $escape($translate('retained (not live)'))
+                                : $escape(implode(', ', $generation['serves'])); ?>
+                        </td>
+                        <td style="padding:0.4rem 0.5rem;">
+                            <?php echo $generation['created'] === null ? '—' : $escape(gmdate('Y-m-d H:i', $generation['created']) . ' UTC'); ?>
+                        </td>
+                        <td style="padding:0.4rem 0.5rem;text-align:right;font-variant-numeric:tabular-nums;">
+                            <?php echo number_format($generation['documents']); ?>
+                        </td>
+                    </tr>
+                <?php endforeach; ?>
+            </tbody>
+        </table>
+        <?php if ($generations['memory'] !== null): ?>
+            <p style="margin-bottom:0;">
+                <?php echo $escape(sprintf(
+                    $translate('Typesense memory in use: %1$s. Host memory used: %2$s of %3$s.'),
+                    $mib($generations['memory']['active']),
+                    $mib($generations['memory']['used']),
+                    $mib($generations['memory']['total'])
+                )); ?>
+            </p>
+        <?php endif; ?>
+        <p class="description" style="margin-top:0.75rem;margin-bottom:0;">
+            <?php echo $translate('Every generation stays in Typesense memory until the cleanup below removes it. The container memory cap is set in IWAC-docker; host figures ignore it.'); ?>
+        </p>
+    <?php endif; ?>
 </section>
 
 <section class="iwac-maintenance-analytics" style="margin-top:1.5rem;border:1px solid #ddd;border-radius:6px;padding:1rem 1.5rem;background:#fff;">

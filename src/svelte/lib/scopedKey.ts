@@ -16,8 +16,12 @@ import { formatHttpError } from './transport';
  * In-flight requests are coalesced so a burst of debounced searches doesn't
  * N-amplify token requests.
  *
- * Keys are memory-only — never written to storage — so they die with the tab
- * regardless of their (1 h) server-side expiry.
+ * Keys are also kept in `sessionStorage`, so navigating between pages of one
+ * tab reuses the key instead of booting Omeka for a new one on every page.
+ * Session storage still dies with the tab, as the memory-only cache did; the
+ * key is public-shaped (the server embeds every restriction in it); and a key
+ * the server rejects is dropped from storage as well as memory. Storage is
+ * best-effort: private modes and blocked site data fall back to memory.
  */
 const keyCache = new Map<
   string,
@@ -27,14 +31,44 @@ const keyCache = new Map<
 /** Refresh this many seconds before the server-side expiry. */
 const RENEW_MARGIN_SECONDS = 60;
 
+const STORAGE_PREFIX = 'iwac-search:scoped-key:';
+
+function readStored(endpoint: string): ScopedKeyResponse | null {
+  try {
+    const raw = globalThis.sessionStorage?.getItem(STORAGE_PREFIX + endpoint);
+    if (!raw) return null;
+    const key = JSON.parse(raw) as Partial<ScopedKeyResponse>;
+    return typeof key.key === 'string' && key.key !== '' && typeof key.expires_at === 'number'
+      ? (key as ScopedKeyResponse)
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeStored(endpoint: string, key: ScopedKeyResponse | null): void {
+  try {
+    if (key) {
+      globalThis.sessionStorage?.setItem(STORAGE_PREFIX + endpoint, JSON.stringify(key));
+    } else {
+      globalThis.sessionStorage?.removeItem(STORAGE_PREFIX + endpoint);
+    }
+  } catch {
+    // Storage full or blocked: the in-memory cache still serves this page.
+  }
+}
+
 export async function getScopedKey(
   endpoint: string,
   rejectedKey?: string,
 ): Promise<ScopedKeyResponse> {
-  const slot = keyCache.get(endpoint) ?? { key: null, inflight: null };
+  const slot = keyCache.get(endpoint) ?? { key: readStored(endpoint), inflight: null };
   keyCache.set(endpoint, slot);
 
-  if (rejectedKey && slot.key?.key === rejectedKey) slot.key = null;
+  if (rejectedKey && slot.key?.key === rejectedKey) {
+    slot.key = null;
+    writeStored(endpoint, null);
+  }
   const now = Math.floor(Date.now() / 1000);
   if (slot.key && slot.key.expires_at - RENEW_MARGIN_SECONDS > now) {
     return slot.key;
@@ -57,6 +91,7 @@ export async function getScopedKey(
         throw new Error('Token endpoint returned no key');
       }
       slot.key = key;
+      writeStored(endpoint, key);
       return key;
     } finally {
       slot.inflight = null;

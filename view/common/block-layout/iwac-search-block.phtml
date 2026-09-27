@@ -47,12 +47,19 @@ $hasHeading = $title !== '';
         </div>
     <?php endif; ?>
 
+    <?php
+    // /search needs JavaScript too, so the no-JS fallback is Omeka's own
+    // server-rendered item browse for the current site.
+    $noScriptSite = $this->currentSite();
+    ?>
     <noscript>
         <p>
             <?= $this->translate('Search requires JavaScript.') ?>
-            <a href="<?= $this->escapeHtmlAttr($this->basePath('/search')) ?>">
-                <?= $this->translate('Open the standalone search page.') ?>
-            </a>
+            <?php if ($noScriptSite !== null): ?>
+                <a href="<?= $this->escapeHtmlAttr($this->url('site/resource', ['site-slug' => $noScriptSite->slug(), 'controller' => 'item', 'action' => 'browse'])) ?>">
+                    <?= $this->translate('Browse the items instead.') ?>
+                </a>
+            <?php endif; ?>
         </p>
     </noscript>
 

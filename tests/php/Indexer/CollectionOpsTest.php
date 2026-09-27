@@ -44,7 +44,7 @@ final class CollectionOpsTest extends TestCase
         $this->server->aliases['iwac_current'] = 'iwac_v1_old';
         $this->server->seedCollection('iwac_v1_new');
 
-        $this->ops()->promote('iwac_current', 'iwac_v1_new', 'iwac_v1', 'iwac_v1_old', 14000, 0);
+        $this->ops()->promote('iwac_current', 'iwac_v1_new', 14000, 0);
 
         self::assertSame('iwac_v1_new', $this->server->aliases['iwac_current']);
         self::assertSame([], $this->server->dropped);
@@ -60,7 +60,7 @@ final class CollectionOpsTest extends TestCase
         $this->expectExceptionMessage('the previous collection stays live');
 
         try {
-            $this->ops()->promote('iwac_current', 'iwac_v1_new', 'iwac_v1', 'iwac_v1_old', 0, 0);
+            $this->ops()->promote('iwac_current', 'iwac_v1_new', 0, 0);
         } finally {
             // The whole point: live search is untouched, and the half-built
             // collection is cleaned up rather than left leaking RAM.
@@ -77,7 +77,7 @@ final class CollectionOpsTest extends TestCase
         $this->server->seedCollection('iwac_v1_new');
 
         $this->expectException(RuntimeException::class);
-        $this->ops()->promote('iwac_current', 'iwac_v1_new', 'iwac_v1', 'iwac_v1_old', 890, 110);
+        $this->ops()->promote('iwac_current', 'iwac_v1_new', 890, 110);
     }
 
     public function testPromoteRefusesEvenOneRejectedDocument(): void
@@ -88,7 +88,7 @@ final class CollectionOpsTest extends TestCase
         $this->server->seedCollection('iwac_v1_new');
 
         $this->expectException(RuntimeException::class);
-        $this->ops()->promote('iwac_current', 'iwac_v1_new', 'iwac_v1', 'iwac_v1_old', 999, 1);
+        $this->ops()->promote('iwac_current', 'iwac_v1_new', 999, 1);
 
         self::assertSame('iwac_v1_new', $this->server->aliases['iwac_current']);
     }
@@ -97,7 +97,7 @@ final class CollectionOpsTest extends TestCase
     {
         $this->server->seedCollection('iwac_v1_new');
 
-        $this->ops()->promote('iwac_current', 'iwac_v1_new', 'iwac_v1', null, 10, 0);
+        $this->ops()->promote('iwac_current', 'iwac_v1_new', 10, 0);
 
         self::assertSame('iwac_v1_new', $this->server->aliases['iwac_current']);
         self::assertSame([], $this->server->dropped);
@@ -108,7 +108,7 @@ final class CollectionOpsTest extends TestCase
         // Defensive: a re-promote of the live collection must not delete it.
         $this->server->seedCollection('iwac_v1_new');
 
-        $this->ops()->promote('iwac_current', 'iwac_v1_new', 'iwac_v1', 'iwac_v1_new', 10, 0);
+        $this->ops()->promote('iwac_current', 'iwac_v1_new', 10, 0);
 
         self::assertSame([], $this->server->dropped);
         self::assertArrayHasKey('iwac_v1_new', $this->server->collections);
@@ -125,14 +125,7 @@ final class CollectionOpsTest extends TestCase
         $this->server->seedCollection('iwac_v1_new');
         $this->server->aliases['iwac_current'] = 'iwac_v1_20260101_000000';
 
-        $this->ops()->promote(
-            'iwac_current',
-            'iwac_v1_new',
-            'iwac_v1',
-            'iwac_v1_20260101_000000',
-            10,
-            0
-        );
+        $this->ops()->promote('iwac_current', 'iwac_v1_new', 10, 0);
 
         self::assertSame(
             [],
@@ -150,7 +143,7 @@ final class CollectionOpsTest extends TestCase
         $this->server->seedCollection('iwac_v2_20260101_000000');
         $this->server->seedCollection('iwac_v1_new');
 
-        $this->ops()->promote('iwac_current', 'iwac_v1_new', 'iwac_v1', null, 10, 0);
+        $this->ops()->promote('iwac_current', 'iwac_v1_new', 10, 0);
 
         self::assertSame([], $this->server->dropped);
     }
@@ -162,7 +155,7 @@ final class CollectionOpsTest extends TestCase
         $this->server->seedCollection('iwac_v1_20260101_000000');
         $this->server->seedCollection('iwac_v1_new');
 
-        $this->ops()->promote('iwac_current', 'iwac_v1_new', 'iwac_v1', null, 10, 0);
+        $this->ops()->promote('iwac_current', 'iwac_v1_new', 10, 0);
 
         self::assertSame([], $this->server->dropped);
     }
@@ -172,7 +165,7 @@ final class CollectionOpsTest extends TestCase
         $this->server->listFailure = new RuntimeException('connection refused');
         $this->server->seedCollection('iwac_v1_new');
 
-        $this->ops()->promote('iwac_current', 'iwac_v1_new', 'iwac_v1', null, 10, 0);
+        $this->ops()->promote('iwac_current', 'iwac_v1_new', 10, 0);
 
         // The swap is what matters; a failed cleanup must not undo it.
         self::assertSame('iwac_v1_new', $this->server->aliases['iwac_current']);
@@ -263,13 +256,15 @@ final class CollectionOpsTest extends TestCase
         self::assertArrayHasKey('iwac_v1_20260101_000000', $this->server->collections);
     }
 
-    public function testDeleteDocumentReportsWhetherTheDocumentExisted(): void
+    public function testDeleteDocumentsCountsOnlyWhatExisted(): void
     {
-        $this->server->collections['c'] = [['id' => '42']];
+        $this->server->collections['c'] = [['id' => '42'], ['id' => '43']];
 
-        self::assertTrue($this->ops()->deleteDocument('c', '42'));
-        self::assertFalse($this->ops()->deleteDocument('c', '42'));
-        self::assertFalse($this->ops()->deleteDocument('c', '999'));
+        self::assertSame(1, $this->ops()->deleteDocuments('c', ['42', '999']));
+        self::assertSame(0, $this->ops()->deleteDocuments('c', ['42']));
+        self::assertSame(0, $this->ops()->deleteDocuments('c', []), 'nothing to delete sends nothing');
+        self::assertCount(2, $this->server->filterDeletes);
+        self::assertSame([['id' => '43']], $this->server->collections['c']);
     }
 
     public function testTruncatedImportResponseCannotLookSuccessful(): void

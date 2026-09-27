@@ -7,7 +7,12 @@ namespace IwacSearch\Indexer;
 use Doctrine\DBAL\Connection;
 use Typesense\Client;
 
-/** Explicit maintenance; shares the rebuild lock and protects every alias target. */
+/**
+ * Explicit maintenance; shares the rebuild lock and protects every alias
+ * target. Besides old generations, it trims the processed journal rows and
+ * the completed drain-job history, which otherwise grow with every save when
+ * full rebuilds are rare.
+ */
 final class CollectionRetention
 {
     public function __construct(private readonly Connection $connection, private readonly Client $client)
@@ -19,6 +24,8 @@ final class CollectionRetention
         $lock = new DatabaseLock($this->connection, 'rebuild');
         $lock->acquire();
         try {
+            (new ChangeJournal($this->connection))->prune();
+            DrainJobHistory::prune($this->connection);
             $active = array_column($this->client->aliases->retrieve()['aliases'], 'collection_name');
             // Record of the actual outgoing targets survives newer failed builds.
             $active = array_merge($active, $this->connection->fetchFirstColumn('SELECT collection_name FROM iwac_search_rollback WHERE collection_name IS NOT NULL'));

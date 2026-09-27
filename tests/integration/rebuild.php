@@ -25,7 +25,10 @@ $logger = new class($db, $listener) extends Psr\Log\AbstractLogger {
 };
 $previous = $ops->resolveAliasTarget('iwac_current');
 $stats = (new ReindexOrchestrator($client, $db, dirname(__DIR__, 2), $logger))->run();
-check($stats['catch_up']['ok'] && $stats['catch_up']['items'] === 2, 'rebuild replays changes before cutover');
+// The two edits land during the content stream, so they are replayed in the
+// unlocked phase; nothing changed after the second watermark.
+check($stats['catch_up']['ok'] && $stats['catch_up']['unlocked_items'] === 2 && $stats['catch_up']['items'] === 0, 'rebuild replays changes before cutover');
+check(isset($stats['gate_held_seconds']), 'cutover reports how long it held the write gate');
 check($ops->document('iwac_current', '1')['is_public'] === false && $ops->document('iwac_current', '2') === null, 'cutover includes privatization and deletion');
 check($ops->documentCount($previous) > 0, 'previous collection retained after promotion');
 check($stats['indexed'] === 1 && $stats['verified_counts']['article'] === 1, 'final source and server subset counts reconciled');
@@ -55,6 +58,8 @@ try {
     check(str_contains($e->getMessage(), 'Injected replay outage'), 'replay failure reaches orchestrator');
 }
 check($ops->resolveAliasTarget('iwac_current') === $beforeContent && $ops->resolveAliasTarget('iwac_index_current') === $beforeIndex, 'failed replay preserves both aliases');
+$generations = array_column($client->collections->retrieve(), 'name');
+check(count(preg_grep('/^iwac_v[0-9]+_/', $generations)) === 2, 'failed build is dropped; live and previous generations remain');
 check($journal->status()['pending'] > 0, 'failed replay remains durably retryable');
 (new IwacSearch\Indexer\ChangeDrainer($db, $incremental))->run();
 check($journal->status()['pending'] === 0, 'recovery drains failed changes');

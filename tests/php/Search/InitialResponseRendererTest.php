@@ -344,6 +344,38 @@ final class InitialResponseRendererTest extends TestCase
         self::assertSame([], $cache->store);
     }
 
+    public function testANewChangeEpochMissesTheCache(): void
+    {
+        $cache = new MemorySnapshotCache();
+        $epoch = 'a';
+        $renderer = $this->renderer([['results' => [self::page(1)]], ['results' => [self::page(2)]]], $cache, static function () use (&$epoch): string {
+            return $epoch;
+        });
+
+        $renderer->render(self::bootstrap());
+        $epoch = 'b'; // a save was journaled
+        $after = $renderer->render(self::bootstrap());
+
+        self::assertSame(2, $after['found']);
+        self::assertCount(2, $this->sent->entries);
+    }
+
+    public function testADisabledCacheSkipsTheEpochQueries(): void
+    {
+        // The epoch costs SQL on every render; with nothing to key, skip it.
+        $cache = new MemorySnapshotCache();
+        $cache->enabled = false;
+        $calls = 0;
+        $renderer = $this->renderer([['results' => [self::page()]]], $cache, static function () use (&$calls): string {
+            $calls++;
+            return 'epoch';
+        });
+
+        self::assertNotNull($renderer->render(self::bootstrap()));
+        self::assertSame(0, $calls);
+        self::assertSame([], $cache->store);
+    }
+
     public function testTheRealCacheIsANoOpRatherThanAnErrorWithoutApcu(): void
     {
         // The module must work on a PHP build with no APCu — it just pays the

@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 namespace IwacSearch\Indexer;
 
+use Doctrine\DBAL\Connection;
 use IwacSearch\Indexer\Mapper\AbstractMapper;
 use IwacSearch\Indexer\Mapper\IndexEntityMapper;
 use IwacSearch\Indexer\Mapper\MapperRegistry;
+use IwacSearch\IwacInstance;
 use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
 use RuntimeException;
@@ -14,15 +16,50 @@ use RuntimeException;
 /** Strict indexing core. Jobs acknowledge only successful writes. */
 final class IncrementalIndexer
 {
+    /**
+     * Occurrence aggregates an entity document carries. They refresh on a full
+     * rebuild only, so an incremental authority update reads them back from
+     * the existing document and keeps them.
+     */
+    private const AGGREGATE_FIELDS = ['frequency', 'authored_count', 'country_ss', 'first_year', 'last_year', 'mentions_by_year_s'];
+
     public function __construct(
         private readonly CollectionOps $ops,
         private readonly OmekaSourceReader $reader,
         private readonly MapperRegistry $mappers,
         private readonly EntityAuthority $authority,
-        private readonly string $collectionAlias = 'iwac_current',
+        private readonly string $collectionAlias = IwacInstance::CONTENT_ALIAS,
         private readonly LoggerInterface $logger = new NullLogger(),
-        private readonly ?string $indexAlias = 'iwac_index_current',
+        private readonly ?string $indexAlias = IwacInstance::INDEX_ALIAS,
     ) {
+    }
+
+    /**
+     * The one wiring of the incremental graph — used by the DrainChanges job
+     * (via its service factory), `cli/maintenance.php drain`, and the rebuild
+     * cutover, so the three cannot drift apart.
+     *
+     * @param string      $collection Content collection (or alias) to write.
+     * @param string|null $index      Entity collection (or alias); null = content only.
+     */
+    public static function create(
+        CollectionOps $ops,
+        Connection $connection,
+        string $moduleRoot,
+        string $collection = IwacInstance::CONTENT_ALIAS,
+        ?string $index = IwacInstance::INDEX_ALIAS,
+        LoggerInterface $logger = new NullLogger(),
+    ): self {
+        $authority = new EntityAuthority();
+        return new self(
+            $ops,
+            new OmekaSourceReader($connection),
+            MapperRegistry::default($authority, new CountryResolver($moduleRoot . '/data/newspaper-countries.json')),
+            $authority,
+            $collection,
+            $logger,
+            $index,
+        );
     }
 
     public function reindexItem(int $itemId): void
@@ -30,12 +67,19 @@ final class IncrementalIndexer
         $this->reindexItems([$itemId]);
     }
 
-    /** @param list<int> $itemIds */
-    public function reindexItems(array $itemIds): void
+    /**
+     * @param  list<int> $itemIds
+     * @return array{content: array<int, ?string>, entity: array<int, bool>} see applySnapshot()
+     */
+    public function reindexItems(array $itemIds): array
     {
+        $outcome = ['content' => [], 'entity' => []];
         foreach (array_chunk(array_values(array_unique($itemIds)), 100) as $batch) {
-            $this->applySnapshot($this->snapshot($batch));
+            $result = $this->applySnapshot($this->snapshot($batch));
+            $outcome['content'] = array_replace($outcome['content'], $result['content']);
+            $outcome['entity'] = array_replace($outcome['entity'], $result['entity']);
         }
+        return $outcome;
     }
 
     /**
@@ -73,47 +117,77 @@ final class IncrementalIndexer
         return $snapshot;
     }
 
-    /** @param list<array{id:int, content:?array<string,mixed>, entity:?array<string,mixed>}> $snapshot */
-    public function applySnapshot(array $snapshot): void
+    /**
+     * Apply one snapshot with a constant number of requests per collection:
+     * one filtered delete, one aggregate read (entities), one import.
+     *
+     * Order: withdrawals first (entity and content deletes), then authority
+     * metadata, then content — whose import may run embedding inference.
+     *
+     * @param  list<array{id:int, content:?array<string,mixed>, entity:?array<string,mixed>}> $snapshot
+     * @return array{content: array<int, ?string>, entity: array<int, bool>}
+     *   Per ID: the content type now indexed (null = no content document),
+     *   and whether an entity document now exists (only when an entity
+     *   collection is maintained).
+     */
+    public function applySnapshot(array $snapshot): array
     {
-        $docs = $entityDocs = [];
+        $outcome = ['content' => [], 'entity' => []];
+        $docs = $contentDeletes = [];
         foreach ($snapshot as $change) {
-            $id = (string) $change['id'];
             if ($change['content'] === null) {
-                $this->ops->deleteDocument($this->collectionAlias, $id);
+                $contentDeletes[] = (string) $change['id'];
+                $outcome['content'][$change['id']] = null;
             } else {
                 $docs[] = $change['content'];
-            }
-            if ($this->indexAlias === null) {
-                continue;
-            }
-            if ($change['entity'] === null) {
-                $this->ops->deleteDocument($this->indexAlias, $id);
-                continue;
-            }
-            $existing = $this->ops->document($this->indexAlias, $id) ?? [];
-            $entityDoc = (new IndexEntityMapper())->map($change['entity'], [
-                'frequency' => (int) ($existing['frequency'] ?? 0),
-                'authored_count' => (int) ($existing['authored_count'] ?? 0),
-                'countries' => $existing['country_ss'] ?? [],
-                'first_year' => $existing['first_year'] ?? null,
-                'last_year' => $existing['last_year'] ?? null,
-            ]);
-            if ($entityDoc === null) {
-                $this->ops->deleteDocument($this->indexAlias, $id);
-            } else {
-                if (isset($existing['mentions_by_year_s'])) {
-                    $entityDoc['mentions_by_year_s'] = $existing['mentions_by_year_s'];
-                }
-                $entityDocs[] = $entityDoc;
+                $outcome['content'][$change['id']] = (string) ($change['content']['type_s'] ?? '');
             }
         }
-        // Authority visibility/deletion is applied before potentially expensive content embeddings.
+
+        $entityDocs = $entityDeletes = [];
+        if ($this->indexAlias !== null) {
+            $withEntity = [];
+            foreach ($snapshot as $change) {
+                if ($change['entity'] !== null) {
+                    $withEntity[] = (string) $change['id'];
+                }
+            }
+            $existing = $withEntity === []
+                ? []
+                : $this->ops->documentsById($this->indexAlias, $withEntity, self::AGGREGATE_FIELDS);
+            $mapper = new IndexEntityMapper();
+            foreach ($snapshot as $change) {
+                $id = (string) $change['id'];
+                $prior = $existing[$id] ?? [];
+                $entityDoc = $change['entity'] === null ? null : $mapper->map($change['entity'], [
+                    'frequency' => (int) ($prior['frequency'] ?? 0),
+                    'authored_count' => (int) ($prior['authored_count'] ?? 0),
+                    'countries' => $prior['country_ss'] ?? [],
+                    'first_year' => $prior['first_year'] ?? null,
+                    'last_year' => $prior['last_year'] ?? null,
+                ]);
+                if ($entityDoc === null) {
+                    $entityDeletes[] = $id;
+                    $outcome['entity'][$change['id']] = false;
+                    continue;
+                }
+                if (isset($prior['mentions_by_year_s'])) {
+                    $entityDoc['mentions_by_year_s'] = $prior['mentions_by_year_s'];
+                }
+                $entityDocs[] = $entityDoc;
+                $outcome['entity'][$change['id']] = true;
+            }
+            $this->ops->deleteDocuments($this->indexAlias, $entityDeletes);
+        }
+        $this->ops->deleteDocuments($this->collectionAlias, $contentDeletes);
+
+        // Authority visibility/metadata is applied before potentially expensive content embeddings.
         if ($this->indexAlias !== null) {
             $this->import($this->indexAlias, $entityDocs);
         }
         $this->import($this->collectionAlias, $docs);
         $this->logger->debug('Processed index change batch', ['items' => count($snapshot)]);
+        return $outcome;
     }
 
     /** @param list<array<string,mixed>> $docs */
@@ -128,9 +202,9 @@ final class IncrementalIndexer
     public function deleteItem(int $itemId): void
     {
         if ($itemId > 0) {
-            $this->ops->deleteDocument($this->collectionAlias, (string) $itemId);
+            $this->ops->deleteDocuments($this->collectionAlias, [(string) $itemId]);
             if ($this->indexAlias !== null) {
-                $this->ops->deleteDocument($this->indexAlias, (string) $itemId);
+                $this->ops->deleteDocuments($this->indexAlias, [(string) $itemId]);
             }
         }
     }

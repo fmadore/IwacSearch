@@ -24,11 +24,7 @@ export interface MultiSearchEnvelope {
   results: Array<IwacSearchResponse | TypesensePerSearchError>;
 }
 
-/**
- * POST a JSON body and parse the JSON response, throwing a formatted error
- * on a non-2xx status. `signal` aborts superseded requests (fast typing) —
- * see isAbortError() for how callers distinguish that from a real failure.
- */
+/** A non-2xx HTTP response, with its status kept for auth-refresh decisions. */
 export class HttpError extends Error {
   constructor(
     message: string,
@@ -38,6 +34,20 @@ export class HttpError extends Error {
   }
 }
 
+/**
+ * Most searches one multi_search request may carry. The public scoped key
+ * embeds the same number as `limit_multi_searches`
+ * (TypesenseSearchKeyProvider::MAX_MULTI_SEARCHES — check-schema-drift.js
+ * keeps them equal), so a larger request would fail on the server; failing
+ * here names the caller instead.
+ */
+export const MULTI_SEARCH_LIMIT = 10;
+
+/**
+ * POST a JSON body and parse the JSON response, throwing a formatted error
+ * on a non-2xx status. `signal` aborts superseded requests (fast typing) —
+ * see isAbortError() for how callers distinguish that from a real failure.
+ */
 export async function postJson<T>(
   url: string,
   apiKey: string,
@@ -45,6 +55,12 @@ export async function postJson<T>(
   label: string,
   signal?: AbortSignal,
 ): Promise<T> {
+  const searches = (body as { searches?: unknown } | null)?.searches;
+  if (Array.isArray(searches) && searches.length > MULTI_SEARCH_LIMIT) {
+    throw new Error(
+      `${label}: ${searches.length} searches exceed the per-request limit of ${MULTI_SEARCH_LIMIT}`,
+    );
+  }
   const deadline = AbortSignal.timeout(15000);
   const res = await fetch(url, {
     method: 'POST',

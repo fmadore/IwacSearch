@@ -18,7 +18,8 @@
     "lint:theme": "node scripts/check-theme-tokens.js",
     "lint:drift": "node scripts/check-schema-drift.js",
     "lint:i18n": "node scripts/check-i18n.js",
-    "lint": "npm run lint:theme && npm run lint:drift && npm run lint:i18n && eslint src/svelte src/svelte-shared scripts tests && prettier --check \"src/svelte/**/*.{ts,svelte}\" \"src/svelte-shared/**/*.{ts,svelte}\" \"scripts/**/*.js\" \"tests/client/**/*.ts\" \"*.{ts,json,md}\"",
+    "lint:docblocks": "node scripts/check-docblocks.js",
+    "lint": "npm run lint:theme && npm run lint:drift && npm run lint:i18n && npm run lint:docblocks && eslint src/svelte src/svelte-shared scripts tests && prettier --check \"src/svelte/**/*.{ts,svelte}\" \"src/svelte-shared/**/*.{ts,svelte}\" \"scripts/**/*.js\" \"tests/client/**/*.ts\" \"*.{ts,json,md}\"",
     "lint:fix": "eslint src/svelte src/svelte-shared scripts tests --fix && prettier --write \"src/svelte/**/*.{ts,svelte}\" \"src/svelte-shared/**/*.{ts,svelte}\" \"scripts/**/*.js\" \"tests/client/**/*.ts\" \"*.{ts,json,md}\"",
     "format": "prettier --write \"src/svelte/**/*.{ts,svelte}\" \"src/svelte-shared/**/*.{ts,svelte}\" \"scripts/**/*.js\" \"tests/client/**/*.ts\" \"*.{ts,json,md}\""
   },

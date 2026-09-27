@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace IwacSearch\Service\Search;
 
+use IwacSearch\IwacInstance;
 use IwacSearch\Log\LoggerResolver;
 use IwacSearch\Search\InitialResponseRenderer;
 use IwacSearch\Search\SnapshotCache;
@@ -27,7 +28,6 @@ final class InitialResponseRendererFactory implements FactoryInterface
         ?array $options = null
     ): InitialResponseRenderer {
         $config = $container->get('Config')['iwac_search'] ?? [];
-        $defaultCollection = (string) ($config['typesense']['collection_alias'] ?? 'iwac_current');
         // 0 disables the cache entirely (and is what a dev instance wants
         // while iterating on the schema or the mappers).
         $ttl = (int) ($config['ssr_cache']['ttl_seconds'] ?? 30);
@@ -35,7 +35,7 @@ final class InitialResponseRendererFactory implements FactoryInterface
         return new InitialResponseRenderer(
             clientFactory:     TypesenseClientLazy::fromContainer($container),
             logger:            LoggerResolver::fromContainer($container),
-            defaultCollection: $defaultCollection,
+            defaultCollection: IwacInstance::CONTENT_ALIAS,
             cache:             new SnapshotCache($ttl),
             cacheVersion:      static fn(): string => (new \IwacSearch\Indexer\ChangeJournal($container->get('Omeka\Connection')))->cacheVersion(),
         );

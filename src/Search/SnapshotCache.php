@@ -80,7 +80,7 @@ final class SnapshotCache implements SnapshotCacheInterface
         }
     }
 
-    private function enabled(): bool
+    public function enabled(): bool
     {
         return $this->ttlSeconds > 0
             && function_exists('apcu_enabled')

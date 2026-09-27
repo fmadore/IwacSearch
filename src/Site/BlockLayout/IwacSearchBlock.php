@@ -3,13 +3,16 @@ declare(strict_types=1);
 
 namespace IwacSearch\Site\BlockLayout;
 
+use Doctrine\DBAL\Connection;
 use IwacSearch\Asset\SvelteAssets;
 use IwacSearch\Browse\FacetCatalog;
+use IwacSearch\IwacInstance;
 use IwacSearch\Search\FacetValueLookup;
 use IwacSearch\Search\InitialResponseRenderer;
 use IwacSearch\Search\PresetCatalog;
 use IwacSearch\Search\ScopeFilters;
 use IwacSearch\Search\SearchDefaults;
+use IwacSearch\Search\SearchStateQuery;
 use IwacSearch\Search\SurfaceBootstrap;
 use Laminas\View\Renderer\PhpRenderer;
 use Omeka\Api\Representation\SitePageBlockRepresentation;
@@ -70,11 +73,14 @@ use Omeka\Stdlib\HtmlPurifier;
  */
 class IwacSearchBlock extends AbstractBlockLayout
 {
+    /** Block-data key recording that intro_html was purified when stored. */
+    public const PURIFIED_FLAG = 'intro_html_purified';
+
     public function __construct(
         private readonly InitialResponseRenderer $initialRenderer,
         private readonly HtmlPurifier $htmlPurifier,
-        private readonly string $contentAlias = 'iwac_current',
-        private readonly string $indexAlias = 'iwac_index_current',
+        private readonly string $contentAlias = IwacInstance::CONTENT_ALIAS,
+        private readonly string $indexAlias = IwacInstance::INDEX_ALIAS,
         // Live facet values for the form's value pickers. Null (or an
         // unreachable index) degrades to the static option lists — see
         // renderValuePickers(). Never touched by render(), only by form().
@@ -100,6 +106,7 @@ class IwacSearchBlock extends AbstractBlockLayout
 
         $introHtml = (string) ($data['intro_html'] ?? '');
         $data['intro_html'] = $introHtml === '' ? '' : $this->htmlPurifier->purify($introHtml);
+        $data[self::PURIFIED_FLAG] = true;
 
         $data['prominent_facets'] = FacetCatalog::normaliseFacets(
             is_iterable($data['prominent_facets'] ?? null) ? $data['prominent_facets'] : []
@@ -587,16 +594,30 @@ class IwacSearchBlock extends AbstractBlockLayout
         // from Sidwaya" on a Welcome page) show items immediately instead
         // of flashing empty for ~500 ms while the client mints a scoped
         // key and fetches. Null return → fall through to client-side fetch.
-        $initial = $this->initialRenderer->render($bootstrap);
-        if ($initial !== null) {
-            $bootstrap['initial_response'] = $initial;
+        // Skipped when the URL already carries this block's own state (a
+        // full-mode block syncs it under `b{id}.`): the client would discard
+        // the default-page snapshot and refetch, as on /search.
+        // The raw query string (see SearchStateQuery); absent outside a web
+        // request, e.g. when a job renders a page.
+        $blockState = $bootstrap['mode'] === 'full'
+            && SearchStateQuery::carriesState(
+                (string) ($_SERVER['QUERY_STRING'] ?? ''),
+                'b' . $block->id() . '.'
+            );
+        if (!$blockState) {
+            $initial = $this->initialRenderer->render($bootstrap);
+            if ($initial !== null) {
+                $bootstrap['initial_response'] = $initial;
+            }
         }
 
-        // Re-purify at render time as well: blocks saved before onHydrate()
-        // existed persist whatever the editor typed, and the template outputs
-        // this raw. Cheap for the short intro strings blocks carry.
+        // The template outputs intro_html raw. Anything saved through
+        // onHydrate() (or migrated by purifyStoredIntros()) is flagged as
+        // already purified; only an unflagged legacy value is purified here,
+        // so a block saved before onHydrate() existed is never output raw —
+        // even on an install whose upgrade migration has not run.
         $introHtml = (string) ($data['intro_html'] ?? '');
-        if ($introHtml !== '') {
+        if ($introHtml !== '' && empty($data[self::PURIFIED_FLAG])) {
             $introHtml = $this->htmlPurifier->purify($introHtml);
         }
 
@@ -607,5 +628,33 @@ class IwacSearchBlock extends AbstractBlockLayout
             'title'      => $data['title']      ?? '',
             'intro_html' => $introHtml,
         ]);
+    }
+
+    /**
+     * Upgrade migration: purify and flag the intro of every stored search
+     * block that predates PURIFIED_FLAG, so render() stops purifying on each
+     * page view. The purifier is resolved only if such a block exists.
+     *
+     * @param  \Closure(): HtmlPurifier $purifier
+     * @return int blocks updated
+     */
+    public static function purifyStoredIntros(Connection $connection, \Closure $purifier): int
+    {
+        $updated = 0;
+        foreach ($connection->executeQuery("SELECT id, data FROM site_page_block WHERE layout = 'iwacSearch'")->fetchAllAssociative() as $row) {
+            $data = json_decode((string) $row['data'], true);
+            if (!is_array($data) || !empty($data[self::PURIFIED_FLAG])) {
+                continue;
+            }
+            $intro = (string) ($data['intro_html'] ?? '');
+            $data['intro_html'] = $intro === '' ? '' : $purifier()->purify($intro);
+            $data[self::PURIFIED_FLAG] = true;
+            $connection->executeStatement(
+                'UPDATE site_page_block SET data = ? WHERE id = ?',
+                [json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR), (int) $row['id']]
+            );
+            $updated++;
+        }
+        return $updated;
     }
 }

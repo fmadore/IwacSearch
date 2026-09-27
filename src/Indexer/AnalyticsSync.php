@@ -3,10 +3,12 @@ declare(strict_types=1);
 
 namespace IwacSearch\Indexer;
 
+use IwacSearch\IwacInstance;
 use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
 use Throwable;
 use Typesense\Client as TypesenseClient;
+use Typesense\Exceptions\ObjectNotFound;
 
 /**
  * Idempotent provisioner for Typesense search analytics: two rules that
@@ -50,7 +52,7 @@ final class AnalyticsSync
     public function __construct(
         private readonly TypesenseClient $typesense,
         private readonly LoggerInterface $logger = new NullLogger(),
-        private readonly string $sourceCollection = 'iwac_current'
+        private readonly string $sourceCollection = IwacInstance::CONTENT_ALIAS
     ) {
     }
 
@@ -121,8 +123,9 @@ final class AnalyticsSync
         try {
             $this->typesense->collections[$name]->retrieve();
             return; // exists — keep the accumulated data
-        } catch (Throwable) {
-            // fall through to create
+        } catch (ObjectNotFound) {
+            // Absent: create it. Any other failure (transport, auth) must
+            // surface as itself, not as a confusing "create" error.
         }
         $this->typesense->collections->create([
             'name'   => $name,

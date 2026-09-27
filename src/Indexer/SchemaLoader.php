@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace IwacSearch\Indexer;
 
+use IwacSearch\IwacInstance;
 use RuntimeException;
 use Symfony\Component\Yaml\Yaml;
 
@@ -53,7 +54,7 @@ final class SchemaLoader
      * @return array<string, mixed> The schema plus the private `_alias_target`
      *   and `_base_name` keys CollectionOps strips before creating.
      */
-    public function loadForReindex(string $aliasTarget = 'iwac_current'): array
+    public function loadForReindex(string $aliasTarget = IwacInstance::CONTENT_ALIAS): array
     {
         $schema = $this->load();
         $base   = $schema['name'];

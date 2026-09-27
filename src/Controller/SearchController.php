@@ -4,10 +4,12 @@ declare(strict_types=1);
 namespace IwacSearch\Controller;
 
 use IwacSearch\Indexer\CurationSync;
+use IwacSearch\IwacInstance;
 use IwacSearch\Search\InitialResponseRenderer;
 use IwacSearch\Search\PresetCatalog;
 use IwacSearch\Search\RetiredQuery;
 use IwacSearch\Search\SearchDefaults;
+use IwacSearch\Search\SearchStateQuery;
 use IwacSearch\Search\SurfaceBootstrap;
 use IwacSearch\Search\TypesenseSearchKeyProvider;
 use IwacSearch\Util\ExceptionMessage;
@@ -109,48 +111,24 @@ class SearchController extends AbstractActionController
         return SurfaceBootstrap::build(
             blockId:          $blockId,
             card:             PresetCatalog::CARD_CONTENT,
-            contentAlias:     $this->contentAlias(),
-            indexAlias:       $this->indexAlias(),
+            contentAlias:     IwacInstance::CONTENT_ALIAS,
+            indexAlias:       IwacInstance::INDEX_ALIAS,
             prominentFacets:  SearchDefaults::CONTENT_PROMINENT_FACETS,
             defaultSort:      '_text_match:desc',
             diversifyTag:     CurationSync::TAG,
         );
     }
 
-    private function contentAlias(): string
-    {
-        return (string) ($this->config['typesense']['collection_alias'] ?? 'iwac_current');
-    }
-
-    private function indexAlias(): string
-    {
-        return (string) ($this->config['typesense']['index_collection_alias'] ?? 'iwac_index_current');
-    }
-
     /**
-     * Whether the request URL carries client search state (urlState.ts's
-     * unprefixed param set) that would make the default-first-page SSR
-     * snapshot useless to the client.
+     * Whether the request URL carries client search state that would make the
+     * default-first-page SSR snapshot useless to the client (see
+     * SearchStateQuery for why the raw query string is read).
      */
     private function requestCarriesSearchState(): bool
     {
-        $params = $this->params()->fromQuery();
-        if (!is_array($params)) {
-            return false;
-        }
-        foreach ($params as $key => $value) {
-            $key = (string) $key;
-            if (str_starts_with($key, 'f.')) {
-                return true;
-            }
-            if (in_array($key, ['q', 'sort', 'date.from', 'date.to'], true) && (string) $value !== '') {
-                return true;
-            }
-            if ($key === 'page' && (int) $value > 1) {
-                return true;
-            }
-        }
-        return false;
+        $request = $this->getRequest();
+        $raw = method_exists($request, 'getUri') ? (string) $request->getUri()->getQuery() : '';
+        return SearchStateQuery::carriesState($raw);
     }
 
     /**
@@ -181,8 +159,8 @@ class SearchController extends AbstractActionController
         $entityTab = SurfaceBootstrap::build(
             blockId:         'everything-entities',
             card:            PresetCatalog::CARD_ENTITY,
-            contentAlias:    $this->contentAlias(),
-            indexAlias:      $this->indexAlias(),
+            contentAlias:    IwacInstance::CONTENT_ALIAS,
+            indexAlias:      IwacInstance::INDEX_ALIAS,
             prominentFacets: $indexPreset?->facets ?? ['entity_type_s', 'country_ss'],
             defaultSort:     $indexPreset?->defaultSort ?? 'frequency:desc',
             resultsPerPage:  20,
@@ -233,11 +211,10 @@ class SearchController extends AbstractActionController
     public function tokenAction(): JsonModel
     {
         try {
-            $aliasName = $this->config['typesense']['collection_alias'] ?? 'iwac_current';
             $expiresIn = (int) ($this->config['public_search_key']['expires_at_seconds'] ?? 3600);
 
             $minted = $this->keyProvider->mintPublicScopedKey(
-                collectionAlias:  $aliasName,
+                collectionAlias:  IwacInstance::CONTENT_ALIAS,
                 expiresInSeconds: $expiresIn
             );
 

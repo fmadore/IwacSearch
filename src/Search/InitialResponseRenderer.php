@@ -6,6 +6,7 @@ namespace IwacSearch\Search;
 use Closure;
 use IwacSearch\Browse\FacetCatalog;
 use IwacSearch\Indexer\StopwordsSync;
+use IwacSearch\IwacInstance;
 use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
 use Throwable;
@@ -53,7 +54,7 @@ final class InitialResponseRenderer
         /** @var Closure(): TypesenseClient */
         private readonly Closure $clientFactory,
         private readonly LoggerInterface $logger = new NullLogger(),
-        private readonly string $defaultCollection = 'iwac_current',
+        private readonly string $defaultCollection = IwacInstance::CONTENT_ALIAS,
         // Short-lived, shared across visitors — safe because every snapshot
         // is public-only by construction. See SnapshotCache.
         private readonly ?SnapshotCacheInterface $cache = null,
@@ -113,12 +114,16 @@ final class InitialResponseRenderer
 
         // Every anonymous visitor of a landing page produces the identical
         // request, so the burst collapses to one Typesense round trip per TTL.
-        try {
-            $cacheBody = $this->cacheVersion === null ? $body : [...$body, '_epoch' => ($this->cacheVersion)()];
-            $cacheKey = $this->cache?->key($cacheBody);
-        } catch (Throwable) {
-            // Cache metadata must never take down the public page.
-            $cacheKey = null;
+        // A disabled cache skips the key entirely — including the epoch's SQL.
+        $cacheKey = null;
+        if ($this->cache !== null && $this->cache->enabled()) {
+            try {
+                $cacheBody = $this->cacheVersion === null ? $body : [...$body, '_epoch' => ($this->cacheVersion)()];
+                $cacheKey = $this->cache->key($cacheBody);
+            } catch (Throwable) {
+                // Cache metadata must never take down the public page.
+                $cacheKey = null;
+            }
         }
         if ($cacheKey !== null) {
             $hit = $this->cache?->get($cacheKey);

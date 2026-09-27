@@ -8,7 +8,7 @@ use Doctrine\DBAL\Connection;
 use RuntimeException;
 
 /** MySQL advisory lock shared by HTTP requests, jobs, and the CLI. */
-final class DatabaseLock
+final class DatabaseLock implements AdvisoryLock
 {
     private int $depth = 0;
     private readonly string $name;

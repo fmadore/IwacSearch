@@ -7,6 +7,7 @@ use Closure;
 use Doctrine\DBAL\Exception\TableNotFoundException;
 use IwacSearch\Form\MaintenanceForm;
 use IwacSearch\Indexer\AnalyticsSync;
+use IwacSearch\IwacInstance;
 use IwacSearch\Job\BulkReindex;
 use IwacSearch\Job\ProvisionAnalytics;
 use IwacSearch\Job\SyncStopwords;
@@ -70,8 +71,8 @@ class MaintenanceController extends AbstractActionController
     public function __construct(
         private readonly string $collectionBaseName = 'iwac_v1',
         private readonly ?Closure $clientFactory = null,
-        private readonly string $contentAlias = 'iwac_current',
-        private readonly string $indexAlias = 'iwac_index_current',
+        private readonly string $contentAlias = IwacInstance::CONTENT_ALIAS,
+        private readonly string $indexAlias = IwacInstance::INDEX_ALIAS,
         private readonly ?\IwacSearch\Indexer\ChangeJournal $journal = null,
     ) {
     }
@@ -121,6 +122,7 @@ class MaintenanceController extends AbstractActionController
             'analyticsForm'       => $this->getForm(MaintenanceForm::class),
             'collectionBaseName'  => $this->collectionBaseName,
             'statuses'            => $this->collectStatuses(),
+            'generations'         => $this->collectGenerations(),
             'analytics'           => $this->collectAnalytics(),
         ]);
     }
@@ -232,6 +234,62 @@ class MaintenanceController extends AbstractActionController
         }
 
         return $rows;
+    }
+
+    /**
+     * Every IWAC index generation on the server — live, retained for
+     * rollback, or left by a failed build — with its size and the aliases it
+     * serves, plus Typesense's own memory figure. Typesense keeps every
+     * collection in RAM, so this is the number to check before a rebuild and
+     * the reason to run the retention cleanup.
+     *
+     * @return array{
+     *   available: bool,
+     *   generations: list<array{name: string, documents: int, created: ?int, serves: list<string>}>,
+     *   memory: ?array{active: ?int, used: ?int, total: ?int}
+     * }
+     */
+    private function collectGenerations(): array
+    {
+        $out = ['available' => false, 'generations' => [], 'memory' => null];
+        $client = $this->client();
+        if ($client === null) {
+            return $out;
+        }
+        try {
+            $serves = [];
+            foreach ($client->aliases->retrieve()['aliases'] ?? [] as $alias) {
+                $serves[(string) ($alias['collection_name'] ?? '')][] = (string) ($alias['name'] ?? '');
+            }
+            foreach ($client->collections->retrieve() as $collection) {
+                $name = (string) ($collection['name'] ?? '');
+                if (preg_match('/^iwac_(?:index_)?v[0-9]+_/', $name) !== 1) {
+                    continue;
+                }
+                $out['generations'][] = [
+                    'name'      => $name,
+                    'documents' => (int) ($collection['num_documents'] ?? 0),
+                    'created'   => isset($collection['created_at']) ? (int) $collection['created_at'] : null,
+                    'serves'    => $serves[$name] ?? [],
+                ];
+            }
+            usort($out['generations'], static fn (array $a, array $b): int => strcmp($b['name'], $a['name']));
+            $out['available'] = true;
+        } catch (Throwable) {
+            return $out;
+        }
+        try {
+            $metrics = $client->metrics->retrieve();
+            $bytes = static fn (string $key): ?int => is_numeric($metrics[$key] ?? null) ? (int) $metrics[$key] : null;
+            $out['memory'] = [
+                'active' => $bytes('typesense_memory_active_bytes'),
+                'used'   => $bytes('system_memory_used_bytes'),
+                'total'  => $bytes('system_memory_total_bytes'),
+            ];
+        } catch (Throwable) {
+            // Metrics are informational; the generation list stands alone.
+        }
+        return $out;
     }
 
     /**

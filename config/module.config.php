@@ -388,6 +388,8 @@ return [
                     ['route' => 'admin/iwac-search/maintenance-sync-stopwords',      'visible' => false],
                     ['route' => 'admin/iwac-search/maintenance-sync-synonyms',       'visible' => false],
                     ['route' => 'admin/iwac-search/maintenance-provision-analytics', 'visible' => false],
+                    ['route' => 'admin/iwac-search/maintenance-retry-changes',       'visible' => false],
+                    ['route' => 'admin/iwac-search/maintenance-prune-collections',   'visible' => false],
                 ],
             ],
         ],
@@ -400,10 +402,8 @@ return [
             'port'             => 8108,
             'protocol'         => 'http',
             'api_key_file'     => '/run/secrets/typesense_api_key',
-            'collection_alias' => 'iwac_current',
-            // Second collection: the index/authority entities, built by
-            // IndexReindexer and surfaced via the /search/everything Entities tab.
-            'index_collection_alias' => 'iwac_index_current',
+            // The live aliases are IwacInstance::CONTENT_ALIAS / INDEX_ALIAS,
+            // shared by search, rebuild, drain and the public key scope.
         ],
         // Server-rendered first page, cached briefly in APCu (no-op when the
         // extension is absent). Safe to share between visitors because every

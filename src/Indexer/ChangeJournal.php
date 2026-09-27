@@ -51,12 +51,18 @@ final class ChangeJournal
         return (int) $this->connection->executeQuery('SELECT COALESCE(MAX(id), 0) FROM iwac_search_change')->fetchOne();
     }
 
-    /** Invalidate SSR on writes, successful replay and completed bulk promotion. */
+    /**
+     * Invalidate SSR on writes, successful replay and completed bulk
+     * promotion — one round trip, since it runs on every cached SSR render.
+     */
     public function cacheVersion(): string
     {
-        $applied = $this->connection->executeQuery('SELECT COALESCE(MAX(id), 0) FROM iwac_search_change WHERE processed = 1')->fetchOne();
-        $generations = $this->connection->fetchFirstColumn('SELECT collection_name FROM iwac_search_rollback ORDER BY alias_name');
-        return hash('sha256', json_encode([$this->watermark(), $applied, $generations], JSON_THROW_ON_ERROR));
+        $row = $this->connection->executeQuery(
+            'SELECT (SELECT COALESCE(MAX(id), 0) FROM iwac_search_change) AS recorded,'
+            . ' (SELECT COALESCE(MAX(id), 0) FROM iwac_search_change WHERE processed = 1) AS applied,'
+            . " (SELECT GROUP_CONCAT(COALESCE(collection_name, '') ORDER BY alias_name SEPARATOR ',') FROM iwac_search_rollback) AS generations"
+        )->fetchAllAssociative()[0];
+        return hash('sha256', json_encode($row, JSON_THROW_ON_ERROR));
     }
 
     /** @return list<int> */

@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace IwacSearch\Search;
 
 use Closure;
+use IwacSearch\IwacInstance;
 use IwacSearch\Util\ExceptionMessage;
 use Omeka\Settings\SettingsInterface;
 use Psr\Log\LoggerInterface;
@@ -44,15 +45,19 @@ final class TypesenseSearchKeyProvider
     private const SETTINGS_KEY    = 'iwac_search_typesense_search_key';
     private const KEY_DESCRIPTION = 'IwacSearch public search-only parent (auto-created)';
 
-    /** Alias-only authorization prevents reading retained generations directly. @var list<string> */
-    public const DEFAULT_COLLECTION_SCOPE = ['^iwac_current$', '^iwac_index_current$'];
     /**
-     * Retained alias of DEFAULT_COLLECTION_SCOPE: the default is now the
-     * tightened, alias-only scope, so the two are identical.
-     *
-     * @var list<string>
+     * Most searches one public multi_search request may carry, embedded in
+     * every scoped key as `limit_multi_searches` (Typesense's default is 50).
+     * nginx rate-limits HTTP requests, not searches, so without this one
+     * request could carry 50 searches past the per-IP limit. The client's
+     * largest request is the typeahead's 7 (title + up to 5 facet
+     * suggestions + entities); transport.ts MULTI_SEARCH_LIMIT mirrors this
+     * value and check-schema-drift.js keeps the two equal.
      */
-    public const TIGHTENED_COLLECTION_SCOPE = self::DEFAULT_COLLECTION_SCOPE;
+    public const MAX_MULTI_SEARCHES = 10;
+
+    /** Alias-only authorization prevents reading retained generations directly. @var list<string> */
+    public const DEFAULT_COLLECTION_SCOPE = ['^' . IwacInstance::CONTENT_ALIAS . '$', '^' . IwacInstance::INDEX_ALIAS . '$'];
 
     public function __construct(
         // Lazily-resolved, memoizing client factory (TypesenseClientLazy):
@@ -74,6 +79,8 @@ final class TypesenseSearchKeyProvider
         // line.
         /** @var list<string> */
         private readonly array $collectionScope = self::DEFAULT_COLLECTION_SCOPE,
+        // Mounted-secret validations that already passed (see ValidatedKeyMemo).
+        private readonly ValidatedKeyMemo $validated = new ValidatedKeyMemo(),
     ) {
     }
 
@@ -85,12 +92,13 @@ final class TypesenseSearchKeyProvider
      *   - PublicSearchPolicy::parameters() — exclude_fields
      *     ocr_text,toc_txt,embedding plus fixed highlight/snippet bounds, so
      *     full bodies and vectors never ship, only bounded excerpts
+     *   - limit_multi_searches         — MAX_MULTI_SEARCHES per request
      *   - expires_at                   — defaults to now+1h
      *
      * @return array{key: string, expires_at: int, host: string, collection: string}
      */
     public function mintPublicScopedKey(
-        string $collectionAlias = 'iwac_current',
+        string $collectionAlias = IwacInstance::CONTENT_ALIAS,
         int $expiresInSeconds = 3600,
         string $browserHost = '/search-api'
     ): array {
@@ -100,6 +108,10 @@ final class TypesenseSearchKeyProvider
         $scoped = ($this->clientFactory)()->keys->generateScopedSearchKey($parent, [
             'filter_by'      => 'is_public:=true',
             ...PublicSearchPolicy::parameters(),
+            // Per-request, not per-search, so it lives here rather than in
+            // PublicSearchPolicy (whose parameters the SSR spreads into each
+            // sub-search body).
+            'limit_multi_searches' => self::MAX_MULTI_SEARCHES,
             'expires_at'     => $expiresAt,
         ]);
 
@@ -140,6 +152,12 @@ final class TypesenseSearchKeyProvider
     /** Mounted secrets cannot silently bypass the configured collection/action restrictions. */
     private function validateSecretScope(string $value): void
     {
+        $scope = $this->collectionScope;
+        sort($scope);
+        $fingerprint = hash('sha256', $value . "\0" . implode("\0", $scope));
+        if ($this->validated->has($fingerprint)) {
+            return;
+        }
         $keys = ($this->clientFactory)()->keys->retrieve()['keys'] ?? [];
         $matches = array_values(array_filter($keys, static fn(array $key): bool => ($key['value_prefix'] ?? '') === substr($value, 0, 4)));
         if (count($matches) !== 1) throw new RuntimeException('Cannot identify search-key secret uniquely; rotate it and retry.');
@@ -150,6 +168,7 @@ final class TypesenseSearchKeyProvider
         if ($actual !== $expected || ($key['actions'] ?? []) !== ['documents:search']) {
             throw new RuntimeException('Search-key secret scope differs from public_search_key.collections; rotate the mounted parent key.');
         }
+        $this->validated->remember($fingerprint);
     }
 
     /**

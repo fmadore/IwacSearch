@@ -56,6 +56,25 @@ final class FakeTypesense
     public ?RuntimeException $searchFailure = null;
 
     /**
+     * Every filtered (bulk) delete and export received, in order, as
+     * `[collection, filter_by]` — so a test can assert request COUNTS, which
+     * is the point of batching.
+     *
+     * @var list<array{0: string, 1: string}>
+     */
+    public array $filterDeletes = [];
+
+    /** @var list<array{0: string, 1: string}> */
+    public array $exports = [];
+
+    /**
+     * Single-document deletes received, as `[collection, id]`.
+     *
+     * @var list<array{0: string, 1: string}>
+     */
+    public array $singleDeletes = [];
+
+    /**
      * The body `documents->search()` returns. Left null, the fake answers with
      * a well-formed empty result. Set it to a `facet_counts` payload to drive
      * the facet-value lookup, or to a malformed one to exercise its guards.
@@ -245,13 +264,78 @@ final class FakeDocuments extends Documents
             $ok = $this->server->importDecision === null
                 || ($this->server->importDecision)($doc);
             if ($ok) {
-                $this->server->collections[$this->collection][] = $doc;
+                // Upsert semantics: a document with a known id replaces it.
+                $replaced = false;
+                if (isset($doc['id'])) {
+                    foreach ($this->server->collections[$this->collection] ?? [] as $i => $existing) {
+                        if ((string) ($existing['id'] ?? '') === (string) $doc['id']) {
+                            $this->server->collections[$this->collection][$i] = $doc;
+                            $replaced = true;
+                            break;
+                        }
+                    }
+                }
+                if (!$replaced) {
+                    $this->server->collections[$this->collection][] = $doc;
+                }
                 $out[] = '{"success":true}';
             } else {
                 $out[] = '{"success":false,"error":"Field `x` has been declared as a string"}';
             }
         }
         return $this->server->importResponse ?? implode("\n", $out);
+    }
+
+    /**
+     * Filtered bulk delete. Understands only the `id:[…]` form the module
+     * sends; absent IDs are not an error, as on the real server.
+     *
+     * @param  array<string, mixed> $queryParams
+     * @return array{num_deleted: int}
+     */
+    public function delete(array $queryParams = []): array
+    {
+        $filter = (string) ($queryParams['filter_by'] ?? '');
+        $this->server->filterDeletes[] = [$this->collection, $filter];
+        $ids = self::idsOf($filter);
+        $before = count($this->server->collections[$this->collection] ?? []);
+        $this->server->collections[$this->collection] = array_values(array_filter(
+            $this->server->collections[$this->collection] ?? [],
+            static fn(array $doc): bool => !in_array((string) ($doc['id'] ?? ''), $ids, true)
+        ));
+        return ['num_deleted' => $before - count($this->server->collections[$this->collection])];
+    }
+
+    /**
+     * Filtered export (JSONL), with `include_fields` projection.
+     *
+     * @param array<string, mixed> $queryParams
+     */
+    public function export(array $queryParams = []): string
+    {
+        $filter = (string) ($queryParams['filter_by'] ?? '');
+        $this->server->exports[] = [$this->collection, $filter];
+        $ids = self::idsOf($filter);
+        $fields = isset($queryParams['include_fields'])
+            ? explode(',', (string) $queryParams['include_fields'])
+            : null;
+        $lines = [];
+        foreach ($this->server->collections[$this->collection] ?? [] as $doc) {
+            if (!in_array((string) ($doc['id'] ?? ''), $ids, true)) {
+                continue;
+            }
+            $lines[] = json_encode($fields === null ? $doc : array_intersect_key($doc, array_flip($fields)));
+        }
+        return implode("\n", $lines);
+    }
+
+    /** @return list<string> */
+    private static function idsOf(string $filter): array
+    {
+        if (preg_match('/^id:\[([0-9,]*)\]$/D', $filter, $m) !== 1) {
+            throw new RuntimeException('Fake only understands id:[…] filters, got: ' . $filter);
+        }
+        return $m[1] === '' ? [] : explode(',', $m[1]);
     }
 
     /**
@@ -302,6 +386,7 @@ final class FakeDocument extends Document
      */
     public function delete(array $options = []): array
     {
+        $this->server->singleDeletes[] = [$this->collection, $this->id];
         $docs = $this->server->collections[$this->collection] ?? [];
         foreach ($docs as $i => $doc) {
             if ((string) ($doc['id'] ?? '') === $this->id) {

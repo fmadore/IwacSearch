@@ -8,9 +8,12 @@ try {
     $journal = new \IwacSearch\Indexer\ChangeJournal($connection);
     $action = $argv[1] ?? 'status';
     if ($action === 'drain') {
-        $authority = new \IwacSearch\Indexer\EntityAuthority();
-        $registry = \IwacSearch\Indexer\Mapper\MapperRegistry::default($authority, new \IwacSearch\Indexer\CountryResolver($moduleRoot . '/data/newspaper-countries.json'));
-        $indexer = new \IwacSearch\Indexer\IncrementalIndexer(new \IwacSearch\Indexer\CollectionOps(fn () => $typesense, $logger), new \IwacSearch\Indexer\OmekaSourceReader($connection), $registry, $authority);
+        $indexer = \IwacSearch\Indexer\IncrementalIndexer::create(
+            new \IwacSearch\Indexer\CollectionOps(fn () => $typesense, $logger, 'incremental'),
+            $connection,
+            $moduleRoot,
+            logger: $logger,
+        );
         (new \IwacSearch\Indexer\ChangeDrainer($connection, $indexer))->run();
     } elseif ($action === 'prune') {
         $removed = (new \IwacSearch\Indexer\CollectionRetention($connection, $typesense))->prune();

@@ -43,6 +43,15 @@ class Module extends AbstractModule
      */
     private const BROWSE_CONFIG_RETIRED_IN = '3.0.0';
 
+    /**
+     * Version from which stored search blocks carry the purified-intro flag
+     * (see Site\BlockLayout\IwacSearchBlock::PURIFIED_FLAG).
+     */
+    private const INTRO_FLAG_ADDED_IN = '3.20.0';
+
+    /** Resolved on the first write of the request/process; null until then. */
+    private ?Indexer\ItemEventListener $itemEventListener = null;
+
     /** @return array<string, mixed> */
     public function getConfig(): array
     {
@@ -137,22 +146,32 @@ class Module extends AbstractModule
             \Omeka\Api\Adapter\ItemSetAdapter::class => 'item_sets',
         ] as $adapter => $resource) {
             $sharedEventManager->attach($adapter, 'api.execute.pre', function (Event $event) use ($resource): void {
-                if (in_array($event->getParam('request')->getOperation(), ['create', 'update', 'delete', 'batch_create', 'batch_update', 'batch_delete'], true)) {
+                if (Indexer\ItemEventListener::isWriteOperation($event->getParam('request')->getOperation())) {
                     $this->resolveItemEventListener()->onBeforeWrite($event, $resource);
+                } else {
+                    $this->itemEventListener?->settle();
                 }
             }, 1000);
             $sharedEventManager->attach($adapter, 'api.execute.post', function (Event $event) use ($resource): void {
-                if (in_array($event->getParam('request')->getOperation(), ['create', 'update', 'delete', 'batch_create', 'batch_update', 'batch_delete'], true)) {
+                if (Indexer\ItemEventListener::isWriteOperation($event->getParam('request')->getOperation())) {
                     $this->resolveItemEventListener()->onAfterWrite($event, $resource);
+                } else {
+                    $this->itemEventListener?->settle();
                 }
             }, -1000);
         }
     }
 
-    /** Write failures must remain visible; reads never resolve this service. */
+    /**
+     * Write failures must remain visible; reads never resolve this service.
+     *
+     * Kept on the module once resolved so reads can settle gate levels left by
+     * a write whose adapter threw (see Indexer\WriteGate) without ever
+     * building the indexing graph themselves.
+     */
     private function resolveItemEventListener(): Indexer\ItemEventListener
     {
-        return $this->getServiceLocator()->get(Indexer\ItemEventListener::class);
+        return $this->itemEventListener ??= $this->getServiceLocator()->get(Indexer\ItemEventListener::class);
     }
 
     /**
@@ -284,6 +303,12 @@ class Module extends AbstractModule
         Indexer\ChangeJournal::install($connection);
         if (version_compare((string) $oldVersion, self::BROWSE_CONFIG_RETIRED_IN, '<')) {
             $connection->executeStatement('DROP TABLE IF EXISTS iwac_browse_config');
+        }
+        if (version_compare((string) $oldVersion, self::INTRO_FLAG_ADDED_IN, '<')) {
+            Site\BlockLayout\IwacSearchBlock::purifyStoredIntros(
+                $connection,
+                static fn () => $services->get('Omeka\HtmlPurifier')
+            );
         }
     }
 

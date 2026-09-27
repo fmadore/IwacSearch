@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace IwacSearch\Tests\Search;
 
 use IwacSearch\Search\TypesenseSearchKeyProvider;
+use IwacSearch\Search\ValidatedKeyMemo;
 use IwacSearch\Tests\Support\CallLog;
 use Omeka\Settings\SettingsInterface;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -29,21 +30,26 @@ final class TypesenseSearchKeyProviderTest extends TestCase
     /** generateScopedSearchKey() calls: ['key' => parent, 'params' => …]. */
     private CallLog $signed;
 
+    /** keys->retrieve() calls — the admin listing a mounted secret is validated against. */
+    private CallLog $listed;
+
     protected function setUp(): void
     {
         $this->created = new CallLog();
         $this->signed  = new CallLog();
+        $this->listed  = new CallLog();
     }
 
     /** @param list<string>|null $scope */
     private function provider(
         FakeSettings $settings,
         ?array $scope = null,
-        string $searchKeyFile = '/nonexistent/typesense_search_key'
+        string $searchKeyFile = '/nonexistent/typesense_search_key',
+        ?ValidatedKeyMemo $memo = null,
     ): TypesenseSearchKeyProvider {
         $client = (new \ReflectionClass(TypesenseClient::class))->newInstanceWithoutConstructor();
-        $client->keys = new class ($this->created, $this->signed) extends Keys {
-            public function __construct(private CallLog $created, private CallLog $signed)
+        $client->keys = new class ($this->created, $this->signed, $this->listed) extends Keys {
+            public function __construct(private CallLog $created, private CallLog $signed, private CallLog $listed)
             {
             }
 
@@ -64,6 +70,7 @@ final class TypesenseSearchKeyProviderTest extends TestCase
             /** @return array<string, mixed> */
             public function retrieve(): array
             {
+                $this->listed->record([]);
                 return ['keys' => [['value_prefix' => 'key-', 'collections' => ['*'], 'actions' => ['documents:search']]]];
             }
 
@@ -80,6 +87,7 @@ final class TypesenseSearchKeyProviderTest extends TestCase
             settings:        $settings,
             searchKeyFile:   $searchKeyFile,
             collectionScope: $scope ?? TypesenseSearchKeyProvider::DEFAULT_COLLECTION_SCOPE,
+            validated:       $memo ?? new ValidatedKeyMemo(0),
         );
     }
 
@@ -92,6 +100,16 @@ final class TypesenseSearchKeyProviderTest extends TestCase
         $params = $this->signed->entries[0]['params'];
         self::assertSame('is_public:=true', $params['filter_by']);
         self::assertSame('ocr_text,toc_txt,embedding', $params['exclude_fields']);
+    }
+
+    public function testScopedKeyCapsSearchesPerRequest(): void
+    {
+        $this->provider(new FakeSettings())->mintPublicScopedKey();
+
+        self::assertSame(
+            TypesenseSearchKeyProvider::MAX_MULTI_SEARCHES,
+            $this->signed->entries[0]['params']['limit_multi_searches']
+        );
     }
 
     public function testScopedKeyExpires(): void
@@ -165,6 +183,27 @@ final class TypesenseSearchKeyProviderTest extends TestCase
         self::assertSame('key-from-secret-file', $this->signed->entries[0]['key']);
     }
 
+    public function testAValidatedSecretIsNotReListedOnEveryMint(): void
+    {
+        $file = tempnam(sys_get_temp_dir(), 'iwac');
+        self::assertIsString($file);
+        file_put_contents($file, 'key-from-secret-file');
+        $memo = new ValidatedKeyMemo(0);
+        try {
+            $provider = $this->provider(new FakeSettings(), ['*'], searchKeyFile: $file, memo: $memo);
+            $provider->mintPublicScopedKey();
+            $provider->mintPublicScopedKey();
+            self::assertCount(1, $this->listed->entries, 'the second mint reuses the validation');
+
+            // A rotated secret is a different key: validate it again.
+            file_put_contents($file, 'key-rotated');
+            $provider->mintPublicScopedKey();
+            self::assertCount(2, $this->listed->entries);
+        } finally {
+            unlink($file);
+        }
+    }
+
     public function testEmptySecretFileFallsBackToSettings(): void
     {
         $file = tempnam(sys_get_temp_dir(), 'iwac');
@@ -193,7 +232,7 @@ final class TypesenseSearchKeyProviderTest extends TestCase
 
     public function testConfiguredScopeIsPassedToTypesense(): void
     {
-        $scope = TypesenseSearchKeyProvider::TIGHTENED_COLLECTION_SCOPE;
+        $scope = TypesenseSearchKeyProvider::DEFAULT_COLLECTION_SCOPE;
         $this->provider(new FakeSettings(), $scope)->mintPublicScopedKey();
 
         self::assertSame($scope, $this->created->entries[0]['collections']);
@@ -208,7 +247,7 @@ final class TypesenseSearchKeyProviderTest extends TestCase
     {
         $settings = new FakeSettings();
         $this->provider($settings, ['*'])->mintPublicScopedKey();
-        $this->provider($settings, TypesenseSearchKeyProvider::TIGHTENED_COLLECTION_SCOPE)
+        $this->provider($settings, TypesenseSearchKeyProvider::DEFAULT_COLLECTION_SCOPE)
             ->mintPublicScopedKey();
 
         self::assertCount(2, $this->created->entries);
@@ -221,7 +260,7 @@ final class TypesenseSearchKeyProviderTest extends TestCase
     {
         $settings = new FakeSettings();
         $this->provider($settings, ['*'])->mintPublicScopedKey();
-        $this->provider($settings, TypesenseSearchKeyProvider::TIGHTENED_COLLECTION_SCOPE)
+        $this->provider($settings, TypesenseSearchKeyProvider::DEFAULT_COLLECTION_SCOPE)
             ->mintPublicScopedKey();
         $this->provider($settings, ['*'])->mintPublicScopedKey();
 

@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace IwacSearch\Search;
 
 use Closure;
+use IwacSearch\IwacInstance;
 use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
 use Throwable;
@@ -53,7 +54,7 @@ final class FacetValueLookup
     public function __construct(
         /** @var ?Closure(): TypesenseClient Lazy, memoizing — see TypesenseClientLazy. */
         private readonly ?Closure $clientFactory = null,
-        private readonly string $contentAlias = 'iwac_current',
+        private readonly string $contentAlias = IwacInstance::CONTENT_ALIAS,
         private readonly LoggerInterface $logger = new NullLogger(),
     ) {
     }

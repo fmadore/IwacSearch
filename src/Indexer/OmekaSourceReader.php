@@ -111,18 +111,7 @@ final class OmekaSourceReader
             $thumbs = $withThumbnail ? $this->mediaThumbnails($ids) : [];
 
             foreach ($rows as $r) {
-                $id = (int) $r['id'];
-                yield [
-                    'item' => [
-                        'id'        => $id,
-                        'title'     => PropertyValues::fromRows($valuesByItem[$id] ?? [])->publicMetadata()->firstDisplay('dcterms:title'),
-                        'is_public' => (bool) $r['is_public'],
-                        'class'     => (int) $r['resource_class_id'],
-                        'item_sets' => $sets[$id] ?? [],
-                    ],
-                    'values'    => PropertyValues::fromRows($valuesByItem[$id] ?? []),
-                    'thumbnail' => $thumbs[$id] ?? null,
-                ];
+                yield $this->record($r, $valuesByItem, $sets, $thumbs);
             }
         }
     }
@@ -163,20 +152,41 @@ final class OmekaSourceReader
 
         $out = [];
         foreach ($rows as $r) {
-            $id = (int) $r['id'];
-            $out[$id] = [
-                'item' => [
-                    'id'        => $id,
-                    'title'     => PropertyValues::fromRows($valuesByItem[$id] ?? [])->publicMetadata()->firstDisplay('dcterms:title'),
-                    'is_public' => (bool) $r['is_public'],
-                    'class'     => (int) $r['resource_class_id'],
-                    'item_sets' => $sets[$id] ?? [],
-                ],
-                'values'    => PropertyValues::fromRows($valuesByItem[$id] ?? []),
-                'thumbnail' => $thumbs[$id] ?? null,
-            ];
+            $out[(int) $r['id']] = $this->record($r, $valuesByItem, $sets, $thumbs);
         }
         return $out;
+    }
+
+    /**
+     * One resource row plus its values, sets and thumbnail, in the shape
+     * streamDocs() and loadResources() both return. The value object is built
+     * once and serves both the public title and the mapper.
+     *
+     * @param  array<string, mixed> $row
+     * @param  array<int, array<string, list<array{vrid:?int,value:?string,uri:?string,title:?string,vpub:bool}>>> $valuesByItem
+     * @param  array<int, list<int>> $sets
+     * @param  array<int, string>    $thumbs
+     * @return array{
+     *     item: array{id:int,title:string,is_public:bool,class:int,item_sets:list<int>},
+     *     values: PropertyValues,
+     *     thumbnail: ?string
+     * }
+     */
+    private function record(array $row, array $valuesByItem, array $sets, array $thumbs): array
+    {
+        $id = (int) $row['id'];
+        $values = PropertyValues::fromRows($valuesByItem[$id] ?? []);
+        return [
+            'item' => [
+                'id'        => $id,
+                'title'     => $values->publicMetadata()->firstDisplay('dcterms:title'),
+                'is_public' => (bool) $row['is_public'],
+                'class'     => (int) $row['resource_class_id'],
+                'item_sets' => $sets[$id] ?? [],
+            ],
+            'values'    => $values,
+            'thumbnail' => $thumbs[$id] ?? null,
+        ];
     }
 
     /**

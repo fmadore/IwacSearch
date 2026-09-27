@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace IwacSearch\Indexer;
 
 use IwacSearch\Indexer\Mapper\IndexEntityMapper;
+use IwacSearch\IwacInstance;
 use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
 use Throwable;
@@ -33,15 +34,19 @@ final class IndexReindexer
         private readonly EntityOccurrences $occurrences,
         private readonly IndexEntityMapper $mapper,
         private readonly LoggerInterface $logger = new NullLogger(),
-        private readonly string $aliasTarget = 'iwac_index_current'
+        private readonly string $aliasTarget = IwacInstance::INDEX_ALIAS
     ) {
     }
+
+    /** @var list<int> IDs of the entity documents the last run() imported. */
+    private array $indexedIds = [];
 
     /**
      * @return array{collection: string, alias: string, indexed: int, errors: int, duration_seconds: float}
      */
     public function run(bool $promote = true): array
     {
+        $this->indexedIds = [];
         $start = microtime(true);
 
         if ($this->authority->size() === 0) {
@@ -51,7 +56,6 @@ final class IndexReindexer
         $schema   = $this->schemaLoader->loadForReindex($this->aliasTarget);
         $newName  = $schema['name'];
         $alias    = $schema['_alias_target'];
-        $previous = $this->ops->resolveAliasTarget($alias);
 
         $this->logger->info('Creating new index collection', ['name' => $newName, 'alias' => $alias]);
         $this->ops->createVersioned($schema);
@@ -67,12 +71,14 @@ final class IndexReindexer
             throw $e;
         }
 
-        // Every rejection blocks promotion; the orchestrator can defer the swap.
+        // Every rejection blocks promotion (and drops the unpromotable build);
+        // the orchestrator can defer the swap.
         if ($errors > 0) {
+            $this->ops->safelyDropCollection($newName);
             throw new \RuntimeException('Reindex import rejected documents; refusing promotion.');
         }
         if ($promote) {
-            $this->ops->promote($alias, $newName, $schema['_base_name'], $previous, $indexed, $errors);
+            $this->ops->promote($alias, $newName, $indexed, $errors);
         }
 
         return [
@@ -82,6 +88,17 @@ final class IndexReindexer
             'errors'           => $errors,
             'duration_seconds' => round(microtime(true) - $start, 2),
         ];
+    }
+
+    /**
+     * IDs of the entity documents the last run() imported — the orchestrator's
+     * starting point for reconciling the entity collection after replay.
+     *
+     * @return list<int>
+     */
+    public function indexedIds(): array
+    {
+        return $this->indexedIds;
     }
 
     /**
@@ -97,6 +114,7 @@ final class IndexReindexer
             if ($doc === null) {
                 continue;
             }
+            $this->indexedIds[] = $entity['id'];
             yield $doc;
         }
     }

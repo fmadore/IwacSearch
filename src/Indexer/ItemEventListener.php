@@ -14,10 +14,14 @@ use Throwable;
 /** Journal writes and dependencies while holding the short cutover gate. No Typesense I/O. */
 final class ItemEventListener
 {
-    /** @var array<int, list<int>> */
-    private array $affected = [];
+    /**
+     * Omeka API operations that change data. Module.php filters on this list
+     * before resolving the listener, so reads never build the indexing graph.
+     */
+    public const WRITE_OPERATIONS = ['create', 'update', 'delete', 'batch_create', 'batch_update', 'batch_delete'];
+
     private bool $scheduled = false;
-    private readonly DatabaseLock $gate;
+    private readonly WriteGate $gate;
     private readonly ChangeJournal $journal;
 
     /** @param Closure(): void $dispatch */
@@ -25,9 +29,25 @@ final class ItemEventListener
         private readonly Connection $connection,
         private readonly Closure $dispatch,
         private readonly LoggerInterface $logger = new NullLogger(),
+        ?WriteGate $gate = null,
     ) {
-        $this->gate = new DatabaseLock($connection, 'mutation');
+        $this->gate = $gate ?? new WriteGate(new DatabaseLock($connection, 'mutation'));
         $this->journal = new ChangeJournal($connection);
+    }
+
+    public static function isWriteOperation(mixed $operation): bool
+    {
+        return in_array($operation, self::WRITE_OPERATIONS, true);
+    }
+
+    /**
+     * Release gate levels left by writes that never reached their post event
+     * (see WriteGate). Cheap; Module calls it on API reads once this listener
+     * exists, so a job that caught a failed write does not keep the gate.
+     */
+    public function settle(): void
+    {
+        $this->gate->settle();
     }
 
     public function onBeforeWrite(Event $event, string $resource): void
@@ -36,7 +56,7 @@ final class ItemEventListener
         if (!$this->isWrite($request)) {
             return;
         }
-        $this->gate->acquire(300);
+        $this->gate->enter($request);
         try {
             $ids = $this->ids($request);
             $affected = $resource === 'items' ? $ids : [];
@@ -66,10 +86,11 @@ final class ItemEventListener
             }
             // Persist tombstones/dependencies before a delete can remove them.
             // Workers snapshot only after the mutation gate has been released.
-            $this->journal->append(array_values(array_unique($affected)));
-            $this->affected[spl_object_id($request)] = $affected;
+            $affected = array_values(array_unique($affected));
+            $this->journal->append($affected);
+            $this->gate->remember($request, $affected);
         } catch (Throwable $e) {
-            $this->gate->release();
+            $this->gate->leave($request);
             throw $e;
         }
     }
@@ -81,9 +102,9 @@ final class ItemEventListener
             return;
         }
         try {
-            $key = spl_object_id($request);
-            $ids = $this->affected[$key] ?? [];
-            unset($this->affected[$key]);
+            // Null when the pre event was skipped (`initialize => false`):
+            // then there are no captured dependencies and no gate level to give back.
+            $ids = $this->gate->pending($request) ?? [];
             $response = $event->getParam('response');
             $content = $response?->getContent();
             foreach (is_array($content) ? $content : [$content] as $representation) {
@@ -106,7 +127,8 @@ final class ItemEventListener
                     }
                 }
             }
-            $this->journal->append(array_values(array_unique($ids)));
+            $ids = array_values(array_unique(array_filter($ids, static fn (int $id): bool => $id > 0)));
+            $this->journal->append($ids);
             if ($ids !== [] && !$this->scheduled) {
                 $this->scheduled = true;
                 // Dispatch once after all nested/batch events have appended their IDs.
@@ -119,14 +141,15 @@ final class ItemEventListener
                 });
             }
         } finally {
-            $this->gate->release();
+            $this->gate->leave($request);
         }
     }
 
+    /** @phpstan-assert-if-true object $request */
     private function isWrite(mixed $request): bool
     {
         return is_object($request) && method_exists($request, 'getOperation')
-            && in_array($request->getOperation(), ['create', 'update', 'delete', 'batch_create', 'batch_update', 'batch_delete'], true);
+            && self::isWriteOperation($request->getOperation());
     }
 
     /** @return list<int> */

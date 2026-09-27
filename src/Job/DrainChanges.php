@@ -9,6 +9,11 @@ use IwacSearch\Indexer\ChangeJournal;
 use IwacSearch\Indexer\IncrementalIndexer;
 use Omeka\Job\AbstractJob;
 
+/**
+ * Applies pending journal rows to Typesense for up to two minutes, then
+ * chains another run while a backlog it made progress on remains. Saves
+ * dispatch it only when no drain is already active (see DrainJobHistory).
+ */
 final class DrainChanges extends AbstractJob
 {
     public function perform(): void

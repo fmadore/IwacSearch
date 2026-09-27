@@ -113,11 +113,11 @@
   // configured Default sort and discard the SSR snapshot on mount.
   const defaultSort = $derived(bootstrap.default_sort || FALLBACK_SORT);
 
-  // TypesenseClient caches a scoped key, so we want exactly one per
-  // mount. $derived.by reruns only if bootstrap changes, which it
-  // doesn't post-mount — same effect as `const`, but satisfies
-  // svelte-check's reactivity rules.
-  const client = $derived.by(() => new TypesenseClient(bootstrap));
+  // One TypesenseClient per mount: it owns this surface's abort channels.
+  // bootstrap is server-emitted and never changes post-mount (same read as
+  // provideI18n above).
+  // svelte-ignore state_referenced_locally
+  const client = new TypesenseClient(bootstrap);
 
   // Initial state — hydrated from the URL on every surface that syncs
   // (standalone /search and full-mode page blocks, each via its own prefix),
@@ -218,17 +218,24 @@
   // when the server couldn't pre-render. The Array.isArray guard rejects
   // malformed bootstraps that would otherwise crash ResultsList on its
   // first render with `Cannot read properties of undefined (reading 'length')`.
+  //
+  // The snapshot is the surface's DEFAULT first page, so it is adopted only
+  // for the pristine state: empty q, page 1, the surface's default sort, no
+  // filters (URL or handed-off), no year range, default page size. Any
+  // URL-hydrated state (e.g. /search?q=ramadan or ?sort=date:asc) fetches
+  // what the user asked for instead. (The server skips the SSR in that case
+  // too — SearchStateQuery.php.)
   // svelte-ignore state_referenced_locally
-  const initialResponse =
+  const pristine =
     Object.keys(bootstrap.initial_filters ?? {}).length === 0 &&
     initial.q === '' &&
     initial.page === 1 &&
     initial.sort === defaultSort &&
     Object.keys(initial.filters).length === 0 &&
     initial.yearRange === null &&
-    initial.perPage === null
-      ? deriveInitialResponse(bootstrap)
-      : null;
+    initial.perPage === null;
+  // svelte-ignore state_referenced_locally
+  const initialResponse = pristine ? deriveInitialResponse(bootstrap) : null;
   let response = $state<IwacSearchResponse | null>(initialResponse);
   let isLoading = $state(false);
   let error = $state<string | null>(null);
@@ -271,26 +278,11 @@
   let mapDocs = $state<IwacDoc[]>([]);
   let mapLoading = $state(false);
 
-  // First $effect run skips its fetch when the live state matches the
-  // state the server used for SSR (empty q, page 1, default sort, no
-  // filters, no year range). Any URL-hydrated non-pristine state (e.g.
-  // /search?q=ramadan or ?sort=date:asc) triggers a real fetch so the user
-  // sees what they asked for, not the "browse everything" SSR snapshot.
-  // The sort check matters: the snapshot was built with the surface's
-  // default sort, so a sorted share link must not reuse it. Plain `let`
-  // (not $state) — reading it inside the effect doesn't create a
-  // reactive dependency, so mutating it doesn't re-trigger the effect.
-  // The defaultSort read is deliberately non-reactive too — it derives
-  // from bootstrap, which is server-emitted and never changes post-mount.
-  // svelte-ignore state_referenced_locally
-  let skipNextFetch =
-    initialResponse != null &&
-    initial.q === '' &&
-    initial.page === 1 &&
-    initial.sort === defaultSort &&
-    Object.keys(initial.filters).length === 0 &&
-    initial.yearRange === null &&
-    initial.perPage === null;
+  // The first $effect run skips its fetch when a snapshot was adopted —
+  // i.e. the state is pristine (see `pristine` above). Plain `let` (not
+  // $state): reading it inside the effect creates no reactive dependency,
+  // so clearing it doesn't re-trigger the effect.
+  let skipNextFetch = initialResponse != null;
 
   // Previous snapshot for URL-sync diffing (pushState vs replaceState).
   let prevState: SearchState | null = null;

@@ -162,6 +162,24 @@ function parseTsStringConst(tsText, name, label) {
   return [...m[1].matchAll(/'([^']*)'/g)].map((x) => x[1]).join('');
 }
 
+/** Value of a PHP `const NAME = 123;` integer constant. */
+function parsePhpIntConst(phpText, name, label) {
+  const m = phpText.match(new RegExp(`const\\s+${name}\\s*=\\s*(\\d+)\\s*;`, 'm'));
+  if (!m) {
+    throw new Error(`${label}: const ${name} not found — update the drift check.`);
+  }
+  return Number(m[1]);
+}
+
+/** Value of a TS `export const NAME = 123;` integer constant. */
+function parseTsIntConst(tsText, name, label) {
+  const m = tsText.match(new RegExp(`const\\s+${name}\\s*=\\s*(\\d+)\\s*;`, 'm'));
+  if (!m) {
+    throw new Error(`${label}: const ${name} not found — update the drift check.`);
+  }
+  return Number(m[1]);
+}
+
 /**
  * A PHP `const NAME = [ 'key' => 'value', … ];` map, as a Map. Unlike
  * parsePhpSortConst this keeps the VALUES, which is what a rename map is.
@@ -324,6 +342,41 @@ try {
     }
   }
 
+  // ── Server contracts the client must agree with ────────────────────
+  // The multi_search cap is embedded in every public scoped key; a client
+  // request above it fails on the server. The stopword set is provisioned
+  // under one name and requested under another literal.
+  const keyProvider = read('src/Search/TypesenseSearchKeyProvider.php');
+  const transport = read('src/svelte/lib/transport.ts');
+  const phpLimit = parsePhpIntConst(
+    keyProvider,
+    'MAX_MULTI_SEARCHES',
+    'TypesenseSearchKeyProvider.php',
+  );
+  const tsLimit = parseTsIntConst(transport, 'MULTI_SEARCH_LIMIT', 'transport.ts');
+  if (phpLimit !== tsLimit) {
+    fail(
+      `TypesenseSearchKeyProvider::MAX_MULTI_SEARCHES (${phpLimit}) and transport.ts ` +
+        `MULTI_SEARCH_LIMIT (${tsLimit}) have drifted.`,
+    );
+  }
+  const phpStopwords = parsePhpStringConst(
+    read('src/Indexer/StopwordsSync.php'),
+    'SET_NAME',
+    'StopwordsSync.php',
+  );
+  const tsStopwords = parseTsStringConst(
+    read('src/svelte/lib/queryPolicy.ts'),
+    'STOPWORD_SET',
+    'queryPolicy.ts',
+  );
+  if (phpStopwords !== tsStopwords) {
+    fail(
+      `StopwordsSync::SET_NAME ('${phpStopwords}') and queryPolicy.ts STOPWORD_SET ` +
+        `('${tsStopwords}') have drifted.`,
+    );
+  }
+
   const facetCatalogPhp = read('src/Browse/FacetCatalog.php');
   const i18n = read('src/svelte/lib/i18n.ts');
   const tsSorts = parseTsSortOptions(i18n, 'i18n.ts');
@@ -388,7 +441,7 @@ try {
     console.log(
       `✅ schema drift check: ${catalogKeys.length} catalog keys consistent across ` +
         'schema.yaml / schema-index.yaml / FacetCatalog.php / i18n.ts; ' +
-        'query_by, highlight and sort constants consistent across PHP / TS',
+        'query_by, highlight, sort, multi-search limit and stopword set consistent across PHP / TS',
     );
   }
 } catch (err) {

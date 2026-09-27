@@ -27,7 +27,7 @@ import {
   perSearchError,
   validateSearchResult,
 } from './transport';
-import { queryPolicy } from './queryPolicy';
+import { STOPWORD_SET, queryPolicy } from './queryPolicy';
 import { authenticatedSearch } from './authenticatedSearch';
 import { getScopedKey } from './scopedKey';
 import { runSuggest } from './suggestQuery';
@@ -251,7 +251,7 @@ export class TypesenseClient {
           // Conditionally included so the recovery retry can drop it — and
           // never applied to an exact query, so a quoted phrase keeps its
           // stopwords ("radicalisation en Côte d'Ivoire" stays intact).
-          ...(includeStopwords && !exact ? { stopwords: 'fr_default' } : {}),
+          ...(includeStopwords && !exact ? { stopwords: STOPWORD_SET } : {}),
           // Strict matching for an exact query (see `exact` above).
           ...(exact ? EXACT_MODE_PARAMS : {}),
           filter_by: filterBy || undefined,
@@ -472,7 +472,7 @@ export class TypesenseClient {
             collection,
             ...queryPolicy(q, queryBy, useStopwords),
             enable_analytics: false,
-            ...(useStopwords ? { stopwords: 'fr_default' } : {}),
+            ...(useStopwords ? { stopwords: STOPWORD_SET } : {}),
             ...(exact ? EXACT_MODE_PARAMS : {}),
             filter_by: filterBy || undefined,
             sort_by: sortBy,
@@ -603,7 +603,7 @@ export class TypesenseClient {
         collection: s.collection,
         q,
         query_by: exact ? withoutField(s.queryBy, 'embedding') : s.queryBy,
-        ...(includeStopwords && !exact ? { stopwords: 'fr_default' } : {}),
+        ...(includeStopwords && !exact ? { stopwords: STOPWORD_SET } : {}),
         ...(exact ? EXACT_MODE_PARAMS : {}),
         filter_by: s.filterBy?.trim() || undefined,
         sort_by: sortBy,

@@ -5,6 +5,7 @@ namespace IwacSearch\Service\Controller;
 
 use IwacSearch\Controller\Admin\MaintenanceController;
 use IwacSearch\Indexer\SchemaLoader;
+use IwacSearch\IwacInstance;
 use IwacSearch\Service\TypesenseClientLazy;
 use Laminas\ServiceManager\Factory\FactoryInterface;
 use Psr\Container\ContainerInterface;
@@ -44,14 +45,12 @@ final class MaintenanceControllerFactory implements FactoryInterface
         $schema = (new SchemaLoader($moduleRoot . '/data/schema.yaml'))->load();
         $baseName = is_string($schema['name'] ?? null) ? $schema['name'] : 'iwac_v1';
 
-        $typesense = $container->get('Config')['iwac_search']['typesense'] ?? [];
-
         return new MaintenanceController(
             journal: new \IwacSearch\Indexer\ChangeJournal($container->get('Omeka\Connection')),
             collectionBaseName: $baseName,
             clientFactory:      TypesenseClientLazy::fromContainer($container),
-            contentAlias:       $typesense['collection_alias'] ?? 'iwac_current',
-            indexAlias:         $typesense['index_collection_alias'] ?? 'iwac_index_current',
+            contentAlias:       IwacInstance::CONTENT_ALIAS,
+            indexAlias:         IwacInstance::INDEX_ALIAS,
         );
     }
 }

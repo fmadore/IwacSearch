@@ -15,6 +15,12 @@ namespace IwacSearch\Search;
 interface SnapshotCacheInterface
 {
     /**
+     * Whether entries are stored at all. A disabled cache lets the renderer
+     * skip computing the key — including the change epoch's SQL.
+     */
+    public function enabled(): bool;
+
+    /**
      * Cache key for a multi_search body. Implementations MUST derive it from
      * the whole body, so that surfaces differing in collection, filter, sort,
      * facets or page size never share an entry.
