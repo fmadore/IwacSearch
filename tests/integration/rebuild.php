@@ -67,7 +67,11 @@ check($journal->status()['pending'] === 0, 'recovery drains failed changes');
 $client->collections->create(['name' => 'iwac_v99_20180101_000000_aaaaaaaaaaaa', 'fields' => [['name' => 'is_public', 'type' => 'bool']]]);
 $client->aliases->upsert('protected_test_alias', ['collection_name' => 'iwac_v99_20180101_000000_aaaaaaaaaaaa']);
 $client->collections->create(['name' => 'iwac_v99_20170101_000000_aaaaaaaaaaaa', 'fields' => [['name' => 'is_public', 'type' => 'bool']]]);
+// Failed builds are dropped at once now, so the newest inactive generation
+// (which retention always keeps) has to be created explicitly.
+$client->collections->create(['name' => 'iwac_v99_20190101_000000_aaaaaaaaaaaa', 'fields' => [['name' => 'is_public', 'type' => 'bool']]]);
 $removed = (new IwacSearch\Indexer\CollectionRetention($db, $client))->prune();
 check(in_array('iwac_v99_20170101_000000_aaaaaaaaaaaa', $removed, true), 'retention removes old unreferenced generations');
+check(!in_array('iwac_v99_20190101_000000_aaaaaaaaaaaa', $removed, true), 'retention keeps the newest inactive generation');
 check(!in_array('iwac_v99_20180101_000000_aaaaaaaaaaaa', $removed, true), 'retention protects every alias target');
 echo "Bulk integration passed.\n";
