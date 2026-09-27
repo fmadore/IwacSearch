@@ -1,5 +1,7 @@
 # IwacSearch 3.19 operations and implementation
 
+> **3.20 changes several contracts below** — the cutover now runs in phases, the mutation gate survives failed writes, alias names are constants, and IWAC-docker runs the scheduled drain. Read [operations-3.20.md](operations-3.20.md) alongside this guide.
+
 This release implements the September module review. It requires an Omeka module upgrade and a full reindex to apply the metadata projection to existing documents. The schema stays at `iwac_v8`; the mapped document fields have not changed.
 
 ## Missing-table recovery (3.19.1)
@@ -12,10 +14,10 @@ If Omeka already marks the module upgraded, run **php cli/repair-schema.php** fr
 
 1. Install the release files and run `composer install --no-dev --optimize-autoloader` from the committed lockfile. It resolves the existing supported dependency lines against PHP 8.2. New major releases that require a higher PHP floor are deliberately excluded. No Laminas or PSR package is a direct module requirement.
 2. Run the Omeka module upgrade. It creates the `iwac_search_change` ID journal and `iwac_search_rollback` previous-target record. Do this before resuming catalog writes.
-3. Replace a mounted search-parent secret with a key whose actions are exactly `documents:search` and whose collections match `['^iwac_current$', '^iwac_index_current$']`. The module now validates mounted-secret metadata and rejects a wider scope. Settings-backed installs mint a new scope-specific parent automatically. Custom alias deployments must configure their matching anchored expressions.
+3. Replace a mounted search-parent secret with a key whose actions are exactly `documents:search` and whose collections match `['^iwac_current$', '^iwac_index_current$']`. The module now validates mounted-secret metadata and rejects a wider scope. Settings-backed installs mint a new scope-specific parent automatically. (Since 3.20 the alias names are `IwacInstance` constants rather than configuration.)
 4. Reindex through the maintenance page or `php cli/reindex.php`. Check the job log, `verified_counts`, and `catch_up.ok`. Keep public search in maintenance during the first privacy migration if existing indexed private values must cease to be exposed immediately; the code change cannot erase the outgoing index by itself.
 5. Revoke the old parent key after migration, including parents that allowed direct reads of versioned collections. Already-issued old scoped keys otherwise retain their original restrictions until they expire. Purge any external page cache containing old bootstrap JSON; the changed SSR request policy naturally uses a new internal cache key.
-6. Schedule `php cli/maintenance.php drain` every minute in the hosting stack. Normal successful API writes also dispatch an Omeka job, and a healthy worker chains another job when its two-minute budget leaves a backlog. The scheduled run is the recovery path for dispatcher failures, failed requests, process crashes, and Typesense outages. No scheduler or production secret was changed by this implementation.
+6. Schedule `php cli/maintenance.php drain` every minute in the hosting stack. Normal successful API writes also dispatch an Omeka job, and a healthy worker chains another job when its two-minute budget leaves a backlog. The scheduled run is the recovery path for dispatcher failures, failed requests, process crashes, and Typesense outages. Since 3.20, IWAC-docker's `search-worker` service runs it (and a daily `prune`).
 
 Use the existing `IWAC_OMEKA_VENDOR`, `IWAC_OMEKA_DB_INI`, and `IWAC_TYPESENSE_*` CLI settings. Load Omeka's vendor before the module's vendor.
 
@@ -27,7 +29,7 @@ Workers acquire the mutation lock followed by the publication lock. They read at
 
 The pre-journal protects existing-resource updates/deletions even if a process dies before the post-event. A newly created resource whose process dies between the database commit and the post-event can require a rebuild to discover its ID. Direct SQL changes and API callers that deliberately disable initialization/finalization events bypass the journal and require a full rebuild. These are explicit limits of the Omeka event boundary.
 
-Bulk rebuilds share a cross-process rebuild lock. Names contain UTC time and a random suffix. After streaming content, cutover holds the mutation/publication locks, replays journal IDs, reconciles final source and server counts by content type, and rebuilds entity aggregates from that final source. Any rejected document, malformed/missing import outcome, failed replay, cancellation, or count mismatch prevents promotion. The two alias updates are individually atomic; they are not a two-alias transaction. If either fails, both restoration attempts run and any rollback failure is logged as critical with the alias and prior target.
+Bulk rebuilds share a cross-process rebuild lock. Names contain UTC time and a random suffix. After streaming content, cutover holds the mutation/publication locks, replays journal IDs, reconciles final source and server counts by content type, and rebuilds entity aggregates from that final source. (3.20 moves the corpus-sized part of this before the locks; see operations-3.20.md.) Any rejected document, malformed/missing import outcome, failed replay, cancellation, or count mismatch prevents promotion. The two alias updates are individually atomic; they are not a two-alias transaction. If either fails, both restoration attempts run and any rollback failure is logged as critical with the alias and prior target.
 
 Read `php cli/maintenance.php status` or the admin maintenance page for pending count/oldest timestamp. Use its retry button or `drain` after resolving an outage. Omeka job logs retain the failure state; the module does not log rejected document bodies or OCR. Create/upgrade grants need permission for the module's journal table; advisory locks require MySQL/MariaDB `GET_LOCK` support.
 

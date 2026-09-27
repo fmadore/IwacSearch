@@ -30,7 +30,10 @@ provides the Typesense container, nginx `/search-api/` proxy, and backups.
   `filter_by: is_public:=true`, hardcoded in
   `PublicSearchPolicy` and `TypesenseSearchKeyProvider::mintPublicScopedKey()` (the shared sources
   of truth — deliberately NOT config-driven). Both are belt-and-suspenders
-  security controls. Loosening either requires sign-off. A page block's
+  security controls. Loosening either requires sign-off. The key also embeds
+  `limit_multi_searches` (`MAX_MULTI_SEARCHES`); the client mirrors it in
+  `transport.ts` and the drift check keeps the two equal — raise both if a
+  request needs more. A page block's
   `locked_filters` are NOT part of this boundary — they are cosmetic
   client-side scoping only.
 
@@ -43,14 +46,16 @@ provides the Typesense container, nginx `/search-api/` proxy, and backups.
 - `Module.php :: install` / `upgrade` — create the durable ID journal `iwac_search_change`. Uninstall drops it and the retired browse table, never Typesense collections.
 - `Module.php :: attachListeners` — injects the Svelte assets on the
   search routes + the site-wide header enhancer, and wires the
-  `api.execute.pre/post` change-journaling events. Background jobs perform indexing; pre/post hold the mutation gate around writes. The indexer listener is
+  `api.execute.pre/post` change-journaling events. Background jobs perform indexing; pre/post hold the mutation gate around writes, tracked per request object in `Indexer\WriteGate` because Omeka skips the post event when a write throws. The indexer listener is
   resolved lazily at event fire time — do not resolve it eagerly, or
   every anonymous GET pays for the full indexer graph.
+- Alias names are `IwacInstance::CONTENT_ALIAS` / `INDEX_ALIAS` everywhere
+  (web, rebuild, drain, analytics, key scope) — not configuration.
 - `SearchControllerFactory` — injects the scoped-key provider, the SSR
   renderer and module config into the controller (deliberately NOT the
   Typesense client itself).
 
-The cutover, retention and retry contracts are documented in `docs/operations-3.19.md`. Run the real integration suite when editing these boundaries.
+The cutover, retention and retry contracts are documented in `docs/operations-3.19.md` and, for what 3.20 changed (phased cutover, write gate, batched drain, retention), `docs/operations-3.20.md`. Run the real integration suite when editing these boundaries.
 
 ## Conventions
 
@@ -69,10 +74,16 @@ The cutover, retention and retry contracts are documented in `docs/operations-3.
   `cli/reindex.php` and `Job\BulkReindex` are thin entry points around it.
   Add new sync steps THERE, never in the entry points. New content mappers
   register in `MapperRegistry::default()` — the one list both the bulk and
-  the incremental pipelines construct from.
+  the incremental pipelines construct from. The incremental graph is built
+  only by `IncrementalIndexer::create()` (job factory, CLI drain, cutover).
 - `npm run lint` includes `scripts/check-schema-drift.js`, which fails CI
   when `FacetCatalog::FACETABLE_FIELDS`, the schema YAMLs, and the i18n
   `FACET_LABELS` disagree. If you add a facet, all four must move together.
+  The same script also pins the server contracts the client restates:
+  query_by/highlight constants, sort sets, the multi-search limit and the
+  stopword set name.
+- `npm run lint:docblocks` fails on two stacked PHP docblocks (only the
+  last attaches to the symbol) — the drift that 3.20's review cleaned up.
 - **Every locale table in `i18n.ts` must carry the same keys in `fr` and
   `en`** — `npm run lint:i18n` (`scripts/check-i18n.js`) enforces it. The
   tables are typed `Record<Locale, Record<string, string>>`, and that inner

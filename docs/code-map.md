@@ -33,9 +33,14 @@ IwacSearch/
 │   │   ├── CollectionOps.php                   #   shared create/import/guarded-promote lifecycle
 │   │   ├── Reindexer.php                       #   content collection bulk pass
 │   │   ├── IndexReindexer.php                  #   entity (iwac_index) collection bulk pass
-│   │   ├── ReindexOrchestrator.php             #   wires the full bulk run (CLI + job share it)
-│   │   ├── IncrementalIndexer.php              #   live upserts/deletes on api.*.post events
-│   │   └── ItemEventListener.php               #   event handler bodies (items, media, item sets)
+│   │   ├── ReindexOrchestrator.php             #   wires the full bulk run (CLI + job share it); phased cutover
+│   │   ├── IncrementalIndexer.php              #   applies journaled changes; create() = the one incremental wiring
+│   │   ├── ItemEventListener.php               #   api.execute.pre/post bodies: journal IDs, schedule a drain
+│   │   ├── WriteGate.php · AdvisoryLock.php    #   mutation gate held per write request (survives failed writes)
+│   │   ├── DatabaseLock.php                    #   MySQL GET_LOCK implementation of AdvisoryLock
+│   │   ├── ChangeJournal.php · ChangeDrainer.php #  durable ID journal + bounded consumer
+│   │   ├── DrainJobHistory.php                 #   is a drain queued/running? prune old drain-job rows
+│   │   └── CollectionRetention.php             #   old generations, journal rows, drain-job history
 │   ├── Browse/FacetCatalog.php                 # facetable fields + content/entity sort sets
 │   ├── Site/BlockLayout/IwacSearchBlock.php    # Page block — drop into any Site page
 │   ├── Job/                                    # Omeka background jobs (admin maintenance buttons)
@@ -52,7 +57,9 @@ IwacSearch/
 │   │   ├── FacetValueLookup.php                #   live facet values for those pickers (degrades to null)
 │   │   ├── SearchDefaults.php                  # per-collection query_by / highlights / default facet stack
 │   │   ├── InitialResponseRenderer.php         # SSR: PHP→Typesense, inlines first page into bootstrap
-│   │   └── TypesenseSearchKeyProvider.php      # mints scoped keys for the browser
+│   │   ├── SearchStateQuery.php                # does the raw URL carry client state? (skip SSR)
+│   │   ├── TypesenseSearchKeyProvider.php      # mints scoped keys for the browser
+│   │   └── ValidatedKeyMemo.php                # APCu memo of mounted-secret scope validation
 │   ├── svelte/                                 # Svelte 5 + TS client source — public bundle
 │   │   ├── App.svelte                          #   per-mount root, owns search state
 │   │   ├── main.ts                             #   IIFE entry; auto-mounts on every root
@@ -89,7 +96,8 @@ IwacSearch/
 │   ├── synonyms-fr.json                        # Arabic-transliteration synonym groups
 │   └── newspaper-countries.json                # Newspaper → country map (derives country_ss)
 ├── scripts/
-│   ├── check-schema-drift.js                   # CI gate: catalog ↔ schemas ↔ i18n labels
+│   ├── check-schema-drift.js                   # CI gate: catalog ↔ schemas ↔ i18n labels, PHP ↔ TS contracts
+│   ├── check-docblocks.js                      # CI gate: no stacked PHP docblocks
 │   └── check-theme-tokens.js                   # CI gate: CSS custom-property fallbacks ↔ tokens.json
 ├── view/
 │   ├── iwac-search/search/{index,everything}.phtml

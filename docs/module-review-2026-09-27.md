@@ -1,13 +1,35 @@
 # IwacSearch module review — 27 September 2026
 
-> **Open report.** Findings against module **3.19.1** and IWAC-docker
-> `13a4574`, cross-checked with the Typesense **30.2** documentation.
-> Nothing below duplicates the [July](module-review-2026-07.md) or
-> [September](module-review-2026-09.md) reviews, which are closed. Only the
-> documentation fixes in §E7 are applied on this branch. Every behavioural
-> change is a proposal, because the write path, the rebuild cutover and the
-> key scope are integration-suite boundaries (CLAUDE.md), and that suite
-> could not run in the review environment.
+> **Implemented in 3.20.0** (and the matching IWAC-docker commit), except
+> where the status table says otherwise. Findings were made against module
+> **3.19.1** and IWAC-docker `13a4574`, cross-checked with the Typesense
+> **30.2** documentation. The resulting behaviour and deployment steps are
+> in [operations-3.20.md](operations-3.20.md); the findings below keep their
+> original wording as the rationale.
+
+## Implementation status
+
+| # | Status |
+| --- | --- |
+| A1 | Done — `Indexer\WriteGate` (per-request holds, released when the request is gone; settled on reads); unit tests |
+| A2 | Done — phased cutover with a second quiescent watermark; one faceted count; `gate_held_seconds` stat. Fail-fast save wait not needed with the shorter window |
+| A3 | Done — unpromoted builds dropped on any failure (never one an alias still serves) |
+| A4 | Done — `DrainJobHistory::isActive()` gate on dispatch; completed drain jobs pruned after 7 days |
+| A5 | Done — filtered delete + export-based aggregate read per batch; unit tests |
+| B1 | Done — `limit_multi_searches: 10` in every key; client guard + drift check. `limit_hits` deliberately off |
+| B3 | Done — APCu memo of secret validation; IWAC-docker `limit_req` on `/discovery/token` |
+| B4 | Done — read-only build job + write-scoped publish job; all actions SHA-pinned |
+| B5 | Done — IWAC-docker `/search-api/` allow-list (multi_search, collection search, health) |
+| B6 | Done — `/health` probe; CORS off; comment corrected |
+| C1 | **Not adopted** — facet sampling can drop rare entities from suggestions; `use_cache` left for measurement |
+| C2 | Done — `sessionStorage` key cache (tab-scoped, rejected keys dropped) |
+| C3 | Done — one `PropertyValues` per row; one-query epoch, skipped when the cache is off; block SSR skipped on its own deep links (and a PHP dotted-key bug fixed for `/search`); flagged intro purification with upgrade migration |
+| D1 | Done — IWAC-docker `search-worker` (drain every minute, prune daily) |
+| D2 | Done — generations, alias targets and Typesense memory on the maintenance page |
+| D3 | Done — `IwacInstance::CONTENT_ALIAS` / `INDEX_ALIAS`; config keys removed |
+| E1 | Done — `IncrementalIndexer::create()` |
+| E2 | Done — shared write-op constant, dead `promote()` params and scope constant removed, `ObjectNotFound`-only catch, shared stopword constant, `App.svelte` pristine predicate, `<noscript>` link |
+| E7 | Done — plus `npm run lint:docblocks` to keep it that way |
 
 ## How this was checked
 

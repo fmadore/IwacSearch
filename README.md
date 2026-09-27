@@ -108,7 +108,7 @@ reasoning behind each of those choices: [docs/search-behaviour.md](docs/search-b
 docker compose exec php php /var/www/html/modules/IwacSearch/cli/reindex.php
 ```
 
-Builds unique content and entity generations from Omeka, replays the durable change journal before cutover, verifies source/index counts, and switches both aliases under shared locks. Previous generations are retained for rollback; a failed replay prevents promotion. Changes and deletion tombstones are consumed by background jobs.
+Builds unique content and entity generations from Omeka, replays the durable change journal (the corpus-sized work before the write gate, only the last edits under it), verifies source/index counts, and switches both aliases under shared locks. Previous generations are retained for rollback; a failed build is dropped and never promoted. Changes and deletion tombstones are consumed by background jobs, with IWAC-docker's `search-worker` as the per-minute recovery drain.
 
 **Upgrading to 3.19:** run the module upgrade and full reindex, rotate older wide-scope parent keys, and schedule the queue recovery command. See [the operations guide](docs/operations-3.19.md) for the migration sequence, consistency limits, retry/cleanup commands, integration tests, and relevance benchmark.
 
