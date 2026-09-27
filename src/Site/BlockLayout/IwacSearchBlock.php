@@ -499,8 +499,7 @@ class IwacSearchBlock extends AbstractBlockLayout
      * that the Svelte client reads on mount. Multiple blocks per page are
      * supported by suffixing both the wrapper id and the state script id
      * with $block->id().
-     */
-    /**
+     *
      * @param  string $templateViewScript
      * @return string Rendered block markup.
      */

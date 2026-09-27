@@ -25,10 +25,10 @@ use Typesense\Client as TypesenseClient;
  * with a plain search (sort_by count:desc).
  *
  * NON-FATAL BY DESIGN: analytics requires server-side flags
- * (--enable-search-analytics=true --analytics-dir=… — an IWAC-docker
- * change, see ROADMAP.md). Until those land, rule creation fails; sync()
- * catches everything, logs a warning, and reports enabled:false so a bulk
- * reindex NEVER fails over an optional observability feature.
+ * (--enable-search-analytics=true --analytics-dir=…). IWAC-docker's compose
+ * file sets them; on a server started without them rule creation fails, and
+ * sync() catches everything, logs a warning, and reports enabled:false so a
+ * bulk reindex NEVER fails over an optional observability feature.
  *
  * The rules bind to the ALIAS name (iwac_current): every search path in
  * this module addresses the alias, and alias-bound rules survive the

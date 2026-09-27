@@ -344,15 +344,10 @@ export class TypesenseClient {
   }
 
   /**
-   * Search the VALUES of a single facet field server-side, so a user can find
-   * and filter on a value that isn't in the top `max_facet_values` the main
-   * search returns (e.g. an author beyond the first 50 on the references
-   * surface). Uses Typesense `facet_query` — the same mechanism suggest() uses
-   * for entities — scoped to the same locked_filters + active filters + year
-   * range + current query as the live results, so the counts shown match what
-   * selecting the value would yield.
-   *
-   * Returns the matching facet counts (value + count). Blank query → [].
+   * Year histogram on its own: the same query and filters as the live
+   * results, WITHOUT the selected year range (the chart always shows the
+   * full span). Used when a full-mode surface adopts the SSR snapshot, which
+   * carries the first page but no histogram.
    */
   async yearDistribution(q: string): Promise<YearBucket[]> {
     const ctx = await this.resolveContext({ q, includeYearRange: false });
@@ -376,6 +371,17 @@ export class TypesenseClient {
     return readYearBuckets(json.results?.[0]);
   }
 
+  /**
+   * Search the VALUES of a single facet field server-side, so a user can find
+   * and filter on a value that isn't in the top `max_facet_values` the main
+   * search returns (e.g. an author beyond the first 50 on the references
+   * surface). Uses Typesense `facet_query` — the same mechanism suggest() uses
+   * for entities — scoped to the same locked_filters + active filters + year
+   * range + current query as the live results, so the counts shown match what
+   * selecting the value would yield.
+   *
+   * Returns the matching facet counts (value + count). Blank query → [].
+   */
   async searchFacetValues(args: {
     field: string;
     /** Text typed in the facet's search box. */
@@ -424,28 +430,6 @@ export class TypesenseClient {
     return fc?.counts ?? [];
   }
 
-  /**
-   * Run a typeahead/suggest query for a short prefix string.
-   *
-   * Tuned differently from the main search:
-   *   - `prefix=true` so each query token does prefix matching (Typesense
-   *     default, but explicit here in case future versions change).
-   *   - `query_by` is narrower (title + entity_aliases) — OCR fulltext
-   *     prefix-matching produces too much noise for a dropdown.
-   *   - per_page is small (default 6) and we ignore facets — the whole
-   *     point is one cheap call per keystroke.
-   *   - The same scoped key + same locked_filters apply, so suggestions
-   *     respect the surface's curatorial scope (a /browse/benin
-   *     suggestion never leaks docs from another country).
-   *
-   * Returns up to `perPage` hits with `title_txt` highlighting, ready to
-   * render in a dropdown. Empty / very short prefixes resolve to an empty
-   * response without hitting the network — saves the cheapest fetch.
-   *
-   * Errors are translated to a thrown Error like search() — caller
-   * decides whether to surface in the UI or swallow. A superseded call
-   * rejects with an AbortError (see transport.isAbortError).
-   */
   /**
    * Typeahead/suggest for a short prefix. The request shape lives in
    * suggestQuery.ts so the site-wide header bundle can run the identical

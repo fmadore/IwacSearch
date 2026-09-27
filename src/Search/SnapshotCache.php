@@ -7,19 +7,20 @@ namespace IwacSearch\Search;
  * Short-lived cache for the server-rendered first page.
  *
  * WHY THIS IS SAFE TO SHARE BETWEEN VISITORS: the SSR path always imposes
- * `is_public:=true` and excludes `ocr_text` (see
+ * `is_public:=true` and the {@see PublicSearchPolicy} projection (see
  * {@see InitialResponseRenderer}), so the snapshot contains only what any
  * anonymous visitor may see — there is no per-user variation to leak. The
  * cache key covers the entire request body, so two surfaces with different
  * filters, sorts or facets never share an entry.
  *
- * WHY THE TTL IS SHORT: the snapshot goes stale the moment a reindex swaps
- * the alias or an incremental edit lands. Thirty seconds bounds how long a
- * visitor can see a just-deleted item on a landing page, while still
- * collapsing the burst of identical requests that a popular page produces.
- * Nothing here needs to be invalidated on write — the TTL IS the invalidation
- * strategy, deliberately, because tracking which snapshots a given item edit
- * would affect costs more than it saves.
+ * INVALIDATION: the renderer folds a change epoch into the key
+ * (ChangeJournal::cacheVersion(): the journal watermark, the applied-change
+ * watermark and the promoted generations), so a recorded write, a drained
+ * batch or a completed rebuild moves every surface to a fresh entry without
+ * tracking which snapshots an edit affects. The short TTL is the backstop
+ * for anything the epoch cannot see (direct SQL edits, a manual alias
+ * change) while still collapsing the burst of identical requests that a
+ * popular page produces.
  *
  * BACKEND: APCu when the extension is loaded and enabled, otherwise nothing.
  * A filesystem cache was considered and rejected — it would need a writable

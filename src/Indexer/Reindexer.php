@@ -26,20 +26,24 @@ use Throwable;
  * Flow:
  *   1. Sync stopwords + the curation and synonym sets (idempotent)
  *   2. Build the EntityAuthority cache from the Omeka entity classes
- *   3. Create the new versioned collection (e.g. iwac_v2_<UTC>)
+ *   3. Create the new versioned collection (e.g. iwac_v8_<UTC>_<random>)
  *   4. Stream → map → import each content subset; record entity occurrences
- *   5. Atomic-swap iwac_current alias → new collection
- *   6. Drop the previous collection
+ *   5. Only when run(true): swap the iwac_current alias to the new
+ *      collection. ReindexOrchestrator calls run(false) and promotes after
+ *      its own replay and count reconciliation.
+ *
+ * Previous generations are never dropped here; CollectionRetention is the
+ * only cross-generation cleanup path.
  *
  * is_public comes straight from resource.is_public (read by the source
  * reader) — there is no ACL overlay step any more, because the database IS
  * the source of truth for visibility.
  *
  * Safety property unchanged: a failed reindex never affects live search. The
- * alias still points at the previous good collection until step 5 succeeds;
- * the half-built collection is dropped on error, and the swap itself is
- * guarded — CollectionOps::promote() refuses to promote a collection whose
- * import was empty or mostly errors.
+ * alias still points at the previous good collection until promotion; the
+ * half-built collection is dropped when an import step throws, any rejected
+ * document refuses promotion, and the swap itself is guarded —
+ * CollectionOps::promote() refuses an empty or failed import.
  */
 final class Reindexer
 {

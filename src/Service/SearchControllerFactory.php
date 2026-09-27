@@ -15,11 +15,13 @@ use Psr\Container\ContainerInterface;
  *
  * Wires:
  *   - TypesenseSearchKeyProvider — mints scoped keys on /discovery/token
+ *   - InitialResponseRenderer    — the SSR first page (admin key, public
+ *                                  constraints applied explicitly)
  *   - module config              — typesense conn + scoped-key constraints
  *
- * The TypesenseClient itself is not injected into the controller —
- * only the key provider needs it, and the controller never makes a
- * direct search call (the browser does, via /search-api/).
+ * The TypesenseClient itself is not injected into the controller — the
+ * key provider and the SSR renderer own every server-side Typesense call,
+ * and live searches go from the browser through /search-api/.
  */
 class SearchControllerFactory implements FactoryInterface
 {
@@ -36,19 +38,19 @@ class SearchControllerFactory implements FactoryInterface
 
         $logger = LoggerResolver::fromContainer($container);
 
-        // Lazy TypesenseClient (see TypesenseClientLazy docblock) so a
-        // missing Docker secret surfaces inside tokenAction's 503 path
-        // instead of as a 500 HTML page before the action even runs.
-        // Collection scope of the search-only parent key. Deliberately read
-        // from config rather than hardcoded: the safe-by-default value is
-        // wide, and tightening it is an operator decision that must be
-        // reversible without a deploy (the provider re-mints when the scope
-        // changes). A malformed value falls back to the default rather than
-        // minting a key nobody can search with.
+        // Collection scope of the search-only parent key. Read from config so
+        // a deployment with custom alias names can match them without a code
+        // change; the default is the anchored alias-only scope, and the
+        // provider re-mints when the scope changes. A malformed value falls
+        // back to the default rather than minting a key nobody can search
+        // with.
         $scope = $config['public_search_key']['collections'] ?? null;
         $scope = is_array($scope) && $scope !== [] ? array_values(array_map('strval', $scope)) : null;
 
         $keyProvider = new TypesenseSearchKeyProvider(
+            // Lazy TypesenseClient (see TypesenseClientLazy docblock) so a
+            // missing Docker secret surfaces inside tokenAction's 503 path
+            // instead of as a 500 HTML page before the action even runs.
             clientFactory:   TypesenseClientLazy::fromContainer($container),
             settings:        $container->get('Omeka\Settings'),
             logger:          $logger,

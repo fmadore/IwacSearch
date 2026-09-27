@@ -2,22 +2,13 @@
 
 The 3.19.0 engineering implementation is complete. Use the [operations guide](docs/operations-3.19.md) and [deployment checklist](docs/deploy-checklist.md) for rollout; deployment has not been performed as part of this release. Measurement-dependent engineering work lives in [docs/engineering-roadmap.md](docs/engineering-roadmap.md).
 
-## Needs an IWAC-docker change: search analytics server flags
+## Search analytics: provision and verify
 
-The module ships the full analytics pipeline (rules provisioning via
-`AnalyticsSync`, an admin digest of top + no-hit queries, a "Provision
-analytics" button), but Typesense only records analytics when started with:
-
-```
---enable-search-analytics=true
---analytics-dir=/data/analytics      # any persistent path in the container
---analytics-flush-interval=60        # seconds; 60 is the minimum
-```
-
-Add those to the typesense service in IWAC-docker's compose file (plus a
-volume for the analytics dir), restart, then click **Provision analytics**
-on the maintenance page. The bulk reindex also (re)applies the rules
-non-fatally, so nothing breaks while the flags are absent.
+IWAC-docker now starts Typesense with the analytics flags
+(`TYPESENSE_ENABLE_SEARCH_ANALYTICS=true`, a separate `/analytics` volume,
+a 60-second flush interval), so no further compose change is needed. What
+remains is operational: click **Provision analytics** on the maintenance
+page once (the bulk reindex also re-applies the rules non-fatally).
 
 **Verify on the live container:** the rules bind to the ALIAS name
 (`iwac_current`) on the assumption that Typesense matches rules against the

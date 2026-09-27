@@ -11,8 +11,8 @@ use Typesense\Client as TypesenseClient;
 /**
  * Background job: bulk Typesense reindex from the Omeka MySQL database.
  *
- * Wraps Reindexer::run() + IndexReindexer::run() — same code path as
- * cli/reindex.php, dispatched from the admin "Run reindex" button.
+ * Wraps ReindexOrchestrator::run() — same code path as cli/reindex.php,
+ * dispatched from the admin "Run reindex" button.
  * Long-running (5–15 min on the IWAC corpus); status at /admin/job/{id}/log.
  *
  * The DBAL Connection comes from the service container ('Omeka\Connection' is
@@ -21,8 +21,10 @@ use Typesense\Client as TypesenseClient;
  * entry points can't drift.
  *
  * On any throw, AbstractTypesenseJob logs and rethrows so Omeka marks the job
- * ERROR — Reindexer::run() has already dropped the half-built collection, so
- * the live alias still points at the previous good one.
+ * ERROR. Promotion happens only after every check passes (and a failed alias
+ * swap restores both aliases), so the live aliases still point at the
+ * previous good generations. A build that fails after its import stays on
+ * the server until retention cleanup removes it.
  */
 class BulkReindex extends AbstractTypesenseJob
 {

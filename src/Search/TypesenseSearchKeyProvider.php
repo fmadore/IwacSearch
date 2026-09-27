@@ -46,7 +46,12 @@ final class TypesenseSearchKeyProvider
 
     /** Alias-only authorization prevents reading retained generations directly. @var list<string> */
     public const DEFAULT_COLLECTION_SCOPE = ['^iwac_current$', '^iwac_index_current$'];
-    /** @var list<string> */
+    /**
+     * Retained alias of DEFAULT_COLLECTION_SCOPE: the default is now the
+     * tightened, alias-only scope, so the two are identical.
+     *
+     * @var list<string>
+     */
     public const TIGHTENED_COLLECTION_SCOPE = self::DEFAULT_COLLECTION_SCOPE;
 
     public function __construct(
@@ -65,8 +70,8 @@ final class TypesenseSearchKeyProvider
         private readonly string $searchKeyFile = '/run/secrets/typesense_search_key',
         // Collections the parent key may search. Changing this re-mints the
         // key on next use (the settings slot is keyed by the scope), so an
-        // operator can try TIGHTENED_COLLECTION_SCOPE and roll back with a
-        // single config line.
+        // operator can change the scope and roll back with a single config
+        // line.
         /** @var list<string> */
         private readonly array $collectionScope = self::DEFAULT_COLLECTION_SCOPE,
     ) {
@@ -75,9 +80,11 @@ final class TypesenseSearchKeyProvider
     /**
      * Mint a short-lived scoped key for the public client.
      *
-     * Public constraints (belt-and-suspenders, see roadmap "Security model"):
+     * Public constraints (belt-and-suspenders, see CLAUDE.md "OCR privacy"):
      *   - filter_by: is_public:=true   — only public docs ever returned
-     *   - exclude_fields: ocr_text,toc_txt — full bodies never ship, highlights only
+     *   - PublicSearchPolicy::parameters() — exclude_fields
+     *     ocr_text,toc_txt,embedding plus fixed highlight/snippet bounds, so
+     *     full bodies and vectors never ship, only bounded excerpts
      *   - expires_at                   — defaults to now+1h
      *
      * @return array{key: string, expires_at: int, host: string, collection: string}
@@ -130,19 +137,6 @@ final class TypesenseSearchKeyProvider
         return $this->bootstrapSearchOnlyKey();
     }
 
-    /**
-     * Settings slot holding the cached parent key.
-     *
-     * The slot name carries a hash of the collection scope, so a key minted
-     * under one scope is never reused under another: change the config and
-     * the next request mints a fresh key with the new scope; change it back
-     * and the original key is found again, still valid. This replaces the
-     * old manual ritual of editing a constant to invalidate the cache, which
-     * only worked if whoever tightened the scope remembered to do it — and
-     * silently kept serving a wide-scope key if they didn't.
-     *
-     * Only an explicitly configured legacy wildcard uses the old settings slot.
-     */
     /** Mounted secrets cannot silently bypass the configured collection/action restrictions. */
     private function validateSecretScope(string $value): void
     {
@@ -158,6 +152,19 @@ final class TypesenseSearchKeyProvider
         }
     }
 
+    /**
+     * Settings slot holding the cached parent key.
+     *
+     * The slot name carries a hash of the collection scope, so a key minted
+     * under one scope is never reused under another: change the config and
+     * the next request mints a fresh key with the new scope; change it back
+     * and the original key is found again, still valid. This replaces the
+     * old manual ritual of editing a constant to invalidate the cache, which
+     * only worked if whoever tightened the scope remembered to do it — and
+     * silently kept serving a wide-scope key if they didn't.
+     *
+     * Only an explicitly configured legacy wildcard uses the old settings slot.
+     */
     private function settingsKey(): string
     {
         $scope = $this->collectionScope;

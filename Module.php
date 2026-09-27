@@ -12,9 +12,11 @@ declare(strict_types=1);
  *  - install/upgrade: create the durable ID-only change journal
  *  - upgrade: drop the retired iwac_browse_config table if present
  *  - bootstrap (attachListeners): inject Svelte assets on the search routes,
- *    plus wire api.*.post listeners so edits in Omeka propagate to Typesense
+ *    plus wire api.execute.pre/post listeners that journal changed IDs; a
+ *    background job (DrainChanges) applies them to Typesense
  *
- * @see https://github.com/fmadore/IWAC-docker/blob/main/docs/iwac-search-roadmap.md
+ * @see docs/code-map.md
+ * @see docs/operations-3.19.md
  */
 
 namespace IwacSearch;
@@ -272,8 +274,7 @@ class Module extends AbstractModule
      * every future upgrade was harmless but left no record of WHEN it stopped
      * being relevant — the guard is that record, and lets the whole branch be
      * deleted once no install can still be below the floor.
-     */
-    /**
+     *
      * @param mixed $oldVersion
      * @param mixed $newVersion
      */

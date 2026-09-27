@@ -25,11 +25,11 @@ use Typesense\Client as TypesenseClient;
  * Trade-offs that drove the design:
  *
  *  1. **Admin key, never browser-reachable.** The public scoped key
- *     carries `filter_by:is_public:=true` and
- *     `exclude_fields:ocr_text,toc_txt`
+ *     carries `filter_by:is_public:=true` and {@see PublicSearchPolicy}
+ *     (`exclude_fields:ocr_text,toc_txt,embedding` plus excerpt bounds)
  *     as hard constraints. The SSR path must impose the same constraints
- *     explicitly (see `applyPublicConstraints()`), because the admin key
- *     bypasses them.
+ *     explicitly (see `applyPublicConstraints()` and the policy spread in
+ *     `buildSearch()`), because the admin key bypasses them.
  *
  *  2. **Lazy client construction.** Same pattern as
  *     TypesenseSearchKeyProvider — if the Docker secret is missing or
@@ -191,14 +191,14 @@ final class InitialResponseRenderer
                 'sort_by'               => $sort,
                 'page'                  => 1,
                 'per_page'              => max(1, min(50, $perPage)),
-                // Drop full body fields from the payload — same hard rule
-                // the scoped key enforces for the live client. Highlights
-                // still ship, but the inlined JSON stays lean.
+                // Drop full body fields and bound the excerpts — the same
+                // policy the scoped key enforces for the live client
+                // (exclude_fields, highlight_full_fields, snippet_threshold,
+                // highlight_affix_num_tokens). Highlights still ship, but the
+                // inlined JSON stays lean.
                 ...PublicSearchPolicy::parameters(),
                 'enable_analytics' => false,
                 'highlight_fields'      => 'title_txt',
-                'highlight_full_fields' => 'title_txt',
-                'snippet_threshold'     => 30,
                 // normaliseFacets drops anything not in the catalog — a safety
                 // net against a stale bootstrap still naming a field removed
                 // from schema.yaml, which Typesense would 400 the whole
@@ -217,21 +217,6 @@ final class InitialResponseRenderer
         return array_filter($search, static fn($v): bool => $v !== null);
     }
 
-    /**
-     * Run the multi_search and validate results[0], retrying ONCE without
-     * the `stopwords` param when the server reports the stopword set
-     * missing. Typesense surfaces that error two ways — an HTTP-level
-     * throw, or HTTP 200 with the error embedded in results[0].error — so
-     * both paths funnel through the same retry. Stopwords are an
-     * enhancement (filter "le", "la", "des" out of matches), never a
-     * correctness requirement, so degrading gracefully beats a blank SSR
-     * page. Operator should provision the set via `discovery:reindex` or
-     * `cli/stopwords-sync.php`.
-     *
-     * @param array{searches: array<int, array<string, mixed>>} $body
-     * @return array<string, mixed>|null results[0] on success, null = let
-     *   the client fall back to its own scoped-key fetch.
-     */
     /**
      * Run the multi_search and validate each result independently, retrying
      * ONCE without `stopwords` when the server reports the set missing.

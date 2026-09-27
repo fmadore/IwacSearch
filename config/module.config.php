@@ -39,13 +39,13 @@ return [
             // so the first page of results is inlined into the bootstrap JSON
             // and the Svelte client paints without any mount-time fetch.
             Search\InitialResponseRenderer::class => Service\Search\InitialResponseRendererFactory::class,
-            // Live sync for is_public toggles + deletes (M4). Hooked into
-            // the Omeka item api.update.post / api.delete.post events by
-            // Module::attachListeners.
+            // Applies journaled changes (upserts, deletes, visibility and
+            // authority updates) to Typesense. Resolved by the DrainChanges
+            // job, never inside the API write events themselves.
             Indexer\IncrementalIndexer::class => Service\Indexer\IncrementalIndexerFactory::class,
-            // Event-handler class that owns the api.*.post bodies. Module.php
-            // attaches its methods directly; this keeps lifecycle code in
-            // Module.php separate from the listener business logic.
+            // Event-handler class that owns the api.execute.pre/post bodies:
+            // it journals affected IDs under the mutation gate and schedules
+            // DrainChanges. Module.php resolves it lazily, on writes only.
             Indexer\ItemEventListener::class => Service\Indexer\ItemEventListenerFactory::class,
         ],
     ],
@@ -408,17 +408,19 @@ return [
         // Server-rendered first page, cached briefly in APCu (no-op when the
         // extension is absent). Safe to share between visitors because every
         // snapshot is public-only by construction — see Search\SnapshotCache.
-        // The TTL is the ONLY invalidation: it bounds how long a landing page
-        // can show a just-reindexed-away item. Set to 0 to disable.
+        // Recorded writes, drained batches and promotions change the cache
+        // key; the TTL is the backstop for changes the journal cannot see.
+        // Set to 0 to disable.
         'ssr_cache' => [
             'ttl_seconds' => 30,
         ],
         'public_search_key' => [
             // TTL of the public scoped key. The key's SECURITY constraints
-            // (filter_by is_public:=true + exclude_fields ocr_text,toc_txt) are NOT
-            // configurable — they are hardcoded in
-            // TypesenseSearchKeyProvider::mintPublicScopedKey(), the single
-            // source of truth. Loosening them there requires sign-off.
+            // (filter_by is_public:=true + Search\PublicSearchPolicy's
+            // exclude_fields ocr_text,toc_txt,embedding) are NOT
+            // configurable — they are hardcoded in PublicSearchPolicy and
+            // TypesenseSearchKeyProvider::mintPublicScopedKey(). Loosening
+            // them there requires sign-off.
             'expires_at_seconds' => 3600,
 
             // Anchored regexes authorize only live aliases, never retained snapshots.

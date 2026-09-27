@@ -62,11 +62,6 @@ export async function postJson<T>(
 }
 
 /**
- * True when an exception is the DOMException a superseded (aborted) fetch
- * rejects with. Callers MUST swallow these silently — an aborted request
- * means "a newer one is in flight", never "show the error state".
- */
-/**
  * One "latest request wins" channel.
  *
  * Every keystroke-driven call needs the same three lines — abort the
@@ -99,6 +94,11 @@ export class SeqGuard {
   }
 }
 
+/**
+ * True when an exception is the DOMException a superseded (aborted) fetch
+ * rejects with. Callers MUST swallow these silently — an aborted request
+ * means "a newer one is in flight", never "show the error state".
+ */
 export function isAbortError(e: unknown): boolean {
   return e instanceof DOMException && e.name === 'AbortError';
 }

@@ -43,6 +43,12 @@ use Typesense\Client as TypesenseClient;
  *     Dispatches IwacSearch\Job\ProvisionAnalytics — creates the
  *     popular/no-hit analytics rules once the server flags are enabled.
  *
+ *   retryChangesAction   POST  …/maintenance/retry-changes
+ *     Dispatches IwacSearch\Job\DrainChanges for pending journal rows.
+ *
+ *   pruneCollectionsAction POST …/maintenance/prune-collections
+ *     Dispatches IwacSearch\Job\PruneCollections (retention cleanup).
+ *
  * ACL: editor + site-admin + global-admin (granted in Module::onBootstrap).
  * The /admin/ parent route already enforces authentication, so the ACL
  * grant just narrows which logged-in roles can reach the page.
@@ -83,9 +89,10 @@ class MaintenanceController extends AbstractActionController
     /**
      * Render the maintenance page.
      *
-     * Two POST forms, each carrying its own CSRF token (re-issued per
-     * render via Laminas\Form\Element\Csrf), wrapping a single submit
-     * button. Posting redirects to one of the action handlers below.
+     * One POST form per maintenance action, each carrying its own CSRF
+     * token (re-issued per render via Laminas\Form\Element\Csrf) and
+     * wrapping a single submit button. Posting redirects to one of the
+     * action handlers below.
      *
      * Also passes the live `collectionBaseName` to the view so the
      * description prose can spell out the actual collection name
@@ -280,22 +287,30 @@ class MaintenanceController extends AbstractActionController
     }
 
     /**
-     * Shared dispatch path: validate the form (= validate CSRF), dispatch
-     * the job, attach a flash message linking to the job log, redirect
-     * back to the maintenance page.
-     *
+     * POST: dispatch a DrainChanges job — retries journaled changes that a
+     * previous drain could not apply (e.g. during a Typesense outage).
      */
     public function retryChangesAction(): Response
     {
         return $this->dispatchJob(\IwacSearch\Job\DrainChanges::class, 'Pending index changes queued for retry.');
     }
 
+    /**
+     * POST: dispatch a PruneCollections job — removes old, inactive index
+     * generations under the rebuild lock (see CollectionRetention).
+     */
     public function pruneCollectionsAction(): Response
     {
         return $this->dispatchJob(\IwacSearch\Job\PruneCollections::class, 'Old index generations queued for cleanup; live aliases and one previous generation are retained.');
     }
 
-    /** @param class-string $jobClass */
+    /**
+     * Shared dispatch path: validate the form (= validate CSRF), dispatch
+     * the job, attach a flash message linking to the job log, redirect
+     * back to the maintenance page.
+     *
+     * @param class-string $jobClass
+     */
     private function dispatchJob(string $jobClass, string $description): Response
     {
         $request = $this->getRequest();
