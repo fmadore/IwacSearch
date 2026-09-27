@@ -5,7 +5,7 @@
 Follow [operations-3.20.md](operations-3.20.md) after (or together with) the 3.19 rollout below.
 
 - [ ] Run the Omeka module upgrade (purifies and flags existing search blocks' intro text).
-- [ ] Update IWAC-docker; recreate `web`, start `search-worker`, recreate `typesense` at a quiet time. This satisfies the 3.19 "schedule the drain" item.
+- [ ] Publish IWAC-docker's v1.1.0 release (its php image also runs `search-worker`), then deploy IWAC-docker with its `docs/deploy-hardening.md`: recreate `typesense` at a quiet time, start `search-worker`, recreate `web`. This satisfies the 3.19 "schedule the drain" item.
 - [ ] Confirm `/search-api/multi_search` still serves the search page and header typeahead, and that `/search-api/keys` or `/search-api/collections` answer 403.
 - [ ] On the first rebuild, read `gate_held_seconds` and `catch_up` in the job log, and check the maintenance page's generation list.
 - [ ] On staging, save an item with a missing required value inside a long-running job, then save another item from the admin: the second save must not wait for the job to finish.

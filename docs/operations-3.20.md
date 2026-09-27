@@ -5,7 +5,7 @@
 ## Deployment
 
 1. Install the release and run **Modules → IWAC Search → Upgrade**. The upgrade purifies and flags the intro text of every existing search page block (see _Page blocks_ below); it resolves Omeka's HTML purifier only if such a block exists.
-2. Update IWAC-docker to the matching commit, then `docker compose up -d --force-recreate web` (nginx bind mounts need a recreate, not a reload) and `docker compose up -d search-worker typesense`. Recreating `typesense` applies the new health check and drops its CORS flag; it reloads every collection on start, so do it at a quiet time.
+2. Update IWAC-docker to the matching commit and deploy it with its [`docs/deploy-hardening.md`](https://github.com/fmadore/IWAC-docker/blob/main/docs/deploy-hardening.md), not by hand. `search-worker` runs the same published image as `php` (`ghcr.io/fmadore/iwac-docker/php:1.1.0`), so IWAC-docker's v1.1.0 release must be published before `docker compose up`, or the image pull fails. Its step 3 recreates `typesense` (new health check, CORS flag dropped, snapshot mount) — Typesense reloads every collection on start, so do it at a quiet time — starts `search-worker`, and recreates `web` (nginx bind mounts need a recreate, not a reload).
 3. Confirm `docker compose logs search-worker` shows no `drain failed` lines and that the maintenance page lists the expected index generations.
 
 Nothing else is required: the old `collection_alias` / `index_collection_alias` config keys are simply no longer read (see _Aliases_).
