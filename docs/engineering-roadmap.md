@@ -1,6 +1,6 @@
 # Engineering follow-ups
 
-Updated for 3.19.0. The July and September implementation work is complete. The [September closure report](module-review-2026-09.md) and [operations guide](operations-3.19.md) replace the old phased implementation plan. PHPStan is a blocking CI gate; SQL/event/key/rebuild contracts have a real Omeka/Typesense integration lane.
+Updated for 3.19.0. The July and September implementation work is complete. Open findings from the later examination of 3.19.1 (write-path gate, rebuild cutover, key hardening, operations) are in the [27 September 2026 review](module-review-2026-09-27.md). The [September closure report](module-review-2026-09.md) and [operations guide](operations-3.19.md) replace the old phased implementation plan. PHPStan is a blocking CI gate; SQL/event/key/rebuild contracts have a real Omeka/Typesense integration lane.
 
 ## Remaining measurement and operational work
 
