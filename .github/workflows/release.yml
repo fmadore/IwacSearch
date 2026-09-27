@@ -13,6 +13,12 @@
 # committed asset/dist bundles) and vendor/.
 #
 # Release dependencies come from the committed PHP-8.2-compatible composer.lock.
+#
+# Two jobs, so that no third-party code runs with a write token: `build` runs
+# npm, Vite, Composer and the checks with a read-only token and uploads the
+# zip as a run artifact; `publish` (tags only) holds `contents: write` and
+# does nothing but download that artifact and attach it to the release.
+# Actions are pinned to commit SHAs; Dependabot keeps the pins current.
 
 name: Release
 
@@ -22,19 +28,22 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: release-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
-  release:
-    name: Build + publish module zip
+  build:
+    name: Build + verify module zip
     runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      zip: ${{ steps.version.outputs.zip }}
 
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       # The tag is the single source of truth for the version, but four files
       # restate it: Omeka reads config/module.ini, the client build reads
@@ -74,7 +83,7 @@ jobs:
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "zip=IwacSearch-v$VERSION.zip" >> "$GITHUB_OUTPUT"
 
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: '24'
           cache: 'npm'
@@ -98,7 +107,7 @@ jobs:
 
       # 8.2 is the composer.json floor. Resolving there yields a vendor tree
       # that runs on every supported PHP, including the live server's 8.5.
-      - uses: shivammathur/setup-php@v2
+      - uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # 2.37.2
         with:
           php-version: '8.2'
           coverage: none
@@ -183,26 +192,41 @@ jobs:
           echo "Zip verified: $(unzip -Z1 "$ZIP" | wc -l) entries, no dev tooling."
 
       # Manual runs exist to prove the build still works without cutting a
-      # release; they stop here, with the zip downloadable from the run.
-      - name: Upload the zip as a run artifact (manual runs)
-        if: github.ref_type != 'tag'
-        uses: actions/upload-artifact@v7
+      # release; they stop here, with the zip downloadable from the run. On a
+      # tag the same artifact is what the publish job attaches.
+      - name: Upload the zip as a run artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: ${{ steps.version.outputs.zip }}
           path: ${{ steps.version.outputs.zip }}
           retention-days: 14
+          if-no-files-found: error
 
-      - name: Publish the release
-        if: github.ref_type == 'tag'
+  publish:
+    name: Publish the release
+    needs: build
+    if: github.ref_type == 'tag'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          name: ${{ needs.build.outputs.zip }}
+
+      - name: Attach the zip to the release
         env:
           GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          ZIP: ${{ needs.build.outputs.zip }}
+          VERSION: ${{ needs.build.outputs.version }}
         run: |
           set -euo pipefail
           TAG="${GITHUB_REF_NAME}"
+          test -f "$ZIP"
           if gh release view "$TAG" > /dev/null 2>&1; then
-            gh release upload "$TAG" "${{ steps.version.outputs.zip }}" --clobber
+            gh release upload "$TAG" "$ZIP" --clobber
           else
-            gh release create "$TAG" "${{ steps.version.outputs.zip }}" \
-              --title "${{ steps.version.outputs.version }}" \
-              --generate-notes
+            gh release create "$TAG" "$ZIP" --title "$VERSION" --generate-notes
           fi
