@@ -27,7 +27,7 @@ live Omeka API (the Phase 0 parity spike):
 | OCR full text (`ocr_text`)                             | ✅                  | `bibo:content`                                            |
 | Display body (`abstract`)                              | ✅                  | AI summary → description → publication ToC excerpt        |
 | Publication ToC (`toc_txt`)                            | ✅                  | `dcterms:tableOfContents`                                 |
-| AI sentiment ×3 (centralité / polarité / subjectivité) | ✅                  | `iwac:{model}*` (see below)                               |
+| AI sentiment ×5 models × (centralité / polarité / subjectivité) | ✅         | `iwac:{model}*` (see below)                               |
 | entities (persons / places / orgs / events / subjects) | ✅                  | `dcterms:subject` + `dcterms:spatial` linked resources    |
 | `is_public`                                            | ✅                  | `resource.is_public`                                      |
 | **semantic embedding**                                 | ✅ (Typesense-side) | generated in-process from title + OCR + ToC               |
@@ -57,6 +57,13 @@ Changed in v6 (schema `iwac_v6`):
 | ------------------------------------------------ | -------------------------------------------------------------------------------- |
 | `gpt_5_6_luna_*` (surfaced sentiment trio)       | `iwac:gpt56Luna*` — replaces the generation-1 `gemini_3_flash_preview_*` trio     |
 | `mistral_small_2603_*`, `deepseek_v4_flash_0731_*` | `iwac:mistralSmall2603*` / `iwac:deepseekV4Flash0731*` — indexed, not surfaced  |
+
+Added in v9 (schema `iwac_v9`):
+
+| Search field                                     | Source / behavior                                                            |
+| ------------------------------------------------ | ---------------------------------------------------------------------------- |
+| `gemma_4_31b_it_*` (sentiment trio, not surfaced) | `iwac:gemma431bIt*` — Gemma 4 31B, annotating since 2026-08-14             |
+| `qwen3_8_27b_*` (sentiment trio, not surfaced)    | `iwac:qwen3827b*` — Qwen3.8 27B, 12,098 articles since 2026-08-25          |
 
 Added in v7 (schema `iwac_v7`) — the audiovisual contract, see
 [Audiovisual](#audiovisual--one-class-two-populations):
@@ -199,14 +206,18 @@ record is the provenance, and a third-party URL never replaces it.
 ### Sentiment — categorical labels resolved to scores
 
 Centralité and polarité are categorical labels (linked or literal). Subjectivité
-is a linked-resource category for **all three** models, resolved to a 1–5 score:
-`Très objectif`→1 … `Très subjectif`→5.
+is a linked-resource category for **every** model, resolved to a 1–5 score:
+`Très objectif`→1 … `Très subjectif`→5. Each reading is read on its own, so a
+model that answered one and not another contributes what it has.
 
-#### Which three models, and why the field names say so
+#### Which five models, and why the field names say so
 
-Schema v6 indexes the **generation-2** annotators. Their Omeka properties name
-the model outright, so the term and the index field are the same name in two
-spellings:
+The index carries the same five annotators IwacVisualizations shows — its
+`config/sentiment-models.json` is the registry of which families exist. Schema
+v6 brought in the three **generation-2** annotators and v9 the two that
+followed. Their Omeka properties name the model outright, so the term and the
+index field are the same name in two spellings, and the field prefix is the
+Hugging Face column prefix:
 
 | Omeka term                              | Index field (v6)                     |
 | --------------------------------------- | ------------------------------------ |
@@ -215,15 +226,23 @@ spellings:
 | `iwac:gpt56LunaSubjectiviteScore`       | `gpt_5_6_luna_subjectivite`          |
 | `iwac:mistralSmall2603*`                | `mistral_small_2603_*`               |
 | `iwac:deepseekV4Flash0731*`             | `deepseek_v4_flash_0731_*`           |
+| `iwac:gemma431bIt*` (v9)                | `gemma_4_31b_it_*`                   |
+| `iwac:qwen3827b*` (v9)                  | `qwen3_8_27b_*`                      |
 
-**Three, where IwacVisualizations shows five.** Since 2026-09-10 the
-dashboards also read `iwac:gemma431bIt*` (Gemma 4 31B) and `iwac:qwen3827b*`
-(Qwen3.8 27B) — see that module's `config/sentiment-models.json`, the one
-registry of which annotator families exist. This index does not carry them
-yet. That is a product decision still to take, not an oversight to patch in
-place: adding them is new fields, so a schema bump (`iwac_vN` → `iwac_vN+1`),
-a reindex, and FacetCatalog / i18n / drift-check entries. Until then a reader
-can see five models' readings on an item page and facet on three of them.
+Until v9 the index carried three of the five, so a reader could see five
+models' readings on an item page and filter on three. Adding a model is now one
+row in `AbstractMapper::SENTIMENT_MODELS` (the terms the reader loads are
+derived from it), three schema fields plus the bump, and the client's
+`SENTIMENT_FIELDS` / `NUMERIC_FACET_FIELDS` / labels. `check-schema-drift.js`
+fails until all of them agree, in both directions.
+
+Qwen has near neighbours too: `iwac:qwen35A3b*` and `iwac:qwen35A10b*` are
+other runs IwacVisualizations hides. Terms are matched exactly, so they never
+reach `qwen3_8_27b_*`. Qwen's coverage is deliberately short: 12,098 of 12,251
+eligible articles. The 153 it never annotated were retired after four attempts,
+and they are not random — 145 failed on a null subjectivité beside a centralité,
+concentrated on low-centrality material — so Qwen's facets count fewer articles
+than the other four's, and that is correct.
 
 Watch the DeepSeek prefix: `iwac:deepseekV4Flash*` (no date) is a **retired
 preview run** that still holds ~11.5k annotations in Omeka. We read the `0731`
@@ -253,11 +272,11 @@ the next rename — `scripts/check-schema-drift.js` keeps the two in sync.
 
 Only the `gpt_5_6_luna_*` trio is offered in the facet UI. GPT-5.6 Luna holds
 that slot because it is the only one complete on all three properties (12,305
-articles; DeepSeek 0731 is ~489 subjectivity values short). The other two models
-are indexed and facetable, but comparing models is a dataset job, not a
+articles; DeepSeek 0731 is ~489 subjectivity values short). The other four
+models are indexed and facetable, but comparing models is a dataset job, not a
 search-sidebar one — and on centralité the Mistral family is a documented
 systematic outlier (`mistral-small-2603` runs κ 0.244–0.270 pairwise against
-0.511–0.725 for non-Mistral pairs), so a "2 of 3 models agree" reading of the
+0.511–0.725 for non-Mistral pairs), so an "N of 5 models agree" reading of the
 sidebar would be misleading. `*_subjectivite` is the weakest of the three
 measures generally — inter-model κ as low as 0.093 in the v2 pilot — so treat it
 as weak evidence.

@@ -52,8 +52,9 @@ final class SchemaLoaderTest extends TestCase
 
         // The collection NAME is the deployment contract: a schema change that
         // reaches production without a bump silently keeps serving the old
-        // collection. v7 added the audiovisual fields asserted below.
-        self::assertSame('iwac_v8', $schema['name']);
+        // collection. v7 added the audiovisual fields asserted below; v9 the
+        // Gemma and Qwen sentiment fields.
+        self::assertSame('iwac_v9', $schema['name']);
         self::assertSame('string', $toc['type']);
         self::assertTrue($toc['stem']);
         self::assertTrue($toc['optional']);

@@ -2,7 +2,13 @@
 
 ## 3.21.0 additions
 
-No schema change and no reindex.
+**Schema `iwac_v9` — a full reindex is required.** The index now carries all
+five AI sentiment models: Gemma 4 31B (`gemma_4_31b_it_*`) and Qwen3.8 27B
+(`qwen3_8_27b_*`) join the three already there. New fields only; the reindex
+builds `iwac_v9` and swaps `iwac_current` to it as usual.
+
+- [ ] Run the full reindex (admin button, `cli/reindex.php` or `omeka-cli discovery:reindex`) and confirm `iwac_current` points at `iwac_v9`.
+- [ ] Spot-check one article annotated by all five: the document carries `gemma_4_31b_it_polarite_ss` and `qwen3_8_27b_polarite_ss` beside `gpt_5_6_luna_polarite_ss`. The sidebar is unchanged — GPT-5.6 Luna remains the one surfaced trio.
 
 - [ ] **Content-Security-Policy, if one is enforced:** the Map view now loads MapLibre 6, which is ES-module only and boots its worker from a `blob:` URL — `worker-src` must allow `blob:` (and `script-src` must allow `https://cdn.jsdelivr.net`, as before). IwacVisualizations has needed the same since its MapLibre 6 move, so a site serving both is already configured.
 - [ ] Open the Map view on the entity index (e.g. `/s/westafrica/browse/…` with the Map toggle) and confirm clusters render; in devtools, `maplibregl.getVersion()` reads `6.11.2`, and the three jsDelivr requests carry `integrity`.

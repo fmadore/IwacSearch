@@ -68,11 +68,6 @@ abstract class AbstractMapper implements MapperInterface
         'dcterms:extent',
         'dcterms:rights',
     ];
-    protected const SENTIMENT_TERMS = [
-        'iwac:gpt56LunaCentralite', 'iwac:gpt56LunaPolarite', 'iwac:gpt56LunaSubjectiviteScore',
-        'iwac:mistralSmall2603Centralite', 'iwac:mistralSmall2603Polarite', 'iwac:mistralSmall2603SubjectiviteScore',
-        'iwac:deepseekV4Flash0731Centralite', 'iwac:deepseekV4Flash0731Polarite', 'iwac:deepseekV4Flash0731SubjectiviteScore',
-    ];
 
     /**
      * Omeka term infix => document field prefix.
@@ -89,6 +84,18 @@ abstract class AbstractMapper implements MapperInterface
      * We read 0731; the two are different annotations of the same corpus and
      * must never be merged.
      *
+     * Qwen has a near neighbour too: `iwac:qwen35A3b*` / `iwac:qwen35A10b*`
+     * are other runs IwacVisualizations hides. Terms are matched exactly, so
+     * neither can leak into `qwen3_8_27b_*`.
+     *
+     * These are the five annotators IwacVisualizations' dashboards show
+     * (its `config/sentiment-models.json` is the registry of which families
+     * exist); the field prefixes are the Hugging Face column prefixes.
+     * `scripts/check-schema-drift.js` holds data/schema.yaml and the client's
+     * field sets to exactly this map, and {@see sentimentTerms()} derives
+     * what the reader loads from it — so adding a row here, a schema bump
+     * and the i18n entries are the whole change.
+     *
      * Re-annotating with a different model = swap the row here for one with
      * new field names + a schema bump. Never repoint an existing prefix at a
      * new model: that silently changes what an already-published facet URL
@@ -98,12 +105,21 @@ abstract class AbstractMapper implements MapperInterface
         'gpt56Luna'           => 'gpt_5_6_luna',
         'mistralSmall2603'    => 'mistral_small_2603',
         'deepseekV4Flash0731' => 'deepseek_v4_flash_0731',
+        'gemma431bIt'         => 'gemma_4_31b_it',
+        'qwen3827b'           => 'qwen3_8_27b',
     ];
 
     /**
+     * The three readings every model records, as Omeka term suffixes:
+     * `iwac:{model}Centralite` and so on.
+     */
+    private const SENTIMENT_PROPERTIES = ['Centralite', 'Polarite', 'SubjectiviteScore'];
+
+    /**
      * Subjectivité is stored as a linked-resource CATEGORY (not a number) for
-     * ALL THREE models — confirmed live against the generation-2 properties,
-     * which link to the same five scale items (78043–78047) generation 1 did.
+     * every model — confirmed live against the generation-2 properties, which
+     * link to the same five scale items (78043–78047) generation 1 did, and
+     * read the same way by IwacVisualizations for Gemma and Qwen.
      * The HF pipeline converts the label to the 1–5 score; we do the same.
      * Scale derived empirically by pairing the Omeka label against the HF
      * *_subjectivite_score for 25 articles.
@@ -441,9 +457,32 @@ abstract class AbstractMapper implements MapperInterface
     }
 
     /**
-     * Three-model AI sentiment. Centralité + polarité are categorical labels
-     * (linked or literal — disp() handles both); subjectivité is a linked
-     * category resolved to its 1–5 score for every model.
+     * Every Omeka term {@see addAiSentiment()} reads — what a mapper that
+     * calls it must declare in readTerms(). Derived, not listed: when this was
+     * a second hand-kept list, a model added to SENTIMENT_MODELS but not here
+     * would have been mapped from values the reader never loaded, i.e. an
+     * empty field and no error.
+     *
+     * @return list<string>
+     */
+    protected static function sentimentTerms(): array
+    {
+        $terms = [];
+        foreach (array_keys(self::SENTIMENT_MODELS) as $model) {
+            foreach (self::SENTIMENT_PROPERTIES as $property) {
+                $terms[] = "iwac:{$model}{$property}";
+            }
+        }
+        return $terms;
+    }
+
+    /**
+     * AI sentiment, one reading per annotating model. Centralité + polarité
+     * are categorical labels (linked or literal — disp() handles both);
+     * subjectivité is a linked category resolved to its 1–5 score for every
+     * model. Each property is read independently: a model that answered one
+     * and not another contributes the fields it has, and no reading is
+     * inferred from the others.
      *
      * The Omeka term infix and the document field prefix name the same model
      * in two spellings — see {@see SENTIMENT_MODELS}.

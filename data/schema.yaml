@@ -34,7 +34,7 @@
 #     dependency at search time.
 #
 # Versioning:
-#   - The actual collection is named `iwac_v6` and aliased as `iwac_current`.
+#   - The actual collection is named `iwac_v9` and aliased as `iwac_current`.
 #     (v1 → v2: French stemming + the `iwac_diversity` curation set.
 #      v2 → v3: accent-insensitive indexing (locale dropped), alt_title_txt,
 #      subjects_ss, searchable/facetable publisher_s + book_title_s, and the
@@ -71,8 +71,13 @@
 #      and publisher too. ~3,045 authority records rendered a false "0
 #      mentions" on the search page, including every newspaper and YouTube
 #      channel; Wanlé Gérard Coulibaly read 0 on the site and 8 on HF.
-#      Restores that parity — see the note in EntityOccurrences.)
-#   - Schema changes ⇒ bump the name (`iwac_v7` → `iwac_v8`), atomic-swap
+#      Restores that parity — see the note in EntityOccurrences.
+#      v8 → v9: the two sentiment annotators added after generation 2 —
+#      gemma-4-31b-it (Omeka `iwac:gemma431bIt*`, from 2026-08-14) and
+#      qwen3.8-27b (`iwac:qwen3827b*`, from 2026-08-25) — join the three
+#      already indexed, so the index carries all five models IwacVisualizations
+#      shows. New fields only; nothing existing is renamed.)
+#   - Schema changes ⇒ bump the name (`iwac_v8` → `iwac_v9`), atomic-swap
 #     the alias. The browser only ever queries the alias, so swaps are
 #     zero-downtime.
 #
@@ -82,7 +87,7 @@
 # both the bulk reindex and the M4 incremental path. No Hugging Face.
 # country_ss is derived (newspaper→country / item-set). See docs/data-sources.md.
 
-name: iwac_v8
+name: iwac_v9
 
 # Global curation set linked to this collection. The set itself is created
 # (idempotently) by src/Indexer/CurationSync.php during the bulk reindex.
@@ -293,7 +298,7 @@ fields:
   - { name: editor_ss,    type: "string[]", index: false, optional: true }
   - { name: edition_s,    type: string,     index: false, optional: true }
 
-  # ── AI sentiment (3 models — keep all three for cross-model queries) ──
+  # ── AI sentiment (5 models — keep every one for cross-model queries) ──
   # `centralite` and `polarite` are categorical → facets.
   # `subjectivite` is 1–5 float → range facet + sort.
   #
@@ -310,7 +315,11 @@ fields:
   # (`iwac:gemini*` / `iwac:chatgpt*` / `iwac:mistral*`, indexed through v5 as
   # `gemini_3_flash_preview_*` / `gpt_5_mini_*` / `ministral_14b_2512_*`) are
   # no longer indexed; their values remain in Omeka and in the dataset.
-  # AbstractMapper::SENTIMENT_MODELS holds the Omeka-term → field-prefix map.
+  # v9 adds the two later annotators, gemma-4-31b-it and qwen3.8-27b
+  # (`iwac:gemma431bIt*`, `iwac:qwen3827b*`), on the same pattern.
+  # AbstractMapper::SENTIMENT_MODELS holds the Omeka-term → field-prefix map,
+  # and scripts/check-schema-drift.js fails when this block and that map
+  # disagree.
   #
   # Subjectivité is stored in Omeka as a linked CATEGORY for every model
   # ("Très objectif" … "Très subjectif", items 78043–78047); the mapper
@@ -324,6 +333,12 @@ fields:
   - { name: deepseek_v4_flash_0731_centralite_ss, type: "string[]", facet: true, optional: true }
   - { name: deepseek_v4_flash_0731_polarite_ss,   type: "string[]", facet: true, optional: true }
   - { name: deepseek_v4_flash_0731_subjectivite,  type: float,    facet: true, sort: true, optional: true }
+  - { name: gemma_4_31b_it_centralite_ss,         type: "string[]", facet: true, optional: true }
+  - { name: gemma_4_31b_it_polarite_ss,           type: "string[]", facet: true, optional: true }
+  - { name: gemma_4_31b_it_subjectivite,          type: float,    facet: true, sort: true, optional: true }
+  - { name: qwen3_8_27b_centralite_ss,            type: "string[]", facet: true, optional: true }
+  - { name: qwen3_8_27b_polarite_ss,              type: "string[]", facet: true, optional: true }
+  - { name: qwen3_8_27b_subjectivite,             type: float,    facet: true, sort: true, optional: true }
 
   # ── ACL ───────────────────────────────────────────────────────────────
   # Sourced from Omeka, NOT HF. Public scoped keys carry filter_by:is_public:=true

@@ -387,15 +387,25 @@ const FACET_LABELS: Record<Locale, Record<string, string>> = {
     // Sentiment fields are keyed by the annotating model (see
     // data/schema.yaml). The surfaced trio keeps a bare label — the panel
     // groups it under "Sentiment" and only one model is offered, so naming
-    // it in every heading would be noise. The other two are labelled
-    // because their only reason to appear is which model said it.
+    // it in every heading would be noise. The other four are labelled
+    // because their only reason to appear (a filter chip from a hand-built
+    // link) is which model said it. check-schema-drift.js requires a label
+    // here for every sentiment field the schema declares.
     gpt_5_6_luna_polarite_ss: 'Polarité',
     gpt_5_6_luna_centralite_ss: 'Centralité',
     gpt_5_6_luna_subjectivite: 'Subjectivité',
     mistral_small_2603_polarite_ss: 'Polarité (Mistral Small 2603)',
     mistral_small_2603_centralite_ss: 'Centralité (Mistral Small 2603)',
+    mistral_small_2603_subjectivite: 'Subjectivité (Mistral Small 2603)',
     deepseek_v4_flash_0731_polarite_ss: 'Polarité (DeepSeek V4 Flash 0731)',
     deepseek_v4_flash_0731_centralite_ss: 'Centralité (DeepSeek V4 Flash 0731)',
+    deepseek_v4_flash_0731_subjectivite: 'Subjectivité (DeepSeek V4 Flash 0731)',
+    gemma_4_31b_it_polarite_ss: 'Polarité (Gemma 4 31B)',
+    gemma_4_31b_it_centralite_ss: 'Centralité (Gemma 4 31B)',
+    gemma_4_31b_it_subjectivite: 'Subjectivité (Gemma 4 31B)',
+    qwen3_8_27b_polarite_ss: 'Polarité (Qwen3.8 27B)',
+    qwen3_8_27b_centralite_ss: 'Centralité (Qwen3.8 27B)',
+    qwen3_8_27b_subjectivite: 'Subjectivité (Qwen3.8 27B)',
   },
   en: {
     country_ss: 'Country',
@@ -429,8 +439,16 @@ const FACET_LABELS: Record<Locale, Record<string, string>> = {
     gpt_5_6_luna_subjectivite: 'Subjectivity',
     mistral_small_2603_polarite_ss: 'Polarity (Mistral Small 2603)',
     mistral_small_2603_centralite_ss: 'Centrality (Mistral Small 2603)',
+    mistral_small_2603_subjectivite: 'Subjectivity (Mistral Small 2603)',
     deepseek_v4_flash_0731_polarite_ss: 'Polarity (DeepSeek V4 Flash 0731)',
     deepseek_v4_flash_0731_centralite_ss: 'Centrality (DeepSeek V4 Flash 0731)',
+    deepseek_v4_flash_0731_subjectivite: 'Subjectivity (DeepSeek V4 Flash 0731)',
+    gemma_4_31b_it_polarite_ss: 'Polarity (Gemma 4 31B)',
+    gemma_4_31b_it_centralite_ss: 'Centrality (Gemma 4 31B)',
+    gemma_4_31b_it_subjectivite: 'Subjectivity (Gemma 4 31B)',
+    qwen3_8_27b_polarite_ss: 'Polarity (Qwen3.8 27B)',
+    qwen3_8_27b_centralite_ss: 'Centrality (Qwen3.8 27B)',
+    qwen3_8_27b_subjectivite: 'Subjectivity (Qwen3.8 27B)',
   },
 };
 
@@ -441,7 +459,8 @@ export function facetLabel(field: string, locale: Locale): string {
 /**
  * Sentiment sub-facets render under one collapsible "Sentiment" group.
  * Keyed by the annotating model, mirroring data/schema.yaml and the Hugging
- * Face dataset's column names.
+ * Face dataset's column names — all five models, three readings each;
+ * check-schema-drift.js holds this set to the schema.
  */
 export const SENTIMENT_FIELDS: ReadonlySet<string> = new Set([
   'gpt_5_6_luna_polarite_ss',
@@ -453,17 +472,27 @@ export const SENTIMENT_FIELDS: ReadonlySet<string> = new Set([
   'deepseek_v4_flash_0731_polarite_ss',
   'deepseek_v4_flash_0731_centralite_ss',
   'deepseek_v4_flash_0731_subjectivite',
+  'gemma_4_31b_it_polarite_ss',
+  'gemma_4_31b_it_centralite_ss',
+  'gemma_4_31b_it_subjectivite',
+  'qwen3_8_27b_polarite_ss',
+  'qwen3_8_27b_centralite_ss',
+  'qwen3_8_27b_subjectivite',
 ]);
 
 /**
  * Numeric facet fields. Their filter_by values must NOT be backtick-quoted
  * (Typesense rejects a backticked number with "Numerical field has an
  * invalid comparator"); they're emitted as a bare numeric array instead.
+ * A float field missing here 400s every search filtered on it, so
+ * check-schema-drift.js requires every schema `_subjectivite` field.
  */
 export const NUMERIC_FACET_FIELDS: ReadonlySet<string> = new Set([
   'gpt_5_6_luna_subjectivite',
   'mistral_small_2603_subjectivite',
   'deepseek_v4_flash_0731_subjectivite',
+  'gemma_4_31b_it_subjectivite',
+  'qwen3_8_27b_subjectivite',
   'pub_year',
 ]);
 
@@ -584,7 +613,7 @@ export function countryLabel(value: string, locale: Locale): string {
 }
 
 // ── Subjectivity scale value labels (1–5 → readable label) ─────────────
-// The three *_subjectivite fields are 1–5 float facets. Typesense
+// Every *_subjectivite field (one per model) is a 1–5 float facet. Typesense
 // returns the facet value as a string ("1", or possibly "1.0"), so the raw
 // sidebar reads as a bare "1". We map the rounded integer to a human label
 // — labels only; the long scale descriptions live in the dataset docs, not

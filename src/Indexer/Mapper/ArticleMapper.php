@@ -9,7 +9,7 @@ use IwacSearch\Indexer\PropertyValues;
 /**
  * Articles (bibo:Article, class 36) — digitised newspaper articles.
  *
- * Richest subset: full OCR, three-model AI sentiment, original-source URL,
+ * Richest subset: full OCR, five-model AI sentiment, original-source URL,
  * AI summary. (LDA topic labels were HF-only and are intentionally dropped.)
  */
 final class ArticleMapper extends AbstractMapper
@@ -35,7 +35,7 @@ final class ArticleMapper extends AbstractMapper
             self::COMMON_TERMS,
             self::BODY_TERMS,
             self::DESCRIPTION_TERMS,
-            self::SENTIMENT_TERMS,
+            self::sentimentTerms(),
         )));
     }
 

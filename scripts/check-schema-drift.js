@@ -19,6 +19,14 @@
  *      a field data/schema.yaml actually declares. Added with the v4
  *      sentiment rename; a rename that lands in only one map resolves on one
  *      surface and silently drops the filter on the other.
+ *   4. The AI-sentiment roster: AbstractMapper::SENTIMENT_MODELS (the one
+ *      map of which annotators are indexed) must match data/schema.yaml's
+ *      sentiment fields exactly — three per model, facetable — and the
+ *      client's SENTIMENT_FIELDS / NUMERIC_FACET_FIELDS / FACET_LABELS must
+ *      carry every one. Added when Gemma and Qwen joined (v9): a model row
+ *      without its schema fields is stored but never indexed (no facet, and a
+ *      filter on it fails the search), and a subjectivité field missing from
+ *      NUMERIC_FACET_FIELDS 400s any search filtered on it.
  *
  * It also prints (informational, non-fatal) the schema facet fields NOT in
  * the catalog, so deliberate exclusions stay visible.
@@ -203,6 +211,16 @@ function parseTsStringMap(tsText, name, label) {
   const body = tsText.slice(start, tsText.indexOf('\n};', start));
   const pairs = [...body.matchAll(/^\s*([A-Za-z0-9_]+):\s*'([A-Za-z0-9_]+)'/gm)];
   return new Map(pairs.map((m) => [m[1], m[2]]));
+}
+
+/** The quoted members of a TS `const NAME… = new Set([ '…', … ]);` literal. */
+function parseTsStringSet(tsText, name, label) {
+  const start = tsText.indexOf(`const ${name}`);
+  if (start === -1) {
+    throw new Error(`${label}: const ${name} not found — update the drift check.`);
+  }
+  const body = tsText.slice(start, tsText.indexOf(']);', start));
+  return new Set([...body.matchAll(/'([A-Za-z0-9_]+)'/g)].map((m) => m[1]));
 }
 
 /** Sort values from a PHP `const NAME = [ 'value' => 'Label', … ];` map. */
@@ -433,6 +451,63 @@ try {
     }
   }
 
+  // ── AI-sentiment roster (PHP ↔ schema ↔ client) ───────────────────────
+  // One row in AbstractMapper::SENTIMENT_MODELS is one annotating model; its
+  // value is the field prefix. Everything else that names a sentiment field
+  // is restated by hand, so each is held to that map here.
+  const mapperPhp = read('src/Indexer/Mapper/AbstractMapper.php');
+  const models = parsePhpStringMap(mapperPhp, 'SENTIMENT_MODELS', 'AbstractMapper.php');
+  if (models.size < 3) {
+    throw new Error(
+      `AbstractMapper.php: parsed only ${models.size} SENTIMENT_MODELS rows — format drift?`,
+    );
+  }
+  const readings = ['centralite_ss', 'polarite_ss', 'subjectivite'];
+  const expected = [...models.values()].flatMap((prefix) => readings.map((r) => `${prefix}_${r}`));
+  const sentimentShaped = /_(centralite_ss|polarite_ss|subjectivite)$/;
+  const declared = [...contentFields.keys()].filter((f) => sentimentShaped.test(f));
+  const sentimentSet = parseTsStringSet(i18n, 'SENTIMENT_FIELDS', 'i18n.ts');
+  const numericSet = parseTsStringSet(i18n, 'NUMERIC_FACET_FIELDS', 'i18n.ts');
+
+  for (const field of expected) {
+    const model = [...models].find(([, prefix]) => field.startsWith(`${prefix}_`))?.[0];
+    if (!contentFields.has(field)) {
+      fail(
+        `SENTIMENT_MODELS maps iwac:${model}* to '${field}', which data/schema.yaml does not ` +
+          'declare — Typesense would store it unindexed: no facet, and a filter on it fails.',
+      );
+    } else if (!contentFields.get(field).facet) {
+      fail(`Sentiment field '${field}' is declared in data/schema.yaml without facet: true.`);
+    }
+    if (!sentimentSet.has(field)) {
+      fail(`Sentiment field '${field}' is missing from i18n.ts SENTIMENT_FIELDS.`);
+    }
+    if (field.endsWith('_subjectivite') && !numericSet.has(field)) {
+      fail(
+        `'${field}' is missing from i18n.ts NUMERIC_FACET_FIELDS — a filter on it would be ` +
+          'backtick-quoted and Typesense rejects the whole search.',
+      );
+    }
+    for (const locale of ['fr', 'en']) {
+      if (!labels.get(field)?.has(locale)) {
+        fail(`Sentiment field '${field}' has no '${locale}' label in i18n.ts FACET_LABELS.`);
+      }
+    }
+  }
+  for (const field of declared) {
+    if (!expected.includes(field)) {
+      fail(
+        `data/schema.yaml declares '${field}', but no AbstractMapper::SENTIMENT_MODELS row ` +
+          'produces it — a retired model left in the schema, or a row missing from the map.',
+      );
+    }
+  }
+  for (const field of sentimentSet) {
+    if (!expected.includes(field)) {
+      fail(`i18n.ts SENTIMENT_FIELDS names '${field}', which no SENTIMENT_MODELS row produces.`);
+    }
+  }
+
   if (!failed) {
     console.log(
       `✅ legacy field aliases: ${phpAliases.size} consistent across FacetCatalog.php / ` +
@@ -442,6 +517,10 @@ try {
       `✅ schema drift check: ${catalogKeys.length} catalog keys consistent across ` +
         'schema.yaml / schema-index.yaml / FacetCatalog.php / i18n.ts; ' +
         'query_by, highlight, sort, multi-search limit and stopword set consistent across PHP / TS',
+    );
+    console.log(
+      `✅ sentiment roster: ${models.size} models (${[...models.values()].join(', ')}), ` +
+        `${expected.length} fields consistent across AbstractMapper.php / schema.yaml / i18n.ts`,
     );
   }
 } catch (err) {

@@ -877,28 +877,104 @@ final class MapperTest extends TestCase
         self::assertArrayNotHasKey('gpt_5_6_luna_subjectivite', $doc);
     }
 
+    /** Omeka term infix => document field prefix, for all five annotators. */
+    private const SENTIMENT_MODELS = [
+        'gpt56Luna' => 'gpt_5_6_luna',
+        'mistralSmall2603' => 'mistral_small_2603',
+        'deepseekV4Flash0731' => 'deepseek_v4_flash_0731',
+        'gemma431bIt' => 'gemma_4_31b_it',
+        'qwen3827b' => 'qwen3_8_27b',
+    ];
+
     /**
-     * Each model's Omeka term feeds its OWN document field — no bleed between
-     * the three. Asserting the camelCase → snake_case crossover explicitly
-     * (`iwac:mistralSmall2603*` → `mistral_small_2603_*`), because a mapper
-     * that echoed the Omeka infix straight through would still populate
-     * something that looked plausible.
+     * Each model's Omeka terms feed its OWN document fields — no bleed between
+     * the five. Every model gets a distinct value on every reading, so a
+     * mapper that read one model's term into another's field would show up as
+     * a wrong value, not just a missing one. Asserting the camelCase →
+     * snake_case crossover explicitly (`iwac:qwen3827b*` → `qwen3_8_27b_*`),
+     * because a mapper that echoed the Omeka infix straight through would
+     * still populate something that looked plausible.
      */
-    public function testAllThreeSentimentModelsAreMappedIndependently(): void
+    public function testAllFiveSentimentModelsAreMappedIndependently(): void
+    {
+        $scale = ['Très objectif', 'Plutôt objectif', 'Mixte', 'Plutôt subjectif', 'Très subjectif'];
+        $terms = [];
+        $i = 0;
+        foreach (self::SENTIMENT_MODELS as $model => $prefix) {
+            $terms["iwac:{$model}Polarite"] = [['value' => "polarite {$prefix}"]];
+            $terms["iwac:{$model}Centralite"] = [['vrid' => 10 + $i, 'title' => "centralite {$prefix}"]];
+            // Subjectivité links to one of the five scale items.
+            $terms["iwac:{$model}SubjectiviteScore"] = [['vrid' => 78043 + $i, 'title' => $scale[$i]]];
+            $i++;
+        }
+
+        $doc = $this->registry->get('articles')->map(self::item(), self::values($terms), null);
+
+        $i = 0;
+        foreach (self::SENTIMENT_MODELS as $prefix) {
+            self::assertSame(["polarite {$prefix}"], $doc["{$prefix}_polarite_ss"]);
+            self::assertSame(["centralite {$prefix}"], $doc["{$prefix}_centralite_ss"]);
+            self::assertSame((float) ($i + 1), $doc["{$prefix}_subjectivite"]);
+            $i++;
+        }
+        self::assertArrayNotHasKey('qwen3827b_polarite_ss', $doc);
+        self::assertArrayNotHasKey('gemma431bIt_polarite_ss', $doc);
+        $sentiment = preg_grep('/_(centralite_ss|polarite_ss|subjectivite)$/', array_keys($doc));
+        self::assertSame(15, count($sentiment ?: []), 'three readings for each of five models, nothing else');
+    }
+
+    /**
+     * The reader only loads the terms a mapper declares, so a model mapped
+     * in addAiSentiment() but missing from readTerms() indexes nothing — no
+     * error, just empty fields on every article.
+     */
+    public function testArticlesReadEverySentimentTermOfEveryModel(): void
+    {
+        $read = $this->registry->get('articles')->readTerms();
+        foreach (array_keys(self::SENTIMENT_MODELS) as $model) {
+            foreach (['Centralite', 'Polarite', 'SubjectiviteScore'] as $property) {
+                self::assertContains("iwac:{$model}{$property}", $read);
+            }
+        }
+    }
+
+    /**
+     * Nothing guarantees a model wrote all three readings — Qwen's failed
+     * runs were exactly a null subjectivité beside a centralité (retired
+     * upstream rather than written, but a partial write is one pipeline
+     * change away). Each reading stands on its own: the article keeps the
+     * centralité it has, and no subjectivité is invented.
+     */
+    public function testAModelThatAnsweredOnlySomeReadingsKeepsThoseItHas(): void
+    {
+        $doc = $this->registry->get('articles')->map(
+            self::item(),
+            self::values(['iwac:qwen3827bCentralite' => [['vrid' => 4, 'title' => 'Marginal']]]),
+            null
+        );
+
+        self::assertSame(['Marginal'], $doc['qwen3_8_27b_centralite_ss']);
+        self::assertArrayNotHasKey('qwen3_8_27b_polarite_ss', $doc);
+        self::assertArrayNotHasKey('qwen3_8_27b_subjectivite', $doc);
+    }
+
+    /**
+     * Omeka also holds `iwac:qwen35A3b*` / `iwac:qwen35A10b*` — other Qwen
+     * runs IwacVisualizations hides. They share the `iwac:qwen3` stem with the
+     * indexed Qwen3.8 27B, so a loose match would file their readings under it.
+     */
+    public function testOtherQwenRunsAreNotIndexedAsQwen38(): void
     {
         $doc = $this->registry->get('articles')->map(
             self::item(),
             self::values([
-                'iwac:gpt56LunaPolarite' => [['value' => 'Neutre']],
-                'iwac:mistralSmall2603Centralite' => [['vrid' => 3, 'title' => 'Centrale']],
+                'iwac:qwen35A3bPolarite' => [['value' => 'Négative']],
+                'iwac:qwen35A10bPolarite' => [['value' => 'Positive']],
             ]),
             null
         );
 
-        self::assertSame(['Neutre'], $doc['gpt_5_6_luna_polarite_ss']);
-        self::assertSame(['Centrale'], $doc['mistral_small_2603_centralite_ss']);
-        self::assertArrayNotHasKey('mistralSmall2603_centralite_ss', $doc);
-        self::assertArrayNotHasKey('deepseek_v4_flash_0731_polarite_ss', $doc);
+        self::assertArrayNotHasKey('qwen3_8_27b_polarite_ss', $doc);
     }
 
     /**

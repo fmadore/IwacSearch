@@ -76,12 +76,12 @@ final class FacetCatalog
         'date_decade_ss'     => 'Decade',
         // Sentiment trio — rendered together under one collapsible
         // "Sentiment" group in the client. subjectivite is a 1–5 numeric
-        // facet. The other two annotating models (mistral_small_2603_*,
-        // deepseek_v4_flash_0731_*) are indexed and facetable in schema.yaml
-        // but deliberately NOT offered here: three parallel sentiment trios
-        // in the admin picker read as noise, and the panel only has room for
-        // one. Cross-model comparison is a dataset job, not a search-sidebar
-        // one.
+        // facet. The other four annotating models (mistral_small_2603_*,
+        // deepseek_v4_flash_0731_*, gemma_4_31b_it_*, qwen3_8_27b_*) are
+        // indexed and facetable in schema.yaml but deliberately NOT offered
+        // here: five parallel sentiment trios in the admin picker read as
+        // noise, and the panel only has room for one. Cross-model comparison
+        // is a dataset job, not a search-sidebar one.
         //
         // GPT-5.6 Luna holds the surfaced slot because it is the only
         // generation-2 annotator complete on all three properties (12,305
