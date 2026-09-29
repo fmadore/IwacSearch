@@ -73,6 +73,15 @@ export function buildYearRangeFilter(range: YearRange | null): string {
   return parts.join(' && ');
 }
 
+/**
+ * Facet union: always request counts for the prominent facets AND any facet
+ * currently selected, so a selected value doesn't vanish from the panel just
+ * because its field falls outside the prominent list.
+ */
+export function facetUnion(prominent: readonly string[], filters: ActiveFilters): string[] {
+  return Array.from(new Set([...prominent, ...Object.keys(filters)]));
+}
+
 /** AND-join the non-empty filter clauses. */
 export function combineFilters(...parts: Array<string | undefined | null>): string {
   return parts

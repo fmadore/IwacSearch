@@ -1,37 +1,28 @@
 <script lang="ts">
-  import type {
-    EntitySuggestion,
-    IwacBootstrap,
-    IwacDoc,
-    IwacFacetCount,
-    IwacSearchResponse,
-    SearchState,
-    YearBucket,
-  } from './lib/types';
+  import type { IwacBootstrap, IwacFacetCount } from './lib/types';
   import { TypesenseClient } from './lib/typesense';
-  import { SeqGuard, isAbortError } from './lib/transport';
   import { effectiveSortValue } from './lib/queryBuilders';
   import { isSemanticOnlyResponse } from './lib/semanticFallback';
-  import { FALLBACK_SORT, onUrlPop, readUrlState, syncToUrl } from './lib/urlState';
-  import { facetLabel, normalizeCard, normalizeLocale, provideI18n } from './lib/i18n';
+  import { FALLBACK_SORT, createUrlSync, onUrlPop } from './lib/urlState';
+  import { adoptableSnapshot, initialSearchState } from './lib/initialState';
+  import { resultAnnouncement } from './lib/announce';
+  import { normalizeCard, normalizeLocale, provideI18n } from './lib/i18n';
+  import { createSearchResults, createMapResults } from './lib/searchResults.svelte';
   import { createViewMode } from './lib/viewMode.svelte';
   import { createFilterDrawer } from './lib/filterDrawer.svelte';
   import { createFilterState } from './lib/filterState.svelte';
   import { createTypeahead, dismissOnOutsidePointer, slashShortcut } from './lib/typeahead.svelte';
-  import { createCopyState } from './lib/clipboard.svelte';
-  import { recordSearch } from './lib/searchHistory';
   import SearchInput from './components/SearchInput.svelte';
   import SuggestDropdown from './components/SuggestDropdown.svelte';
   import ResultsList from './components/ResultsList.svelte';
+  import ResultsToolbar from './components/ResultsToolbar.svelte';
   import ResultSummary from './components/ResultSummary.svelte';
   import ResultSkeleton from './components/ResultSkeleton.svelte';
   import ResultsEmpty from './components/ResultsEmpty.svelte';
-  import ViewToggle from './components/ViewToggle.svelte';
+  import DidYouMean from './components/DidYouMean.svelte';
+  import SemanticFallback from './components/SemanticFallback.svelte';
   import MapView from './components/MapView.svelte';
   import FacetPanel from './components/FacetPanel.svelte';
-  import SortSelect from './components/SortSelect.svelte';
-  import ExportMenu from './components/ExportMenu.svelte';
-  import Icon from './components/Icon.svelte';
   import Drawer from '../svelte-shared/components/Drawer.svelte';
 
   /**
@@ -48,16 +39,19 @@
    * on one page would clash if they all fought over the URL.
    *
    * Modularity note: this component is the orchestrator. It owns the query /
-   * page / sort state and the fetch effects, and wires everything together.
+   * page / sort state and wires everything together; it no longer fetches.
    * The UI is in small focused components (SearchInput, FacetPanel,
-   * ResultsList, Pagination, ResultItem, SortSelect, …); each self-contained
-   * cluster of state mechanics is a composable —
+   * ResultsToolbar, ResultsList, SemanticFallback, …); each self-contained
+   * cluster of mechanics is a module —
    *
-   *   filterState.svelte.ts   facet selections + year range (+ their rules)
-   *   typeahead.svelte.ts     suggest dropdown state, ARIA wiring, "/" shortcut
-   *   viewMode.svelte.ts      list / gallery / map resolution + persistence
-   *   filterDrawer.svelte.ts  narrow-viewport drawer
-   *   clipboard.svelte.ts     copy-link button state
+   *   searchResults.svelte.ts  what the state fetches: results, histogram,
+   *                            did-you-mean, the map set (+ their rules)
+   *   initialState.ts          mount state, and when the SSR page is adopted
+   *   filterState.svelte.ts    facet selections + year range (+ their rules)
+   *   typeahead.svelte.ts      suggest dropdown state, ARIA wiring, "/" shortcut
+   *   viewMode.svelte.ts       list / gallery / map resolution + persistence
+   *   filterDrawer.svelte.ts   narrow-viewport drawer
+   *   announce.ts              the live region's sentence
    *
    * — so each stays independently readable and testable, and this file keeps
    * only what genuinely crosses between them.
@@ -89,10 +83,7 @@
   // once at init from the server-detected bootstrap locale (defaults to
   // French). svelte-ignore: bootstrap is a prop, not reactive state.
   // svelte-ignore state_referenced_locally
-  const { t, card, locale } = provideI18n(
-    normalizeLocale(bootstrap.locale),
-    normalizeCard(bootstrap.card),
-  );
+  const { t, card } = provideI18n(normalizeLocale(bootstrap.locale), normalizeCard(bootstrap.card));
 
   const isStandalone = $derived(String(bootstrap.block_id) === 'standalone');
 
@@ -119,26 +110,12 @@
   // svelte-ignore state_referenced_locally
   const client = new TypesenseClient(bootstrap);
 
-  // Initial state — hydrated from the URL on every surface that syncs
-  // (standalone /search and full-mode page blocks, each via its own prefix),
-  // empty otherwise. `syncUrl`, `urlPrefix` and `bootstrap` are read once at
-  // mount; svelte-check warns because the read isn't reactive, but none can
-  // change post-mount (bootstrap is server-emitted, the rest derive from it).
+  // Initial state — see lib/initialState.ts. `syncUrl`, `urlPrefix`,
+  // `defaultSort` and `bootstrap` are read once at mount; svelte-check warns
+  // because the read isn't reactive, but none can change post-mount
+  // (bootstrap is server-emitted, the rest derive from it).
   // svelte-ignore state_referenced_locally
-  const initial: SearchState = syncUrl
-    ? readUrlState(window.location.href, urlPrefix, defaultSort)
-    : {
-        // sharedQuery is the federated page's live query; initial_filters is
-        // the filter handed off from a union-tab chip. Both absent on page
-        // blocks, which start empty.
-        q: sharedQuery ?? '',
-        page: 1,
-        sort: defaultSort,
-        filters: bootstrap.initial_filters ?? {},
-        yearRange: null,
-        perPage: null,
-        view: null,
-      };
+  const initial = initialSearchState(bootstrap, { syncUrl, urlPrefix, defaultSort, sharedQuery });
 
   let query = $state(initial.q);
   let page = $state(initial.page);
@@ -210,52 +187,18 @@
     initialView: initial.view,
   });
 
-  // Hydrate from the SSR'd first page when present. The server inlines
-  // a `initial_response` in the bootstrap JSON for curated browse pages,
-  // page blocks with locked filters, and the standalone /search shell —
-  // so `response` is already set on first frame and the user sees real
-  // content, not a spinner. Falls back to null (client-side fetch path)
-  // when the server couldn't pre-render. The Array.isArray guard rejects
-  // malformed bootstraps that would otherwise crash ResultsList on its
-  // first render with `Cannot read properties of undefined (reading 'length')`.
-  //
-  // The snapshot is the surface's DEFAULT first page, so it is adopted only
-  // for the pristine state: empty q, page 1, the surface's default sort, no
-  // filters (URL or handed-off), no year range, default page size. Any
-  // URL-hydrated state (e.g. /search?q=ramadan or ?sort=date:asc) fetches
-  // what the user asked for instead. (The server skips the SSR in that case
-  // too — SearchStateQuery.php.)
+  // ── What the state fetches ───────────────────────────────────────────
+  // Hydrated from the SSR'd first page when the initial state is pristine
+  // (lib/initialState.ts), so the first frame shows real content rather than
+  // a skeleton; otherwise the first run fetches.
   // svelte-ignore state_referenced_locally
-  const pristine =
-    Object.keys(bootstrap.initial_filters ?? {}).length === 0 &&
-    initial.q === '' &&
-    initial.page === 1 &&
-    initial.sort === defaultSort &&
-    Object.keys(initial.filters).length === 0 &&
-    initial.yearRange === null &&
-    initial.perPage === null;
-  // svelte-ignore state_referenced_locally
-  const initialResponse = pristine ? deriveInitialResponse(bootstrap) : null;
-  let response = $state<IwacSearchResponse | null>(initialResponse);
-  let isLoading = $state(false);
-  let error = $state<string | null>(null);
-
-  // Year-distribution histogram data for the date slider. Computed as a
-  // second sub-search of the main request (one POST, not two) and only when
-  // stale — see the search effect. Empty until the first response resolves,
-  // and on any surface without a facet panel.
-  let yearDistribution = $state<YearBucket[]>([]);
-  let yearsUnavailable = $state(false);
-  let retryVersion = $state(0);
-  // Query+filters signature the current bars were computed for. Plain `let`:
-  // the search effect reads it without wanting a reactive dependency.
-  let lastHistogramKey: string | null = null;
-
-  // "Did you mean" candidates for a zero-result query: entity suggestions
-  // fetched through the typo-tolerant suggest path (facet_query + the alias
-  // index), so a near-miss spelling ("Tidjaniya") can offer the canonical
-  // entity. Rendered above the empty state; picking one applies the filter.
-  let didYouMean = $state<EntitySuggestion[]>([]);
+  const results = createSearchResults(client, {
+    withHistogram: bootstrap.mode === 'full',
+    prominentFacets: bootstrap.prominent_facets,
+    collection: bootstrap.collection_alias,
+    initialResponse: adoptableSnapshot(bootstrap, initial, defaultSort),
+  });
+  const response = $derived(results.response);
 
   /**
    * The query the reader explicitly asked to see semantic near-matches for.
@@ -273,32 +216,27 @@
    */
   let semanticOptInFor = $state<string | null>(null);
 
-  // Geo-tagged docs for the Map view (entity surfaces). Fetched when the
-  // map is active and the query/filter state changes.
-  let mapDocs = $state<IwacDoc[]>([]);
-  let mapLoading = $state(false);
+  function showSemantic(): void {
+    semanticOptInFor = query;
+  }
 
-  // The first $effect run skips its fetch when a snapshot was adopted —
-  // i.e. the state is pristine (see `pristine` above). Plain `let` (not
-  // $state): reading it inside the effect creates no reactive dependency,
-  // so clearing it doesn't re-trigger the effect.
-  let skipNextFetch = initialResponse != null;
-
-  // Previous snapshot for URL-sync diffing (pushState vs replaceState).
-  let prevState: SearchState | null = null;
+  function hideSemantic(): void {
+    semanticOptInFor = null;
+  }
 
   // Anchor element above the result list — page changes scroll back
-  // to this so the new page lands at the top. Bound via bind:this on
-  // the toolbar header below.
+  // to this so the new page lands at the top. Bound to the toolbar below.
   let resultsAnchor: HTMLElement | null = $state(null);
 
   // Push state → URL whenever anything observable changes. An EXPLICIT view
   // always goes to the URL, `list` included, so a copied link reproduces what
   // the sharer was looking at; an auto-suggested gallery writes nothing and
   // stays a session hint (the recipient's own results re-derive it, or don't).
+  // svelte-ignore state_referenced_locally
+  const urlSync = createUrlSync(urlPrefix, defaultSort);
   $effect(() => {
     if (!syncUrl) return;
-    const next: SearchState = {
+    urlSync.push({
       q: query,
       page,
       sort,
@@ -306,21 +244,7 @@
       yearRange,
       perPage: perPageChoice,
       view: view.explicit ? view.mode : null,
-    };
-    syncToUrl(next, prevState, urlPrefix, defaultSort);
-    // Snapshot for the next diff. NOT structuredClone(next): `filters` and
-    // `yearRange` are deep Svelte 5 reactive proxies, and structuredClone
-    // throws DataCloneError on a proxy. Build a plain deep copy by hand so
-    // the clone is guaranteed serialisable and proxy-free.
-    prevState = {
-      q: next.q,
-      page: next.page,
-      sort: next.sort,
-      filters: Object.fromEntries(Object.entries(next.filters).map(([k, v]) => [k, [...v]])),
-      yearRange: next.yearRange ? { ...next.yearRange } : null,
-      perPage: next.perPage,
-      view: next.view,
-    };
+    });
   });
 
   // Back / forward → re-hydrate state from URL.
@@ -354,178 +278,20 @@
     if (r && !semanticHidden) view.autoSuggest(r);
   });
 
-  // Query → search. Tracks every reactive state field by reading it.
-  // Always fires on mount (including with an empty query) so browse
-  // surfaces — curated pages, blocks with locked_filters, or just a
-  // bare /search arrival — show items + facets immediately. The
-  // typesense client translates an empty query into `q=*` browse mode.
-  $effect(() => {
-    const q = query;
-    const p = page;
-    const s = sort;
-    const f = filters;
-    const y = yearRange;
-    const pp = perPageChoice;
+  // Query → search. Tracks every state field by reading it here. Always fires
+  // on mount (including with an empty query) so browse surfaces — curated
+  // pages, blocks with locked_filters, or just a bare /search arrival — show
+  // items + facets immediately. The typesense client translates an empty
+  // query into `q=*` browse mode.
+  $effect(() => results.run({ q: query, page, sort, filters, yearRange, perPage: perPageChoice }));
 
-    // Facet union: always request counts for prominent facets + any
-    // facet the user has currently selected, so selected values don't
-    // vanish from the UI even if they fall outside the top-N prominent
-    // list.
-    const facetBy = Array.from(new Set([...bootstrap.prominent_facets, ...Object.keys(f)]));
-
-    // First run with a fresh SSR snapshot that matches the current
-    // state? Don't refetch — we already have the right data. Any
-    // subsequent state change falls through to the normal fetch.
-    void retryVersion;
-    if (skipNextFetch) {
-      skipNextFetch = false;
-      if (bootstrap.mode === 'full') {
-        let cancelled = false;
-        client
-          .yearDistribution(q)
-          .then((years) => {
-            if (!cancelled) {
-              yearDistribution = years;
-              lastHistogramKey = `${q}\u0000${JSON.stringify(f)}`;
-            }
-          })
-          .catch(() => {
-            if (!cancelled) yearsUnavailable = true;
-          });
-        return () => {
-          cancelled = true;
-        };
-      }
-      return;
-    }
-
-    // The histogram depends on the query + categorical filters ONLY, so ask
-    // for it as a second sub-search of THIS request just when that pair has
-    // actually changed. Paging or re-sorting reuses the bars already drawn,
-    // which is what the separate effect used to achieve with a second POST.
-    const histogramKey = bootstrap.mode === 'full' ? `${q}\u0000${JSON.stringify(f)}` : null;
-    const needHistogram = histogramKey !== null && histogramKey !== lastHistogramKey;
-
-    isLoading = true;
-    error = null;
-    didYouMean = [];
-    client
-      .search({
-        q,
-        page: p,
-        sortBy: s,
-        activeFilters: f,
-        yearRange: y,
-        perPage: pp ?? undefined,
-        facetBy,
-        withYearDistribution: needHistogram,
-      })
-      .then(({ response: r, years, yearsUnavailable: unavailable }) => {
-        if (needHistogram) {
-          yearsUnavailable = unavailable ?? false;
-          if (unavailable) yearDistribution = [];
-        }
-        response = r;
-        // The typeahead is deliberately NOT touched here — neither closed nor
-        // re-armed. Search-as-you-type means results land while the reader is
-        // still composing and still reading the suggestions; closing the panel
-        // on the commit (3.16.0) made a two-second pause enough to lose the row
-        // they were aiming at, and re-opening it (pre-3.16.0) put it back over
-        // its own answer. It closes on an outside press, blur, Escape, a pick,
-        // or an emptied box — all of which are the reader saying so.
-        if (years !== undefined) {
-          yearDistribution = years;
-          lastHistogramKey = histogramKey;
-        }
-        if (q.trim() !== '') {
-          // A semantic-only response is a dead query wearing a full result
-          // list, so it takes the zero-result path on BOTH counts: it never
-          // enters the recent-searches history, and it gets the spelling
-          // suggestions that used to be unreachable behind it.
-          const semanticOnly = isSemanticOnlyResponse(r, q);
-          window.dispatchEvent(
-            new CustomEvent('iwac-search:outcome', {
-              detail: {
-                query: q,
-                collection: bootstrap.collection_alias,
-                found: r.found,
-                keywordFound: r.keyword_found,
-                semanticOnly,
-              },
-            }),
-          );
-          const foundNothing = r.found === 0 || semanticOnly;
-          if (!foundNothing) {
-            // Only fruitful queries enter the recent-searches history, so
-            // typo dead-ends don't pollute the dropdown.
-            recordSearch(q);
-          } else if (q.trim().length >= 3) {
-            fetchDidYouMean(q);
-          }
-        }
-        isLoading = false;
-      })
-      .catch((e: unknown) => {
-        // A superseded (aborted) request means a newer one is already in
-        // flight — its .then/.catch will settle the UI state; touching
-        // isLoading here would blank the spinner under the live request.
-        if (isAbortError(e)) return;
-        console.error('[iwac-search] search failed', e);
-        error = e instanceof Error ? e.message : String(e);
-        // Keep stale response visible on error? No — show the error
-        // explicitly so the user doesn't think filters succeeded.
-        response = null;
-        isLoading = false;
-      });
-  });
-
-  /**
-   * Zero-result recovery: ask the typo-tolerant suggest path (facet_query +
-   * the alias-reconciling entity index) for entities near the dead query.
-   * Best-effort — failures (including aborts) just mean no banner.
-   */
-  function fetchDidYouMean(q: string): void {
-    client
-      .suggest(q, 3)
-      .then((s) => {
-        didYouMean = s.entities.slice(0, 4);
-      })
-      .catch(() => {
-        didYouMean = [];
-      });
-  }
-
-  // Map data: when the Map view is active, fetch every geo-tagged entity
-  // matching the current query + filters (year range included — unlike the
-  // histogram, the map should reflect the selected window).
-  //
-  // One abort signal cancels the complete loop; the ticket also guards cleanup.
-  const mapSeq = new SeqGuard();
+  // Map data: when the Map view is active, every geo-tagged entity matching
+  // the current query + filters (year range included — unlike the histogram,
+  // the map reflects the selected window).
+  const map = createMapResults(client);
   $effect(() => {
     if (view.mode !== 'map') return;
-    const q = query;
-    const f = filters;
-    const y = yearRange;
-    const ticket = mapSeq.start();
-    const controller = new AbortController();
-    mapLoading = true;
-    client
-      .fetchForMap({ q, activeFilters: f, yearRange: y, signal: controller.signal })
-      .then((docs) => {
-        if (mapSeq.isStale(ticket)) return; // superseded — newer fetch in flight
-        mapDocs = docs;
-        mapLoading = false;
-      })
-      .catch((e: unknown) => {
-        if (mapSeq.isStale(ticket) || isAbortError(e)) return;
-        console.warn('[iwac-search] map fetch failed', e);
-        mapDocs = [];
-        mapLoading = false;
-      });
-    return () => {
-      controller.abort();
-      mapSeq.start();
-    };
+    return map.run({ q: query, filters, yearRange });
   });
 
   /** The debounce fired: this is the search commit. `typedQuery` already
@@ -574,12 +340,6 @@
       () => suggest.close(),
     );
   });
-
-  // ── Copy link ───────────────────────────────────────────────────────
-  // The URL mirrors the full search state on syncing surfaces, so "copy
-  // link" is just the address — the button saves the trip to the URL bar
-  // and confirms the copy with a transient label swap instead of a toast.
-  const copyLink = createCopyState();
 
   // ── Mobile filter drawer ────────────────────────────────────────────
   // Composable owns the matchMedia listener + open/close state; the
@@ -696,44 +456,10 @@
     response ? Math.max(1, Math.ceil(response.found / Math.max(1, perPage))) : 1,
   );
 
-  /**
-   * What a screen reader should be told once the surface settles.
-   *
-   * Nothing announced the result count before. The one polite region on the
-   * surface was ResultSummary's own <section>, which is inside the `{#if
-   * response}` — so it was torn down for the skeleton and re-mounted with its
-   * text already in place, and a live region that arrives populated never
-   * announces. The count changed silently under every query, facet toggle and
-   * page turn.
-   *
-   * Composed only from settled state (never from `isLoading`), so a
-   * mid-flight response can't produce a claim that is about to be replaced.
-   * The empty string while loading is deliberate — silence, then one sentence.
-   */
-  const announcement = $derived.by(() => {
-    if (!response) return '';
-    if (semanticHidden) {
-      return t(response.found === 1 ? 'announce_semantic_one' : 'announce_semantic_other', {
-        n: response.found.toLocaleString(),
-      });
-    }
-    if (response.found === 0) return t('announce_no_results');
-    // Opted in to the near-neighbour set: it is rendered, so it is announced —
-    // but as what it is. Reading "100 results found" over the set the banner
-    // and the count line both just qualified would put the fabrication back
-    // in the only channel that had never carried it.
-    const count = semanticOnly
-      ? t(response.found === 1 ? 'announce_semantic_shown_one' : 'announce_semantic_shown_other', {
-          n: response.found.toLocaleString(),
-        })
-      : t(response.found === 1 ? 'announce_results_one' : 'announce_results_other', {
-          n: response.found.toLocaleString(),
-        });
-    // The page is only worth saying when there is more than one of them.
-    return totalPages > 1
-      ? `${count} ${t('announce_page', { p: page.toLocaleString(), total: totalPages.toLocaleString() })}`
-      : count;
-  });
+  /** What a screen reader should be told once the surface settles (lib/announce.ts). */
+  const announcement = $derived(
+    resultAnnouncement({ response, semanticHidden, semanticOnly, page, totalPages }, t),
+  );
 
   /**
    * The text actually in the DOM, held one beat behind {@link announcement}.
@@ -768,27 +494,22 @@
   );
   // Single-country scopes hide the (redundant) country chip on result cards.
   const hideCountry = $derived(bootstrap.hide_country ?? false);
-
-  /**
-   * SSR'd `initial_response` is only safe to hydrate when its shape is
-   * the one ResultsList expects (`hits` must be an array). A malformed
-   * bootstrap — pre-0.2.5 SSR could emit a per-search-error envelope
-   * via the bootstrap script — would otherwise blow up first render
-   * with `Cannot read properties of undefined (reading 'length')`.
-   * Pulled out of the script body so the read of `bootstrap.initial_response`
-   * doesn't trigger Svelte's `state_referenced_locally` warning.
-   *
-   * Only consulted when the surface starts with an empty query: every
-   * snapshot the server emits is the default browse page, so mounting with
-   * a query (a federated tab, a deep link) would flash all-of-corpus for
-   * one frame before the real results land.
-   */
-  function deriveInitialResponse(bs: IwacBootstrap): IwacSearchResponse | null {
-    return bs.initial_response && Array.isArray(bs.initial_response.hits)
-      ? bs.initial_response
-      : null;
-  }
 </script>
+
+<!-- The one facet panel, rendered into the sticky column or the Drawer. -->
+{#snippet facetPanel()}
+  <FacetPanel
+    {facets}
+    selected={filters}
+    {yearRange}
+    distribution={results.yearDistribution}
+    onToggle={(f, v, c) => filterState.toggle(f, v, c)}
+    onClearAll={() => filterState.clearAll()}
+    onClearField={(f) => filterState.clearField(f)}
+    onYearRangeChange={(r) => filterState.setYearRange(r)}
+    onFacetSearch={handleFacetSearch}
+  />
+{/snippet}
 
 <div class="iwac-search" class:iwac-search--compact={bootstrap.mode === 'compact'}>
   {#if showSearchBox && bootstrap.mode !== 'results-only'}
@@ -842,21 +563,16 @@
     </form>
   {/if}
 
-  {#if yearsUnavailable}
+  {#if results.yearsUnavailable}
     <p role="status">
       {t('histogram_unavailable')}
-      <button
-        type="button"
-        onclick={() => {
-          retryVersion += 1;
-        }}>{t('retry_search')}</button
-      >
+      <button type="button" onclick={() => results.retry()}>{t('retry_search')}</button>
     </p>
   {/if}
-  {#if error}
+  {#if results.error}
     <div class="iwac-search__error" role="alert">
       <strong>{t('search_unavailable')}</strong>
-      <span>{error}</span>
+      <span>{results.error}</span>
     </div>
   {/if}
 
@@ -893,33 +609,13 @@
           width="min(22rem, 92vw)"
         >
           <div class="iwac-search__facets-body">
-            <FacetPanel
-              {facets}
-              selected={filters}
-              {yearRange}
-              distribution={yearDistribution}
-              onToggle={(f, v, c) => filterState.toggle(f, v, c)}
-              onClearAll={() => filterState.clearAll()}
-              onClearField={(f) => filterState.clearField(f)}
-              onYearRangeChange={(r) => filterState.setYearRange(r)}
-              onFacetSearch={handleFacetSearch}
-            />
+            {@render facetPanel()}
           </div>
         </Drawer>
       {:else}
         <!-- Wide viewport: classic sticky left column. -->
         <aside class="iwac-search__facets-inline" aria-label={t('filters')}>
-          <FacetPanel
-            {facets}
-            selected={filters}
-            {yearRange}
-            distribution={yearDistribution}
-            onToggle={(f, v, c) => filterState.toggle(f, v, c)}
-            onClearAll={() => filterState.clearAll()}
-            onClearField={(f) => filterState.clearField(f)}
-            onYearRangeChange={(r) => filterState.setYearRange(r)}
-            onFacetSearch={handleFacetSearch}
-          />
+          {@render facetPanel()}
         </aside>
       {/if}
 
@@ -935,72 +631,25 @@
         bind:this={resultsRegion}
         tabindex="-1"
         aria-labelledby={resultsHeadingId}
-        aria-busy={isLoading}
+        aria-busy={results.isLoading}
       >
         <h2 id={resultsHeadingId} class="iwac-search__sr-only">{t('results_heading')}</h2>
         {#if response}
-          <!-- Result controls. On desktop one row: view toggle (left), then
-               copy-link + export + sort (right). On a phone the bar wraps —
-               [view] / [filters · actions] — above a full-width sort, so the
-               controls stay legible instead of clipping the view toggle. -->
-          <div class="iwac-search__controls" bind:this={resultsAnchor}>
-            <div class="iwac-search__controls-bar">
-              {#if view.supportsToggle}
-                <ViewToggle value={view.mode} modes={view.modes} onChange={(m) => view.set(m)} />
-              {/if}
-              <div class="iwac-search__controls-actions">
-                <!-- aria-expanded, even though the drawer is a proper
-                     aria-modal dialog: the trigger stays in the accessibility
-                     tree behind the backdrop, and without it a reader who
-                     lands back on it cannot tell whether the panel it opens is
-                     already open. -->
-                <button
-                  type="button"
-                  class="iwac-search__filters-trigger"
-                  onclick={() => drawer.show()}
-                  aria-expanded={drawer.open}
-                  aria-label={t('open_filters')}
-                >
-                  <span class="iwac-search__filters-trigger-icon" aria-hidden="true">
-                    <Icon name="filter" />
-                  </span>
-                  <span class="iwac-search__filters-trigger-label">{t('filters')}</span>
-                  {#if filterState.activeCount > 0}
-                    <span class="iwac-search__filters-trigger-badge">{filterState.activeCount}</span
-                    >
-                  {/if}
-                </button>
-                {#if syncUrl}
-                  <button
-                    type="button"
-                    class="iwac-search__copylink"
-                    class:is-copied={copyLink.copied}
-                    onclick={() => copyLink.copy(window.location.href)}
-                    aria-label={t('copy_link')}
-                  >
-                    <span class="iwac-search__copylink-icon" aria-hidden="true">
-                      <Icon name="link" />
-                    </span>
-                    <span class="iwac-search__copylink-label">
-                      {copyLink.copied ? t('link_copied') : t('copy_link')}
-                    </span>
-                  </button>
-                {/if}
-                {#if card === 'content' && response.found > 0 && !semanticHidden}
-                  <ExportMenu fetchDocs={handleExportFetch} {query} found={response.found} />
-                {/if}
-              </div>
-            </div>
-            <!-- Shows the RESOLVED order, so the control and the summary a few
-                 pixels below it can never disagree about the ordering — which
-                 also means it must not offer a value that resolves to a
-                 different one, hence hasQuery. -->
-            <SortSelect
-              value={effectiveSort}
-              onChange={handleSortChange}
-              hasQuery={query.trim() !== ''}
-            />
-          </div>
+          <ResultsToolbar
+            bind:anchor={resultsAnchor}
+            {view}
+            filtersOpen={drawer.open}
+            activeFilterCount={filterState.activeCount}
+            onOpenFilters={() => drawer.show()}
+            showCopyLink={syncUrl}
+            fetchDocs={card === 'content' && response.found > 0 && !semanticHidden
+              ? handleExportFetch
+              : null}
+            {query}
+            found={response.found}
+            sort={effectiveSort}
+            onSortChange={handleSortChange}
+          />
 
           <!-- Persistent count + scope + sort summary, visible on every
                viewport (the mobile filter readout). Closed by a 2px ink rule.
@@ -1024,26 +673,17 @@
           <!-- The map owns its own loading/empty states and reflects the
                live query + filters; the summary strip above still shows
                the textual result count. -->
-          <MapView docs={mapDocs} loading={mapLoading} />
-        {:else if isLoading}
+          <MapView docs={map.docs} loading={map.loading} />
+        {:else if results.isLoading}
           <!-- Galley-proof skeleton in the active view (replaces the opacity
                dim) — holds geometry so the page doesn't jump (§03A). -->
           <ResultSkeleton view={view.mode} count={Math.min(Math.max(perPage, 4), 8)} />
         {:else if response && (response.found === 0 || semanticHidden)}
-          {#if didYouMean.length > 0}
-            <div class="iwac-search__didyoumean" role="status">
-              <span class="iwac-search__didyoumean-label">{t('did_you_mean')}</span>
-              {#each didYouMean as s (s.field + s.value)}
-                <button
-                  type="button"
-                  class="iwac-search__didyoumean-chip"
-                  onclick={() => suggest.pickEntity(s.field, s.value)}
-                >
-                  {s.value}
-                  <span class="iwac-search__didyoumean-tag">{facetLabel(s.field, locale)}</span>
-                </button>
-              {/each}
-            </div>
+          {#if results.didYouMean.length > 0}
+            <DidYouMean
+              suggestions={results.didYouMean}
+              onPick={(field, value) => suggest.pickEntity(field, value)}
+            />
           {/if}
           <ResultsEmpty
             {filters}
@@ -1053,35 +693,23 @@
             onClearAll={() => filterState.clearAll()}
           />
           {#if semanticHidden}
-            <!-- The vector leg found near neighbours. Offered, not asserted:
-                 one control, labelled with what it will actually show. -->
-            <div class="iwac-search__semantic-offer">
-              <button
-                type="button"
-                class="iwac-search__semantic-btn"
-                onclick={() => (semanticOptInFor = query)}
-              >
-                {t(response.found === 1 ? 'show_semantic_one' : 'show_semantic_other', {
-                  n: response.found.toLocaleString(),
-                })}
-              </button>
-            </div>
+            <SemanticFallback
+              found={response.found}
+              {query}
+              shown={false}
+              onShow={showSemantic}
+              onHide={hideSemantic}
+            />
           {/if}
         {:else if response}
           {#if semanticOnly}
-            <!-- Opted in: the set renders, but never unlabelled. -->
-            <div class="iwac-search__semantic-banner" role="status">
-              <p class="iwac-search__semantic-banner-text">
-                {t('semantic_only_banner', { q: query })}
-              </p>
-              <button
-                type="button"
-                class="iwac-search__semantic-btn"
-                onclick={() => (semanticOptInFor = null)}
-              >
-                {t('hide_semantic')}
-              </button>
-            </div>
+            <SemanticFallback
+              found={response.found}
+              {query}
+              shown={true}
+              onShow={showSemantic}
+              onHide={hideSemantic}
+            />
           {/if}
           <ResultsList
             {response}
@@ -1096,7 +724,7 @@
         {/if}
       </section>
     </div>
-  {:else if isLoading && !response}
+  {:else if results.isLoading && !response}
     <!-- No aria-live: the persistent region above already owns announcements,
          and two polite regions on one surface talk over each other. -->
     <p class="iwac-search__status">{t('searching')}</p>
@@ -1106,29 +734,22 @@
          set as findings. Same contract, smaller frame: say nothing matched, and
          offer the near neighbours explicitly. -->
     <p class="iwac-search__status" role="status">{t('results_empty_list')}</p>
-    <div class="iwac-search__semantic-offer">
-      <button
-        type="button"
-        class="iwac-search__semantic-btn"
-        onclick={() => (semanticOptInFor = query)}
-      >
-        {t(response.found === 1 ? 'show_semantic_one' : 'show_semantic_other', {
-          n: response.found.toLocaleString(),
-        })}
-      </button>
-    </div>
+    <SemanticFallback
+      found={response.found}
+      {query}
+      shown={false}
+      onShow={showSemantic}
+      onHide={hideSemantic}
+    />
   {:else if response}
     {#if semanticOnly}
-      <div class="iwac-search__semantic-banner" role="status">
-        <p class="iwac-search__semantic-banner-text">{t('semantic_only_banner', { q: query })}</p>
-        <button
-          type="button"
-          class="iwac-search__semantic-btn"
-          onclick={() => (semanticOptInFor = null)}
-        >
-          {t('hide_semantic')}
-        </button>
-      </div>
+      <SemanticFallback
+        found={response.found}
+        {query}
+        shown={true}
+        onShow={showSemantic}
+        onHide={hideSemantic}
+      />
     {/if}
     <ResultsList
       {response}
@@ -1248,299 +869,17 @@
        its own padding from src/svelte-shared/components/Drawer.svelte. */
     padding: var(--space-4, 1rem);
   }
-  .iwac-search__filters-trigger {
-    display: none;
-  }
-
-  /*
-   * Copy-link — quiet outlined control matching the toolbar vocabulary.
-   * Swaps its label to a confirmation for 2 s after a successful copy.
-   */
-  .iwac-search__copylink {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--space-1, 0.25rem);
-    height: var(--size-control-md, 2.5rem);
-    padding-inline: var(--space-4, 1rem);
-    border: 1px solid var(--border, #ced1d6);
-    border-radius: var(--radius-md, 0.5rem);
-    background: var(--surface, #fdfcfb);
-    color: var(--ink, #13161c);
-    box-shadow: none;
-    font: inherit;
-    font-size: var(--text-sm, 0.9375rem);
-    font-weight: 500;
-    cursor: pointer;
-    transition:
-      border-color var(--transition-fast, 150ms cubic-bezier(0.25, 1, 0.5, 1)),
-      color var(--transition-fast, 150ms cubic-bezier(0.25, 1, 0.5, 1));
-  }
-  .iwac-search__copylink:hover {
-    background: var(--surface, #fdfcfb);
-    border-color: var(--primary, #ce4115);
-    color: var(--primary, #ce4115);
-    box-shadow: none;
-    transform: none;
-  }
-  .iwac-search__copylink:focus-visible {
-    outline: var(--focus-outline, 2px solid #ce4115);
-    outline-offset: 2px;
-  }
-  .iwac-search__copylink.is-copied {
-    border-color: var(--primary, #ce4115);
-    color: var(--primary, #ce4115);
-  }
-  .iwac-search__copylink-icon {
-    display: inline-flex;
-    align-items: center;
-    font-size: 0.9em;
-    color: var(--muted, #66696e);
-  }
-  .iwac-search__copylink:hover .iwac-search__copylink-icon,
-  .iwac-search__copylink.is-copied .iwac-search__copylink-icon {
-    color: var(--primary, #ce4115);
-  }
-
-  /*
-   * "Did you mean" banner on zero-result queries: entity chips from the
-   * typo-tolerant suggest path; picking one applies it as a filter.
-   */
-  .iwac-search__didyoumean {
-    display: flex;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: var(--space-2, 0.5rem);
-    padding: var(--space-2, 0.5rem) 0;
-  }
-  .iwac-search__didyoumean-label {
-    color: var(--muted, #66696e);
-    font-size: var(--text-sm, 0.9375rem);
-  }
-  .iwac-search__didyoumean-chip {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--space-1, 0.25rem);
-    padding: 0.25rem var(--space-2, 0.5rem);
-    border: 1px solid var(--border, #ced1d6);
-    border-radius: var(--radius-full, 9999px);
-    background: var(--surface, #fdfcfb);
-    color: var(--ink, #13161c);
-    box-shadow: none;
-    font: inherit;
-    font-size: var(--text-sm, 0.9375rem);
-    cursor: pointer;
-    transition:
-      border-color var(--transition-fast, 150ms cubic-bezier(0.25, 1, 0.5, 1)),
-      color var(--transition-fast, 150ms cubic-bezier(0.25, 1, 0.5, 1));
-  }
-  .iwac-search__didyoumean-chip:hover,
-  .iwac-search__didyoumean-chip:focus-visible {
-    border-color: var(--primary, #ce4115);
-    color: var(--primary, #ce4115);
-    background: var(--surface, #fdfcfb);
-    box-shadow: none;
-    transform: none;
-  }
-  .iwac-search__didyoumean-chip:focus-visible {
-    outline: var(--focus-outline, 2px solid #ce4115);
-    outline-offset: 2px;
-  }
-  .iwac-search__didyoumean-tag {
-    font-size: var(--text-xs, 0.8125rem);
-    color: var(--muted, #66696e);
-    background: var(--surface-sunken, #f4f1ef);
-    padding: 0.0625rem 0.375rem;
-    border-radius: var(--radius-full, 9999px);
-  }
-
-  /*
-   * Semantic fallback — the opt-in under the empty state, and the labelled
-   * banner over the set once it's shown. Quiet outlined control in the toolbar
-   * vocabulary: this offers a weaker kind of answer, so it must not out-shout
-   * the empty state's own "Clear all filters".
-   */
-  .iwac-search__semantic-offer {
-    display: flex;
-    justify-content: center;
-  }
-  .iwac-search__semantic-banner {
-    display: flex;
-    align-items: baseline;
-    flex-wrap: wrap;
-    gap: var(--space-1, 0.25rem) var(--space-4, 1rem);
-    padding-block-end: var(--space-2, 0.5rem);
-    /* Hairline under, like the toolbar — a dateline over the set, not a card. */
-    border-block-end: 1px solid var(--border-light, #e2e5e8);
-  }
-  .iwac-search__semantic-banner-text {
-    margin: 0;
-    color: var(--ink, #13161c);
-    font-size: var(--text-sm, 0.9375rem);
-  }
-  .iwac-search__semantic-btn {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--space-1, 0.25rem);
-    padding: 0.4rem 0.75rem;
-    border: 1px solid var(--border, #ced1d6);
-    border-radius: var(--radius-md, 0.5rem);
-    background: var(--surface, #fdfcfb);
-    color: var(--ink, #13161c);
-    box-shadow: none;
-    font: inherit;
-    font-size: var(--text-sm, 0.9375rem);
-    font-weight: 500;
-    cursor: pointer;
-    transition:
-      border-color var(--transition-fast, 150ms cubic-bezier(0.25, 1, 0.5, 1)),
-      color var(--transition-fast, 150ms cubic-bezier(0.25, 1, 0.5, 1));
-  }
-  .iwac-search__semantic-btn:hover {
-    background: var(--surface, #fdfcfb);
-    border-color: var(--primary, #ce4115);
-    color: var(--primary, #ce4115);
-    box-shadow: none;
-    transform: none;
-  }
-  .iwac-search__semantic-btn:focus-visible {
-    outline: var(--focus-outline, 2px solid #ce4115);
-    outline-offset: 2px;
-  }
-  .iwac-search__semantic-banner .iwac-search__semantic-btn {
-    /* Tail of the banner line, like the summary strip's sort readout. */
-    margin-inline-start: auto;
-  }
 
   /* 767px = md 768 − 1 on the theme's published scale. This literal has a
      twin in lib/filterDrawer.svelte.ts's matchMedia, which decides whether
      the facet panel renders as a column or inside the Drawer; the two must
-     agree or the page reserves a sidebar for a panel that moved. */
+     agree or the page reserves a sidebar for a panel that moved. (The
+     toolbar's own phone layout — components/ResultsToolbar.svelte — switches
+     at the same width.) */
   @media (max-width: 767px) {
     .iwac-search__layout {
       grid-template-columns: 1fr;
       gap: var(--space-4, 1rem);
-    }
-
-    /*
-     * Tidy rows on a phone: [view · filters · actions] on top, then a
-     * full-width sort row. Stacking the controls (column) bounds the sort row
-     * to the viewport so its <select> can't overflow.
-     */
-    .iwac-search__controls {
-      flex-direction: column;
-      align-items: stretch;
-      gap: var(--space-2, 0.5rem);
-    }
-    .iwac-search__controls-bar {
-      width: 100%;
-      /*
-       * Wrap rather than squeeze. With Export present (results > 0) the four
-       * labelled controls need ~566px but a phone offers ~418px, and the only
-       * shrinkable child was the view toggle — which clips instead of
-       * ellipsising. Wrapping drops the actions onto their own row, so the
-       * bar stays honest at any width and in any locale (the French labels
-       * are the widest, but nothing here depends on their length).
-       */
-      flex-wrap: wrap;
-    }
-    .iwac-search__controls :global(.iwac-sort) {
-      display: flex;
-      width: 100%;
-    }
-    .iwac-search__controls :global(.iwac-sort__select) {
-      flex: 1 1 auto;
-      min-width: 0;
-    }
-
-    /* Comfortable 44px touch targets across the whole bar. */
-    .iwac-search__filters-trigger,
-    .iwac-search__copylink,
-    .iwac-search__controls :global(.iwac-view__btn),
-    .iwac-search__controls :global(.iwac-export__trigger),
-    .iwac-search__controls :global(.iwac-sort__select) {
-      height: var(--size-control-lg, 2.75rem);
-    }
-
-    /*
-     * Filters trigger — outlined, icon-forward (funnel + label + count). Hidden
-     * on desktop, where filters live in the sticky sidebar; here it opens the
-     * drawer, so it's the most important control on the row and keeps its label
-     * longest (collapses to the funnel only on the narrowest phones below).
-     */
-    .iwac-search__filters-trigger {
-      display: inline-flex;
-      align-items: center;
-      gap: var(--space-1, 0.25rem);
-      padding-inline: var(--space-4, 1rem);
-      border: 1px solid var(--border, #ced1d6);
-      border-radius: var(--radius-md, 0.5rem);
-      background: var(--surface, #fdfcfb);
-      color: var(--ink, #13161c);
-      box-shadow: none;
-      font-size: var(--text-sm, 0.9375rem);
-      font-weight: 500;
-      cursor: pointer;
-      transition:
-        border-color var(--transition-fast, 150ms cubic-bezier(0.25, 1, 0.5, 1)),
-        color var(--transition-fast, 150ms cubic-bezier(0.25, 1, 0.5, 1));
-    }
-    .iwac-search__filters-trigger:hover {
-      background: var(--surface, #fdfcfb);
-      border-color: var(--primary, #ce4115);
-      color: var(--primary, #ce4115);
-      box-shadow: none;
-      transform: none;
-    }
-    .iwac-search__filters-trigger:focus-visible {
-      outline: var(--focus-outline, 2px solid #ce4115);
-      outline-offset: 2px;
-    }
-    .iwac-search__filters-trigger-icon {
-      display: inline-flex;
-      align-items: center;
-      font-size: 0.9em;
-      color: var(--muted, #66696e);
-    }
-    .iwac-search__filters-trigger:hover .iwac-search__filters-trigger-icon {
-      color: var(--primary, #ce4115);
-    }
-    .iwac-search__filters-trigger-badge {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      min-width: 1.25rem;
-      height: 1.25rem;
-      padding: 0 0.375rem;
-      background: var(--primary, #ce4115);
-      color: var(--white, #fff);
-      border-radius: var(--radius-full, 9999px);
-      font-size: var(--text-xs, 0.8125rem);
-      font-weight: 600;
-      font-variant-numeric: tabular-nums;
-    }
-  }
-
-  /*
-   * Smallest phones: the bar goes fully icon-forward — the view toggle and the
-   * Export trigger already drop their labels at this breakpoint, so the Filters
-   * and copy-link labels follow (icons stay; the buttons keep their aria-labels).
-   */
-  @media (max-width: 399px) {
-    .iwac-search__filters-trigger,
-    .iwac-search__copylink {
-      padding-inline: var(--space-2, 0.5rem);
-    }
-    .iwac-search__filters-trigger-label,
-    .iwac-search__copylink-label {
-      position: absolute;
-      width: 1px;
-      height: 1px;
-      padding: 0;
-      margin: -1px;
-      overflow: hidden;
-      clip: rect(0 0 0 0);
-      white-space: nowrap;
-      border: 0;
     }
   }
 
@@ -1558,35 +897,6 @@
   }
   .iwac-search__results:focus:not(:focus-visible) {
     outline: none;
-  }
-  /*
-   * Result controls. Desktop: one row — the view toggle sits at the left of a
-   * growing bar that pushes export + sort to the right. Mobile: the bar and the
-   * sort stack into two tidy rows (see the media query). Hairline under; anchors
-   * the pagination scroll-back.
-   */
-  .iwac-search__controls {
-    display: flex;
-    align-items: center;
-    gap: var(--space-2, 0.5rem) var(--space-4, 1rem);
-    flex-wrap: wrap;
-    padding-block-end: var(--space-2, 0.5rem);
-    border-bottom: 1px solid var(--border-light, #e2e5e8);
-  }
-  /* View toggle + (mobile) filters + actions. Grows so sort sits at the far end. */
-  .iwac-search__controls-bar {
-    display: flex;
-    align-items: center;
-    gap: var(--space-2, 0.5rem);
-    flex: 1 1 auto;
-    min-width: 0;
-  }
-  .iwac-search__controls-actions {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--space-2, 0.5rem);
-    margin-inline-start: auto;
-    flex-shrink: 0;
   }
   .iwac-search__error {
     background: color-mix(in oklab, var(--error, #c9222b) 12%, var(--surface, #fdfcfb));

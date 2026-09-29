@@ -7,6 +7,7 @@ No schema change and no reindex.
 - [ ] **Content-Security-Policy, if one is enforced:** the Map view now loads MapLibre 6, which is ES-module only and boots its worker from a `blob:` URL — `worker-src` must allow `blob:` (and `script-src` must allow `https://cdn.jsdelivr.net`, as before). IwacVisualizations has needed the same since its MapLibre 6 move, so a site serving both is already configured.
 - [ ] Open the Map view on the entity index (e.g. `/s/westafrica/browse/…` with the Map toggle) and confirm clusters render; in devtools, `maplibregl.getVersion()` reads `6.11.2`, and the three jsDelivr requests carry `integrity`.
 - [ ] Confirm the header typeahead still suggests on a non-search page (its bundle was slimmed from ~25 KB to ~16 KB).
+- [ ] On `/search`, walk the result states once — a query, a zero-result misspelling (the "Did you mean" chips), a query that only matches semantically (the opt-in and its banner), and the Filters drawer on a phone. `App.svelte` was split into a fetch module and three components; a mocked-backend render of these states was pixel-identical before and after, but it has not been seen against the live index.
 
 ## 3.20.0 additions
 

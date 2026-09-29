@@ -61,20 +61,25 @@ IwacSearch/
 │   │   ├── TypesenseSearchKeyProvider.php      # mints scoped keys for the browser
 │   │   └── ValidatedKeyMemo.php                # APCu memo of mounted-secret scope validation
 │   ├── svelte/                                 # Svelte 5 + TS client source — public bundle
-│   │   ├── App.svelte                          #   per-mount root, owns search state
+│   │   ├── App.svelte                          #   per-mount root: owns search state, wires the rest
 │   │   ├── main.ts                             #   IIFE entry; auto-mounts on every root
 │   │   ├── header.ts · header.css              #   site-wide header typeahead bundle (framework-free)
 │   │   ├── components/                         #   SearchInput · SuggestDropdown · FacetPanel ·
 │   │   │                                       #   FacetGroup · DateRangeSlider · SortSelect ·
-│   │   │                                       #   ResultsList · ResultItem · ResultSummary ·
-│   │   │                                       #   ResultsEmpty · ResultSkeleton · Pagination ·
+│   │   │                                       #   ResultsToolbar · ResultsList · ResultItem ·
+│   │   │                                       #   ResultSummary · ResultsEmpty · ResultSkeleton ·
+│   │   │                                       #   SemanticFallback · DidYouMean · Pagination ·
 │   │   │                                       #   ExportMenu · ViewToggle · MapView · Sparkline ·
 │   │   │                                       #   FederatedApp · Icon
 │   │   └── lib/                                #   typesense.ts (REST wrapper, scoped-key cache) ·
-│   │                                           #   types.ts · urlState.ts · i18n.ts · queryBuilders ·
-│   │                                           #   transport · sanitize · suggestions · searchHistory ·
-│   │                                           #   filterChips · filterDrawer · viewMode · export ·
-│   │                                           #   sparkline · thumbnail · maplibreLoader
+│   │                                           #   searchResults (what the state fetches: results,
+│   │                                           #   histogram, did-you-mean, map set) · initialState ·
+│   │                                           #   types.ts · urlState.ts · i18n.ts · announce ·
+│   │                                           #   queryBuilders · queryPolicy · transport · sanitize ·
+│   │                                           #   suggestions · searchHistory · filterChips ·
+│   │                                           #   filterState · filterDrawer · typeahead · viewMode ·
+│   │                                           #   clipboard · export · sparkline · thumbnail ·
+│   │                                           #   maplibreLoader
 │   ├── svelte-shared/components/Drawer.svelte  # slide-in overlay (animation, ESC, scroll lock)
 │   └── Service/                                # Service-locator factories only (services live elsewhere)
 │       ├── SearchControllerFactory.php

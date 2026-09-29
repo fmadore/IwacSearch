@@ -325,6 +325,44 @@ export function syncToUrl(
 }
 
 /**
+ * A plain, proxy-free deep copy of `state` — the `prev` that {@link syncToUrl}
+ * diffs the next state against.
+ *
+ * NOT structuredClone: `filters` and `yearRange` arrive as Svelte 5 deep
+ * reactive proxies, and structuredClone throws DataCloneError on a proxy.
+ */
+export function snapshotState(state: SearchState): SearchState {
+  return {
+    q: state.q,
+    page: state.page,
+    sort: state.sort,
+    filters: Object.fromEntries(Object.entries(state.filters).map(([k, v]) => [k, [...v]])),
+    yearRange: state.yearRange ? { ...state.yearRange } : null,
+    perPage: state.perPage,
+    view: state.view,
+  };
+}
+
+/**
+ * State → URL for one surface: {@link syncToUrl} plus the previous snapshot it
+ * needs to choose between pushState and replaceState. Call `push()` from an
+ * `$effect` that reads every observable field, so any change lands in the
+ * address bar.
+ */
+export function createUrlSync(
+  prefix = '',
+  defaultSort: string = FALLBACK_SORT,
+): { push(next: SearchState): void } {
+  let prev: SearchState | null = null;
+  return {
+    push(next: SearchState): void {
+      syncToUrl(next, prev, prefix, defaultSort);
+      prev = snapshotState(next);
+    },
+  };
+}
+
+/**
  * Listen for popstate (back/forward button) and re-hydrate state from URL.
  * Returns a cleanup function suitable for $effect's destructor.
  */

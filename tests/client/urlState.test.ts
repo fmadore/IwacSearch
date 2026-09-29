@@ -1,5 +1,12 @@
-import { describe, expect, it } from 'vitest';
-import { FALLBACK_SORT, readUrlState, writeUrlState } from '../../src/svelte/lib/urlState';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import {
+  FALLBACK_SORT,
+  createUrlSync,
+  readUrlState,
+  snapshotState,
+  writeUrlState,
+} from '../../src/svelte/lib/urlState';
+import { createFilterState } from '../../src/svelte/lib/filterState.svelte';
 import type { SearchState } from '../../src/svelte/lib/types';
 
 /**
@@ -278,5 +285,62 @@ describe('round trip', () => {
   it.each(cases)('%s survives write → read under a block prefix', (_label, original) => {
     const qs = writeUrlState(original, 'b42.', '', 'date:desc');
     expect(readUrlState(`${base}${qs}`, 'b42.', 'date:desc')).toEqual(original);
+  });
+});
+
+describe('snapshotState', () => {
+  it('copies Svelte state proxies into plain, cloneable data', () => {
+    // The live filters are a deep $state proxy; structuredClone throws on one,
+    // which is why the snapshot is built by hand.
+    const live = createFilterState({ country_ss: ['Niger'] }, { from: 1990, to: 2000 }, () => {});
+    const snap = snapshotState(state({ filters: live.filters, yearRange: live.yearRange }));
+    expect(() => structuredClone(snap)).not.toThrow();
+    expect(snap.filters).toEqual({ country_ss: ['Niger'] });
+    expect(snap.yearRange).toEqual({ from: 1990, to: 2000 });
+  });
+
+  it('does not share arrays with the state it copied', () => {
+    const filters = { country_ss: ['Niger'] };
+    const snap = snapshotState(state({ filters }));
+    filters.country_ss.push('Mali');
+    expect(snap.filters.country_ss).toEqual(['Niger']);
+  });
+});
+
+describe('createUrlSync', () => {
+  afterEach(() => {
+    window.history.replaceState({}, '', '/');
+  });
+
+  it('replaces on the first write, then pushes a new query and replaces a page turn', () => {
+    window.history.replaceState({}, '', '/search');
+    const push = vi.spyOn(window.history, 'pushState');
+    const replace = vi.spyOn(window.history, 'replaceState');
+    const sync = createUrlSync('', FALLBACK_SORT);
+
+    sync.push(state({ q: 'islam' }));
+    expect(replace).toHaveBeenCalledTimes(1);
+    expect(push).not.toHaveBeenCalled();
+
+    sync.push(state({ q: 'coran' }));
+    expect(push).toHaveBeenCalledTimes(1);
+
+    sync.push(state({ q: 'coran', page: 2 }));
+    expect(push).toHaveBeenCalledTimes(1);
+    expect(replace).toHaveBeenCalledTimes(2);
+    expect(window.location.search).toBe('?q=coran&page=2');
+  });
+
+  it('diffs against the snapshot, not the live object the caller keeps mutating', () => {
+    window.history.replaceState({}, '', '/search');
+    const push = vi.spyOn(window.history, 'pushState');
+    const sync = createUrlSync('', FALLBACK_SORT);
+    const live = state({ filters: { country_ss: ['Niger'] } });
+    sync.push(live);
+    live.filters.country_ss.push('Mali');
+    sync.push(live);
+    // A filter was added, so it is a navigation — had `prev` aliased `live`,
+    // the two would compare equal and the change would be a silent replace.
+    expect(push).toHaveBeenCalledTimes(1);
   });
 });

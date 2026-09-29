@@ -16,6 +16,7 @@ Updated for 3.19.0. The July and September implementation work is complete. The 
 - Two alias swaps are individually atomic, with guarded restoration; Typesense offers no two-alias transaction.
 - Keep the two small schema definitions explicit and protected by drift tests. A generator is unwarranted while their shared fields are small and title stemming intentionally differs.
 - Result-card derivations are extracted and tested. Separate list/gallery components would duplicate their largely shared layout and CSS.
+- `App.svelte` owns the search state and wires components; it does not fetch. The fetch rules (snapshot adoption, histogram staleness, aborted requests, the semantic-only dead end) live in `lib/searchResults.svelte.ts` and are unit-tested against a fake client. Components are not rendered in unit tests, so a markup refactor is checked by rendering the bundle before and after against a mocked Typesense.
 - Do not add an unrestricted admin search key without a concrete product requirement.
 - Omeka supplies Laminas and framework interfaces. Do not add direct Laminas/PSR module dependencies to simplify standalone tools or tests.
 
