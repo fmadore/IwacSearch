@@ -1,17 +1,47 @@
 /**
  * Lazy CDN loader for MapLibre GL — fetched only when a user activates the
- * Map view, so the ~230 KB library never taxes the normal search bundle.
+ * Map view, so the library never taxes the normal search bundle.
  *
- * Deliberately mirrors IwacVisualizations (the analytics module on the same
- * site): the SAME exact-pinned jsDelivr URLs, so the browser cache is shared
- * between the two modules and the version is immutable-cached for a year.
+ * PINNED TO IwacVisualizations' EXACT FILES (view/common/iwac-assets.phtml):
+ * the same jsDelivr URLs, so a visitor moving between a search map and a
+ * dashboard map downloads MapLibre once, and the same Subresource Integrity
+ * hashes. This comment claimed the shared cache for a release after
+ * IwacVisualizations had moved to MapLibre 6.11 while this file still loaded
+ * 5.24 — two versions of a ~800 KB library on one site, the older without
+ * SRI. Upgrade both modules together; the hashes come from the npm tarball
+ * (`npm pack maplibre-gl@<v>`, sha384 of dist/*), which is also how
+ * IwacVisualizations' `npm run update:sri` derives them.
+ *
+ * MapLibre 6 is ESM-ONLY: there is no `dist/maplibre-gl.js`, so the library is
+ * `import()`ed, and its namespace published as `window.maplibregl` — the global
+ * IwacVisualizations publishes too, so whichever module loads first, the other
+ * reuses it. `import()` takes no `integrity`, so the entry and its ~500 KB
+ * chunk are `modulepreload`ed with their hashes and the import waits for the
+ * entry's preload: it then resolves against the verified module-map entry
+ * (and the chunk downloads in parallel instead of after the entry). The
+ * worker needs no configuration: v6 boots it from a blob that re-imports the
+ * CDN URL, which requires `blob:` in `worker-src` wherever a CSP is enforced.
+ *
  * Basemap conventions (CARTO styles, cooperative gestures) also follow that
  * module — see MapView.svelte.
  */
 
-const MAPLIBRE_VERSION = '5.24.0';
-const JS_URL = `https://cdn.jsdelivr.net/npm/maplibre-gl@${MAPLIBRE_VERSION}/dist/maplibre-gl.js`;
-const CSS_URL = `https://cdn.jsdelivr.net/npm/maplibre-gl@${MAPLIBRE_VERSION}/dist/maplibre-gl.css`;
+const MAPLIBRE_VERSION = '6.11.2';
+const CDN = `https://cdn.jsdelivr.net/npm/maplibre-gl@${MAPLIBRE_VERSION}/dist/`;
+
+export const MAPLIBRE_FILES = {
+  module: `${CDN}maplibre-gl.mjs`,
+  chunk: `${CDN}maplibre-gl-shared.mjs`,
+  css: `${CDN}maplibre-gl.css`,
+} as const;
+
+/** sha384 per pinned file — identical to IwacVisualizations' `$cdnIntegrity`. */
+export const MAPLIBRE_INTEGRITY: Readonly<Record<string, string>> = {
+  [MAPLIBRE_FILES.module]:
+    'sha384-KQzExYlfg1SnYNpLaXHTnaCTjr5wmiZ6X3sasvPb94caZfH+3+T1Sl4eJziXUtmN',
+  [MAPLIBRE_FILES.chunk]: 'sha384-V59ofCEPEqpSk5Mswc19DtDYbZWJtne210dFzS328Il6O31eLwTV7v57+Z3NjW/7',
+  [MAPLIBRE_FILES.css]: 'sha384-ntw3zEt6rcVML7jDK0ULmHa5hxLB23afsPqzqfY+gLgMfAkbFCnCgPpkZvV5mmZX',
+};
 
 /**
  * CARTO's free GL basemaps (OSM data, no API key), one per theme.
@@ -103,38 +133,71 @@ export interface MapLibreGlobal {
 
 let loader: Promise<MapLibreGlobal> | null = null;
 
-/** Inject the pinned CSS + JS once and resolve the `maplibregl` global. */
-export function loadMapLibre(): Promise<MapLibreGlobal> {
-  loader ??= new Promise<MapLibreGlobal>((resolve, reject) => {
-    const existing = (window as unknown as Record<string, unknown>).maplibregl;
-    if (existing) {
-      resolve(existing as MapLibreGlobal);
-      return;
+/** A `<link>` carrying its pinned file's hash (SRI on a cross-origin file needs CORS). */
+function pinnedLink(rel: string, href: string): HTMLLinkElement {
+  const link = document.createElement('link');
+  link.rel = rel;
+  link.integrity = MAPLIBRE_INTEGRITY[href];
+  link.crossOrigin = 'anonymous';
+  link.href = href;
+  return link;
+}
+
+/** Settles once the `modulepreload` of `href` has fetched and verified it. */
+function modulePreload(href: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const link = pinnedLink('modulepreload', href);
+    link.onload = () => resolve();
+    link.onerror = () => reject(new Error(`Module failed integrity or load: ${href}`));
+    document.head.appendChild(link);
+  });
+}
+
+function supportsModulePreload(): boolean {
+  try {
+    const link = document.createElement('link');
+    return Boolean(link.relList?.supports?.('modulepreload'));
+  } catch {
+    return false; // an engine whose relList has no supported-token set
+  }
+}
+
+/**
+ * Load the pinned CSS + modules once and resolve the library namespace.
+ * `importer` exists for the unit test; production uses the native import.
+ */
+export function loadMapLibre(
+  importer: (url: string) => Promise<unknown> = (url) => import(/* @vite-ignore */ url),
+): Promise<MapLibreGlobal> {
+  loader ??= (async () => {
+    const globals = window as unknown as Record<string, unknown>;
+    if (globals.maplibregl) return globals.maplibregl as MapLibreGlobal;
+
+    document.head.appendChild(pinnedLink('stylesheet', MAPLIBRE_FILES.css));
+
+    if (supportsModulePreload()) {
+      const chunk = modulePreload(MAPLIBRE_FILES.chunk);
+      // The chunk's own failure surfaces through the import that needs it.
+      chunk.catch(() => {});
+      await modulePreload(MAPLIBRE_FILES.module);
     }
-
-    const css = document.createElement('link');
-    css.rel = 'stylesheet';
-    css.href = CSS_URL;
-    document.head.appendChild(css);
-
-    const script = document.createElement('script');
-    script.src = JS_URL;
-    script.defer = true;
-    script.onload = () => {
-      const lib = (window as unknown as Record<string, unknown>).maplibregl;
-      if (lib) {
-        resolve(lib as MapLibreGlobal);
-      } else {
-        reject(new Error('maplibre-gl loaded but the global is missing'));
-      }
-    };
-    script.onerror = () => {
-      loader = null; // allow a retry on the next activation
-      reject(new Error('Failed to load maplibre-gl from jsDelivr'));
-    };
-    document.head.appendChild(script);
+    const lib = (await importer(MAPLIBRE_FILES.module)) as MapLibreGlobal;
+    if (!lib || typeof lib.Map !== 'function')
+      throw new Error('maplibre-gl loaded without a Map export');
+    globals.maplibregl = lib;
+    return lib;
+  })().catch((error: unknown) => {
+    loader = null; // allow a retry on the next activation
+    throw new Error(
+      `Failed to load maplibre-gl from jsDelivr: ${(error as Error)?.message ?? error}`,
+    );
   });
   return loader;
+}
+
+/** Test seam: forget the memoised load. */
+export function resetMapLibreLoaderForTests(): void {
+  loader = null;
 }
 
 /**

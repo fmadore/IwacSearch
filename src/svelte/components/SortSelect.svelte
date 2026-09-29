@@ -49,7 +49,7 @@
   .iwac-sort {
     display: inline-flex;
     align-items: center;
-    gap: var(--space-xs, 0.25rem);
+    gap: var(--space-1, 0.25rem);
     color: var(--muted, #66696e);
     font-size: var(--text-sm, 0.9375rem);
   }
@@ -58,9 +58,9 @@
   }
   .iwac-sort__select {
     height: var(--size-control-md, 2.5rem);
-    padding: 0 var(--space-lg, 1.5rem) 0 var(--space-sm, 0.5rem);
+    padding: 0 var(--space-6, 1.5rem) 0 var(--space-2, 0.5rem);
     /* The IWAC theme's global field rule puts `width: 100%` and
-       `margin-bottom: var(--space-sm)` on every <select>; the margin made
+       `margin-bottom: var(--space-2)` on every <select>; the margin made
        the flex row centre the select's margin-box, floating the control
        ~4px above the Export/Filters buttons. Reset both explicitly. */
     width: auto;

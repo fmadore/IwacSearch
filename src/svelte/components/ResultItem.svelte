@@ -382,8 +382,8 @@
   .iwac-card {
     display: grid;
     grid-template-columns: auto 1fr;
-    gap: var(--space-md, 1rem);
-    padding: var(--space-md, 1rem) var(--space-sm, 0.5rem);
+    gap: var(--space-4, 1rem);
+    padding: var(--space-4, 1rem) var(--space-2, 0.5rem);
     background: transparent;
     border: none;
     border-radius: 0;
@@ -413,7 +413,7 @@
   .iwac-card--gallery {
     display: flex;
     flex-direction: column;
-    gap: var(--space-sm, 0.5rem);
+    gap: var(--space-2, 0.5rem);
     padding: 0;
   }
   .iwac-card--gallery:hover {
@@ -502,7 +502,7 @@
     min-width: 0;
     display: flex;
     flex-direction: column;
-    gap: var(--space-xs, 0.25rem);
+    gap: var(--space-1, 0.25rem);
   }
   .iwac-card__body--gallery {
     gap: 0.2rem;
@@ -734,7 +734,7 @@
   }
 
   .iwac-card__snippet {
-    margin: var(--space-xs, 0.25rem) 0 0;
+    margin: var(--space-1, 0.25rem) 0 0;
     font-size: var(--text-sm, 0.9375rem);
     color: var(--ink-light, #3f4349);
     line-height: var(--line-height-normal, 1.5);
@@ -763,7 +763,7 @@
   }
 
   .iwac-card__matched {
-    margin: var(--space-xs, 0.25rem) 0 0;
+    margin: var(--space-1, 0.25rem) 0 0;
     font-size: var(--text-xs, 0.8125rem);
     color: var(--muted, #66696e);
     line-height: 1.5;
@@ -796,8 +796,8 @@
   .iwac-card__metrics {
     display: flex;
     align-items: flex-end;
-    gap: var(--space-md, 1rem);
-    margin-block-start: var(--space-xs, 0.25rem);
+    gap: var(--space-4, 1rem);
+    margin-block-start: var(--space-1, 0.25rem);
   }
   .iwac-card__mentions {
     display: inline-flex;
@@ -814,7 +814,10 @@
       serif
     );
     font-size: var(--text-xl, 1.5rem);
-    font-weight: 700;
+    /* 800, not 700: the theme loads Besley at 500/600/800 only, so a 700
+       has always rendered as 800 — saying so keeps the sheet honest, and the
+       token guard's font-weight rule refuses the 700. */
+    font-weight: 800;
     line-height: 1;
     color: var(--ink-strong, #05070c);
     /* Lining, NOT tabular. Besley's `tnum` zero is frozen at a 55-unit
@@ -863,7 +866,7 @@
    */
   .iwac-card__source {
     list-style: none;
-    margin: var(--space-xs, 0.25rem) 0 0;
+    margin: var(--space-1, 0.25rem) 0 0;
     padding: 0;
     font-size: var(--text-xs, 0.8125rem);
     line-height: 1.5;
@@ -953,7 +956,7 @@
   @media (max-width: 599px) {
     .iwac-card--list {
       grid-template-columns: 1fr;
-      gap: var(--space-sm, 0.5rem);
+      gap: var(--space-2, 0.5rem);
     }
     .iwac-card--list .iwac-card__thumb {
       width: 100%;

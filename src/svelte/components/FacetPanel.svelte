@@ -234,8 +234,8 @@
     display: flex;
     align-items: baseline;
     justify-content: space-between;
-    gap: var(--space-sm, 0.5rem);
-    padding-block: var(--space-xs, 0.25rem) var(--space-sm, 0.5rem);
+    gap: var(--space-2, 0.5rem);
+    padding-block: var(--space-1, 0.25rem) var(--space-2, 0.5rem);
     border-bottom: 1px solid var(--border, #ced1d6);
   }
   .iwac-facets__heading {
@@ -269,7 +269,7 @@
   }
 
   .iwac-facets__section {
-    padding-block: var(--space-md, 1rem);
+    padding-block: var(--space-4, 1rem);
     border-bottom: 1px solid var(--border-light, #e2e5e8);
   }
   .iwac-facets__section:last-of-type {
@@ -278,7 +278,7 @@
   .iwac-facets__section--active {
     /* The chips themselves carry the active state (primary dot + border);
        the old block-level orange wash made the whole corner shout. */
-    padding-block-start: var(--space-sm, 0.5rem);
+    padding-block-start: var(--space-2, 0.5rem);
   }
 
   .iwac-facets__groups {
@@ -293,7 +293,7 @@
    * zero out its background / shadow / hover-translate explicitly.
    */
   .iwac-facets__group {
-    padding-block: var(--space-md, 1rem);
+    padding-block: var(--space-4, 1rem);
     border-bottom: 1px solid var(--border-light, #e2e5e8);
   }
   .iwac-facets__group:last-child {
@@ -302,7 +302,7 @@
   .iwac-facets__group-heading {
     display: flex;
     align-items: center;
-    gap: var(--space-xs, 0.25rem);
+    gap: var(--space-1, 0.25rem);
     width: 100%;
     padding: 0;
     background: none;
@@ -345,20 +345,20 @@
     letter-spacing: 0;
   }
   .iwac-facets__group-body {
-    margin-block-start: var(--space-xs, 0.25rem);
-    padding-inline-start: var(--space-md, 1rem);
+    margin-block-start: var(--space-1, 0.25rem);
+    padding-inline-start: var(--space-4, 1rem);
     /* Indentation alone groups the sub-facets; no accent rail. */
   }
   /* Tighten the nested sub-facets; the parent owns the section rhythm. */
   .iwac-facets__group-body :global(.iwac-facet) {
-    padding-block: var(--space-sm, 0.5rem);
+    padding-block: var(--space-2, 0.5rem);
   }
   .iwac-facets__group-body :global(.iwac-facet:first-child) {
-    padding-block-start: var(--space-xs, 0.25rem);
+    padding-block-start: var(--space-1, 0.25rem);
   }
 
   .iwac-facets__empty {
-    padding-block: var(--space-md, 1rem);
+    padding-block: var(--space-4, 1rem);
     color: var(--muted, #66696e);
     font-size: var(--text-sm, 0.9375rem);
     margin: 0;

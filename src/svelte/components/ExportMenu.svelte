@@ -142,9 +142,9 @@
   .iwac-export__trigger {
     display: inline-flex;
     align-items: center;
-    gap: var(--space-xs, 0.25rem);
+    gap: var(--space-1, 0.25rem);
     height: var(--size-control-md, 2.5rem);
-    padding-inline: var(--space-md, 1rem);
+    padding-inline: var(--space-4, 1rem);
     border: 1px solid var(--border, #ced1d6);
     border-radius: var(--radius-md, 0.5rem);
     background: var(--surface, #fdfcfb);
@@ -185,7 +185,7 @@
    */
   @media (max-width: 399px) {
     .iwac-export__trigger {
-      padding-inline: var(--space-sm, 0.5rem);
+      padding-inline: var(--space-2, 0.5rem);
     }
     .iwac-export__label {
       /* Visually hidden but kept for assistive tech. */
@@ -205,8 +205,8 @@
   .iwac-export__menu {
     position: absolute;
     inset-inline-end: 0;
-    inset-block-start: calc(100% + var(--space-xs, 0.25rem));
-    z-index: 30;
+    inset-block-start: calc(100% + var(--space-1, 0.25rem));
+    z-index: var(--z-dropdown, 100);
     min-width: 14rem;
     background: var(--surface, #fdfcfb);
     border: 1px solid var(--border, #ced1d6);
@@ -226,7 +226,7 @@
     display: block;
     width: 100%;
     margin: 0;
-    padding: var(--space-sm, 0.5rem) var(--space-md, 1rem);
+    padding: var(--space-2, 0.5rem) var(--space-4, 1rem);
     appearance: none;
     background: transparent;
     border: 0;
@@ -257,7 +257,7 @@
   .iwac-export__hint,
   .iwac-export__error {
     margin: 0;
-    padding: var(--space-xs, 0.25rem) var(--space-md, 1rem) var(--space-sm, 0.5rem);
+    padding: var(--space-1, 0.25rem) var(--space-4, 1rem) var(--space-2, 0.5rem);
     font-size: var(--text-xs, 0.8125rem);
     color: var(--muted, #66696e);
     border-top: 1px solid var(--border-light, #e2e5e8);

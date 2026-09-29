@@ -64,14 +64,14 @@
 <style>
   .iwac-empty {
     /* Quiet text on the page surface — an empty ledger, not a dashed bin. */
-    padding: var(--space-2xl, 3rem) var(--space-lg, 1.5rem);
+    padding: var(--space-12, 3rem) var(--space-6, 1.5rem);
     border-block-end: 1px solid var(--border-light, #e2e5e8);
     text-align: center;
     color: var(--muted, #66696e);
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: var(--space-sm, 0.5rem);
+    gap: var(--space-2, 0.5rem);
   }
   .iwac-empty strong {
     color: var(--ink-strong, #05070c);
@@ -112,7 +112,7 @@
     box-shadow: none;
     font-size: var(--text-sm, 0.9375rem);
     cursor: pointer;
-    margin-top: var(--space-xs, 0.25rem);
+    margin-top: var(--space-1, 0.25rem);
     transition:
       background var(--transition-fast, 150ms cubic-bezier(0.25, 1, 0.5, 1)),
       color var(--transition-fast, 150ms cubic-bezier(0.25, 1, 0.5, 1));

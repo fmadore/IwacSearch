@@ -121,9 +121,9 @@
   .iwac-view__btn {
     display: inline-flex;
     align-items: center;
-    gap: var(--space-xs, 0.25rem);
+    gap: var(--space-1, 0.25rem);
     height: var(--size-control-md, 2.5rem);
-    padding-inline: var(--space-sm, 0.5rem) var(--space-md, 1rem);
+    padding-inline: var(--space-2, 0.5rem) var(--space-4, 1rem);
     background: transparent;
     color: var(--ink-light, #3f4349);
     border: none;
@@ -178,7 +178,7 @@
       display: none;
     }
     .iwac-view__btn {
-      padding-inline: var(--space-sm, 0.5rem);
+      padding-inline: var(--space-2, 0.5rem);
     }
   }
 </style>

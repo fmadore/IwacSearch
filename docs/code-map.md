@@ -98,7 +98,10 @@ IwacSearch/
 ├── scripts/
 │   ├── check-schema-drift.js                   # CI gate: catalog ↔ schemas ↔ i18n labels, PHP ↔ TS contracts
 │   ├── check-docblocks.js                      # CI gate: no stacked PHP docblocks
-│   └── check-theme-tokens.js                   # CI gate: CSS custom-property fallbacks ↔ tokens.json
+│   ├── check-i18n.js                           # CI gate: every locale table has the same keys in fr/en
+│   ├── check-bundle-size.js                    # build gate: gzipped budgets; no app strings in the header bundle
+│   ├── check-theme-tokens.js                   # CI gate: runs the theme's token guard over src/ + asset/css/
+│   └── theme-token-guard.cjs                   # SYNCED from IWAC-theme (npm run sync:tokens) — never edit here
 ├── view/
 │   ├── iwac-search/search/{index,everything}.phtml
 │   ├── iwac-search/admin/maintenance/index.phtml      # Admin maintenance page

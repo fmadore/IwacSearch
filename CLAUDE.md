@@ -151,6 +151,26 @@ step is fixed on purpose — so that a 15px facet label doesn't quietly become
   claimed a headline ink degrades to body ink). `lint:theme` fails on them.
 - All selectors are scoped under `.iwac-search-block` / the standalone shell —
   no global rules — so the module never collides with theme styles.
+- **The token guard's rules are the theme's.** `scripts/check-theme-tokens.js`
+  only names our sources and namespace (`--iwac-*`, minus `--iwac-vis-*`); the
+  engine is `scripts/theme-token-guard.cjs`, written by the theme's
+  `npm run sync:tokens` beside tokens.json. Never edit that copy. It refuses
+  deprecated names (spacing is `--space-N` only), theme-internal parameters,
+  re-declared theme tokens, unloaded font weights (Besley is 500/600/800), and
+  a media width in a script (`matchMedia` strings) that is off the breakpoint
+  contract. The weekly `theme-contract` workflow fails when either synced
+  file falls behind the theme's master.
+- **Stacking is stated against the theme's scale** — `var(--z-dropdown, 100)`
+  for menus and typeaheads, `calc(var(--z-modal, 300) + n)` for the drawer —
+  never a bare number that restates the theme's in a comment.
+- **MapLibre is pinned to IwacVisualizations' exact files** (version, URLs and
+  sha384 hashes in `src/svelte/lib/maplibreLoader.ts`), so the two modules
+  share one cached copy and one `window.maplibregl`. Upgrade both together.
+- **The header bundle loads on every page.** It may import only
+  `translateSuggest()` from i18n, never `translate()`, and module-level code in
+  anything it imports must not call into i18n — `npm run check:size` (the last
+  step of `npm run build`) enforces a gzipped budget and refuses the app's
+  string table in that bundle.
 
 ## Linked repos
 

@@ -143,8 +143,8 @@
     /* Theme global field rule adds margin-bottom — the shell owns rhythm. */
     margin: 0;
     height: var(--size-control-lg, 2.75rem);
-    padding-inline: var(--space-md, 1rem);
-    padding-inline-end: var(--space-2xl, 3rem);
+    padding-inline: var(--space-4, 1rem);
+    padding-inline-end: var(--space-12, 3rem);
     font-size: var(--text-base, 1.0625rem);
     color: var(--ink, #13161c);
     background: var(--surface, #fdfcfb);
@@ -176,7 +176,7 @@
   }
   .iwac-input__clear {
     position: absolute;
-    inset-inline-end: var(--space-sm, 0.5rem);
+    inset-inline-end: var(--space-2, 0.5rem);
     display: inline-flex;
     align-items: center;
     justify-content: center;

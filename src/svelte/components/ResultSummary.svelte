@@ -144,7 +144,7 @@
        KPI figures). The strip itself is transparent: chips carry their own
        outline, no block-level wash. */
     border-block-end: 2px solid var(--ink-strong, #05070c);
-    padding-block-end: var(--space-sm, 0.5rem);
+    padding-block-end: var(--space-2, 0.5rem);
   }
   /* Focused only programmatically (last chip removed). A ring around the whole
      strip would say nothing about where the next Tab goes; :focus-visible is
@@ -156,7 +156,7 @@
     display: flex;
     align-items: baseline;
     flex-wrap: wrap;
-    gap: var(--space-xs, 0.25rem) var(--space-sm, 0.5rem);
+    gap: var(--space-1, 0.25rem) var(--space-2, 0.5rem);
   }
   .iwac-summary__count-block {
     display: inline-flex;
@@ -178,7 +178,10 @@
       serif
     );
     font-size: var(--text-xl, 1.5rem);
-    font-weight: 700;
+    /* 800, not 700: the theme loads Besley at 500/600/800 only, so a 700
+       has always rendered as 800 — saying so keeps the sheet honest, and the
+       token guard's font-weight rule refuses the 700. */
+    font-weight: 800;
     line-height: 1;
     /* Lining, NOT tabular — and the tabular-nums above is inherited, so it
        has to be cleared here explicitly. Besley's `tnum` zero is frozen at a

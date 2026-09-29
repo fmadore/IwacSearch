@@ -25,5 +25,10 @@ export default defineConfig({
     // The bundles live in asset/dist; nothing there is a test.
     exclude: ['node_modules/**', 'asset/**', 'vendor/**'],
     restoreMocks: true,
+    // Building a jsdom per test file was ~70% of the run. VM contexts reuse
+    // one worker per thread while still giving every file its own globals
+    // (unlike `isolate: false`): the suite went from ~11.6 s to ~4.4 s with
+    // the same 261 results, and v8 coverage still reports.
+    pool: 'vmThreads',
   },
 });

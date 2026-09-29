@@ -216,6 +216,15 @@ spellings:
 | `iwac:mistralSmall2603*`                | `mistral_small_2603_*`               |
 | `iwac:deepseekV4Flash0731*`             | `deepseek_v4_flash_0731_*`           |
 
+**Three, where IwacVisualizations shows five.** Since 2026-09-10 the
+dashboards also read `iwac:gemma431bIt*` (Gemma 4 31B) and `iwac:qwen3827b*`
+(Qwen3.8 27B) — see that module's `config/sentiment-models.json`, the one
+registry of which annotator families exist. This index does not carry them
+yet. That is a product decision still to take, not an oversight to patch in
+place: adding them is new fields, so a schema bump (`iwac_vN` → `iwac_vN+1`),
+a reindex, and FacetCatalog / i18n / drift-check entries. Until then a reader
+can see five models' readings on an item page and facet on three of them.
+
 Watch the DeepSeek prefix: `iwac:deepseekV4Flash*` (no date) is a **retired
 preview run** that still holds ~11.5k annotations in Omeka. We read the `0731`
 properties only; the two are different readings of the same corpus.

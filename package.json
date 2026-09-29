@@ -1,6 +1,6 @@
 {
   "name": "iwac-search-client",
-  "version": "3.20.0",
+  "version": "3.21.0",
   "description": "Svelte client for the IwacSearch Omeka S module — public discovery surface backed by Typesense.",
   "private": true,
   "type": "module",
@@ -9,9 +9,10 @@
   },
   "scripts": {
     "dev": "vite build --watch",
-    "build": "npm run lint:theme && npm run lint:drift && npm run lint:i18n && npm run build:public && npm run build:header",
+    "build": "npm run lint:theme && npm run lint:drift && npm run lint:i18n && npm run build:public && npm run build:header && npm run check:size",
     "build:public": "cross-env IWAC_BUNDLE=public vite build",
     "build:header": "cross-env IWAC_BUNDLE=header vite build",
+    "check:size": "node scripts/check-bundle-size.js",
     "check": "svelte-check --tsconfig ./tsconfig.json",
     "test": "vitest run --config vitest.config.ts",
     "test:watch": "vitest --config vitest.config.ts",

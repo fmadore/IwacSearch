@@ -104,7 +104,7 @@
   .iwac-results {
     display: flex;
     flex-direction: column;
-    gap: var(--space-md, 1rem);
+    gap: var(--space-4, 1rem);
   }
   /* Ruled ledger: hairlines between rows, closed top and bottom. */
   .iwac-results__list {
@@ -131,7 +131,7 @@
     padding: 0;
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
-    gap: var(--space-lg, 1.5rem);
+    gap: var(--space-6, 1.5rem);
   }
   .iwac-results__tile {
     margin: 0;
@@ -145,12 +145,12 @@
   @media (max-width: 599px) {
     .iwac-results__gallery {
       grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: var(--space-md, 1rem);
+      gap: var(--space-4, 1rem);
     }
   }
   .iwac-results__empty {
     color: var(--muted, #66696e);
-    padding: var(--space-md, 1rem);
+    padding: var(--space-4, 1rem);
     background: var(--surface-sunken, #f4f1ef);
     border-radius: var(--radius-md, 0.5rem);
     margin: 0;

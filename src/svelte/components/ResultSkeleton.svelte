@@ -92,8 +92,8 @@
   .iwac-skeleton__row {
     display: grid;
     grid-template-columns: 7rem 1fr;
-    gap: var(--space-md, 1rem);
-    padding: var(--space-md, 1rem) var(--space-sm, 0.5rem);
+    gap: var(--space-4, 1rem);
+    padding: var(--space-4, 1rem) var(--space-2, 0.5rem);
     border-block-start: 1px solid var(--border-light, #e2e5e8);
   }
   .iwac-skeleton__thumb {
@@ -104,7 +104,7 @@
   .iwac-skeleton__lines {
     display: flex;
     flex-direction: column;
-    gap: var(--space-sm, 0.5rem);
+    gap: var(--space-2, 0.5rem);
     padding-block-start: 0.25rem;
   }
   .iwac-skeleton__bar {
@@ -115,13 +115,13 @@
   .iwac-skeleton--gallery {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
-    gap: var(--space-lg, 1.5rem);
+    gap: var(--space-6, 1.5rem);
     border-block-end: none;
   }
   .iwac-skeleton__tile {
     display: flex;
     flex-direction: column;
-    gap: var(--space-sm, 0.5rem);
+    gap: var(--space-2, 0.5rem);
   }
   .iwac-skeleton__plate {
     width: 100%;
@@ -153,7 +153,7 @@
   @media (max-width: 599px) {
     .iwac-skeleton__row {
       grid-template-columns: 1fr;
-      gap: var(--space-sm, 0.5rem);
+      gap: var(--space-2, 0.5rem);
     }
     .iwac-skeleton__thumb {
       width: 100%;

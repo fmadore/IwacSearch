@@ -336,8 +336,8 @@
   .iwac-suggest {
     position: absolute;
     inset-inline: 0;
-    inset-block-start: calc(100% + var(--space-xs, 0.25rem));
-    z-index: 30;
+    inset-block-start: calc(100% + var(--space-1, 0.25rem));
+    z-index: var(--z-dropdown, 100);
     background: var(--surface, #fdfcfb);
     border: 1px solid var(--border, #ced1d6);
     border-radius: var(--radius-md, 0.5rem);
@@ -375,10 +375,10 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: var(--space-sm, 0.5rem);
+    gap: var(--space-2, 0.5rem);
     width: 100%;
     margin: 0;
-    padding: var(--space-sm, 0.5rem) var(--space-md, 1rem);
+    padding: var(--space-2, 0.5rem) var(--space-4, 1rem);
     appearance: none;
     -webkit-appearance: none;
     text-decoration: none;
@@ -430,8 +430,8 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: var(--space-sm, 0.5rem);
-    padding: var(--space-xs, 0.25rem) var(--space-md, 1rem);
+    gap: var(--space-2, 0.5rem);
+    padding: var(--space-1, 0.25rem) var(--space-4, 1rem);
     font-size: var(--text-xs, 0.8125rem);
     color: var(--muted, #66696e);
     border-bottom: 1px solid var(--border-light, #e2e5e8);
@@ -491,7 +491,7 @@
   }
   .iwac-suggest__empty,
   .iwac-suggest__error {
-    padding: var(--space-sm, 0.5rem) var(--space-md, 1rem);
+    padding: var(--space-2, 0.5rem) var(--space-4, 1rem);
     font-size: var(--text-xs, 0.8125rem);
     color: var(--muted, #66696e);
     border-top: 1px solid var(--border-light, #e2e5e8);

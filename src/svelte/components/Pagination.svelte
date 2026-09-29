@@ -199,9 +199,9 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: var(--space-sm, 0.5rem);
+    gap: var(--space-2, 0.5rem);
     flex-wrap: wrap;
-    padding-block: var(--space-md, 1rem);
+    padding-block: var(--space-4, 1rem);
   }
   .iwac-pager__list {
     list-style: none;
@@ -209,7 +209,7 @@
     padding: 0;
     display: flex;
     align-items: center;
-    gap: var(--space-xs, 0.25rem);
+    gap: var(--space-1, 0.25rem);
   }
   .iwac-pager__item {
     margin: 0;
@@ -219,13 +219,13 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    gap: var(--space-xs, 0.25rem);
+    gap: var(--space-1, 0.25rem);
     /* Explicit, because the current page carries a 2px border where the rest
        carry 1px and the row must not step up by a pixel around it. */
     box-sizing: border-box;
     min-width: var(--size-control-md, 2.5rem);
     height: var(--size-control-md, 2.5rem);
-    padding-inline: var(--space-sm, 0.5rem);
+    padding-inline: var(--space-2, 0.5rem);
     background: var(--surface, #fdfcfb);
     color: var(--ink, #13161c);
     border: 1px solid var(--border, #ced1d6);
@@ -281,7 +281,7 @@
     cursor: default;
   }
   .iwac-pager__nav {
-    padding-inline: var(--space-md, 1rem);
+    padding-inline: var(--space-4, 1rem);
   }
   .iwac-pager__nav:disabled {
     opacity: 0.45;
@@ -309,8 +309,8 @@
     align-items: center;
     justify-content: center;
     flex-wrap: wrap;
-    gap: var(--space-sm, 0.5rem) var(--space-lg, 1.5rem);
-    padding-block-end: var(--space-md, 1rem);
+    gap: var(--space-2, 0.5rem) var(--space-6, 1.5rem);
+    padding-block-end: var(--space-4, 1rem);
     color: var(--muted, #66696e);
     font-size: var(--text-xs, 0.8125rem);
   }
@@ -318,7 +318,7 @@
   .iwac-pager__size {
     display: inline-flex;
     align-items: center;
-    gap: var(--space-xs, 0.25rem);
+    gap: var(--space-1, 0.25rem);
   }
   .iwac-pager__jump-input {
     /* Theme global field rule adds margin-bottom — this row owns its rhythm. */
@@ -326,7 +326,7 @@
     box-sizing: border-box;
     width: 5rem;
     height: var(--size-control-sm, 2.25rem);
-    padding-inline: var(--space-sm, 0.5rem);
+    padding-inline: var(--space-2, 0.5rem);
     background: var(--surface, #fdfcfb);
     color: var(--ink, #13161c);
     border: 1px solid var(--border, #ced1d6);
@@ -343,7 +343,7 @@
   }
   .iwac-pager__jump-go {
     height: var(--size-control-sm, 2.25rem);
-    padding-inline: var(--space-md, 1rem);
+    padding-inline: var(--space-4, 1rem);
     /* A SUBMIT control, which the theme paints filled-and-glowing by default
        (see IWAC-theme CLAUDE.md, "the loud one opts in" — submit opts in
        implicitly). This is a utility beside a pager, not the page's primary
@@ -380,7 +380,7 @@
     margin: 0;
     box-sizing: border-box;
     height: var(--size-control-sm, 2.25rem);
-    padding-inline: var(--space-sm, 0.5rem);
+    padding-inline: var(--space-2, 0.5rem);
     background: var(--surface, #fdfcfb);
     color: var(--ink, #13161c);
     border: 1px solid var(--border, #ced1d6);
@@ -405,7 +405,7 @@
       display: none;
     }
     .iwac-pager__nav {
-      padding-inline: var(--space-sm, 0.5rem);
+      padding-inline: var(--space-2, 0.5rem);
     }
   }
 </style>

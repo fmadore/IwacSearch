@@ -54,7 +54,7 @@
   .iwac-chip {
     display: inline-flex;
     align-items: center;
-    gap: var(--space-xs, 0.25rem);
+    gap: var(--space-1, 0.25rem);
     background: transparent;
     border: 1px solid var(--primary, #ce4115);
     border-radius: var(--radius-full, 9999px);

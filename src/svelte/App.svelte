@@ -1145,7 +1145,7 @@
   .iwac-search {
     display: flex;
     flex-direction: column;
-    gap: var(--space-md, 1rem);
+    gap: var(--space-4, 1rem);
     color: var(--ink, #13161c);
     font-size: var(--text-base, 1.0625rem);
   }
@@ -1183,7 +1183,9 @@
     position: absolute;
     inset-inline-start: -9999px;
     inset-block-start: auto;
-    z-index: 402;
+    /* Where the theme's own skip link sits. It is a grid item once focused,
+       so the z-index still applies after it turns static. */
+    z-index: var(--z-tooltip, 500);
   }
   .iwac-search__skip:focus,
   .iwac-search__skip:focus-visible {
@@ -1195,8 +1197,8 @@
     grid-column: 1 / -1;
     justify-self: start;
     align-self: start;
-    margin-block-end: var(--space-sm, 0.5rem);
-    padding: var(--space-xs, 0.25rem) var(--space-md, 1rem);
+    margin-block-end: var(--space-2, 0.5rem);
+    padding: var(--space-1, 0.25rem) var(--space-4, 1rem);
     border: 1px solid var(--border, #ced1d6);
     border-radius: var(--radius-md, 0.5rem);
     background: var(--surface, #fdfcfb);
@@ -1210,7 +1212,7 @@
   .iwac-search__layout {
     display: grid;
     grid-template-columns: minmax(15rem, 18rem) 1fr;
-    gap: var(--space-xl, 2rem);
+    gap: var(--space-8, 2rem);
     align-items: start;
   }
 
@@ -1222,14 +1224,14 @@
    */
   .iwac-search__facets-inline {
     position: sticky;
-    top: var(--space-md, 1rem);
+    top: var(--space-4, 1rem);
     align-self: start;
     /* The single scroll container for filters. Facet groups no longer
        scroll individually (see FacetGroup .iwac-facet__list), so this is
        the only scrollbar in the sidebar — and it only appears when the
        collapsed facet column is taller than the viewport. Thin + stable
        gutter keeps it from crowding the divider. */
-    max-height: calc(100vh - var(--space-xl, 2rem));
+    max-height: calc(100vh - var(--space-8, 2rem));
     overflow-y: auto;
     scrollbar-width: thin;
     scrollbar-gutter: stable;
@@ -1238,13 +1240,13 @@
        decoration: `overflow-y: auto` makes this a scroll container, which
        clips ink painted outside its padding box — without it the leading
        stroke of a facet control's 2px focus outline is trimmed away. */
-    padding-inline: 0.1875rem var(--space-md, 1rem);
+    padding-inline: 0.1875rem var(--space-4, 1rem);
     border-inline-end: 1px solid var(--border-light, #e2e5e8);
   }
   .iwac-search__facets-body {
     /* Padding inside the drawer body. The drawer header already has
        its own padding from src/svelte-shared/components/Drawer.svelte. */
-    padding: var(--space-md, 1rem);
+    padding: var(--space-4, 1rem);
   }
   .iwac-search__filters-trigger {
     display: none;
@@ -1257,9 +1259,9 @@
   .iwac-search__copylink {
     display: inline-flex;
     align-items: center;
-    gap: var(--space-xs, 0.25rem);
+    gap: var(--space-1, 0.25rem);
     height: var(--size-control-md, 2.5rem);
-    padding-inline: var(--space-md, 1rem);
+    padding-inline: var(--space-4, 1rem);
     border: 1px solid var(--border, #ced1d6);
     border-radius: var(--radius-md, 0.5rem);
     background: var(--surface, #fdfcfb);
@@ -1307,8 +1309,8 @@
     display: flex;
     align-items: center;
     flex-wrap: wrap;
-    gap: var(--space-sm, 0.5rem);
-    padding: var(--space-sm, 0.5rem) 0;
+    gap: var(--space-2, 0.5rem);
+    padding: var(--space-2, 0.5rem) 0;
   }
   .iwac-search__didyoumean-label {
     color: var(--muted, #66696e);
@@ -1317,8 +1319,8 @@
   .iwac-search__didyoumean-chip {
     display: inline-flex;
     align-items: center;
-    gap: var(--space-xs, 0.25rem);
-    padding: 0.25rem var(--space-sm, 0.5rem);
+    gap: var(--space-1, 0.25rem);
+    padding: 0.25rem var(--space-2, 0.5rem);
     border: 1px solid var(--border, #ced1d6);
     border-radius: var(--radius-full, 9999px);
     background: var(--surface, #fdfcfb);
@@ -1365,8 +1367,8 @@
     display: flex;
     align-items: baseline;
     flex-wrap: wrap;
-    gap: var(--space-xs, 0.25rem) var(--space-md, 1rem);
-    padding-block-end: var(--space-sm, 0.5rem);
+    gap: var(--space-1, 0.25rem) var(--space-4, 1rem);
+    padding-block-end: var(--space-2, 0.5rem);
     /* Hairline under, like the toolbar — a dateline over the set, not a card. */
     border-block-end: 1px solid var(--border-light, #e2e5e8);
   }
@@ -1378,7 +1380,7 @@
   .iwac-search__semantic-btn {
     display: inline-flex;
     align-items: center;
-    gap: var(--space-xs, 0.25rem);
+    gap: var(--space-1, 0.25rem);
     padding: 0.4rem 0.75rem;
     border: 1px solid var(--border, #ced1d6);
     border-radius: var(--radius-md, 0.5rem);
@@ -1416,7 +1418,7 @@
   @media (max-width: 767px) {
     .iwac-search__layout {
       grid-template-columns: 1fr;
-      gap: var(--space-md, 1rem);
+      gap: var(--space-4, 1rem);
     }
 
     /*
@@ -1427,7 +1429,7 @@
     .iwac-search__controls {
       flex-direction: column;
       align-items: stretch;
-      gap: var(--space-sm, 0.5rem);
+      gap: var(--space-2, 0.5rem);
     }
     .iwac-search__controls-bar {
       width: 100%;
@@ -1468,8 +1470,8 @@
     .iwac-search__filters-trigger {
       display: inline-flex;
       align-items: center;
-      gap: var(--space-xs, 0.25rem);
-      padding-inline: var(--space-md, 1rem);
+      gap: var(--space-1, 0.25rem);
+      padding-inline: var(--space-4, 1rem);
       border: 1px solid var(--border, #ced1d6);
       border-radius: var(--radius-md, 0.5rem);
       background: var(--surface, #fdfcfb);
@@ -1526,7 +1528,7 @@
   @media (max-width: 399px) {
     .iwac-search__filters-trigger,
     .iwac-search__copylink {
-      padding-inline: var(--space-sm, 0.5rem);
+      padding-inline: var(--space-2, 0.5rem);
     }
     .iwac-search__filters-trigger-label,
     .iwac-search__copylink-label {
@@ -1545,7 +1547,7 @@
   .iwac-search__results {
     display: flex;
     flex-direction: column;
-    gap: var(--space-md, 1rem);
+    gap: var(--space-4, 1rem);
     min-width: 0; /* allow snippet wrap */
     /* Focused programmatically by the skip link and the pager; the ring would
        be a full-column outline saying nothing about where the next Tab goes.
@@ -1566,23 +1568,23 @@
   .iwac-search__controls {
     display: flex;
     align-items: center;
-    gap: var(--space-sm, 0.5rem) var(--space-md, 1rem);
+    gap: var(--space-2, 0.5rem) var(--space-4, 1rem);
     flex-wrap: wrap;
-    padding-block-end: var(--space-sm, 0.5rem);
+    padding-block-end: var(--space-2, 0.5rem);
     border-bottom: 1px solid var(--border-light, #e2e5e8);
   }
   /* View toggle + (mobile) filters + actions. Grows so sort sits at the far end. */
   .iwac-search__controls-bar {
     display: flex;
     align-items: center;
-    gap: var(--space-sm, 0.5rem);
+    gap: var(--space-2, 0.5rem);
     flex: 1 1 auto;
     min-width: 0;
   }
   .iwac-search__controls-actions {
     display: inline-flex;
     align-items: center;
-    gap: var(--space-sm, 0.5rem);
+    gap: var(--space-2, 0.5rem);
     margin-inline-start: auto;
     flex-shrink: 0;
   }
@@ -1590,11 +1592,11 @@
     background: color-mix(in oklab, var(--error, #c9222b) 12%, var(--surface, #fdfcfb));
     border: 1px solid color-mix(in oklab, var(--error, #c9222b) 35%, transparent);
     border-radius: var(--radius-md, 0.5rem);
-    padding: var(--space-md, 1rem);
+    padding: var(--space-4, 1rem);
     color: var(--ink-strong, #05070c);
     display: flex;
     flex-direction: column;
-    gap: var(--space-xs, 0.25rem);
+    gap: var(--space-1, 0.25rem);
   }
   .iwac-search__status {
     color: var(--muted, #66696e);

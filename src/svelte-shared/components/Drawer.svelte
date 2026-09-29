@@ -196,11 +196,18 @@
     /* Modal scrim. Deliberately neutral in BOTH themes — a warm scrim over the
        lamplit dark ground reads as a tint, not as "the page behind is
        inert" — but sourced from the published --black rather than a literal. */
-    background: color-mix(in oklab, var(--black, #000000) 35%, transparent);
-    /* Above the IWAC-theme sticky header (z-index 200) and its menu-drawer
-       (300) so the filter drawer overlays the page chrome instead of sliding
-       in behind the sticky header (it appeared cut off under it on mobile). */
-    z-index: 400;
+    background: color-mix(
+      in oklab,
+      var(--black, #000000) 35%,
+      transparent
+    ); /* allow-absolute-mix */
+    /* Above the theme's sticky header (--z-sticky) and level-plus-one with its
+       own modal layer (--z-modal: the menu drawer, a maximized viewer), so the
+       filter drawer overlays the page chrome instead of sliding in behind the
+       header (it appeared cut off under it on mobile). Stated against the
+       theme's scale rather than as a number that restates it: this was 400,
+       with the theme's 200 and 300 copied into this comment. */
+    z-index: calc(var(--z-modal, 300) + 1);
     animation: iwac-drawer-fade-in 150ms ease;
   }
   .iwac-drawer {
@@ -208,7 +215,7 @@
     inset-block: 0;
     width: var(--iwac-drawer-width, min(42rem, 100vw));
     background: var(--surface, #fdfcfb);
-    z-index: 401;
+    z-index: calc(var(--z-modal, 300) + 2);
     display: flex;
     flex-direction: column;
   }
@@ -263,7 +270,7 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: var(--space-md, 1rem) var(--space-lg, 1.5rem);
+    padding: var(--space-4, 1rem) var(--space-6, 1.5rem);
     border-bottom: 1px solid var(--border, #ced1d6);
     /* Sticky so long bodies still show the title + close affordance. */
     position: sticky;
@@ -294,7 +301,7 @@
     align-items: center;
     justify-content: center;
     line-height: 1;
-    margin-inline-start: var(--space-md, 1rem);
+    margin-inline-start: var(--space-4, 1rem);
   }
   .iwac-drawer__close:hover {
     background: var(--surface-sunken, #f4f1ef);

@@ -1,5 +1,13 @@
 # Deployment and acceptance checklist — 3.19.0
 
+## 3.21.0 additions
+
+No schema change and no reindex.
+
+- [ ] **Content-Security-Policy, if one is enforced:** the Map view now loads MapLibre 6, which is ES-module only and boots its worker from a `blob:` URL — `worker-src` must allow `blob:` (and `script-src` must allow `https://cdn.jsdelivr.net`, as before). IwacVisualizations has needed the same since its MapLibre 6 move, so a site serving both is already configured.
+- [ ] Open the Map view on the entity index (e.g. `/s/westafrica/browse/…` with the Map toggle) and confirm clusters render; in devtools, `maplibregl.getVersion()` reads `6.11.2`, and the three jsDelivr requests carry `integrity`.
+- [ ] Confirm the header typeahead still suggests on a non-search page (its bundle was slimmed from ~25 KB to ~16 KB).
+
 ## 3.20.0 additions
 
 Follow [operations-3.20.md](operations-3.20.md) after (or together with) the 3.19 rollout below.

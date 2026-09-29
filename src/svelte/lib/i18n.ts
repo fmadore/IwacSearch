@@ -85,14 +85,11 @@ const STRINGS: Record<Locale, Record<string, string>> = {
     filter_values: 'Filtrer les valeurs : {name}',
     clear_filter: 'Effacer le filtre',
     no_values: 'Aucune valeur pour ce filtre.',
-    no_matches: 'Aucune correspondance.',
     match_count: '{shown} sur {total}',
     facet_search_count: '{n} résultat(s)',
     n_active: '{n} actif(s)',
     source: 'Source',
     untitled: '[Sans titre #{id}]',
-    suggestions: 'Suggestions',
-    search_for: 'Rechercher « {q} »',
     results_empty_list: 'Aucune correspondance. Essayez un autre mot ou retirez un filtre.',
     sentiment: 'Sentiment',
     mention_one: '{n} mention',
@@ -224,14 +221,11 @@ const STRINGS: Record<Locale, Record<string, string>> = {
     filter_values: 'Filter {name} values',
     clear_filter: 'Clear filter',
     no_values: 'No values for this filter.',
-    no_matches: 'No matches.',
     match_count: '{shown} of {total}',
     facet_search_count: '{n} result(s)',
     n_active: '{n} active',
     source: 'Source',
     untitled: '[Untitled #{id}]',
-    suggestions: 'Suggestions',
-    search_for: 'Search for “{q}”',
     results_empty_list: 'No matches. Try a different word or remove a filter.',
     sentiment: 'Sentiment',
     mention_one: '{n} mention',
@@ -307,19 +301,57 @@ const STRINGS: Record<Locale, Record<string, string>> = {
   },
 };
 
-export function translate(
-  locale: Locale,
-  key: string,
-  vars?: Record<string, string | number>,
-): string {
-  const table = STRINGS[locale] ?? STRINGS.fr;
-  let s = table[key] ?? STRINGS.fr[key] ?? key;
+/**
+ * The strings the site-wide header typeahead renders (header.ts).
+ *
+ * Kept OUT of STRINGS on purpose. The header bundle loads on every public
+ * page, and importing `translate()` pulled the whole app table — both
+ * locales, ~270 keys — into it for the sake of three strings. The bundler can
+ * drop STRINGS from the header only if nothing it imports reads STRINGS, so
+ * `translateSuggest()` reads this table alone; `translate()` falls back to it,
+ * so the app's `t('no_matches')` etc. are unchanged. Parity is checked like
+ * every other table (npm run lint:i18n).
+ */
+const SUGGEST_STRINGS: Record<Locale, Record<string, string>> = {
+  fr: {
+    no_matches: 'Aucune correspondance.',
+    suggestions: 'Suggestions',
+    search_for: 'Rechercher « {q} »',
+  },
+  en: {
+    no_matches: 'No matches.',
+    suggestions: 'Suggestions',
+    search_for: 'Search for “{q}”',
+  },
+};
+
+function interpolate(s: string, vars?: Record<string, string | number>): string {
   if (vars) {
     for (const [k, v] of Object.entries(vars)) {
       s = s.replaceAll(`{${k}}`, String(v));
     }
   }
   return s;
+}
+
+/** The header typeahead's translator — see SUGGEST_STRINGS. */
+export function translateSuggest(
+  locale: Locale,
+  key: string,
+  vars?: Record<string, string | number>,
+): string {
+  const table = SUGGEST_STRINGS[locale] ?? SUGGEST_STRINGS.fr;
+  return interpolate(table[key] ?? SUGGEST_STRINGS.fr[key] ?? key, vars);
+}
+
+export function translate(
+  locale: Locale,
+  key: string,
+  vars?: Record<string, string | number>,
+): string {
+  const table = STRINGS[locale] ?? STRINGS.fr;
+  const s = table[key] ?? STRINGS.fr[key];
+  return s === undefined ? translateSuggest(locale, key, vars) : interpolate(s, vars);
 }
 
 // ── Facet field labels ─────────────────────────────────────────────────
@@ -658,10 +690,21 @@ export function sortOptions(
  * that error-states the whole surface. Every other URL param was already
  * clamped or allowlisted (see urlState.ts); sort was the one hole.
  */
-export const SORT_VALUES: ReadonlySet<string> = new Set([
-  ...sortOptions('fr', 'content').map((o) => o.value),
-  ...sortOptions('fr', 'entity').map((o) => o.value),
-]);
+export const SORT_VALUES: ReadonlySet<string> = /* @__PURE__ */ collectSortValues();
+
+/**
+ * Built through a PURE-annotated call so a bundle that never reads
+ * SORT_VALUES can drop it. Written inline, the top-level `new Set([...
+ * sortOptions()])` was a call the bundler had to assume had side effects, so
+ * the site-wide header typeahead — which sorts nothing — carried
+ * sortOptions(), translate() and the whole STRINGS table on every page.
+ */
+function collectSortValues(): ReadonlySet<string> {
+  return new Set([
+    ...sortOptions('fr', 'content').map((o) => o.value),
+    ...sortOptions('fr', 'entity').map((o) => o.value),
+  ]);
+}
 
 /**
  * Fallback for facets we haven't explicitly labelled — strip the suffix

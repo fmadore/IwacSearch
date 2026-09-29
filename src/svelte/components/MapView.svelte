@@ -313,7 +313,7 @@
   .iwac-map {
     display: flex;
     flex-direction: column;
-    gap: var(--space-sm, 0.5rem);
+    gap: var(--space-2, 0.5rem);
   }
   .iwac-map__canvas {
     width: 100%;

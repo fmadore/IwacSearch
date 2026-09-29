@@ -28,13 +28,16 @@
  *                          hydrates — so an entity click searches its name)
  *
  * It ships as its own IIFE bundle (vite --mode header) injected by
- * Module.php on every public site page, NOT the full ~90 KB search app.
+ * Module.php on every public site page, NOT the full search app — see
+ * scripts/check-bundle-size.js for both budgets. Its strings come from
+ * `translateSuggest()`, never `translate()`: the latter reads the app's whole
+ * STRINGS table, which the size check refuses to find in this bundle.
  * Endpoints + locale come from an inline `window.IWAC_HEADER_SEARCH` blob
  * the module injects; the landing URL is read from the form's own action.
  */
 
 import { runSuggest } from './lib/suggestQuery';
-import { facetLabel, normalizeLocale, translate, type Locale } from './lib/i18n';
+import { facetLabel, normalizeLocale, translateSuggest, type Locale } from './lib/i18n';
 import {
   actionOf,
   buildSuggestRows,
@@ -134,7 +137,7 @@ class HeaderSearch {
     this.listbox.className = 'iwac-header-suggest';
     this.listbox.id = `iwac-header-suggest-${++uid}`;
     this.listbox.setAttribute('role', 'listbox');
-    this.listbox.setAttribute('aria-label', translate(this.locale, 'suggestions'));
+    this.listbox.setAttribute('aria-label', translateSuggest(this.locale, 'suggestions'));
     this.host.appendChild(this.listbox);
 
     // ARIA combobox wiring on the existing input.
@@ -272,7 +275,7 @@ class HeaderSearch {
       const empty = document.createElement('div');
       empty.className = 'iwac-header-suggest__empty';
       empty.setAttribute('role', 'status');
-      empty.textContent = translate(this.locale, 'no_matches');
+      empty.textContent = translateSuggest(this.locale, 'no_matches');
       this.listbox.appendChild(empty);
     }
     this.renderHighlight();
@@ -298,7 +301,7 @@ class HeaderSearch {
       // only — but the shared SuggestRow union includes them.)
       const title = document.createElement('span');
       title.className = 'iwac-header-suggest__title';
-      title.textContent = translate(this.locale, 'search_for', { q });
+      title.textContent = translateSuggest(this.locale, 'search_for', { q });
       el.append(title);
     } else if (row.kind === 'entity') {
       el.classList.add('iwac-header-suggest__item--entity');

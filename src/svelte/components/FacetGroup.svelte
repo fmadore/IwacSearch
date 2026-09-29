@@ -305,7 +305,7 @@
 
 <style>
   .iwac-facet {
-    padding-block: var(--space-md, 1rem);
+    padding-block: var(--space-4, 1rem);
     border-bottom: 1px solid var(--border-light, #e2e5e8);
   }
   .iwac-facet:last-child {
@@ -320,7 +320,7 @@
   .iwac-facet__heading {
     display: flex;
     align-items: center;
-    gap: var(--space-xs, 0.25rem);
+    gap: var(--space-1, 0.25rem);
     width: 100%;
     /* SC 2.5.8: the collapse/expand target measured 261×20.8. The label is an
        uppercase 13px eyebrow, so height came from the line box alone; this
@@ -370,15 +370,15 @@
 
   .iwac-facet__search {
     position: relative;
-    margin-block: var(--space-sm, 0.5rem) var(--space-xs, 0.25rem);
+    margin-block: var(--space-2, 0.5rem) var(--space-1, 0.25rem);
   }
   .iwac-facet__search-input {
     width: 100%;
     /* Theme global field rule adds margin-bottom — the wrapper owns rhythm. */
     margin: 0;
     height: var(--size-control-md, 2.5rem);
-    padding-inline: var(--space-sm, 0.5rem);
-    padding-inline-end: var(--space-xl, 2rem);
+    padding-inline: var(--space-2, 0.5rem);
+    padding-inline-end: var(--space-8, 2rem);
     background: var(--surface, #fdfcfb);
     color: var(--ink, #13161c);
     border: 1px solid var(--border, #ced1d6);
@@ -408,7 +408,7 @@
   }
   .iwac-facet__search-clear {
     position: absolute;
-    inset-inline-end: var(--space-xs, 0.25rem);
+    inset-inline-end: var(--space-1, 0.25rem);
     inset-block-start: 50%;
     transform: translateY(-50%);
     width: 1.5rem;
@@ -442,7 +442,7 @@
 
   .iwac-facet__list {
     list-style: none;
-    margin: var(--space-xs, 0.25rem) 0 0;
+    margin: var(--space-1, 0.25rem) 0 0;
     padding: 0;
     display: flex;
     flex-direction: column;
@@ -475,9 +475,9 @@
   .iwac-facet__option {
     display: grid;
     grid-template-columns: auto 1fr auto;
-    gap: var(--space-sm, 0.5rem);
+    gap: var(--space-2, 0.5rem);
     align-items: center;
-    padding: 0.375rem var(--space-xs, 0.25rem);
+    padding: 0.375rem var(--space-1, 0.25rem);
     border-radius: var(--radius-sm, 0.375rem);
     cursor: pointer;
     color: var(--ink, #13161c);
@@ -542,7 +542,7 @@
   }
 
   .iwac-facet__more {
-    margin-top: var(--space-sm, 0.5rem);
+    margin-top: var(--space-2, 0.5rem);
     background: none;
     border: none;
     box-shadow: none;
@@ -550,7 +550,7 @@
     font-size: var(--text-xs, 0.8125rem);
     font-weight: 500;
     cursor: pointer;
-    padding: var(--space-xs, 0.25rem) 0;
+    padding: var(--space-1, 0.25rem) 0;
     transition: color var(--transition-fast, 150ms cubic-bezier(0.25, 1, 0.5, 1));
   }
   .iwac-facet__more:hover {
@@ -566,7 +566,7 @@
   }
 
   .iwac-facet__hint {
-    margin: var(--space-xs, 0.25rem) 0 0;
+    margin: var(--space-1, 0.25rem) 0 0;
     color: var(--muted, #66696e);
     font-size: var(--text-xs, 0.8125rem);
     font-variant-numeric: tabular-nums;
@@ -575,7 +575,7 @@
   .iwac-facet__empty {
     color: var(--muted, #66696e);
     font-size: var(--text-sm, 0.9375rem);
-    margin: var(--space-xs, 0.25rem) 0 0;
-    padding: var(--space-xs, 0.25rem);
+    margin: var(--space-1, 0.25rem) 0 0;
+    padding: var(--space-1, 0.25rem);
   }
 </style>

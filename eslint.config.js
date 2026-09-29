@@ -10,7 +10,9 @@ import globals from 'globals';
 
 export default [
   {
-    ignores: ['asset/dist/**', 'node_modules/**', 'vendor/**'],
+    // scripts/theme-token-guard.cjs is synced verbatim from IWAC-theme by its
+    // `npm run sync:tokens`, and linted there.
+    ignores: ['asset/dist/**', 'node_modules/**', 'vendor/**', 'scripts/theme-token-guard.cjs'],
   },
   js.configs.recommended,
   ...tseslint.configs.recommended,

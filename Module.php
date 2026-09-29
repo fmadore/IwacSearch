@@ -197,7 +197,10 @@ class Module extends AbstractModule
      * Separate from injectSvelteAssets (which ships the full search app only
      * on SearchController routes): the header search box lives in the theme
      * chrome on every page, so its typeahead must load site-wide. The bundle
-     * is framework-free and small (~34 KB raw / ~13 KB gzipped); it no-ops
+     * is framework-free and small — its gzipped budget, and the rule that it
+     * never carries the app's string table, are asserted by
+     * scripts/check-bundle-size.js rather than restated here (this comment
+     * said "~34 KB raw / ~13 KB gzipped" while it was 25 / 8.8). It no-ops
      * harmlessly if the active theme has no [data-iwac-header-search] form.
      *
      * Keep it that way: it imports `runSuggest()` rather than TypesenseClient

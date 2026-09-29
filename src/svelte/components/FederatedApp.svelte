@@ -463,7 +463,7 @@
   .iwac-fed {
     display: flex;
     flex-direction: column;
-    gap: var(--space-md, 1rem);
+    gap: var(--space-4, 1rem);
     color: var(--ink, #13161c);
   }
 
@@ -485,7 +485,7 @@
    * per-collection tab, both of which are one click away.
    */
   .iwac-fed__cap {
-    margin: var(--space-md, 1rem) 0 0;
+    margin: var(--space-4, 1rem) 0 0;
     color: var(--muted, #66696e);
     font-size: var(--text-sm, 0.9375rem);
     text-align: center;
@@ -495,8 +495,8 @@
   .iwac-fed__tabs {
     display: flex;
     flex-wrap: wrap;
-    gap: var(--space-xs, 0.25rem);
-    padding-block-end: var(--space-sm, 0.5rem);
+    gap: var(--space-1, 0.25rem);
+    padding-block-end: var(--space-2, 0.5rem);
     border-bottom: 1px solid var(--border-light, #e2e5e8);
   }
   /*
@@ -550,7 +550,7 @@
   .iwac-fed__union {
     display: flex;
     flex-direction: column;
-    gap: var(--space-md, 1rem);
+    gap: var(--space-4, 1rem);
     min-width: 0;
   }
   .iwac-fed__union-list {
@@ -578,8 +578,8 @@
     display: flex;
     align-items: baseline;
     flex-wrap: wrap;
-    gap: var(--space-xs, 0.25rem) var(--space-md, 1rem);
-    padding-block-end: var(--space-sm, 0.5rem);
+    gap: var(--space-1, 0.25rem) var(--space-4, 1rem);
+    padding-block-end: var(--space-2, 0.5rem);
     border-block-end: 1px solid var(--border-light, #e2e5e8);
   }
   .iwac-fed__semantic-banner .iwac-fed__semantic-btn {
@@ -588,7 +588,7 @@
   .iwac-fed__semantic-btn {
     display: inline-flex;
     align-items: center;
-    gap: var(--space-xs, 0.25rem);
+    gap: var(--space-1, 0.25rem);
     padding: 0.4rem 0.75rem;
     /* The IWAC theme paints every <button>; the resets keep this an outline. */
     border: 1px solid var(--border, #ced1d6) !important;
@@ -618,9 +618,9 @@
     background: color-mix(in oklab, var(--error, #c9222b) 12%, var(--surface, #fdfcfb));
     border: 1px solid color-mix(in oklab, var(--error, #c9222b) 35%, transparent);
     border-radius: var(--radius-md, 0.5rem);
-    padding: var(--space-md, 1rem);
+    padding: var(--space-4, 1rem);
     display: flex;
     flex-direction: column;
-    gap: var(--space-xs, 0.25rem);
+    gap: var(--space-1, 0.25rem);
   }
 </style>

@@ -311,13 +311,13 @@
   .iwac-daterange {
     display: flex;
     flex-direction: column;
-    gap: var(--space-sm, 0.5rem);
+    gap: var(--space-2, 0.5rem);
   }
   .iwac-daterange__header {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: var(--space-sm, 0.5rem);
+    gap: var(--space-2, 0.5rem);
     color: var(--ink-strong, #05070c);
   }
   .iwac-daterange__label {
@@ -345,7 +345,7 @@
     font-weight: 500;
     cursor: pointer;
     padding: 0;
-    margin-inline-start: var(--space-sm, 0.5rem);
+    margin-inline-start: var(--space-2, 0.5rem);
   }
   .iwac-daterange__reset:hover {
     text-decoration: underline;
