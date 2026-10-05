@@ -533,17 +533,26 @@
     color: var(--white, #fff) !important;
     font-weight: 600;
   }
-  .iwac-fed__tab--empty:not(.iwac-fed__tab--active) {
-    opacity: 0.55;
+  /*
+   * Quiet tabs step down by colour, never by opacity: an empty tab is still
+   * clickable, so its text owes 4.5:1, and ink at 0.55 opacity made 4.0:1.
+   * --muted is the token built to clear that bar on --surface.
+   */
+  .iwac-fed__tab--empty:not(.iwac-fed__tab--active):not(:hover) {
+    color: var(--muted, #66696e) !important;
   }
   .iwac-fed__tab:focus-visible {
     outline: var(--focus-outline, 2px solid #ce4115) !important;
     outline-offset: 2px;
   }
+  /*
+   * No opacity here either: white on the active tab's --primary clears AA at
+   * 4.78:1 with nothing to spare, and 0.85 opacity took the count to 3.87:1.
+   * The smaller step is the de-emphasis.
+   */
   .iwac-fed__tab-count {
     font-variant-numeric: tabular-nums;
     font-size: var(--text-xs, 0.8125rem);
-    opacity: 0.85;
   }
 
   /* Union "All" tab — a lean merged list (ResultItem rows + pagination). */
