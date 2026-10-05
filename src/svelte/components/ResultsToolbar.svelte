@@ -294,7 +294,7 @@
       height: 1.25rem;
       padding: 0 0.375rem;
       background: var(--primary, #ce4115);
-      color: var(--white, #fff);
+      color: var(--ink-on-primary, #fff);
       border-radius: var(--radius-full, 9999px);
       font-size: var(--text-xs, 0.8125rem);
       font-weight: 600;

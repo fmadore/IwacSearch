@@ -119,7 +119,7 @@
   }
   .iwac-empty__clear:hover {
     background: var(--primary, #ce4115);
-    color: var(--white, #fff);
+    color: var(--ink-on-primary, #fff);
     box-shadow: none;
     transform: none;
   }

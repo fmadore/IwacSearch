@@ -530,7 +530,7 @@
   .iwac-fed__tab--active:hover {
     background: var(--primary, #ce4115) !important;
     border-color: var(--primary, #ce4115) !important;
-    color: var(--white, #fff) !important;
+    color: var(--ink-on-primary, #fff) !important;
     font-weight: 600;
   }
   /*
@@ -546,9 +546,10 @@
     outline-offset: 2px;
   }
   /*
-   * No opacity here either: white on the active tab's --primary clears AA at
-   * 4.78:1 with nothing to spare, and 0.85 opacity took the count to 3.87:1.
-   * The smaller step is the de-emphasis.
+   * No opacity here either: the active tab's --ink-on-primary clears AA on
+   * --primary with little to spare (4.78:1 light, 6.10:1 dark), and 0.85
+   * opacity took the light count to 3.87:1. The smaller step is the
+   * de-emphasis.
    */
   .iwac-fed__tab-count {
     font-variant-numeric: tabular-nums;
