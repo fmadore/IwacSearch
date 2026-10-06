@@ -91,7 +91,6 @@ updates:
           # patterns each got its own weekly PR, defeating the grouping.
           - 'guzzlehttp/*'
           - 'php-http/*'
-          - 'http-interop/*'
         update-types:
           - 'minor'
           - 'patch'
