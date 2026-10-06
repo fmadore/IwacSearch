@@ -248,6 +248,8 @@ final class InitialResponseRenderer
 
         // Two attempts max: the retry drops `stopwords` from every
         // sub-search, so a stopword error cannot recur on the second pass.
+        // Every pass returns and only the first may `continue`, so the loop
+        // never falls through — PHPStan reports a missing return if it can.
         for ($attempt = 0; $attempt < 2; $attempt++) {
             $canRetry = $attempt === 0 && $this->usesStopwords($body);
 
@@ -296,7 +298,6 @@ final class InitialResponseRenderer
             }
             return $out;
         }
-        return $none;
     }
 
     /**
