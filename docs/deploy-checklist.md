@@ -1,5 +1,13 @@
 # Deployment and acceptance checklist — 3.19.0
 
+## 3.21.1 additions
+
+Dependencies only: no schema change, no reindex, no module upgrade step.
+
+- [ ] **Deploy together with IwacVisualizations 1.75.2.** Both now load MapLibre GL 6.12.0 from the same jsDelivr files with the same SRI hashes. Shipping one without the other works, but then a page that has both maps downloads two copies of MapLibre.
+- [ ] Open the Map view on the entity index (`/s/westafrica/page/index`, Map toggle) and confirm clusters render; in devtools, `maplibregl.getVersion()` reads `6.12.0`, and the three jsDelivr requests carry `integrity`.
+- [ ] **Typesense transport is Guzzle 8** (from 7; `php-http/guzzle7-adapter` and `http-interop/http-factory-guzzle` are gone from `vendor/`). Confirm a search returns results, and that the maintenance page shows the live aliases and the generation list — both are read through the new client. CI's Omeka 4.2.1 + Typesense 30.2 job already exercises it end to end.
+
 ## 3.21.0 additions
 
 **Schema `iwac_v9` — a full reindex is required.** The index now carries all
@@ -11,7 +19,7 @@ builds `iwac_v9` and swaps `iwac_current` to it as usual.
 - [ ] Spot-check one article annotated by all five: the document carries `gemma_4_31b_it_polarite_ss` and `qwen3_8_27b_polarite_ss` beside `gpt_5_6_luna_polarite_ss`. The sidebar is unchanged — GPT-5.6 Luna remains the one surfaced trio.
 
 - [ ] **Content-Security-Policy, if one is enforced:** the Map view now loads MapLibre 6, which is ES-module only and boots its worker from a `blob:` URL — `worker-src` must allow `blob:` (and `script-src` must allow `https://cdn.jsdelivr.net`, as before). IwacVisualizations has needed the same since its MapLibre 6 move, so a site serving both is already configured.
-- [ ] Open the Map view on the entity index (e.g. `/s/westafrica/browse/…` with the Map toggle) and confirm clusters render; in devtools, `maplibregl.getVersion()` reads `6.12.0`, and the three jsDelivr requests carry `integrity`.
+- [ ] Open the Map view on the entity index (e.g. `/s/westafrica/browse/…` with the Map toggle) and confirm clusters render; in devtools, `maplibregl.getVersion()` reads `6.11.2`, and the three jsDelivr requests carry `integrity`.
 - [ ] Confirm the header typeahead still suggests on a non-search page (its bundle was slimmed from ~25 KB to ~16 KB).
 - [ ] On `/search`, walk the result states once — a query, a zero-result misspelling (the "Did you mean" chips), a query that only matches semantically (the opt-in and its banner), and the Filters drawer on a phone. `App.svelte` was split into a fetch module and three components; a mocked-backend render of these states was pixel-identical before and after, but it has not been seen against the live index.
 - [ ] On `/search/everything` in **dark** mode, the active tab (All / Content / Entities), the Filters count badge and the empty state's clear button on hover read dark ink on orange. That ink is the theme's `--ink-on-primary`, defined from the IWAC-theme release after 2.22.0; on 2.22.0 or older those three fall back to white, as before (3.23:1 in dark). Light mode is unchanged, and the active tab's count is no longer dimmed (3.87:1 → 4.78:1).
