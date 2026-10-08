@@ -279,7 +279,7 @@
           <div class="iwac-card__metrics">
             {#if cardData.frequency != null}
               <span class="iwac-card__mentions">
-                <span class="iwac-card__mentions-n">{cardData.frequency.toLocaleString()}</span>
+                <span class="iwac-card__mentions-n">{cardData.frequencyLabel}</span>
                 <span class="iwac-card__mentions-label">{cardData.mentionsWord}</span>
               </span>
             {/if}

@@ -39,7 +39,7 @@
 
   const { fetchDocs, query, found }: Props = $props();
 
-  const { locale, t } = useI18n();
+  const { locale, t, formatNumber } = useI18n();
   const menuId = nextExportMenuId();
 
   let open = $state(false);
@@ -117,7 +117,7 @@
       {/each}
       {#if found > EXPORT_MAX_HITS}
         <p class="iwac-export__hint">
-          {t('export_limit', { n: EXPORT_MAX_HITS.toLocaleString() })}
+          {t('export_limit', { n: formatNumber(EXPORT_MAX_HITS) })}
         </p>
       {/if}
       {#if error}

@@ -32,7 +32,7 @@
   }
 
   const { docs, loading }: Props = $props();
-  const { t } = useI18n();
+  const { t, tp, formatNumber } = useI18n();
 
   let container: HTMLDivElement | null = $state(null);
   let map: MapLibreMapLike | null = null;
@@ -219,9 +219,7 @@
             if (!f || !lib || !map) return;
             const props = f.properties;
             const esc = escapeHtml;
-            const mentions = t(props.frequency === 1 ? 'mention_one' : 'mention_other', {
-              n: props.frequency,
-            });
+            const mentions = tp('mention', props.frequency);
             const title = props.url
               ? `<a href="${esc(props.url)}">${esc(props.title)}</a>`
               : esc(props.title);
@@ -303,7 +301,7 @@
       <p class="iwac-map__status">{t('map_empty')}</p>
     {:else if isCapped}
       <p class="iwac-map__status iwac-map__status--note">
-        {t('map_capped', { n: MAP_MAX_HITS })}
+        {t('map_capped', { n: formatNumber(MAP_MAX_HITS) })}
       </p>
     {/if}
   {/if}

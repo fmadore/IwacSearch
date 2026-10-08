@@ -11,7 +11,7 @@
  * mid-flight response can't produce a claim that is about to be replaced.
  */
 import type { IwacSearchResponse } from './types';
-import type { Translate } from './i18n';
+import type { I18n } from './i18n';
 
 export interface AnnouncementInput {
   response: IwacSearchResponse | null;
@@ -23,24 +23,28 @@ export interface AnnouncementInput {
   totalPages: number;
 }
 
-export function resultAnnouncement(input: AnnouncementInput, t: Translate): string {
+/**
+ * Plurals come from the locale's rules (`tp`), never from `found === 1` —
+ * French says "0 résultat" — and every count is formatted for the PAGE's
+ * locale, so the region reads the same figure the strip shows.
+ */
+export function resultAnnouncement(
+  input: AnnouncementInput,
+  i18n: Pick<I18n, 't' | 'tp' | 'formatNumber'>,
+): string {
   const { response, semanticHidden, semanticOnly, page, totalPages } = input;
+  const { t, tp, formatNumber } = i18n;
   if (!response) return '';
-  const n = response.found.toLocaleString();
-  const one = response.found === 1;
-  if (semanticHidden) {
-    return t(one ? 'announce_semantic_one' : 'announce_semantic_other', { n });
-  }
-  if (response.found === 0) return t('announce_no_results');
+  const found = response.found;
+  if (semanticHidden) return tp('announce_semantic', found);
+  if (found === 0) return t('announce_no_results');
   // Opted in to the near-neighbour set: it is rendered, so it is announced —
   // but as what it is. Reading "100 results found" over the set the banner
   // and the count line both just qualified would put the fabrication back in
   // the only channel that had never carried it.
-  const count = semanticOnly
-    ? t(one ? 'announce_semantic_shown_one' : 'announce_semantic_shown_other', { n })
-    : t(one ? 'announce_results_one' : 'announce_results_other', { n });
+  const count = semanticOnly ? tp('announce_semantic_shown', found) : tp('announce_results', found);
   // The page is only worth saying when there is more than one of them.
   return totalPages > 1
-    ? `${count} ${t('announce_page', { p: page.toLocaleString(), total: totalPages.toLocaleString() })}`
+    ? `${count} ${t('announce_page', { p: formatNumber(page), total: formatNumber(totalPages) })}`
     : count;
 }

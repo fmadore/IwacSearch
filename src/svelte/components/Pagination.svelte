@@ -62,7 +62,7 @@
 
   const { currentPage, totalPages, onPageChange, perPage, onPerPageChange }: Props = $props();
 
-  const { t } = useI18n();
+  const { t, formatNumber } = useI18n();
   // Unique per mount: several search blocks can share one page, and a
   // duplicated `for`/`id` pair points every label at the first control.
   const uid = $props.id();
@@ -134,10 +134,10 @@
               class="iwac-pager__page"
               class:is-current={it === currentPage}
               aria-current={it === currentPage ? 'page' : undefined}
-              aria-label={t('page_n', { n: it })}
+              aria-label={t('page_n', { n: formatNumber(it) })}
               onclick={() => go(it)}
             >
-              {it}
+              {formatNumber(it)}
             </button>
           {/if}
         </li>
@@ -171,7 +171,9 @@
             placeholder={String(currentPage)}
             bind:value={jumpValue}
           />
-          <span class="iwac-pager__jump-total">{t('jump_of_total', { total: totalPages })}</span>
+          <span class="iwac-pager__jump-total"
+            >{t('jump_of_total', { total: formatNumber(totalPages) })}</span
+          >
           <button type="submit" class="iwac-pager__jump-go">{t('jump_go')}</button>
         </form>
       {/if}

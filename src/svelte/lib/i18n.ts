@@ -35,6 +35,25 @@ export function normalizeCard(value: unknown): CardKind {
 /** Translator bound to a locale — `t('clear_all')`, `t('page_n', {n: 3})`. */
 export type Translate = (key: string, vars?: Record<string, string | number>) => string;
 
+/**
+ * Plural-aware translator: `tp('result', 1284)` → "1 284 résultats".
+ *
+ * Picks `${base}_${category}` by the locale's Intl.PluralRules — never by
+ * `count === 1`, because French files 0 under "one" ("0 résultat") where
+ * English files it under "other", and French also has a "many" category
+ * (1 000 000). A category the table does not spell out falls back to
+ * `${base}_other`. `{n}` is filled with the count through
+ * {@link formatNumber} unless `vars` supplies its own `n`.
+ */
+export type TranslatePlural = (
+  base: string,
+  count: number,
+  vars?: Record<string, string | number>,
+) => string;
+
+/** Number formatter bound to a locale — see {@link formatNumber}. */
+export type FormatNumber = (value: number, options?: Intl.NumberFormatOptions) => string;
+
 // ── String tables ─────────────────────────────────────────────────────
 // Keys are snake_case. `{name}` placeholders are filled by translate().
 
@@ -86,8 +105,10 @@ const STRINGS: Record<Locale, Record<string, string>> = {
     clear_filter: 'Effacer le filtre',
     no_values: 'Aucune valeur pour ce filtre.',
     match_count: '{shown} sur {total}',
-    facet_search_count: '{n} résultat(s)',
-    n_active: '{n} actif(s)',
+    facet_search_count_one: '{n} résultat',
+    facet_search_count_other: '{n} résultats',
+    n_active_one: '{n} actif',
+    n_active_other: '{n} actifs',
     source: 'Source',
     untitled: '[Sans titre #{id}]',
     results_empty_list: 'Aucune correspondance. Essayez un autre mot ou retirez un filtre.',
@@ -126,7 +147,7 @@ const STRINGS: Record<Locale, Record<string, string>> = {
     did_you_mean: 'Vouliez-vous dire :',
     // Semantic fallback: a query the keyword leg didn't match at all. The
     // vector leg's top-k is offered, never asserted (see lib/semanticFallback.ts).
-    show_semantic_one: 'Afficher 1 document sémantiquement proche',
+    show_semantic_one: 'Afficher {n} document sémantiquement proche',
     show_semantic_other: 'Afficher {n} documents sémantiquement proches',
     semantic_only_banner:
       'Aucune correspondance exacte pour « {q} » — voici des documents sémantiquement proches.',
@@ -164,15 +185,15 @@ const STRINGS: Record<Locale, Record<string, string>> = {
     results_heading: 'Résultats',
     // Polite announcements for the persistent live region. Kept to one short
     // sentence: this is read aloud after every settled search.
-    announce_results_one: '1 résultat trouvé.',
+    announce_results_one: '{n} résultat trouvé.',
     announce_results_other: '{n} résultats trouvés.',
     announce_no_results: 'Aucun résultat.',
     announce_page: 'Page {p} sur {total}.',
     announce_semantic_one:
-      'Aucune correspondance exacte. 1 document sémantiquement proche peut être affiché.',
+      'Aucune correspondance exacte. {n} document sémantiquement proche peut être affiché.',
     announce_semantic_other:
       'Aucune correspondance exacte. {n} documents sémantiquement proches peuvent être affichés.',
-    announce_semantic_shown_one: 'Affichage de 1 document sémantiquement proche.',
+    announce_semantic_shown_one: 'Affichage de {n} document sémantiquement proche.',
     announce_semantic_shown_other: 'Affichage de {n} documents sémantiquement proches.',
   },
   en: {
@@ -222,8 +243,10 @@ const STRINGS: Record<Locale, Record<string, string>> = {
     clear_filter: 'Clear filter',
     no_values: 'No values for this filter.',
     match_count: '{shown} of {total}',
-    facet_search_count: '{n} result(s)',
-    n_active: '{n} active',
+    facet_search_count_one: '{n} result',
+    facet_search_count_other: '{n} results',
+    n_active_one: '{n} active',
+    n_active_other: '{n} active',
     source: 'Source',
     untitled: '[Untitled #{id}]',
     results_empty_list: 'No matches. Try a different word or remove a filter.',
@@ -260,7 +283,7 @@ const STRINGS: Record<Locale, Record<string, string>> = {
     copy_link: 'Copy link',
     link_copied: 'Link copied!',
     did_you_mean: 'Did you mean:',
-    show_semantic_one: 'Show 1 semantically related item',
+    show_semantic_one: 'Show {n} semantically related item',
     show_semantic_other: 'Show {n} semantically related items',
     semantic_only_banner: 'No exact matches for “{q}” — showing semantically related items.',
     hide_semantic: 'Hide these results',
@@ -290,13 +313,13 @@ const STRINGS: Record<Locale, Record<string, string>> = {
     view_source: 'View the source',
     skip_to_results: 'Skip to results',
     results_heading: 'Results',
-    announce_results_one: '1 result found.',
+    announce_results_one: '{n} result found.',
     announce_results_other: '{n} results found.',
     announce_no_results: 'No results.',
     announce_page: 'Page {p} of {total}.',
-    announce_semantic_one: 'No exact matches. 1 semantically related item can be shown.',
+    announce_semantic_one: 'No exact matches. {n} semantically related item can be shown.',
     announce_semantic_other: 'No exact matches. {n} semantically related items can be shown.',
-    announce_semantic_shown_one: 'Showing 1 semantically related item.',
+    announce_semantic_shown_one: 'Showing {n} semantically related item.',
     announce_semantic_shown_other: 'Showing {n} semantically related items.',
   },
 };
@@ -352,6 +375,86 @@ export function translate(
   const table = STRINGS[locale] ?? STRINGS.fr;
   const s = table[key] ?? STRINGS.fr[key];
   return s === undefined ? translateSuggest(locale, key, vars) : interpolate(s, vars);
+}
+
+// ── Numbers and plurals ───────────────────────────────────────────────
+
+/** U+202F NARROW NO-BREAK SPACE — the thousands separator in every locale. */
+const GROUP_SEPARATOR = ' ';
+
+/** Default (no-options) formatters, one per locale — built once, used per facet row. */
+const DEFAULT_NUMBER_FORMATS: Partial<Record<Locale, Intl.NumberFormat>> = {};
+
+/**
+ * Format a number for display in the PAGE's locale — never the browser's.
+ *
+ * The rule is the stack's (IWAC-theme docs/DESIGN-SYSTEM.md): thousands are
+ * grouped with U+202F in every locale, "never a comma a French reader would
+ * take for a decimal mark"; the decimal mark follows the page (fr `12,5`, en
+ * `12.5`); a French percent keeps its U+202F before the sign (`12,5 %`), an
+ * English one does not (`12.5%`). Before this, the module called a bare
+ * `toLocaleString()` in thirteen places, so the English site read "20,944" on
+ * one surface and "6 879" on the next, and the French site in an English
+ * browser read "1,234 résultats".
+ *
+ * Years are not numbers in this sense — render them as plain strings, or
+ * 1989 becomes "1 989".
+ */
+export function formatNumber(
+  value: number,
+  locale: Locale,
+  options?: Intl.NumberFormatOptions,
+): string {
+  const format = options
+    ? new Intl.NumberFormat(locale, options)
+    : (DEFAULT_NUMBER_FORMATS[locale] ??= new Intl.NumberFormat(locale));
+  // A one-space literal is French typography's space before `%` (or a compact
+  // suffix): engines disagree on NBSP vs U+202F there, so it is normalised too.
+  return format
+    .formatToParts(value)
+    .map((part) =>
+      part.type === 'group' || (part.type === 'literal' && /^\s$/u.test(part.value))
+        ? GROUP_SEPARATOR
+        : part.value,
+    )
+    .join('');
+}
+
+const PLURAL_RULES: Partial<Record<Locale, Intl.PluralRules>> = {};
+
+/** Does `locale`'s (or the French fallback) table define `key`? */
+function hasString(locale: Locale, key: string): boolean {
+  return (STRINGS[locale] ?? STRINGS.fr)[key] !== undefined || STRINGS.fr[key] !== undefined;
+}
+
+/**
+ * The key for `count` under `base`: `${base}_${category}` when the tables
+ * define that category, else `${base}_other`. See {@link TranslatePlural}.
+ */
+export function pluralKey(locale: Locale, base: string, count: number): string {
+  const rules = (PLURAL_RULES[locale] ??= new Intl.PluralRules(locale));
+  const key = `${base}_${rules.select(count)}`;
+  return hasString(locale, key) ? key : `${base}_other`;
+}
+
+/** Everything a surface needs to speak one locale. */
+export interface I18n {
+  locale: Locale;
+  t: Translate;
+  tp: TranslatePlural;
+  formatNumber: FormatNumber;
+}
+
+/** Bind the translators and the number formatter to one locale. Pure — no context. */
+export function createI18n(locale: Locale): I18n {
+  const formatFor: FormatNumber = (value, options) => formatNumber(value, locale, options);
+  return {
+    locale,
+    t: (key, vars) => translate(locale, key, vars),
+    tp: (base, count, vars) =>
+      translate(locale, pluralKey(locale, base, count), { n: formatFor(count), ...vars }),
+    formatNumber: formatFor,
+  };
 }
 
 // ── Facet field labels ─────────────────────────────────────────────────
@@ -746,28 +849,20 @@ function humanise(field: string): string {
 
 // ── Svelte context plumbing ────────────────────────────────────────────
 
-interface I18nContext {
-  locale: Locale;
+interface I18nContext extends I18n {
   card: CardKind;
-  t: Translate;
 }
 
 const I18N_KEY = Symbol('iwac-i18n');
 
 /** Call once in App.svelte during init. */
 export function provideI18n(locale: Locale, card: CardKind = 'content'): I18nContext {
-  const ctx: I18nContext = { locale, card, t: (key, vars) => translate(locale, key, vars) };
+  const ctx: I18nContext = { ...createI18n(locale), card };
   setContext(I18N_KEY, ctx);
   return ctx;
 }
 
 /** Read in any descendant component during init. Falls back to French content. */
 export function useI18n(): I18nContext {
-  return (
-    getContext<I18nContext | undefined>(I18N_KEY) ?? {
-      locale: 'fr',
-      card: 'content',
-      t: (key, vars) => translate('fr', key, vars),
-    }
-  );
+  return getContext<I18nContext | undefined>(I18N_KEY) ?? { ...createI18n('fr'), card: 'content' };
 }

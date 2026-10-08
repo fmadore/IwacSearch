@@ -47,7 +47,7 @@
     semantic = false,
   }: Props = $props();
 
-  const { locale, card, t } = useI18n();
+  const { locale, card, t, tp, formatNumber } = useI18n();
 
   const chips = $derived(deriveActiveChips({ selected: filters, yearRange, locale, t }));
   const hasChips = $derived(chips.length > 0);
@@ -100,18 +100,12 @@
 <section class="iwac-summary" aria-label={t('active_filters')} bind:this={stripEl} tabindex="-1">
   <div class="iwac-summary__line">
     <span class="iwac-summary__count-block">
-      <span class="iwac-summary__count">{found.toLocaleString()}</span>
+      <span class="iwac-summary__count">{formatNumber(found)}</span>
       <span class="iwac-summary__count-label">
-        {semantic
-          ? found === 1
-            ? t('semantic_result_one')
-            : t('semantic_result_other')
-          : found === 1
-            ? t('result_one')
-            : t('result_other')}
+        {semantic ? tp('semantic_result', found) : tp('result', found)}
       </span>
       {#if searchTimeMs > 0}
-        <span class="iwac-summary__timing">· {searchTimeMs} ms</span>
+        <span class="iwac-summary__timing">· {formatNumber(searchTimeMs)} ms</span>
       {/if}
       {#if hasChips}<span class="iwac-summary__in">{t('results_in_scope')}</span>{/if}
     </span>

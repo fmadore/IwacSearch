@@ -47,7 +47,7 @@
   const locale: Locale = normalizeLocale(bootstrap.locale);
   // Context for the union tab's ResultItems (they detect entity docs by
   // shape); the per-tab Apps provide their own context on top.
-  const { t } = provideI18n(locale, 'content');
+  const { t, tp, formatNumber } = provideI18n(locale, 'content');
 
   // svelte-ignore state_referenced_locally
   const tabs = bootstrap.tabs;
@@ -308,10 +308,10 @@
       // bound — close enough for a badge).
       const values = tabs.map((tab) => counts[tab.id]);
       if (values.some((v) => typeof v !== 'number')) return '';
-      return values.reduce((a: number, b) => a + (b as number), 0).toLocaleString();
+      return formatNumber(values.reduce((a: number, b) => a + (b as number), 0));
     }
     const n = counts[id];
-    return typeof n === 'number' ? n.toLocaleString() : '';
+    return typeof n === 'number' ? formatNumber(n) : '';
   }
 
   /**
@@ -401,9 +401,7 @@
                   class="iwac-fed__semantic-btn"
                   onclick={() => (unionSemanticOptInFor = query)}
                 >
-                  {t(unionResponse.found === 1 ? 'show_semantic_one' : 'show_semantic_other', {
-                    n: unionResponse.found.toLocaleString(),
-                  })}
+                  {tp('show_semantic', unionResponse.found)}
                 </button>
               </div>
             {/if}
@@ -422,11 +420,11 @@
               </div>
             {/if}
             <p class="iwac-fed__union-count">
-              {unionResponse.found.toLocaleString()}
+              {formatNumber(unionResponse.found)}
               {#if unionSemanticOnly}
-                {t(unionResponse.found === 1 ? 'semantic_result_one' : 'semantic_result_other')}
+                {tp('semantic_result', unionResponse.found)}
               {:else}
-                {t(unionResponse.found === 1 ? 'result_one' : 'result_other')}
+                {tp('result', unionResponse.found)}
               {/if}
             </p>
             <ol class="iwac-fed__union-list">

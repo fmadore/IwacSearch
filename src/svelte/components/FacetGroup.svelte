@@ -7,10 +7,6 @@
     return `iwac-facet-body-${++groupUid}`;
   }
 
-  function formatCount(n: number): string {
-    return new Intl.NumberFormat().format(n);
-  }
-
   /**
    * Lowercase, strip diacritics — so typing "cote" matches "Côte d'Ivoire"
    * and "moham" matches "Mohammed" / "Mahomet" in any IWAC locale. We do
@@ -111,7 +107,7 @@
     sortMode = 'count',
   }: Props = $props();
 
-  const { locale, t } = useI18n();
+  const { locale, t, tp, formatNumber } = useI18n();
 
   const heading = $derived(label ?? facetLabel(field, locale));
   const selectedSet = $derived(new Set(selected));
@@ -223,7 +219,7 @@
   >
     <span class="iwac-facet__label">{heading}</span>
     {#if selected.length > 0}
-      <span class="iwac-facet__active-count" aria-label={t('n_active', { n: selected.length })}>
+      <span class="iwac-facet__active-count" aria-label={tp('n_active', selected.length)}>
         {selected.length}
       </span>
     {/if}
@@ -276,7 +272,7 @@
                       onToggle(field, fc.value, (e.currentTarget as HTMLInputElement).checked)}
                   />
                   <span class="iwac-facet__value">{facetValueLabel(field, fc.value, locale)}</span>
-                  <span class="iwac-facet__count">{formatCount(fc.count)}</span>
+                  <span class="iwac-facet__count">{formatNumber(fc.count)}</span>
                 </label>
               </li>
             {/each}
@@ -286,16 +282,19 @@
         {#if usingServerResults}
           {#if visible.length > 0}
             <p class="iwac-facet__hint" aria-live="polite">
-              {searchLoading ? t('searching') : t('facet_search_count', { n: visible.length })}
+              {searchLoading ? t('searching') : tp('facet_search_count', visible.length)}
             </p>
           {/if}
         {:else if isFiltering}
           <p class="iwac-facet__hint">
-            {t('match_count', { shown: localFiltered.length, total: counts.length })}
+            {t('match_count', {
+              shown: formatNumber(localFiltered.length),
+              total: formatNumber(counts.length),
+            })}
           </p>
         {:else if hiddenCount > 0}
           <button type="button" class="iwac-facet__more" onclick={() => (expanded = !expanded)}>
-            {expanded ? t('show_less') : t('show_more', { n: hiddenCount })}
+            {expanded ? t('show_less') : t('show_more', { n: formatNumber(hiddenCount) })}
           </button>
         {/if}
       {/if}

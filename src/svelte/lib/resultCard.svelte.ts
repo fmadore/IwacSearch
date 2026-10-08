@@ -30,7 +30,7 @@ export { CHIP_ICONS, type CardChip, type MatchedIn } from './resultCard';
  *   returned values track the component's props).
  */
 export function createResultCard(input: () => { hit: IwacHit; hideCountry: boolean }) {
-  const { locale, card, t } = useI18n();
+  const { locale, card, t, tp, formatNumber } = useI18n();
 
   const doc = $derived(input().hit.document);
   const hideCountry = $derived(input().hideCountry);
@@ -90,16 +90,14 @@ export function createResultCard(input: () => { hit: IwacHit; hideCountry: boole
       : null,
   );
   const frequency = $derived(typeof doc.frequency === 'number' ? doc.frequency : null);
-  const mentionsLabel = $derived(
-    frequency != null
-      ? t(frequency === 1 ? 'mention_one' : 'mention_other', { n: frequency.toLocaleString() })
-      : '',
-  );
+  const mentionsLabel = $derived(frequency != null ? tp('mention', frequency) : '');
+  /** The count as the display numeral beside {@link mentionsWord}. */
+  const frequencyLabel = $derived(frequency != null ? formatNumber(frequency) : '');
   // The bare "mention(s)" word for the split number + label metric (the
   // number is rendered separately as a display numeral). t() with an empty n
   // yields " mentions" → trimmed.
   const mentionsWord = $derived(
-    frequency != null ? t(frequency === 1 ? 'mention_one' : 'mention_other', { n: '' }).trim() : '',
+    frequency != null ? tp('mention', frequency, { n: '' }).trim() : '',
   );
   // "dont 8 signés" — the authorship breakdown of the mention count. Shown
   // only when the entity actually signed something, so the overwhelming
@@ -109,13 +107,7 @@ export function createResultCard(input: () => { hit: IwacHit; hideCountry: boole
   const authoredCount = $derived(
     typeof doc.authored_count === 'number' && doc.authored_count > 0 ? doc.authored_count : null,
   );
-  const authoredLabel = $derived(
-    authoredCount != null
-      ? t(authoredCount === 1 ? 'authored_one' : 'authored_other', {
-          n: authoredCount.toLocaleString(),
-        })
-      : '',
-  );
+  const authoredLabel = $derived(authoredCount != null ? tp('authored', authoredCount) : '');
   // Per-year mentions series for the sparkline. Empty until the entity
   // collection is rebuilt with mentions_by_year_s, so the card simply omits
   // the sparkline when the data isn't there.
@@ -210,6 +202,9 @@ export function createResultCard(input: () => { hit: IwacHit; hideCountry: boole
     },
     get frequency() {
       return frequency;
+    },
+    get frequencyLabel() {
+      return frequencyLabel;
     },
     get mentionsLabel() {
       return mentionsLabel;

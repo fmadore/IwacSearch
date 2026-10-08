@@ -47,7 +47,7 @@
 
   const { value, min = 1960, max = 2025, distribution = [], onChange }: Props = $props();
 
-  const { t } = useI18n();
+  const { t, formatNumber } = useI18n();
 
   // svelte-ignore state_referenced_locally
   let fromHandle = $state(value?.from ?? min);
@@ -255,7 +255,7 @@
           class="iwac-daterange__bar"
           class:iwac-daterange__bar--in={bar.year >= fromHandle && bar.year <= toHandle}
           style="height: {bar.h}%;"
-          title="{bar.year} · {bar.count}"
+          title="{bar.year} · {formatNumber(bar.count)}"
         ></span>
       {/each}
     </div>

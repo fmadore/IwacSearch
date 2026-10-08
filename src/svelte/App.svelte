@@ -83,7 +83,8 @@
   // once at init from the server-detected bootstrap locale (defaults to
   // French). svelte-ignore: bootstrap is a prop, not reactive state.
   // svelte-ignore state_referenced_locally
-  const { t, card } = provideI18n(normalizeLocale(bootstrap.locale), normalizeCard(bootstrap.card));
+  const i18n = provideI18n(normalizeLocale(bootstrap.locale), normalizeCard(bootstrap.card));
+  const { t, card } = i18n;
 
   const isStandalone = $derived(String(bootstrap.block_id) === 'standalone');
 
@@ -458,7 +459,7 @@
 
   /** What a screen reader should be told once the surface settles (lib/announce.ts). */
   const announcement = $derived(
-    resultAnnouncement({ response, semanticHidden, semanticOnly, page, totalPages }, t),
+    resultAnnouncement({ response, semanticHidden, semanticOnly, page, totalPages }, i18n),
   );
 
   /**

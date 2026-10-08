@@ -170,6 +170,19 @@ describe('formatDate', () => {
 
   it('prints the full date for dated content', () => {
     expect(formatDate('en', epoch, 1989)).toBe('November 4, 1989');
+    expect(formatDate('fr', epoch, 1989)).toBe('4 novembre 1989');
+  });
+
+  /**
+   * The suite runs in America/New_York (vitest.config.ts), where this epoch is
+   * the evening of the 3rd. The stored value is a date, not an instant, so the
+   * card must print the 4th wherever the reader is — the same day the
+   * export's getUTC* parts write.
+   */
+  it('prints the stored calendar day, not the reader-local one', () => {
+    expect(new Date(epoch * 1000).getDate()).toBe(3);
+    expect(formatDate('en', epoch, 1989)).toContain('4');
+    expect(formatDate('en', epoch, 1989)).not.toContain('3,');
   });
 
   /** References carry a Jan-1 epoch: printing a day would invent precision. */

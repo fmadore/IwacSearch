@@ -133,6 +133,12 @@ export function buildCitation(d: IwacDoc, citeEds: string): string {
  * Display date. `yearOnly` is for references, whose pub_date is commonly a
  * Jan-1 epoch — printing "1 janvier 2016" would invent a precision the
  * source never had.
+ *
+ * Always formatted in UTC. The indexer stores a date-only `dcterms:date` as
+ * MIDNIGHT UTC (AbstractMapper::dateToEpoch), so formatting it in the
+ * reader's zone printed the day before for everyone west of Greenwich —
+ * 1989-11-04 read "3 novembre 1989" in New York — while the exports, which
+ * read the getUTC* parts, said the 4th. The card and the export now agree.
  */
 export function formatDate(
   locale: Locale,
@@ -146,6 +152,7 @@ export function formatDate(
         year: 'numeric',
         month: 'long',
         day: 'numeric',
+        timeZone: 'UTC',
       });
     } catch {
       // Invalid locale — fall through to the year.

@@ -17,10 +17,22 @@ import { svelte } from '@sveltejs/vite-plugin-svelte';
  * the value here is in the codecs, query builders and state rules that
  * silently changed behaviour before (see A1 in docs/module-review-2026-07.md).
  */
+/**
+ * The suite runs WEST OF GREENWICH, on purpose. Publication dates are stored
+ * as midnight UTC, and a formatter that forgets `timeZone: 'UTC'` prints the
+ * day before for every reader in the Americas — a bug this suite could not
+ * see while it ran in UTC (CI) or Central Europe (the maintainer's machine),
+ * where midnight UTC is still the same calendar day. Set here, before any
+ * worker starts, because Node binds a worker's zone from the environment it
+ * inherits; tests/client/timezone.test.ts fails if a platform ignores it.
+ */
+process.env.TZ = 'America/New_York';
+
 export default defineConfig({
   plugins: [svelte()],
   test: {
     environment: 'jsdom',
+    env: { TZ: 'America/New_York' },
     include: ['tests/client/**/*.test.ts'],
     // The bundles live in asset/dist; nothing there is a test.
     exclude: ['node_modules/**', 'asset/**', 'vendor/**'],

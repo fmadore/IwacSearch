@@ -24,7 +24,7 @@
   }
 
   const { found, query, shown, onShow, onHide }: Props = $props();
-  const { t } = useI18n();
+  const { t, tp } = useI18n();
 </script>
 
 {#if shown}
@@ -37,9 +37,7 @@
 {:else}
   <div class="iwac-search__semantic-offer">
     <button type="button" class="iwac-search__semantic-btn" onclick={onShow}>
-      {t(found === 1 ? 'show_semantic_one' : 'show_semantic_other', {
-        n: found.toLocaleString(),
-      })}
+      {tp('show_semantic', found)}
     </button>
   </div>
 {/if}
