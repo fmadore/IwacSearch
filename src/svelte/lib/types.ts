@@ -269,8 +269,12 @@ export interface IwacFacetCount {
 export interface IwacFacet {
   field_name: string;
   counts: IwacFacetCount[];
-  /** Number of facet values found across all matches (not just the top N shown). */
-  stats?: { total_values?: number };
+  /**
+   * Number of facet values found across all matches (not just the top N
+   * shown), and — for a NUMERIC facet like pub_year — the smallest and largest
+   * value over the whole matched set, whatever max_facet_values truncated.
+   */
+  stats?: { total_values?: number; min?: number; max?: number };
 }
 
 export interface IwacSearchResponse {
@@ -312,6 +316,18 @@ export interface YearRange {
 export interface YearBucket {
   year: number;
   count: number;
+}
+
+/**
+ * The first and last `pub_year` a surface can show at all — its locked scope,
+ * before any query, facet or year filter. Read from the facet stats of a
+ * counts-only sub-search (TypesenseClient.search's `withYearSpan`), so the
+ * year slider spans the data rather than a hardcoded 1960–2025 that cut off
+ * the 1912 references and every 2026 article.
+ */
+export interface YearSpan {
+  min: number;
+  max: number;
 }
 
 /**

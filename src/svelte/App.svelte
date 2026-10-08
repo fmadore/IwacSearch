@@ -12,6 +12,8 @@
   import { createFilterDrawer } from './lib/filterDrawer.svelte';
   import { createFilterState } from './lib/filterState.svelte';
   import { createTypeahead, dismissOnOutsidePointer, slashShortcut } from './lib/typeahead.svelte';
+  import { clampYearRange, resolveYearBounds, sameYearRange } from './lib/yearBounds';
+  import { untrack } from 'svelte';
   import SearchInput from './components/SearchInput.svelte';
   import SuggestDropdown from './components/SuggestDropdown.svelte';
   import ResultsList from './components/ResultsList.svelte';
@@ -202,6 +204,16 @@
   const response = $derived(results.response);
 
   /**
+   * The year slider's bounds: the surface's data span once it has arrived
+   * (asked for with the first histogram), else a fallback wide enough for
+   * every bar on screen and both ends of the requested range. Shared by the
+   * slider and every year chip, so they name the same ends.
+   */
+  const yearBounds = $derived(
+    resolveYearBounds(results.yearSpan, results.yearDistribution, yearRange),
+  );
+
+  /**
    * The query the reader explicitly asked to see semantic near-matches for.
    *
    * Content surfaces search hybrid, so a query the keyword leg doesn't match
@@ -235,6 +247,24 @@
   // stays a session hint (the recipient's own results re-derive it, or don't).
   // svelte-ignore state_referenced_locally
   const urlSync = createUrlSync(urlPrefix, defaultSort);
+
+  // A year range outside the data (a hand-edited `?date.from=2050`, an old
+  // link from before the corpus grew) is brought inside the span once the
+  // span is known — the slider can only show what is on its track, and the
+  // address should say what the slider says. A correction, not a navigation:
+  // written with replaceState, and the page is left alone.
+  $effect(() => {
+    const span = results.yearSpan;
+    const range = yearRange;
+    if (!span || !range) return;
+    const clamped = clampYearRange(range, span);
+    if (sameYearRange(clamped, range)) return;
+    urlSync.replaceNext();
+    filterState.hydrate(
+      untrack(() => filters),
+      clamped,
+    );
+  });
   $effect(() => {
     if (!syncUrl) return;
     urlSync.push({
@@ -503,6 +533,7 @@
     {facets}
     selected={filters}
     {yearRange}
+    {yearBounds}
     distribution={results.yearDistribution}
     onToggle={(f, v, c) => filterState.toggle(f, v, c)}
     onClearAll={() => filterState.clearAll()}
@@ -662,6 +693,7 @@
               {searchTimeMs}
               {filters}
               {yearRange}
+              {yearBounds}
               sort={effectiveSort}
               onRemoveChip={(c) => filterState.removeChip(c)}
               onClearAll={() => filterState.clearAll()}
@@ -689,6 +721,7 @@
           <ResultsEmpty
             {filters}
             {yearRange}
+            {yearBounds}
             {query}
             onRemoveChip={(c) => filterState.removeChip(c)}
             onClearAll={() => filterState.clearAll()}

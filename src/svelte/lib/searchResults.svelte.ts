@@ -27,6 +27,8 @@
  *  - A semantic-only response is a dead query wearing a full result list:
  *    it stays out of the recent-searches history and gets the spelling
  *    suggestions, exactly like a zero-hit one.
+ *  - The year SPAN (the slider's bounds) is asked for alongside the histogram
+ *    until one arrives, then never again: it depends on the locked scope only.
  */
 import type {
   ActiveFilters,
@@ -35,6 +37,7 @@ import type {
   IwacSearchResponse,
   YearBucket,
   YearRange,
+  YearSpan,
 } from './types';
 import type { TypesenseClient } from './typesense';
 import { SeqGuard, isAbortError } from './transport';
@@ -85,6 +88,8 @@ export interface SearchResults {
   readonly error: string | null;
   readonly yearDistribution: YearBucket[];
   readonly yearsUnavailable: boolean;
+  /** The surface's pub_year span, once known (lib/yearBounds.ts turns it into bounds). */
+  readonly yearSpan: YearSpan | null;
   readonly didYouMean: EntitySuggestion[];
   /** Re-run the current search (the histogram-unavailable notice's button). */
   retry(): void;
@@ -115,6 +120,7 @@ export function createSearchResults(
   // facet panel.
   let yearDistribution = $state<YearBucket[]>([]);
   let yearsUnavailable = $state(false);
+  let yearSpan = $state<YearSpan | null>(null);
   let retryVersion = $state(0);
   // "Did you mean" candidates for a zero-result query: entity suggestions
   // fetched through the typo-tolerant suggest path (facet_query + the alias
@@ -128,6 +134,15 @@ export function createSearchResults(
   let lastHistogramKey: string | null = null;
   // The first run skips its fetch when a snapshot was adopted.
   let skipNextFetch = opts.initialResponse != null;
+  // Mirrors `yearSpan !== null` without the reactive read: run() asking the
+  // $state would re-run the calling effect — a second search — when it lands.
+  let spanKnown = false;
+
+  function adoptSpan(span: YearSpan | undefined): void {
+    if (!span || spanKnown) return;
+    spanKnown = true;
+    yearSpan = span;
+  }
 
   /**
    * Zero-result recovery: ask the typo-tolerant suggest path for entities
@@ -157,11 +172,12 @@ export function createSearchResults(
       if (!opts.withHistogram) return undefined;
       let cancelled = false;
       client
-        .yearDistribution(q)
-        .then((years) => {
+        .yearDistribution(q, !spanKnown)
+        .then(({ years, span }) => {
           if (cancelled) return;
           yearDistribution = years;
           lastHistogramKey = histogramKeyOf(q, filters);
+          adoptSpan(span);
         })
         .catch(() => {
           if (!cancelled) yearsUnavailable = true;
@@ -187,8 +203,10 @@ export function createSearchResults(
         perPage: perPage ?? undefined,
         facetBy: facetUnion(opts.prominentFacets, filters),
         withYearDistribution: needHistogram,
+        withYearSpan: opts.withHistogram && !spanKnown,
       })
-      .then(({ response: r, years, yearsUnavailable: unavailable }) => {
+      .then(({ response: r, years, yearsUnavailable: unavailable, span }) => {
+        adoptSpan(span);
         if (needHistogram) {
           yearsUnavailable = unavailable ?? false;
           if (unavailable) yearDistribution = [];
@@ -252,6 +270,9 @@ export function createSearchResults(
     },
     get yearsUnavailable() {
       return yearsUnavailable;
+    },
+    get yearSpan() {
+      return yearSpan;
     },
     get didYouMean() {
       return didYouMean;

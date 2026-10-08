@@ -27,9 +27,16 @@ The canonical list is `SearchDefaults::CONTENT_PROMINENT_FACETS` — the
 standalone route, the federated Content tab, and the page-block default
 all read it, so they cannot drift.
 
-Plus a dedicated `pub_year` two-handle range slider (1960..2025 default
-bounds) — kept separate from the categorical list because numeric range
-semantics don't fit the checkbox UI.
+Plus a dedicated `pub_year` two-handle range slider — kept separate from the
+categorical list because numeric range semantics don't fit the checkbox UI.
+Its bounds are the surface's data span: the first request that carries the
+histogram also carries a counts-only sub-search over the locked scope alone,
+whose `pub_year` facet stats give the first and last year (1912–2026 over the
+whole corpus in October 2026, 1961–2026 on the primary sources). Until that
+arrives the slider spans 1960 to the current year, widened to cover every
+histogram bar and the requested range. A `date.from` / `date.to` outside the
+span is clamped onto it with `replaceState` once the span is known
+(`src/svelte/lib/yearBounds.ts`).
 
 Block admins can override the visible facets per-instance via the page
 block form. The full catalog of facetable fields lives in

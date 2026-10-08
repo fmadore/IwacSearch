@@ -7,7 +7,7 @@ import {
   type SearchResultsOptions,
 } from '../../src/svelte/lib/searchResults.svelte';
 import { facetUnion } from '../../src/svelte/lib/queryBuilders';
-import type { SearchOutcome } from '../../src/svelte/lib/typesense';
+import type { HistogramOutcome, SearchOutcome } from '../../src/svelte/lib/typesense';
 import type { IwacDoc, IwacSearchResponse, YearBucket } from '../../src/svelte/lib/types';
 
 /**
@@ -57,7 +57,7 @@ function fakeClient(outcome: () => Promise<SearchOutcome> = async () => ({ respo
       void args;
       return outcome();
     }),
-    yearDistribution: vi.fn(async () => YEARS),
+    yearDistribution: vi.fn(async (): Promise<HistogramOutcome> => ({ years: YEARS })),
     suggest: vi.fn(async () => ({
       articles: [],
       entities: [1, 2, 3, 4, 5].map((i) => ({ field: 'topics_ss', value: `T${i}`, count: i })),
@@ -138,7 +138,7 @@ describe('createSearchResults', () => {
     expect(results.response).toEqual(snapshot);
     results.run(req());
     expect(client.search).not.toHaveBeenCalled();
-    expect(client.yearDistribution).toHaveBeenCalledWith('');
+    expect(client.yearDistribution).toHaveBeenCalledWith('', true);
     await flush();
     expect(results.yearDistribution).toEqual(YEARS);
     // The next change searches — and the histogram it fetched is reused.
@@ -156,12 +156,12 @@ describe('createSearchResults', () => {
 
   it('drops a histogram that lands after the effect was torn down', async () => {
     const client = fakeClient();
-    const d = deferred<YearBucket[]>();
+    const d = deferred<HistogramOutcome>();
     client.yearDistribution.mockReturnValueOnce(d.promise);
     const { results } = make(client, { initialResponse: res(4) });
     const cleanup = results.run(req());
     cleanup?.();
-    d.resolve(YEARS);
+    d.resolve({ years: YEARS });
     await flush();
     expect(results.yearDistribution).toEqual([]);
   });
@@ -194,6 +194,50 @@ describe('createSearchResults', () => {
     await flush();
     results.run(req({ q: 'coran', filters: { country_ss: ['Niger'] } }));
     expect(asked()).toBe(true);
+  });
+
+  /**
+   * The slider's bounds come from the data (S-02): the span rides with the
+   * first request that carries a histogram, and stops being asked for once
+   * it has arrived — it depends on the locked scope alone.
+   */
+  it('asks for the year span until one arrives, then never again', async () => {
+    const client = fakeClient(async () => ({ response: res(3), years: YEARS }));
+    const { results } = make(client);
+    const askedSpan = () => client.search.mock.calls.at(-1)![0].withYearSpan;
+
+    results.run(req({ q: 'islam' }));
+    expect(askedSpan()).toBe(true);
+    await flush();
+    // No span in that answer (a failed sub-search): ask again next time.
+    expect(results.yearSpan).toBeNull();
+    client.search.mockImplementationOnce(async () => ({
+      response: res(3),
+      span: { min: 1912, max: 2026 },
+    }));
+    results.run(req({ q: 'islam', page: 2 }));
+    expect(askedSpan()).toBe(true);
+    await flush();
+    expect(results.yearSpan).toEqual({ min: 1912, max: 2026 });
+    results.run(req({ q: 'coran' }));
+    expect(askedSpan()).toBe(false);
+  });
+
+  it('takes the span from the histogram request when the snapshot was adopted', async () => {
+    const client = fakeClient();
+    client.yearDistribution.mockResolvedValueOnce({ years: YEARS, span: { min: 1961, max: 2026 } });
+    const { results } = make(client, { initialResponse: res(4) });
+    results.run(req());
+    await flush();
+    expect(results.yearSpan).toEqual({ min: 1961, max: 2026 });
+    results.run(req({ page: 2 }));
+    expect(client.search.mock.calls[0][0].withYearSpan).toBe(false);
+  });
+
+  it('never asks for a span on a surface without a slider', () => {
+    const client = fakeClient();
+    make(client, { withHistogram: false }).results.run(req({ q: 'islam' }));
+    expect(client.search.mock.calls[0][0].withYearSpan).toBe(false);
   });
 
   it('never asks for a histogram on a surface without one', () => {

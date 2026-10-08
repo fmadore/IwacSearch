@@ -14,10 +14,7 @@
 
 import type { ActiveFilters, YearRange } from './types';
 import { facetLabel, facetValueLabel, type Locale, type Translate } from './i18n';
-
-/** Year-slider bounds — kept here so every chip surface shows the same span. */
-export const DEFAULT_YEAR_MIN = 1960;
-export const DEFAULT_YEAR_MAX = 2025;
+import { DEFAULT_YEAR_MIN, defaultYearMax, type YearBounds } from './yearBounds';
 
 export interface ActiveFilterChip {
   /** Schema facet field (e.g. `country_ss`), or `pub_year` for the year chip. */
@@ -40,8 +37,12 @@ export function deriveActiveChips(args: {
   yearRange: YearRange | null;
   locale: Locale;
   t: Translate;
-  yearMin?: number;
-  yearMax?: number;
+  /**
+   * The slider's bounds (lib/yearBounds.ts), so an open-ended range reads
+   * "1990 – 2026" with the same end the slider shows. Every chip surface gets
+   * the same object from App.
+   */
+  yearBounds?: YearBounds;
   /** Rare per-field label overrides (same map FacetPanel accepts). */
   labels?: Record<string, string>;
 }): ActiveFilterChip[] {
@@ -50,8 +51,7 @@ export function deriveActiveChips(args: {
     yearRange,
     locale,
     t,
-    yearMin = DEFAULT_YEAR_MIN,
-    yearMax = DEFAULT_YEAR_MAX,
+    yearBounds = { min: DEFAULT_YEAR_MIN, max: defaultYearMax() },
     labels,
   } = args;
 
@@ -68,8 +68,8 @@ export function deriveActiveChips(args: {
     }
   }
   if (yearRange) {
-    const lo = yearRange.from ?? yearMin;
-    const hi = yearRange.to ?? yearMax;
+    const lo = yearRange.from ?? yearBounds.min;
+    const hi = yearRange.to ?? yearBounds.max;
     const range = `${lo} – ${hi}`;
     chips.push({
       field: 'pub_year',

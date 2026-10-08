@@ -14,21 +14,26 @@
   import type { ActiveFilters, YearRange } from '../lib/types';
   import { useI18n } from '../lib/i18n';
   import { deriveActiveChips, type ActiveFilterChip } from '../lib/filterChips';
+  import type { YearBounds } from '../lib/yearBounds';
   import FilterChip from './FilterChip.svelte';
 
   interface Props {
     filters: ActiveFilters;
     yearRange: YearRange | null;
+    /** The slider's bounds, so an open-ended year chip names the same ends. */
+    yearBounds?: YearBounds;
     query: string;
     onRemoveChip: (chip: ActiveFilterChip) => void;
     onClearAll: () => void;
   }
 
-  const { filters, yearRange, query, onRemoveChip, onClearAll }: Props = $props();
+  const { filters, yearRange, yearBounds, query, onRemoveChip, onClearAll }: Props = $props();
 
   const { locale, t } = useI18n();
 
-  const chips = $derived(deriveActiveChips({ selected: filters, yearRange, locale, t }));
+  const chips = $derived(
+    deriveActiveChips({ selected: filters, yearRange, yearBounds, locale, t }),
+  );
   const hasChips = $derived(chips.length > 0);
   const hasQuery = $derived(query.trim() !== '');
 </script>

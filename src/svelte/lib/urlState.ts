@@ -352,12 +352,23 @@ export function snapshotState(state: SearchState): SearchState {
 export function createUrlSync(
   prefix = '',
   defaultSort: string = FALLBACK_SORT,
-): { push(next: SearchState): void } {
+): { push(next: SearchState): void; replaceNext(): void } {
   let prev: SearchState | null = null;
+  let replace = false;
   return {
     push(next: SearchState): void {
-      syncToUrl(next, prev, prefix, defaultSort);
+      // A null `prev` is what makes syncToUrl replace rather than push.
+      syncToUrl(next, replace ? null : prev, prefix, defaultSort);
+      replace = false;
       prev = snapshotState(next);
+    },
+    /**
+     * Write the next change with replaceState: a CORRECTION of the address
+     * (a year range clamped to the data, say) rather than a step the reader
+     * took, which Back should not have to walk through.
+     */
+    replaceNext(): void {
+      replace = true;
     },
   };
 }

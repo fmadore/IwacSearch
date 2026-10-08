@@ -8,6 +8,7 @@ import type {
   SuggestResult,
   YearBucket,
   YearRange,
+  YearSpan,
 } from './types';
 import {
   CONTENT_HIGHLIGHT_FALLBACK,
@@ -117,12 +118,40 @@ function isStopwordError(message: string): boolean {
   return /stopword set/i.test(message);
 }
 
-/** What search() returns: the page of results, plus the histogram if asked. */
+/** What search() returns: the page of results, plus the histogram and span if asked. */
 export interface SearchOutcome {
   response: IwacSearchResponse;
   /** Present only when `withYearDistribution` was requested. */
   years?: YearBucket[];
   yearsUnavailable?: boolean;
+  /** Present only when `withYearSpan` was requested and the sub-search answered. */
+  span?: YearSpan;
+}
+
+/** What yearDistribution() returns: the bars, plus the span if asked. */
+export interface HistogramOutcome {
+  years: YearBucket[];
+  span?: YearSpan;
+}
+
+/**
+ * The surface's year span out of a counts-only pub_year sub-search: Typesense
+ * reports min/max over the WHOLE matched set in a numeric facet's stats, so
+ * the sub-search needs only one facet value. Undefined (never an error) when
+ * the sub-search failed or the scope holds no dated document — the slider
+ * then keeps its fallback bounds.
+ */
+function readYearSpan(result: unknown): YearSpan | undefined {
+  const typed = result as IwacSearchResponse | TypesensePerSearchError | undefined;
+  if (!typed || perSearchError(typed)) return undefined;
+  const stats = (typed as IwacSearchResponse).facet_counts?.find(
+    (f) => f.field_name === 'pub_year',
+  )?.stats;
+  const min = stats?.min;
+  const max = stats?.max;
+  return typeof min === 'number' && typeof max === 'number' && min <= max
+    ? { min: Math.trunc(min), max: Math.trunc(max) }
+    : undefined;
 }
 
 /**
@@ -222,6 +251,12 @@ export class TypesenseClient {
      * is going to look at.
      */
     withYearDistribution?: boolean;
+    /**
+     * Also read the surface's year SPAN (see {@link YearSpan}), as one more
+     * counts-only sub-search scoped by the locked filters alone. Asked until a
+     * span has been received; it never changes for the life of a mount.
+     */
+    withYearSpan?: boolean;
   }): Promise<SearchOutcome> {
     const ctx = await this.resolveContext(args);
     const { collection, q, filterBy, isBrowse, exact } = ctx;
@@ -312,8 +347,12 @@ export class TypesenseClient {
               },
             ]
           : []),
+        ...(args.withYearSpan ? [this.yearSpanSearch(ctx, includeStopwords)] : []),
       ],
     });
+    // Sub-search positions: [main, histogram?, keyword count?, span?].
+    const keywordIndex = args.withYearDistribution ? 2 : 1;
+    const spanIndex = keywordIndex + (isBrowse ? 0 : 1);
 
     return this.withStopwordRetry({
       label: 'Search',
@@ -328,18 +367,20 @@ export class TypesenseClient {
         lastEnvelope = raw as MultiSearchEnvelope;
       },
     }).then((response) => {
-      if (!isBrowse)
-        response.keyword_found = readCount(
-          lastEnvelope?.results?.[args.withYearDistribution ? 2 : 1],
-        );
+      if (!isBrowse) response.keyword_found = readCount(lastEnvelope?.results?.[keywordIndex]);
+      const outcome: SearchOutcome = { response };
+      if (args.withYearSpan) {
+        const span = readYearSpan(lastEnvelope?.results?.[spanIndex]);
+        if (span) outcome.span = span;
+      }
       if (args.withYearDistribution) {
         try {
-          return { response, years: readYearBuckets(lastEnvelope?.results?.[1]) };
+          outcome.years = readYearBuckets(lastEnvelope?.results?.[1]);
         } catch {
-          return { response, yearsUnavailable: true };
+          outcome.yearsUnavailable = true;
         }
       }
-      return { response };
+      return outcome;
     });
   }
 
@@ -347,9 +388,9 @@ export class TypesenseClient {
    * Year histogram on its own: the same query and filters as the live
    * results, WITHOUT the selected year range (the chart always shows the
    * full span). Used when a full-mode surface adopts the SSR snapshot, which
-   * carries the first page but no histogram.
+   * carries the first page but no histogram — and, with `withSpan`, no span.
    */
-  async yearDistribution(q: string): Promise<YearBucket[]> {
+  async yearDistribution(q: string, withSpan = false): Promise<HistogramOutcome> {
     const ctx = await this.resolveContext({ q, includeYearRange: false });
     const json = await this.auxiliary(
       ctx.key.key,
@@ -364,11 +405,30 @@ export class TypesenseClient {
             per_page: 0,
             enable_analytics: false,
           },
+          ...(withSpan ? [this.yearSpanSearch(ctx, stopwords)] : []),
         ],
       }),
       'Histogram',
     );
-    return readYearBuckets(json.results?.[0]);
+    const span = withSpan ? readYearSpan(json.results?.[1]) : undefined;
+    return { years: readYearBuckets(json.results?.[0]), ...(span ? { span } : {}) };
+  }
+
+  /**
+   * The span sub-search: browse (`*`), the surface's LOCKED filters only — no
+   * query, no facet selection, no year range — and one facet value, because
+   * only the stats are read (see readYearSpan).
+   */
+  private yearSpanSearch(ctx: SearchContext, stopwords: boolean): object {
+    return {
+      collection: ctx.collection,
+      ...queryPolicy('*', ctx.queryBy, stopwords),
+      filter_by: combineFilters(this.bootstrap.locked_filters) || undefined,
+      facet_by: 'pub_year',
+      max_facet_values: 1,
+      per_page: 0,
+      enable_analytics: false,
+    };
   }
 
   /**

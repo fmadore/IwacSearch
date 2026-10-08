@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { YearBucket, YearRange } from '../lib/types';
   import { useI18n } from '../lib/i18n';
+  import { DEFAULT_YEAR_MIN, defaultYearMax } from '../lib/yearBounds';
 
   /**
    * Single-track dual-thumb year range slider.
@@ -27,9 +28,11 @@
    *   - The thumbs cannot cross — moving the From thumb past the To
    *     thumb (or vice versa) clamps to the other thumb's position.
    *
-   * Defaults: 1960..2025. Override via min/max props if the corpus
-   * warrants. Dirty/clean: a fully-default range is treated as "no
-   * filter" — the parent receives null so URL state stays clean.
+   * Bounds: min/max come from the surface's data span (App resolves them,
+   * see lib/yearBounds.ts) — the defaults here are only a fallback for a
+   * caller that passes none. Dirty/clean: a range covering the full span is
+   * treated as "no filter" — the parent receives null so URL state stays
+   * clean.
    */
 
   interface Props {
@@ -45,19 +48,31 @@
     onChange: (next: YearRange | null) => void;
   }
 
-  const { value, min = 1960, max = 2025, distribution = [], onChange }: Props = $props();
+  const {
+    value,
+    min = DEFAULT_YEAR_MIN,
+    max = defaultYearMax(),
+    distribution = [],
+    onChange,
+  }: Props = $props();
 
   const { t, formatNumber } = useI18n();
 
-  // svelte-ignore state_referenced_locally
-  let fromHandle = $state(value?.from ?? min);
-  // svelte-ignore state_referenced_locally
-  let toHandle = $state(value?.to ?? max);
+  /** A year on the track — a value outside the bounds never draws a thumb off its end. */
+  function onTrack(year: number): number {
+    return Math.min(max, Math.max(min, year));
+  }
 
-  // Re-sync when the parent pushes a new value (URL pop, "clear all").
+  // svelte-ignore state_referenced_locally
+  let fromHandle = $state(onTrack(value?.from ?? min));
+  // svelte-ignore state_referenced_locally
+  let toHandle = $state(onTrack(value?.to ?? max));
+
+  // Re-sync when the parent pushes a new value (URL pop, "clear all") or the
+  // bounds arrive from the data.
   $effect(() => {
-    fromHandle = value?.from ?? min;
-    toHandle = value?.to ?? max;
+    fromHandle = onTrack(value?.from ?? min);
+    toHandle = onTrack(value?.to ?? max);
   });
 
   /** Reference to the track div for hit-testing pointer coords. */
@@ -186,8 +201,11 @@
     emit();
   }
 
-  const fillStart = $derived(((fromHandle - min) / (max - min)) * 100);
-  const fillEnd = $derived(((toHandle - min) / (max - min)) * 100);
+  // Max(1, …): a scope whose documents all share one year has a zero-width
+  // span, and 0/0 would put both thumbs at NaN%.
+  const trackSpan = $derived(Math.max(1, max - min));
+  const fillStart = $derived(((fromHandle - min) / trackSpan) * 100);
+  const fillEnd = $derived(((toHandle - min) / trackSpan) * 100);
   const isDirty = $derived(fromHandle !== min || toHandle !== max);
 
   /**

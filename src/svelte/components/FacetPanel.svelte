@@ -17,6 +17,7 @@
   } from '../lib/types';
   import { SENTIMENT_FIELDS, NUMERIC_FACET_FIELDS, useI18n } from '../lib/i18n';
   import { deriveActiveChips } from '../lib/filterChips';
+  import { DEFAULT_YEAR_MIN, defaultYearMax, type YearBounds } from '../lib/yearBounds';
   import FacetGroup from './FacetGroup.svelte';
   import DateRangeSlider from './DateRangeSlider.svelte';
   import FilterChip from './FilterChip.svelte';
@@ -55,9 +56,11 @@
     facets: IwacFacet[];
     selected: ActiveFilters;
     yearRange: YearRange | null;
-    /** Year slider bounds. Defaults are sane for the IWAC corpus. */
-    yearMin?: number;
-    yearMax?: number;
+    /**
+     * Year slider bounds — the surface's data span, resolved by App
+     * (lib/yearBounds.ts). The default is only the pre-span fallback.
+     */
+    yearBounds?: YearBounds;
     /** Per-year document counts, drawn as a mini histogram on the slider. */
     distribution?: YearBucket[];
     /** Schema field name → display label override (rare). */
@@ -78,8 +81,7 @@
     facets,
     selected,
     yearRange,
-    yearMin = 1960,
-    yearMax = 2025,
+    yearBounds = { min: DEFAULT_YEAR_MIN, max: defaultYearMax() },
     distribution = [],
     labels,
     onToggle,
@@ -94,7 +96,7 @@
   // Active-filter chips come from the shared deriveActiveChips() so the sidebar,
   // the result-summary strip and the empty state can never disagree about scope.
   const activeChips = $derived(
-    deriveActiveChips({ selected, yearRange, locale, t, yearMin, yearMax, labels }),
+    deriveActiveChips({ selected, yearRange, locale, t, yearBounds, labels }),
   );
 
   const hasActive = $derived(activeChips.length > 0);
@@ -159,8 +161,8 @@
   <section class="iwac-facets__section" aria-label={t('year')}>
     <DateRangeSlider
       value={yearRange}
-      min={yearMin}
-      max={yearMax}
+      min={yearBounds.min}
+      max={yearBounds.max}
       {distribution}
       onChange={onYearRangeChange}
     />

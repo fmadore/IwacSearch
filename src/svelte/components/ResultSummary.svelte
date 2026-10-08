@@ -17,6 +17,7 @@
   import type { ActiveFilters, YearRange } from '../lib/types';
   import { sortOptions, useI18n } from '../lib/i18n';
   import { deriveActiveChips, type ActiveFilterChip } from '../lib/filterChips';
+  import type { YearBounds } from '../lib/yearBounds';
   import FilterChip from './FilterChip.svelte';
 
   interface Props {
@@ -24,6 +25,8 @@
     searchTimeMs: number;
     filters: ActiveFilters;
     yearRange: YearRange | null;
+    /** The slider's bounds, so an open-ended year chip names the same ends. */
+    yearBounds?: YearBounds;
     sort: string;
     /** Remove one chip (the parent decides facet-toggle vs year-clear). */
     onRemoveChip: (chip: ActiveFilterChip) => void;
@@ -41,6 +44,7 @@
     searchTimeMs,
     filters,
     yearRange,
+    yearBounds,
     sort,
     onRemoveChip,
     onClearAll,
@@ -49,7 +53,9 @@
 
   const { locale, card, t, tp, formatNumber } = useI18n();
 
-  const chips = $derived(deriveActiveChips({ selected: filters, yearRange, locale, t }));
+  const chips = $derived(
+    deriveActiveChips({ selected: filters, yearRange, yearBounds, locale, t }),
+  );
   const hasChips = $derived(chips.length > 0);
 
   /**
