@@ -116,18 +116,48 @@
   let collapsed = $state(false); // user-collapsed (whole group)
   let filterText = $state('');
 
+  /**
+   * The row order the list had when focus entered it, or null when focus is
+   * elsewhere.
+   *
+   * Ticking a box re-sorts the group (selected values first), and the
+   * response that follows re-sorts it again by the new counts. Inside a keyed
+   * {#each}, Svelte MOVES the row's DOM node to its new place — and a moved
+   * node loses focus, so a keyboard reader's next Tab restarted at the top of
+   * the page. While focus is anywhere in the list the order is frozen: rows
+   * keep their places, a row that appears joins the end, and the re-sort
+   * happens when focus leaves the group, where nobody is standing on it.
+   */
+  let frozenOrder = $state<string[] | null>(null);
+
   // Sort: selected first (so toggling doesn't make a value vanish under
   // the "show more" fold), then by the chosen order (count desc, or
   // numeric ascending for scale facets like subjectivity). Shared by the
-  // loaded list and the server search results.
+  // loaded list and the server search results. Frozen while focused (above).
   function orderValues(list: IwacFacetCount[]): IwacFacetCount[] {
-    return [...list].sort((a, b) => {
+    const natural = [...list].sort((a, b) => {
       const aSel = selectedSet.has(a.value);
       const bSel = selectedSet.has(b.value);
       if (aSel !== bSel) return aSel ? -1 : 1;
       if (sortMode === 'value-asc') return Number(a.value) - Number(b.value);
       return b.count - a.count;
     });
+    if (!frozenOrder) return natural;
+    const place = new Map(frozenOrder.map((value, i) => [value, i]));
+    const rank = (fc: IwacFacetCount): number => place.get(fc.value) ?? Infinity;
+    // Array.prototype.sort is stable, so rows new since the freeze keep their
+    // natural order among themselves, after every row that was already there.
+    return natural.sort((a, b) => rank(a) - rank(b));
+  }
+
+  function freezeOrder(): void {
+    if (frozenOrder === null) frozenOrder = visible.map((fc) => fc.value);
+  }
+
+  function thawOrder(e: FocusEvent): void {
+    const next = e.relatedTarget;
+    if (next instanceof Node && (e.currentTarget as HTMLElement).contains(next)) return;
+    frozenOrder = null;
   }
 
   const sorted = $derived(orderValues(counts));
@@ -260,7 +290,12 @@
         {:else if visible.length === 0}
           <p class="iwac-facet__empty">{t('no_matches')}</p>
         {:else}
-          <ul class="iwac-facet__list" class:iwac-facet__list--bounded={listBounded}>
+          <ul
+            class="iwac-facet__list"
+            class:iwac-facet__list--bounded={listBounded}
+            onfocusin={freezeOrder}
+            onfocusout={thawOrder}
+          >
             {#each visible as fc (fc.value)}
               <li class="iwac-facet__item">
                 <label class="iwac-facet__option" class:is-selected={selectedSet.has(fc.value)}>
