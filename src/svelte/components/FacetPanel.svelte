@@ -252,7 +252,7 @@
     background: none;
     border: none;
     box-shadow: none;
-    color: var(--primary, #ce4115);
+    color: var(--primary-hover, #b03710);
     cursor: pointer;
     font-size: var(--text-xs, 0.8125rem);
     font-weight: 500;
@@ -321,7 +321,7 @@
     transition: color var(--transition-fast, 150ms cubic-bezier(0.25, 1, 0.5, 1));
   }
   .iwac-facets__group-heading:hover {
-    color: var(--primary, #ce4115);
+    color: var(--primary-hover, #b03710);
     background: none;
     box-shadow: none;
     transform: none;
@@ -334,7 +334,7 @@
     flex: 1;
   }
   .iwac-facets__group-count {
-    color: var(--primary, #ce4115);
+    color: var(--primary-hover, #b03710);
     font-size: var(--text-xs, 0.8125rem);
     font-weight: 700;
     font-variant-numeric: tabular-nums;

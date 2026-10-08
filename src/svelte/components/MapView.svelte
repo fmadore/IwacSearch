@@ -329,6 +329,30 @@
   .iwac-map__status--note {
     font-style: italic;
   }
+  /* MapLibre paints its popup white whatever the page's theme, and the dark
+     theme's lightened primary/muted inks measure under 3:1 on white. The
+     popup takes the page's own surface and ink instead, tip included. */
+  .iwac-map :global(.maplibregl-popup-content) {
+    background: var(--surface, #fdfcfb);
+    color: var(--ink, #13161c);
+  }
+  /* The tip is a border triangle: only the side facing the content is
+     coloured, and which side that is depends on the anchor. */
+  .iwac-map :global([class*='maplibregl-popup-anchor-top'] .maplibregl-popup-tip) {
+    border-bottom-color: var(--surface, #fdfcfb);
+  }
+  .iwac-map :global([class*='maplibregl-popup-anchor-bottom'] .maplibregl-popup-tip) {
+    border-top-color: var(--surface, #fdfcfb);
+  }
+  .iwac-map :global(.maplibregl-popup-anchor-left .maplibregl-popup-tip) {
+    border-right-color: var(--surface, #fdfcfb);
+  }
+  .iwac-map :global(.maplibregl-popup-anchor-right .maplibregl-popup-tip) {
+    border-left-color: var(--surface, #fdfcfb);
+  }
+  .iwac-map :global(.maplibregl-popup-close-button) {
+    color: var(--ink, #13161c);
+  }
   /* Popup body (rendered by MapLibre outside Svelte's scope). */
   .iwac-map :global(.iwac-map__popup) {
     display: flex;
@@ -337,7 +361,7 @@
     font-size: var(--text-sm, 0.9375rem);
   }
   .iwac-map :global(.iwac-map__popup a) {
-    color: var(--primary, #ce4115);
+    color: var(--primary-hover, #b03710);
   }
   .iwac-map :global(.iwac-map__popup span) {
     color: var(--muted, #66696e);

@@ -220,7 +220,7 @@
     border: none;
     box-shadow: none;
     padding: 0;
-    color: var(--primary, #ce4115);
+    color: var(--primary-hover, #b03710);
     cursor: pointer;
     font: inherit;
     font-size: var(--text-xs, 0.8125rem);

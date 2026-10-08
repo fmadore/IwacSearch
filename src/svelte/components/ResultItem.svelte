@@ -630,7 +630,7 @@
      own colour. No pill fill on every row. */
   .iwac-card__type--filter.is-active {
     background: transparent;
-    color: var(--primary, #ce4115);
+    color: var(--primary-hover, #b03710);
   }
   .iwac-card__type--filter:focus-visible {
     outline: var(--focus-outline, 2px solid #ce4115);
@@ -660,7 +660,7 @@
     text-decoration: none;
   }
   .iwac-card__title a:hover {
-    color: var(--primary, #ce4115);
+    color: var(--primary-hover, #b03710);
     text-decoration: underline;
     text-underline-offset: 2px;
   }
@@ -691,7 +691,7 @@
     transition: color var(--transition-fast, 150ms cubic-bezier(0.25, 1, 0.5, 1));
   }
   .iwac-card__author:hover {
-    color: var(--primary, #ce4115);
+    color: var(--primary-hover, #b03710);
     background: none;
     box-shadow: none;
     transform: none;
@@ -699,7 +699,7 @@
     text-underline-offset: 2px;
   }
   .iwac-card__author.is-active {
-    color: var(--primary, #ce4115);
+    color: var(--primary-hover, #b03710);
     font-weight: 600;
     text-decoration: underline;
     text-underline-offset: 2px;
@@ -905,7 +905,7 @@
   }
   .iwac-card__chip--filter:hover {
     background: transparent;
-    color: var(--primary, #ce4115);
+    color: var(--primary-hover, #b03710);
     text-decoration: underline;
     text-underline-offset: 2px;
     box-shadow: none;
@@ -913,7 +913,7 @@
   }
   .iwac-card__chip--filter.is-active {
     background: transparent;
-    color: var(--primary, #ce4115);
+    color: var(--primary-hover, #b03710);
     font-weight: 600;
     text-decoration: underline;
     text-underline-offset: 2px;
@@ -936,7 +936,7 @@
     text-decoration-style: dotted;
   }
   .iwac-card__chip--external:hover {
-    color: var(--primary, #ce4115);
+    color: var(--primary-hover, #b03710);
     text-decoration-style: solid;
   }
   .iwac-card__chip--external:focus-visible {

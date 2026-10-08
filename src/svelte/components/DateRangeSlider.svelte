@@ -353,12 +353,12 @@
     text-align: end;
   }
   .iwac-daterange__range--dirty {
-    color: var(--primary, #ce4115);
+    color: var(--primary-hover, #b03710);
   }
   .iwac-daterange__reset {
     background: none;
     border: none;
-    color: var(--primary, #ce4115);
+    color: var(--primary-hover, #b03710);
     font-size: var(--text-xs, 0.8125rem);
     font-weight: 500;
     cursor: pointer;

@@ -111,7 +111,7 @@
   .iwac-empty__clear {
     background: none;
     border: 1px solid var(--primary, #ce4115);
-    color: var(--primary, #ce4115);
+    color: var(--primary-hover, #b03710);
     border-radius: var(--radius-md, 0.5rem);
     padding: 0.4rem 0.75rem;
     box-shadow: none;
