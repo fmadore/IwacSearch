@@ -176,9 +176,18 @@
   border-radius: var(--radius-full, 9999px);
 }
 
+/* The status line sits after the listbox (a listbox may own only options),
+   inside the same panel. */
 .iwac-header-suggest__empty {
   padding: var(--space-2, 0.5rem) var(--space-4, 1rem);
   font-size: var(--text-xs, 0.8125rem);
   color: var(--muted, #66696e);
   border-top: 1px solid var(--border-light, #e2e5e8);
+}
+
+/* Between messages it draws nothing but stays in the accessibility tree, so
+   the next "No matches." is announced rather than arriving pre-populated. */
+.iwac-header-suggest__empty:empty {
+  padding: 0;
+  border-top: 0;
 }

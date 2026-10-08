@@ -64,7 +64,7 @@ declare global {
   }
 }
 
-interface HeaderConfig {
+export interface HeaderConfig {
   endpoints: { token: string; search: string };
   locale: Locale;
 }
@@ -107,11 +107,21 @@ function withParams(base: string, params: Record<string, string>): string {
   return url.toString();
 }
 
-class HeaderSearch {
+export class HeaderSearch {
   private readonly bootstrap: IwacBootstrap;
   private readonly locale: Locale;
   private readonly landing: string;
+  /** The positioned, visible dropdown — holds the listbox and its status line. */
+  private readonly panel: HTMLDivElement;
+  /** role=listbox: options only, so a screen reader can count and walk them. */
   private readonly listbox: HTMLDivElement;
+  /**
+   * "No matches." — a persistent polite region OUTSIDE the listbox. It used to
+   * be a role=status div appended among the options (a listbox may own only
+   * options), and re-created on every render, which a live region that
+   * arrives already populated never announces.
+   */
+  private readonly status: HTMLDivElement;
   private readonly host: HTMLElement;
 
   private rows: SuggestRow[] = [];
@@ -124,6 +134,8 @@ class HeaderSearch {
     private readonly form: HTMLFormElement,
     private readonly input: HTMLInputElement,
     cfg: HeaderConfig,
+    /** Every action here is a page load; injectable so the tests can watch it. */
+    private readonly navigate: (url: string) => void = (url) => window.location.assign(url),
   ) {
     this.bootstrap = buildBootstrap(cfg);
     this.locale = cfg.locale;
@@ -133,12 +145,18 @@ class HeaderSearch {
     this.landing = form.getAttribute('action') || '/search/everything';
 
     this.host = this.resolveHost();
+    this.panel = document.createElement('div');
+    this.panel.className = 'iwac-header-suggest';
     this.listbox = document.createElement('div');
-    this.listbox.className = 'iwac-header-suggest';
+    this.listbox.className = 'iwac-header-suggest__list';
     this.listbox.id = `iwac-header-suggest-${++uid}`;
     this.listbox.setAttribute('role', 'listbox');
     this.listbox.setAttribute('aria-label', translateSuggest(this.locale, 'suggestions'));
-    this.host.appendChild(this.listbox);
+    this.status = document.createElement('div');
+    this.status.className = 'iwac-header-suggest__empty';
+    this.status.setAttribute('role', 'status');
+    this.panel.append(this.listbox, this.status);
+    this.host.appendChild(this.panel);
 
     // ARIA combobox wiring on the existing input.
     input.setAttribute('role', 'combobox');
@@ -225,7 +243,7 @@ class HeaderSearch {
       const q = this.input.value.trim();
       if (q.length === 0) return; // let the empty form no-op
       e.preventDefault();
-      window.location.assign(withParams(this.landing, { q }));
+      this.navigate(withParams(this.landing, { q }));
     });
   }
 
@@ -271,13 +289,7 @@ class HeaderSearch {
     this.listbox.textContent = '';
     this.rows.forEach((row, i) => this.listbox.appendChild(this.renderRow(row, i, q)));
     const hasSuggestions = this.rows.some((r) => r.kind !== 'search');
-    if (!hasSuggestions) {
-      const empty = document.createElement('div');
-      empty.className = 'iwac-header-suggest__empty';
-      empty.setAttribute('role', 'status');
-      empty.textContent = translateSuggest(this.locale, 'no_matches');
-      this.listbox.appendChild(empty);
-    }
+    this.status.textContent = hasSuggestions ? '' : translateSuggest(this.locale, 'no_matches');
     this.renderHighlight();
     // Row content (and therefore the panel's width) just changed — re-clamp.
     if (this.isOpen) this.clampHorizontal();
@@ -288,6 +300,10 @@ class HeaderSearch {
       row.kind === 'article' ? document.createElement('a') : document.createElement('button');
     el.className = 'iwac-header-suggest__item';
     el.setAttribute('role', 'option');
+    // Addressable by aria-activedescendant, and never a Tab stop: focus stays
+    // in the input for the whole combobox, as the pattern requires.
+    el.id = `${this.listbox.id}-opt-${index}`;
+    el.tabIndex = -1;
     el.dataset.index = String(index);
     if (el instanceof HTMLButtonElement) el.type = 'button';
 
@@ -337,13 +353,26 @@ class HeaderSearch {
     return el;
   }
 
+  /**
+   * Paint the highlighted row and point the input's aria-activedescendant at
+   * it. Without the pointer, arrowing through the suggestions moved a visual
+   * highlight and told a screen reader nothing (WCAG 4.1.2) — on every page
+   * of the site, since this box is the masthead's.
+   */
   private renderHighlight(): void {
+    let activeId: string | null = null;
     const items = this.listbox.querySelectorAll<HTMLElement>('.iwac-header-suggest__item');
     items.forEach((el) => {
       const active = Number(el.dataset.index) === this.highlighted;
       el.classList.toggle('iwac-header-suggest__item--active', active);
       el.setAttribute('aria-selected', active ? 'true' : 'false');
+      if (active) activeId = el.id;
     });
+    if (this.isOpen && activeId) {
+      this.input.setAttribute('aria-activedescendant', activeId);
+    } else {
+      this.input.removeAttribute('aria-activedescendant');
+    }
   }
 
   private activate(row: SuggestRow): void {
@@ -353,19 +382,19 @@ class HeaderSearch {
     const action = actionOf(row);
     switch (action.type) {
       case 'navigate':
-        window.location.assign(action.url);
+        this.navigate(action.url);
         return;
       case 'pick-entity':
         // The landing page is the federated "search everything" surface,
         // which reads ?q (not the ?f.<field>= facet params standalone
         // /search hydrates). Search the entity's name as text so the click
         // lands on matching content plus the entity itself.
-        window.location.assign(withParams(this.landing, { q: action.value }));
+        this.navigate(withParams(this.landing, { q: action.value }));
         return;
       case 'run-search':
       case 'pick-query': {
         const q = action.query || this.input.value.trim();
-        if (q.length > 0) window.location.assign(withParams(this.landing, { q }));
+        if (q.length > 0) this.navigate(withParams(this.landing, { q }));
         return;
       }
     }
@@ -402,19 +431,22 @@ class HeaderSearch {
   private open(): void {
     if (this.isOpen) return;
     this.isOpen = true;
-    this.listbox.classList.add('iwac-header-suggest--open');
+    this.panel.classList.add('iwac-header-suggest--open');
     this.input.setAttribute('aria-expanded', 'true');
+    this.renderHighlight();
     this.clampHorizontal();
   }
 
   private close(): void {
     if (!this.isOpen) return;
     this.isOpen = false;
-    this.listbox.classList.remove('iwac-header-suggest--open');
+    this.panel.classList.remove('iwac-header-suggest--open');
     this.input.setAttribute('aria-expanded', 'false');
+    // A pointer at an option nobody can see would be read out as current.
+    this.input.removeAttribute('aria-activedescendant');
     // Drop the inline clamp so the next open re-measures from the CSS anchor.
-    this.listbox.style.left = '';
-    this.listbox.style.right = '';
+    this.panel.style.left = '';
+    this.panel.style.right = '';
   }
 
   /**
@@ -430,7 +462,7 @@ class HeaderSearch {
    * open animation's `transform: translateY`.
    */
   private clampHorizontal(): void {
-    const panel = this.listbox;
+    const panel = this.panel;
     // Re-measure from the CSS baseline every call: drop any prior nudge first.
     panel.style.left = '';
     panel.style.right = '';
@@ -458,7 +490,8 @@ class HeaderSearch {
   }
 }
 
-function init(): void {
+/** Enhance every header search form on the page (idempotent). Exported for the tests. */
+export function init(): void {
   const forms = document.querySelectorAll<HTMLFormElement>('form[data-iwac-header-search]');
   if (forms.length === 0) return;
   const cfg = readConfig();
