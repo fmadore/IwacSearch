@@ -106,6 +106,8 @@ IwacSearch/
 │   ├── check-i18n.js                           # CI gate: every locale table has the same keys in fr/en
 │   ├── check-bundle-size.js                    # build gate: gzipped budgets; no app strings in the header bundle
 │   ├── check-theme-tokens.js                   # CI gate: runs the theme's token guard over src/ + asset/css/
+│   ├── check-versions.js · bump-version.js     # version guard + its only writer (sites: lib/versions.js)
+│   ├── check-audit.js                          # CI gate: npm audit high+, minus lib/audit-exceptions.js
 │   └── theme-token-guard.cjs                   # SYNCED from IWAC-theme (npm run sync:tokens) — never edit here
 ├── view/
 │   ├── iwac-search/search/{index,everything}.phtml
@@ -120,7 +122,11 @@ IwacSearch/
 │       └── iwac-search-header.{js,css}         #   site-wide header typeahead
 ├── .github/
 │   ├── dependabot.yml                          # weekly grouped updates: npm + composer + actions
-│   └── workflows/ci.yml                        # lint + svelte-check + build + dist diff + PHP 8.2/8.4 lint
+│   └── workflows/
+│       ├── ci.yml                              # versions + audit + lint + svelte-check + vitest + build + dist diff;
+│       │                                       #   PHP lint/PHPUnit/PHPStan 8.2/8.4/8.5; integration (also workflow_call)
+│       ├── release.yml                         # gates (= ci.yml) → build zip → publish
+│       ├── theme-contract.yml                  # weekly: tokens.json + guard engine vs IWAC-theme master
 ├── docs/
 │   ├── data-sources.md                         # Why the indexer reads Omeka MySQL directly
 │   └── engineering-roadmap.md                  # Refactoring / hardening roadmap + deferred items

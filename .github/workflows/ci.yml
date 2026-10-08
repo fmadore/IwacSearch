@@ -1,6 +1,13 @@
 # CI: lint, type-check, test and build both sides on every PR + push to main.
 #
 # Real Omeka/Typesense contracts run in the integration job below.
+#
+# Also a reusable workflow: release.yml calls it (`workflow_call`) and makes its
+# publish job `needs:` it, so a tag can only ship if this exact suite —
+# svelte-check, vitest, PHPUnit and PHPStan included — passed on the tagged
+# tree. Before that, the release job re-ran a hand-picked subset (no
+# svelte-check, no PHPUnit, no PHPStan), so a commit CI had failed could still
+# be released.
 
 name: CI
 
@@ -9,12 +16,17 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  workflow_call:
 
 permissions:
   contents: read
 
+# `ci-` prefix: when release.yml calls this workflow, github.workflow is the
+# CALLER's name, and concurrency group names are case-insensitive — without the
+# prefix this group would collide with release.yml's own `release-<ref>` group
+# and cancel the release that called it.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -23,14 +35,27 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: '24'
+          node-version-file: .nvmrc
           cache: 'npm'
 
       - name: Install
         run: npm ci --no-audit --no-fund
+
+      # Every version declaration agrees (scripts/lib/versions.js is the list).
+      # On every push, so drift is caught on the commit that introduces it —
+      # not at the next tag, which is the only place it used to be checked.
+      - name: Version declarations agree
+        run: npm run check:versions
+
+      # npm audit at high+, minus the exceptions written down (with reasons)
+      # in scripts/lib/audit-exceptions.js.
+      - name: Audit (npm audit, documented exceptions only)
+        run: npm run check:audit
 
       - name: Lint (eslint + prettier)
         run: npm run lint
@@ -68,6 +93,8 @@ jobs:
         php-version: ['8.2', '8.4', '8.5']
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # 2.37.2
         with:
@@ -98,6 +125,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # 2.37.2
         with:
           php-version: '8.3'

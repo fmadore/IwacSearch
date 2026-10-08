@@ -14,10 +14,18 @@
 #
 # Release dependencies come from the committed PHP-8.2-compatible composer.lock.
 #
-# Two jobs, so that no third-party code runs with a write token: `build` runs
-# npm, Vite, Composer and the checks with a read-only token and uploads the
-# zip as a run artifact; `publish` (tags only) holds `contents: write` and
-# does nothing but download that artifact and attach it to the release.
+# Three jobs, so that nothing ships unchecked and no third-party code runs with
+# a write token:
+#
+#   gates    the whole push/PR suite (ci.yml, called as a reusable workflow) on
+#            the tagged tree — lint, svelte-check, vitest, build + bundle diff,
+#            PHP lint, PHPUnit, PHPStan on every matrix leg, the integration
+#            contracts. Reusable calls ignore path filters, so every gate runs.
+#   build    resolves and checks the version, assembles and verifies the zip
+#            with a read-only token, uploads it as a run artifact.
+#   publish  (tags only) needs BOTH, holds `contents: write`, and does nothing
+#            but download that artifact and attach it to the release.
+#
 # Actions are pinned to commit SHAs; Dependabot keeps the pins current.
 
 name: Release
@@ -35,6 +43,12 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  gates:
+    name: CI suite on the tagged tree
+    uses: ./.github/workflows/ci.yml
+    permissions:
+      contents: read
+
   build:
     name: Build + verify module zip
     runs-on: ubuntu-latest
@@ -43,59 +57,58 @@ jobs:
       zip: ${{ steps.version.outputs.zip }}
 
     steps:
+      # fetch-depth 0 so the ancestry check below can see the default branch.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
 
-      # The tag is the single source of truth for the version, but four files
-      # restate it: Omeka reads config/module.ini, the client build reads
-      # package.json, `npm ci` reads package-lock.json, and citation tooling
-      # reads CITATION.cff. A tag that disagrees with any of them ships a
-      # module that reports the wrong version — catch it before anything is
-      # built. The lockfile is checked here because it is the one that
-      # actually drifted: it sat at 3.13.1 across the 3.14.0, 3.15.0, 3.16.0
-      # and 3.16.1 releases, each of whose commits claimed to bump every
-      # version declaration, because nothing verified the claim.
+      # A tag on a commit that never reached main (a local experiment, a
+      # branch nobody merged) would publish code that has had no review and
+      # that main does not contain. The gates job proves the tree is green;
+      # this proves it is the tree everyone else has.
+      - name: Assert the tagged commit is on the default branch
+        if: github.ref_type == 'tag'
+        env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" "origin/$DEFAULT_BRANCH"; then
+            echo "::error::$GITHUB_REF_NAME ($GITHUB_SHA) is not an ancestor of origin/$DEFAULT_BRANCH — merge it before tagging"
+            exit 1
+          fi
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: 'npm'
+
+      # The tag is the single source of truth for the version, and every file
+      # that restates it must agree. The list of those files is DATA —
+      # scripts/lib/versions.js, shared with the writer (`npm run bump`) and the
+      # push-time guard in ci.yml. It used to be an inline list here, which is
+      # how package-lock.json sat at 3.13.1 across four releases: the gate
+      # asserted what a human remembered, and only at tag time.
       - name: Resolve version and check every declaration agrees
         id: version
         run: |
           if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
             VERSION="${GITHUB_REF_NAME#v}"
           else
-            VERSION="$(sed -n 's/^version *= *"\(.*\)"/\1/p' config/module.ini)"
-            echo "::notice::Manual run — version taken from module.ini ($VERSION)"
+            VERSION="$(node -p "require('./package.json').version")"
+            echo "::notice::Manual run — version taken from package.json ($VERSION)"
           fi
-
-          INI="$(sed -n 's/^version *= *"\(.*\)"/\1/p' config/module.ini)"
-          PKG="$(node -p "require('./package.json').version")"
-          # Both places npm writes it: the top-level field and the root package
-          # entry. `npm install --package-lock-only` keeps them in step, but a
-          # hand-edit of one and not the other should still fail loudly.
-          LOCK="$(node -p "require('./package-lock.json').version")"
-          LOCK_ROOT="$(node -p "require('./package-lock.json').packages[''].version")"
-          CFF="$(sed -n 's/^version: *//p' CITATION.cff | tr -d '"' | head -1)"
-
-          echo "tag=$VERSION  module.ini=$INI  package.json=$PKG  package-lock.json=$LOCK/$LOCK_ROOT  CITATION.cff=$CFF"
-          [ "$VERSION" = "$INI" ] || { echo "::error::tag $VERSION != config/module.ini $INI"; exit 1; }
-          [ "$VERSION" = "$PKG" ] || { echo "::error::tag $VERSION != package.json $PKG"; exit 1; }
-          [ "$VERSION" = "$LOCK" ] || { echo "::error::tag $VERSION != package-lock.json $LOCK — run 'npm install --package-lock-only'"; exit 1; }
-          [ "$VERSION" = "$LOCK_ROOT" ] || { echo "::error::tag $VERSION != package-lock.json packages[''] $LOCK_ROOT — run 'npm install --package-lock-only'"; exit 1; }
-          [ "$VERSION" = "$CFF" ] || { echo "::error::tag $VERSION != CITATION.cff $CFF"; exit 1; }
-
+          node scripts/check-versions.js "$VERSION"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "zip=IwacSearch-v$VERSION.zip" >> "$GITHUB_OUTPUT"
-
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version: '24'
-          cache: 'npm'
 
       - name: Install client deps
         run: npm ci --no-audit --no-fund
 
-      - name: Test + build client
-        run: |
-          npm run lint
-          npm test
-          npm run build
+      # The gates job ran the full suite; this rebuild exists only because the
+      # zip is assembled from THIS job's tree, and must carry the bundle the
+      # source produces.
+      - name: Build client
+        run: npm run build
 
       # Same guard as CI. asset/dist is committed because production has no
       # Node toolchain, and the zip ships the committed copy — so a tag whose
@@ -146,15 +159,18 @@ jobs:
           ls build/IwacSearch/vendor/psr 2>/dev/null || echo "  none"
 
       - name: Create the zip
+        env:
+          ZIP: ${{ steps.version.outputs.zip }}
         run: |
           set -euo pipefail
-          (cd build && zip -qr "../${{ steps.version.outputs.zip }}" IwacSearch)
-          echo "Built ${{ steps.version.outputs.zip }} ($(du -h "${{ steps.version.outputs.zip }}" | cut -f1))"
+          (cd build && zip -qr "../$ZIP" IwacSearch)
+          echo "Built $ZIP ($(du -h "$ZIP" | cut -f1))"
 
       - name: Verify the zip is installable and carries no dev tooling
+        env:
+          ZIP: ${{ steps.version.outputs.zip }}
         run: |
           set -euo pipefail
-          ZIP="${{ steps.version.outputs.zip }}"
 
           for f in IwacSearch/Module.php \
                    IwacSearch/config/module.ini \
@@ -175,7 +191,7 @@ jobs:
           # normal part of a vendor tree — not this repo's tooling leaking.
           # What matters about vendor/ is that --no-dev worked, checked below.
           LEAKED="$(unzip -Z1 "$ZIP" | grep -v '^IwacSearch/vendor/' \
-            | grep -E '(^|/)(tests|node_modules|\.github|scripts|tools|src/svelte)/|(package\.json|package-lock\.json|phpunit\.xml|phpstan\.neon|tsconfig\.json|vite\.config\.ts|vitest\.config\.ts|eslint\.config\.js|CLAUDE\.md)$' || true)"
+            | grep -E '(^|/)(tests|node_modules|\.github|scripts|tools|src/svelte)/|(package\.json|package-lock\.json|phpunit\.xml|phpstan\.neon|tsconfig\.json|vite\.config\.ts|vitest\.config\.ts|eslint\.config\.js|CLAUDE\.md|\.nvmrc)$' || true)"
           if [ -n "$LEAKED" ]; then
             echo "::error::dev tooling leaked into the zip:"
             echo "$LEAKED"
@@ -204,7 +220,7 @@ jobs:
 
   publish:
     name: Publish the release
-    needs: build
+    needs: [gates, build]
     if: github.ref_type == 'tag'
     runs-on: ubuntu-latest
     permissions:

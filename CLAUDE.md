@@ -96,6 +96,25 @@ The cutover, retention and retry contracts are documented in `docs/operations-3.
   (`COUNTRY_LABELS`); that is the only exemption, and it is printed on every
   run so it stays visible.
 
+## Versions, audit and releases
+
+- **The version lives in five places** — `config/module.ini`, `package.json`,
+  `package-lock.json` (twice: root and `packages[""]`) and `CITATION.cff`. The
+  list is data in `scripts/lib/versions.js`; `npm run bump -- <patch|minor|major|X.Y.Z>`
+  is its only writer (it hands the two npm files to `npm version`, then writes the
+  rest and stamps `date-released`), and `npm run check:versions` is its guard, run
+  on every push by `ci.yml` and against the tag by `release.yml`. A sixth site is
+  one entry in that file. Never hand-edit the version.
+- **`npm run check:audit`** fails on any high/critical advisory not written down,
+  with its reason, in `scripts/lib/audit-exceptions.js` — and on an exception that
+  is no longer needed. Ported from the theme; don't weaken it with `--omit=dev`
+  (every dependency here is a dev dependency, so that turns it off).
+- **A release only publishes what CI passed.** `release.yml` calls `ci.yml`
+  (`workflow_call`) as its `gates` job and `publish` needs it, so the tagged tree
+  runs the whole suite — svelte-check, PHPUnit and PHPStan included. The tag must
+  also be an ancestor of `main`. Pushing to `main` deploys nothing; the live site
+  installs the release zip.
+
 ## Adding a new field
 
 1. Add it to `data/schema.yaml`.

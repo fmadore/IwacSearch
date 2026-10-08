@@ -40,6 +40,7 @@
 /tools/         export-ignore
 /.gitattributes export-ignore
 /.gitignore     export-ignore
+/.nvmrc         export-ignore
 /.prettierignore export-ignore
 /.prettierrc.json export-ignore
 /CLAUDE.md      export-ignore
