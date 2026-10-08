@@ -184,7 +184,9 @@ step is fixed on purpose — so that a 15px facet label doesn't quietly become
   never a bare number that restates the theme's in a comment.
 - **MapLibre is pinned to IwacVisualizations' exact files** (version, URLs and
   sha384 hashes in `src/svelte/lib/maplibreLoader.ts`), so the two modules
-  share one cached copy and one `window.maplibregl`. Upgrade both together.
+  share one cached copy and one `window.maplibregl`. Upgrade both together:
+  `npm run check:maplibre` (weekly in `maplibre-pins.yml`) compares the pins with
+  IwacVisualizations `main` and fails when this module falls behind it.
 - **The header bundle loads on every page.** It may import only
   `translateSuggest()` from i18n, never `translate()`, and module-level code in
   anything it imports must not call into i18n — `npm run check:size` (the last

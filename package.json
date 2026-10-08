@@ -16,6 +16,7 @@
     "check": "svelte-check --tsconfig ./tsconfig.json",
     "check:versions": "node scripts/check-versions.js",
     "check:audit": "node scripts/check-audit.js",
+    "check:maplibre": "node scripts/check-maplibre-pins.js",
     "bump": "node scripts/bump-version.js",
     "test": "vitest run --config vitest.config.ts",
     "test:watch": "vitest --config vitest.config.ts",

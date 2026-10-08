@@ -1,0 +1,46 @@
+name: MapLibre lockstep
+
+# This module and IwacVisualizations load the SAME MapLibre GL files from
+# jsDelivr (version, URLs, sha384 hashes — src/svelte/lib/maplibreLoader.ts and
+# IwacVisualizations' view/common/iwac-assets.phtml), so one site downloads the
+# library once and both modules share `window.maplibregl`. Nothing in this
+# repository's own CI can see the other repository, so a MapLibre upgrade there
+# used to leave this module silently on the old files — two copies of an
+# ~800 KB library on one site.
+#
+# Once a week (and on demand, and on a PR that touches the pin) compare the
+# pins with IwacVisualizations main. A pin AHEAD of main — waiting on an
+# unmerged upgrade there — is reported and passes; a pin BEHIND, or the same
+# version with different hashes, fails with the values to copy. Modelled on
+# theme-contract.yml. It never upgrades MapLibre: that stays a deliberate
+# change made in both modules together.
+
+on:
+  schedule:
+    - cron: '41 6 * * 1'
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'src/svelte/lib/maplibreLoader.ts'
+      - 'scripts/check-maplibre-pins.js'
+      - '.github/workflows/maplibre-pins.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  compare:
+    name: MapLibre pins match IwacVisualizations main
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+
+      # No `npm ci`: the checker has no dependencies (global fetch + fs).
+      - run: node scripts/check-maplibre-pins.js
