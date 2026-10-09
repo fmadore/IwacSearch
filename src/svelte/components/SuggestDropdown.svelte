@@ -14,6 +14,7 @@
   import { clearHistory, readHistory } from '../lib/searchHistory';
   import { facetLabel, useI18n } from '../lib/i18n';
   import Icon from './Icon.svelte';
+  import { refocus } from '../lib/refocus';
 
   /**
    * Floating typeahead dropdown shown just under the SearchInput.
@@ -88,6 +89,9 @@
   let entities = $state<EntitySuggestion[]>([]);
   let highlightedIndex = $state(0);
   let lastError = $state<string | null>(null);
+  // Between a keystroke and its answer there is nothing true to report yet:
+  // "No matches" used to show (and would now be announced) while loading.
+  let pending = $state(false);
   let debounceTimer: number | null = null;
   let inFlightToken = 0;
 
@@ -109,10 +113,27 @@
 
   const hasSuggestions = $derived(articles.length > 0 || entities.length > 0);
 
-  function handleClearHistory(): void {
+  /**
+   * Clearing the history empties the list, so the panel — and this button —
+   * unmount: focus goes back to the search box it belongs to.
+   */
+  function handleClearHistory(e: MouseEvent): void {
+    const input = (e.currentTarget as HTMLElement).closest('form')?.querySelector('input');
     clearHistory();
     history = [];
+    void refocus(input);
   }
+
+  /**
+   * What the status line says: nothing while a request is out, the error if
+   * one failed, "No matches" if the answer was empty. Shown in the panel and
+   * spoken by the persistent region below it — which lives OUTSIDE the
+   * listbox (a listbox may own only options) and outside the panel's {#if},
+   * since a live region created already populated announces nothing.
+   */
+  const statusText = $derived(
+    !isPrefixMode || pending ? '' : (lastError ?? (hasSuggestions ? '' : t('no_matches'))),
+  );
 
   // Re-fetch suggestions whenever the query (or enabled flag) changes.
   $effect(() => {
@@ -124,6 +145,7 @@
       entities = [];
       lastError = null;
       highlightedIndex = 0;
+      pending = false;
       return;
     }
 
@@ -131,6 +153,7 @@
       clearTimeout(debounceTimer);
     }
     const myToken = ++inFlightToken;
+    pending = true;
     debounceTimer = window.setTimeout(() => {
       debounceTimer = null;
       client
@@ -141,6 +164,7 @@
           entities = r.entities;
           highlightedIndex = 0; // re-arm on the search action
           lastError = null;
+          pending = false;
         })
         .catch((e: unknown) => {
           if (myToken !== inFlightToken) return;
@@ -151,6 +175,7 @@
           lastError = e instanceof Error ? e.message : String(e);
           articles = [];
           entities = [];
+          pending = false;
         });
     }, 120);
   });
@@ -239,98 +264,104 @@
 </script>
 
 {#if enabled && rows.length > 0}
-  <div
-    class="iwac-suggest"
-    id={listboxId}
-    role="listbox"
-    aria-label={isPrefixMode ? t('suggestions') : t('recent_searches')}
-    tabindex="-1"
-  >
+  <!-- The panel: heading and status line around a listbox that owns options
+       only. Rows are never Tab stops (tabindex -1) — focus stays in the input
+       for the whole combobox, as the pattern requires. -->
+  <div class="iwac-suggest">
     {#if !isPrefixMode}
-      <div class="iwac-suggest__heading" role="presentation">
+      <div class="iwac-suggest__heading">
         <span>{t('recent_searches')}</span>
-        <!-- Mouse/touch affordance; focus stays on the input (combobox
-             pattern), so this is deliberately not arrow-navigable. -->
+        <!-- Not arrow-navigable (focus stays in the input); reachable by Tab,
+             and the search form keeps the panel open while focus is on it. -->
         <button type="button" class="iwac-suggest__clear" onclick={handleClearHistory}>
           {t('clear_history')}
         </button>
       </div>
     {/if}
-    {#each rows as row, i (rowKey(row))}
-      {#if row.kind === 'search'}
-        <button
-          type="button"
-          id={optionId(i)}
-          class="iwac-suggest__item iwac-suggest__item--search"
-          class:iwac-suggest__item--active={i === highlightedIndex}
-          onmousedown={preventBlur}
-          onclick={(e) => onRowClick(row, i, e)}
-          onmouseenter={() => (highlightedIndex = i)}
-          role="option"
-          aria-selected={i === highlightedIndex}
-        >
-          <span class="iwac-suggest__icon" aria-hidden="true"><Icon name="search" /></span>
-          <span class="iwac-suggest__title">{t('search_for', { q: query.trim() })}</span>
-        </button>
-      {:else if row.kind === 'history'}
-        <button
-          type="button"
-          id={optionId(i)}
-          class="iwac-suggest__item iwac-suggest__item--history"
-          class:iwac-suggest__item--active={i === highlightedIndex}
-          onmousedown={preventBlur}
-          onclick={(e) => onRowClick(row, i, e)}
-          onmouseenter={() => (highlightedIndex = i)}
-          role="option"
-          aria-selected={i === highlightedIndex}
-        >
-          <span class="iwac-suggest__icon iwac-suggest__icon--muted" aria-hidden="true">
-            <Icon name="clock" />
-          </span>
-          <span class="iwac-suggest__title">{row.query}</span>
-        </button>
-      {:else if row.kind === 'article'}
-        <a
-          id={optionId(i)}
-          class="iwac-suggest__item"
-          class:iwac-suggest__item--active={i === highlightedIndex}
-          href={hrefOf(row)}
-          onmousedown={preventBlur}
-          onclick={(e) => onRowClick(row, i, e)}
-          onmouseenter={() => (highlightedIndex = i)}
-          role="option"
-          aria-selected={i === highlightedIndex}
-        >
-          <span class="iwac-suggest__title">
-            <!-- eslint-disable-next-line svelte/no-at-html-tags -->
-            {@html titleMarkupOf(row.hit)}
-          </span>
-        </a>
-      {:else}
-        <button
-          type="button"
-          id={optionId(i)}
-          class="iwac-suggest__item iwac-suggest__item--entity"
-          class:iwac-suggest__item--active={i === highlightedIndex}
-          onmousedown={preventBlur}
-          onclick={(e) => onRowClick(row, i, e)}
-          onmouseenter={() => (highlightedIndex = i)}
-          role="option"
-          aria-selected={i === highlightedIndex}
-        >
-          <span class="iwac-suggest__title">{row.entity.value}</span>
-          <span class="iwac-suggest__tag">{facetLabel(row.entity.field, locale)}</span>
-        </button>
-      {/if}
-    {/each}
-    {#if isPrefixMode && !hasSuggestions && lastError === null}
-      <div class="iwac-suggest__empty" role="status">{t('no_matches')}</div>
-    {/if}
-    {#if isPrefixMode && lastError}
-      <div class="iwac-suggest__error" role="status">{lastError}</div>
+    <div
+      class="iwac-suggest__list"
+      id={listboxId}
+      role="listbox"
+      aria-label={isPrefixMode ? t('suggestions') : t('recent_searches')}
+    >
+      {#each rows as row, i (rowKey(row))}
+        {#if row.kind === 'search'}
+          <button
+            type="button"
+            id={optionId(i)}
+            class="iwac-suggest__item iwac-suggest__item--search"
+            class:iwac-suggest__item--active={i === highlightedIndex}
+            onmousedown={preventBlur}
+            onclick={(e) => onRowClick(row, i, e)}
+            onmouseenter={() => (highlightedIndex = i)}
+            role="option"
+            tabindex="-1"
+            aria-selected={i === highlightedIndex}
+          >
+            <span class="iwac-suggest__icon" aria-hidden="true"><Icon name="search" /></span>
+            <span class="iwac-suggest__title">{t('search_for', { q: query.trim() })}</span>
+          </button>
+        {:else if row.kind === 'history'}
+          <button
+            type="button"
+            id={optionId(i)}
+            class="iwac-suggest__item iwac-suggest__item--history"
+            class:iwac-suggest__item--active={i === highlightedIndex}
+            onmousedown={preventBlur}
+            onclick={(e) => onRowClick(row, i, e)}
+            onmouseenter={() => (highlightedIndex = i)}
+            role="option"
+            tabindex="-1"
+            aria-selected={i === highlightedIndex}
+          >
+            <span class="iwac-suggest__icon iwac-suggest__icon--muted" aria-hidden="true">
+              <Icon name="clock" />
+            </span>
+            <span class="iwac-suggest__title">{row.query}</span>
+          </button>
+        {:else if row.kind === 'article'}
+          <a
+            id={optionId(i)}
+            class="iwac-suggest__item"
+            class:iwac-suggest__item--active={i === highlightedIndex}
+            href={hrefOf(row)}
+            onmousedown={preventBlur}
+            onclick={(e) => onRowClick(row, i, e)}
+            onmouseenter={() => (highlightedIndex = i)}
+            role="option"
+            tabindex="-1"
+            aria-selected={i === highlightedIndex}
+          >
+            <span class="iwac-suggest__title">
+              <!-- eslint-disable-next-line svelte/no-at-html-tags -->
+              {@html titleMarkupOf(row.hit)}
+            </span>
+          </a>
+        {:else}
+          <button
+            type="button"
+            id={optionId(i)}
+            class="iwac-suggest__item iwac-suggest__item--entity"
+            class:iwac-suggest__item--active={i === highlightedIndex}
+            onmousedown={preventBlur}
+            onclick={(e) => onRowClick(row, i, e)}
+            onmouseenter={() => (highlightedIndex = i)}
+            role="option"
+            tabindex="-1"
+            aria-selected={i === highlightedIndex}
+          >
+            <span class="iwac-suggest__title">{row.entity.value}</span>
+            <span class="iwac-suggest__tag">{facetLabel(row.entity.field, locale)}</span>
+          </button>
+        {/if}
+      {/each}
+    </div>
+    {#if statusText}
+      <div class="iwac-suggest__empty" aria-hidden="true">{statusText}</div>
     {/if}
   </div>
 {/if}
+<p class="iwac-suggest__sr" role="status">{enabled ? statusText : ''}</p>
 
 <style>
   .iwac-suggest {
@@ -489,8 +520,16 @@
     padding: 0.125rem 0.5rem;
     border-radius: var(--radius-full, 9999px);
   }
-  .iwac-suggest__empty,
-  .iwac-suggest__error {
+  .iwac-suggest__sr {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  .iwac-suggest__empty {
     padding: var(--space-2, 0.5rem) var(--space-4, 1rem);
     font-size: var(--text-xs, 0.8125rem);
     color: var(--muted, #66696e);

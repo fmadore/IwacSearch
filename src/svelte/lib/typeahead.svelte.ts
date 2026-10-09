@@ -133,7 +133,16 @@ export function createTypeahead(blockId: string | number, callbacks: TypeaheadCa
     handleFocus(): void {
       open = true;
     },
-    handleBlur(): void {
+    /**
+     * Focus left something in the search form. Moving WITHIN the form — the
+     * input to the panel's "Clear history" button, say — keeps the panel: it
+     * used to close 120 ms later and unmount the very button Tab had just
+     * reached, dropping focus to <body>. Leaving the form closes it.
+     */
+    handleBlur(e?: FocusEvent): void {
+      const next = e?.relatedTarget;
+      const form = e?.currentTarget;
+      if (next instanceof Node && form instanceof Node && form.contains(next)) return;
       window.setTimeout(() => {
         open = false;
       }, BLUR_CLOSE_MS);

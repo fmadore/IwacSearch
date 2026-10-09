@@ -191,6 +191,30 @@ describe('closing', () => {
     }
   });
 
+  /** S-08: Tab from the box onto "Clear history" must not unmount that button. */
+  it('stays open when focus moves to another control inside the search form', () => {
+    vi.useFakeTimers();
+    try {
+      const form = document.createElement('form');
+      const clear = document.createElement('button');
+      form.append(clear);
+      const blurTo = (target: Element | null): FocusEvent => {
+        const e = new FocusEvent('focusout', { relatedTarget: target });
+        Object.defineProperty(e, 'currentTarget', { value: form });
+        return e;
+      };
+      const { suggest } = opened();
+      suggest.handleBlur(blurTo(clear));
+      vi.advanceTimersByTime(500);
+      expect(suggest.open).toBe(true);
+      suggest.handleBlur(blurTo(document.body));
+      vi.advanceTimersByTime(500);
+      expect(suggest.open).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('closes on every kind of row pick, and hands the pick to App', () => {
     const picked = opened();
     picked.suggest.pickQuery('ramadan');

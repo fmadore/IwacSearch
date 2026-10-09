@@ -607,8 +607,8 @@
       role="search"
       bind:this={searchFormEl}
       onfocusin={() => suggest.handleFocus()}
-      onfocusout={() => {
-        suggest.handleBlur();
+      onfocusout={(e) => {
+        suggest.handleBlur(e);
         typingBurst.end();
       }}
       onkeydown={(e) => {
