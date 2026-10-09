@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace IwacSearch\Search;
 
 use Closure;
+use IwacSearch\Indexer\AdvisoryLock;
 use IwacSearch\IwacInstance;
 use IwacSearch\Util\ExceptionMessage;
 use Omeka\Settings\SettingsInterface;
@@ -81,6 +82,16 @@ final class TypesenseSearchKeyProvider
         private readonly array $collectionScope = self::DEFAULT_COLLECTION_SCOPE,
         // Mounted-secret validations that already passed (see ValidatedKeyMemo).
         private readonly ValidatedKeyMemo $validated = new ValidatedKeyMemo(),
+        // Serialises the parent-key bootstrap across concurrent requests, with
+        // a FRESH read of the settings slot once the lock is held (Omeka's
+        // settings service caches every value for the request, so it cannot
+        // see a key another request minted meanwhile). Both null in tests and
+        // wherever no database is at hand: the bootstrap then runs unguarded,
+        // as it always used to.
+        /** @var (Closure(): AdvisoryLock)|null */
+        private readonly ?Closure $mintLock = null,
+        /** @var (Closure(string): mixed)|null */
+        private readonly ?Closure $freshSetting = null,
     ) {
     }
 
@@ -95,7 +106,12 @@ final class TypesenseSearchKeyProvider
      *   - limit_multi_searches         — MAX_MULTI_SEARCHES per request
      *   - expires_at                   — defaults to now+1h
      *
-     * @return array{key: string, expires_at: int, host: string, collection: string}
+     * `expires_in` rides beside the absolute `expires_at` because the browser
+     * must not compare the SERVER's clock with its own: a visitor whose clock
+     * runs an hour fast treated every fresh key as expired (and one running
+     * slow kept an expired key). The client renews from expires_in.
+     *
+     * @return array{key: string, expires_at: int, expires_in: int, host: string, collection: string}
      */
     public function mintPublicScopedKey(
         string $collectionAlias = IwacInstance::CONTENT_ALIAS,
@@ -103,7 +119,8 @@ final class TypesenseSearchKeyProvider
         string $browserHost = '/search-api'
     ): array {
         $parent    = $this->resolveSearchOnlyKey();
-        $expiresAt = time() + max(60, $expiresInSeconds);
+        $expiresIn = max(60, $expiresInSeconds);
+        $expiresAt = time() + $expiresIn;
 
         $scoped = ($this->clientFactory)()->keys->generateScopedSearchKey($parent, [
             'filter_by'      => 'is_public:=true',
@@ -118,6 +135,7 @@ final class TypesenseSearchKeyProvider
         return [
             'key'        => $scoped,
             'expires_at' => $expiresAt,
+            'expires_in' => $expiresIn,
             'host'       => $browserHost,
             'collection' => $collectionAlias,
         ];
@@ -146,7 +164,32 @@ final class TypesenseSearchKeyProvider
             return $cached;
         }
 
-        return $this->bootstrapSearchOnlyKey();
+        return $this->bootstrapOnce();
+    }
+
+    /**
+     * Bootstrap the parent key under the mint lock. Two concurrent first
+     * requests used to create TWO parent keys: the loser's value overwrote
+     * the winner's in settings, and the winner's key stayed in Typesense,
+     * orphaned and still able to sign search keys. The second request now
+     * waits, re-reads the slot, and uses the key the first one minted.
+     */
+    private function bootstrapOnce(): string
+    {
+        if ($this->mintLock === null) {
+            return $this->bootstrapSearchOnlyKey();
+        }
+        $lock = ($this->mintLock)();
+        $lock->acquire(10);
+        try {
+            $minted = $this->freshSetting !== null ? ($this->freshSetting)($this->settingsKey()) : null;
+            if (is_string($minted) && $minted !== '') {
+                return $minted;
+            }
+            return $this->bootstrapSearchOnlyKey();
+        } finally {
+            $lock->release();
+        }
     }
 
     /** Mounted secrets cannot silently bypass the configured collection/action restrictions. */

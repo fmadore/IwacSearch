@@ -78,7 +78,15 @@ export interface IwacBootstrap {
  */
 export interface ScopedKeyResponse {
   key: string;
-  expires_at: number; // unix seconds
+  /**
+   * Unix seconds — ON THE CLIENT'S CLOCK once scopedKey.ts has read the
+   * response: it is rebased from `expires_in`, because comparing the server's
+   * clock with the visitor's renewed fresh keys (fast clock) or kept dead ones
+   * (slow clock).
+   */
+  expires_at: number;
+  /** Lifetime in seconds, from the server (absent on an older module). */
+  expires_in?: number;
   host: string; // ignored by client; informative
   collection: string;
 }

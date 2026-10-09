@@ -6,6 +6,7 @@ namespace IwacSearch\Tests\Search;
 use IwacSearch\Search\TypesenseSearchKeyProvider;
 use IwacSearch\Search\ValidatedKeyMemo;
 use IwacSearch\Tests\Support\CallLog;
+use IwacSearch\Tests\Support\CountingLock;
 use Omeka\Settings\SettingsInterface;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
@@ -46,6 +47,8 @@ final class TypesenseSearchKeyProviderTest extends TestCase
         ?array $scope = null,
         string $searchKeyFile = '/nonexistent/typesense_search_key',
         ?ValidatedKeyMemo $memo = null,
+        ?\Closure $mintLock = null,
+        ?\Closure $freshSetting = null,
     ): TypesenseSearchKeyProvider {
         $client = (new \ReflectionClass(TypesenseClient::class))->newInstanceWithoutConstructor();
         $client->keys = new class ($this->created, $this->signed, $this->listed) extends Keys {
@@ -88,6 +91,8 @@ final class TypesenseSearchKeyProviderTest extends TestCase
             searchKeyFile:   $searchKeyFile,
             collectionScope: $scope ?? TypesenseSearchKeyProvider::DEFAULT_COLLECTION_SCOPE,
             validated:       $memo ?? new ValidatedKeyMemo(0),
+            mintLock:        $mintLock,
+            freshSetting:    $freshSetting,
         );
     }
 
@@ -143,6 +148,55 @@ final class TypesenseSearchKeyProviderTest extends TestCase
         self::assertSame('iwac_index_current', $minted['collection']);
         self::assertSame('/search-api', $minted['host']);
         self::assertSame('scoped(parent-key-1)', $minted['key']);
+    }
+
+    /** S-18: the browser renews from a duration, never by comparing two clocks. */
+    public function testMintedPayloadCarriesARelativeLifetime(): void
+    {
+        $minted = $this->provider(new FakeSettings())->mintPublicScopedKey(expiresInSeconds: 900);
+
+        self::assertSame(900, $minted['expires_in']);
+        self::assertEqualsWithDelta(time() + 900, $minted['expires_at'], 2);
+    }
+
+    /**
+     * S-18: two first requests used to mint two parent keys, orphaning one in
+     * Typesense. Under the lock, a request that finds a key minted meanwhile
+     * (read fresh, past Omeka's per-request settings cache) uses it.
+     */
+    public function testTheBootstrapRunsUnderTheLockAndReusesAKeyMintedMeanwhile(): void
+    {
+        $lock = new CountingLock();
+        $depthDuringRead = null;
+        $provider = $this->provider(
+            new FakeSettings(),
+            mintLock: static fn(): CountingLock => $lock,
+            freshSetting: static function () use ($lock, &$depthDuringRead): string {
+                $depthDuringRead = $lock->depth;
+                return 'parent-key-from-the-other-request';
+            },
+        );
+
+        $minted = $provider->mintPublicScopedKey();
+
+        self::assertSame('scoped(parent-key-from-the-other-request)', $minted['key']);
+        self::assertSame(1, $depthDuringRead, 'the fresh read must happen under the lock');
+        self::assertSame(0, $lock->depth, 'the lock is released');
+        self::assertSame(0, $this->created->count(), 'no second parent key');
+    }
+
+    public function testTheBootstrapStillMintsWhenNobodyElseDid(): void
+    {
+        $lock = new CountingLock();
+        $provider = $this->provider(
+            new FakeSettings(),
+            mintLock: static fn(): CountingLock => $lock,
+            freshSetting: static fn(): ?string => null,
+        );
+
+        self::assertSame('scoped(parent-key-1)', $provider->mintPublicScopedKey()['key']);
+        self::assertSame(1, $this->created->count());
+        self::assertSame(0, $lock->depth);
     }
 
     // ---- parent key resolution ----

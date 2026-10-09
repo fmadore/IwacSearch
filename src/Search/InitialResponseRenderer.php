@@ -47,6 +47,14 @@ use Typesense\Client as TypesenseClient;
  */
 final class InitialResponseRenderer
 {
+    /**
+     * How long a transport failure (unreachable, timed out) suspends the SSR
+     * for every page. Short enough that recovery shows within a reload or
+     * two; long enough that a slowdown does not cost each page view the full
+     * connect + read timeout before the client fetches the same first page.
+     */
+    private const UNAVAILABLE_SECONDS = 20;
+
     public function __construct(
         // Lazily-resolved, memoizing client factory (TypesenseClientLazy) —
         // a missing secret / down Typesense surfaces inside render()'s
@@ -103,6 +111,12 @@ final class InitialResponseRenderer
     {
         if ($bootstraps === []) {
             return [];
+        }
+        // Typesense was unreachable moments ago: skip the attempt — and its
+        // timeouts — and let every surface fetch for itself, as it would after
+        // a failed render anyway.
+        if ($this->cache?->isUnavailable()) {
+            return array_fill(0, count($bootstraps), null);
         }
 
         $searches = array_map(fn(array $b): array => $this->buildSearch($b), $bootstraps);
@@ -263,11 +277,13 @@ final class InitialResponseRenderer
                 }
                 // Never fail the page render because Typesense is flaky. The
                 // Svelte client will still try on its own and surface a
-                // concrete error via /discovery/token if it persists.
+                // concrete error via /discovery/token if it persists. Spare
+                // the next pages the same timeout for a little while.
                 $this->logger->warning(
                     'IwacSearch SSR: Typesense multi_search failed, falling back to client-side fetch',
                     ['error' => $e->getMessage(), 'collections' => $collections]
                 );
+                $this->cache?->markUnavailable(self::UNAVAILABLE_SECONDS);
                 return $none;
             }
 

@@ -4,6 +4,8 @@ declare(strict_types=1);
 namespace IwacSearch\Service;
 
 use IwacSearch\Controller\SearchController;
+use IwacSearch\Indexer\AdvisoryLock;
+use IwacSearch\Indexer\DatabaseLock;
 use IwacSearch\Log\LoggerResolver;
 use IwacSearch\Search\InitialResponseRenderer;
 use IwacSearch\Search\TypesenseSearchKeyProvider;
@@ -54,7 +56,21 @@ class SearchControllerFactory implements FactoryInterface
             clientFactory:   TypesenseClientLazy::fromContainer($container),
             settings:        $container->get('Omeka\Settings'),
             logger:          $logger,
-            collectionScope: $scope ?? TypesenseSearchKeyProvider::DEFAULT_COLLECTION_SCOPE
+            collectionScope: $scope ?? TypesenseSearchKeyProvider::DEFAULT_COLLECTION_SCOPE,
+            // Resolved only on the rare request that has to MINT the parent key
+            // (no secret, nothing cached), so a token request pays nothing for
+            // them. The fresh read bypasses Omeka's per-request settings cache;
+            // Omeka stores each setting JSON-encoded in `setting.value`.
+            mintLock:        static fn(): AdvisoryLock => new DatabaseLock(
+                $container->get('Omeka\Connection'),
+                'search-key-bootstrap'
+            ),
+            freshSetting:    static function (string $id) use ($container): mixed {
+                $raw = $container->get('Omeka\Connection')
+                    ->executeQuery('SELECT value FROM setting WHERE id = ?', [$id])
+                    ->fetchOne();
+                return is_string($raw) ? json_decode($raw, true) : null;
+            },
         );
 
         return new SearchController(

@@ -43,4 +43,17 @@ final class MemorySnapshotCache implements SnapshotCacheInterface
     {
         $this->store[$key] = $value;
     }
+
+    /** Seconds the last markUnavailable() asked for; null = available. */
+    public ?int $unavailableFor = null;
+
+    public function markUnavailable(int $seconds): void
+    {
+        $this->unavailableFor = $seconds;
+    }
+
+    public function isUnavailable(): bool
+    {
+        return $this->unavailableFor !== null;
+    }
 }

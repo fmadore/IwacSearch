@@ -90,6 +90,10 @@ export async function getScopedKey(
       if (!key.key) {
         throw new Error('Token endpoint returned no key');
       }
+      // Rebase the expiry onto this browser's clock (see ScopedKeyResponse).
+      if (typeof key.expires_in === 'number' && key.expires_in > 0) {
+        key.expires_at = Math.floor(Date.now() / 1000) + key.expires_in;
+      }
       slot.key = key;
       writeStored(endpoint, key);
       return key;

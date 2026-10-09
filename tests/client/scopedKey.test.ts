@@ -123,3 +123,29 @@ describe('token endpoint failures', () => {
     await expect(getScopedKey(ENDPOINT)).rejects.toThrow('Token endpoint returned no key');
   });
 });
+
+/** S-18: a visitor's clock may be far off the server's; renewal must not care. */
+describe('key expiry', () => {
+  it('renews from the relative lifetime, not by comparing two clocks', async () => {
+    // The server's expires_at is already in the past by this browser's clock
+    // (a clock an hour fast), but the key has an hour to live.
+    const fetch = vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify({
+            key: 'k1',
+            expires_at: Math.floor(Date.now() / 1000) - 3600,
+            expires_in: 3600,
+            host: '',
+            collection: 'c',
+          }),
+          { status: 200 },
+        ),
+    );
+    vi.stubGlobal('fetch', fetch);
+    const getScopedKey = await freshPage();
+    await getScopedKey(ENDPOINT);
+    expect((await getScopedKey(ENDPOINT)).key).toBe('k1');
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+});

@@ -80,6 +80,18 @@ final class SnapshotCache implements SnapshotCacheInterface
         }
     }
 
+    public function markUnavailable(int $seconds): void
+    {
+        if ($this->enabled()) {
+            apcu_store(self::PREFIX . 'unavailable', true, max(1, $seconds));
+        }
+    }
+
+    public function isUnavailable(): bool
+    {
+        return $this->enabled() && apcu_fetch(self::PREFIX . 'unavailable') === true;
+    }
+
     public function enabled(): bool
     {
         return $this->ttlSeconds > 0

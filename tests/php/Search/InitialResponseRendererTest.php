@@ -332,6 +332,34 @@ final class InitialResponseRendererTest extends TestCase
         self::assertSame([], $cache->store);
     }
 
+    /**
+     * S-18: the failure is not cached as a snapshot, but it IS remembered for a
+     * few seconds — otherwise every page view during a slowdown paid the full
+     * timeout before the client fetched the same first page anyway.
+     */
+    public function testAnUnreachableTypesenseSuspendsTheSsrBriefly(): void
+    {
+        $cache = new MemorySnapshotCache();
+        $renderer = $this->renderer(new RuntimeException('timed out'), $cache);
+
+        self::assertNull($renderer->render(self::bootstrap()));
+        self::assertSame(20, $cache->unavailableFor);
+        self::assertCount(1, $this->sent->entries);
+
+        // The next pages skip the attempt entirely.
+        self::assertSame([null, null], $renderer->renderMany([self::bootstrap(), self::bootstrap()]));
+        self::assertCount(1, $this->sent->entries);
+    }
+
+    public function testAPerSearchErrorDoesNotSuspendTheSsr(): void
+    {
+        $cache = new MemorySnapshotCache();
+        $renderer = $this->renderer([['results' => [['code' => 422, 'error' => 'bad filter']]]], $cache);
+
+        self::assertNull($renderer->render(self::bootstrap()));
+        self::assertNull($cache->unavailableFor);
+    }
+
     public function testAPartiallyFailedRenderIsNotCachedEither(): void
     {
         $cache = new MemorySnapshotCache();

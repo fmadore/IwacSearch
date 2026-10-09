@@ -38,4 +38,17 @@ interface SnapshotCacheInterface
      * @param list<array<string, mixed>|null> $value
      */
     public function set(string $key, array $value): void;
+
+    /**
+     * Remember, for $seconds, that Typesense could not be reached. A failed
+     * render is never cached as a snapshot (that would pin a blip in front of
+     * every visitor), but without this every page view during a slowdown
+     * paid the full connection + read timeout before falling back to the
+     * client — seconds per page, for a first page the client then fetched
+     * anyway.
+     */
+    public function markUnavailable(int $seconds): void;
+
+    /** Whether a recent render found Typesense unreachable. */
+    public function isUnavailable(): bool;
 }
