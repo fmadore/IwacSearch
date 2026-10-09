@@ -280,11 +280,7 @@
 <section class="iwac-daterange" aria-label={t('year_range')}>
   <header class="iwac-daterange__header">
     <span class="iwac-daterange__label">{t('year')}</span>
-    <span
-      class="iwac-daterange__range"
-      class:iwac-daterange__range--dirty={isDirty}
-      aria-live="polite"
-    >
+    <span class="iwac-daterange__range" class:iwac-daterange__range--dirty={isDirty}>
       {fromHandle} – {toHandle}
     </span>
     {#if isDirty}

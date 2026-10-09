@@ -28,7 +28,7 @@
 </script>
 
 {#if shown}
-  <div class="iwac-search__semantic-banner" role="status">
+  <div class="iwac-search__semantic-banner">
     <p class="iwac-search__semantic-banner-text">{t('semantic_only_banner', { q: query })}</p>
     <button type="button" class="iwac-search__semantic-btn" onclick={onHide}>
       {t('hide_semantic')}

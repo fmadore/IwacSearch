@@ -44,9 +44,18 @@ describe('resultAnnouncement', () => {
 
   it('adds the page only when there is more than one', () => {
     const one = resultAnnouncement(input({ totalPages: 1 }), i18n);
-    const many = resultAnnouncement(input({ page: 2, totalPages: 3 }), i18n);
+    const many = resultAnnouncement(
+      input({ response: { ...input().response!, page: 2 }, page: 2, totalPages: 3 }),
+      i18n,
+    );
     expect(one).not.toContain(t('announce_page', { p: '2', total: '3' }));
     expect(many).toBe(`${one} ${t('announce_page', { p: '2', total: '3' })}`);
+  });
+
+  /** S-15: the state's page moves on the click; the results arrive a round trip later. */
+  it('announces the page the response answers, not the one the state already asks for', () => {
+    const s = resultAnnouncement(input({ page: 3, totalPages: 5 }), i18n);
+    expect(s).toContain(t('announce_page', { p: '1', total: '5' }));
   });
 
   it('announces nothing found', () => {

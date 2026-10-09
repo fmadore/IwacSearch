@@ -521,7 +521,7 @@
             {#if unionCapped && unionPage >= unionTotalPages}
               <!-- Only at the cap: saying this up front would read as a
                    limitation on a list most people never page through. -->
-              <p class="iwac-fed__cap" role="status">{t('union_cap_hint')}</p>
+              <p class="iwac-fed__cap">{t('union_cap_hint')}</p>
             {/if}
           {/if}
         {/if}

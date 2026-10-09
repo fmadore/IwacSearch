@@ -17,7 +17,7 @@
   const { t, locale } = useI18n();
 </script>
 
-<div class="iwac-search__didyoumean" role="status">
+<div class="iwac-search__didyoumean">
   <span class="iwac-search__didyoumean-label">{t('did_you_mean')}</span>
   {#each suggestions as s (s.field + s.value)}
     <button

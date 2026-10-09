@@ -642,7 +642,7 @@
   {/if}
 
   {#if results.yearsUnavailable}
-    <p role="status">
+    <p>
       {t('histogram_unavailable')}
       <button type="button" onclick={() => results.retry()}>{t('retry_search')}</button>
     </p>
@@ -822,7 +822,7 @@
          they run the same hybrid query and so could present the same vector-only
          set as findings. Same contract, smaller frame: say nothing matched, and
          offer the near neighbours explicitly. -->
-    <p class="iwac-search__status" role="status">{t('results_empty_list')}</p>
+    <p class="iwac-search__status">{t('results_empty_list')}</p>
     <SemanticFallback
       found={response.found}
       {query}

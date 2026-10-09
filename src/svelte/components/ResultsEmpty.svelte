@@ -38,7 +38,7 @@
   const hasQuery = $derived(query.trim() !== '');
 </script>
 
-<div class="iwac-empty" role="status">
+<div class="iwac-empty">
   {#if hasChips}
     <p class="iwac-empty__scope">
       <span class="iwac-empty__lead">{t('no_results_in_scope')}</span>

@@ -7,9 +7,13 @@
    *
    * Shape follows the active view. Respects prefers-reduced-motion: the shimmer
    * drops to a static tint (see the media query).
+   *
+   * Hidden from assistive tech: it used to be a role="status" region, torn
+   * down and re-created populated on every search — one more polite region
+   * competing with App's persistent one, which owns announcements, while the
+   * results section's aria-busy already says "loading".
    */
   import type { ViewMode } from '../lib/types';
-  import { useI18n } from '../lib/i18n';
 
   interface Props {
     view: ViewMode;
@@ -18,18 +22,11 @@
   }
 
   const { view, count = 6 }: Props = $props();
-  const { t } = useI18n();
 
   const rows = $derived(Array.from({ length: Math.max(1, count) }, (_, i) => i));
 </script>
 
-<div
-  class="iwac-skeleton"
-  class:iwac-skeleton--gallery={view === 'gallery'}
-  role="status"
-  aria-busy="true"
-  aria-label={t('loading_results')}
->
+<div class="iwac-skeleton" class:iwac-skeleton--gallery={view === 'gallery'} aria-hidden="true">
   {#each rows as i (i)}
     {#if view === 'gallery'}
       <div class="iwac-skeleton__tile">

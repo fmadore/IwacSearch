@@ -19,6 +19,7 @@ export interface AnnouncementInput {
   semanticHidden: boolean;
   /** A semantic-only response, withheld or shown. */
   semanticOnly: boolean;
+  /** Fallback only: the page the RESPONSE answers is the one announced. */
   page: number;
   totalPages: number;
 }
@@ -32,9 +33,13 @@ export function resultAnnouncement(
   input: AnnouncementInput,
   i18n: Pick<I18n, 't' | 'tp' | 'formatNumber'>,
 ): string {
-  const { response, semanticHidden, semanticOnly, page, totalPages } = input;
+  const { response, semanticHidden, semanticOnly, totalPages } = input;
   const { t, tp, formatNumber } = i18n;
   if (!response) return '';
+  // The response's own page, not the state's: the state moves on the click,
+  // the response a round trip later, and pairing the new page number with
+  // the old results announced a page the reader was not yet looking at.
+  const page = response.page || input.page;
   const found = response.found;
   if (semanticHidden) return tp('announce_semantic', found);
   if (found === 0) return t('announce_no_results');
