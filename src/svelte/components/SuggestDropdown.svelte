@@ -146,12 +146,11 @@
       lastError = null;
       highlightedIndex = 0;
       pending = false;
+      // A request already out answers a box that has since closed or emptied.
+      inFlightToken++;
       return;
     }
 
-    if (debounceTimer !== null) {
-      clearTimeout(debounceTimer);
-    }
     const myToken = ++inFlightToken;
     pending = true;
     debounceTimer = window.setTimeout(() => {
@@ -178,6 +177,15 @@
           pending = false;
         });
     }, 120);
+    // Cancel a pending fetch when the box changes again, the panel closes or
+    // the component goes away. Without it a timer armed just before close
+    // still fired its seven-sub-search suggest into a panel nobody could see.
+    return () => {
+      if (debounceTimer !== null) {
+        clearTimeout(debounceTimer);
+        debounceTimer = null;
+      }
+    };
   });
 
   // Mirror the active option's id onto the parent so it can set the input's

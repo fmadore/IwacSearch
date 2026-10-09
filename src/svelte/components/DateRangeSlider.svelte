@@ -64,17 +64,11 @@
     return Math.min(max, Math.max(min, year));
   }
 
-  // svelte-ignore state_referenced_locally
-  let fromHandle = $state(onTrack(value?.from ?? min));
-  // svelte-ignore state_referenced_locally
-  let toHandle = $state(onTrack(value?.to ?? max));
-
-  // Re-sync when the parent pushes a new value (URL pop, "clear all") or the
-  // bounds arrive from the data.
-  $effect(() => {
-    fromHandle = onTrack(value?.from ?? min);
-    toHandle = onTrack(value?.to ?? max);
-  });
+  // The thumbs: WRITABLE deriveds. A drag or a key moves them; a new value
+  // from the parent (URL pop, "clear all") or bounds arriving from the data
+  // re-derives them — no effect mirroring the props a tick late.
+  let fromHandle = $derived(onTrack(value?.from ?? min));
+  let toHandle = $derived(onTrack(value?.to ?? max));
 
   /** Reference to the track div for hit-testing pointer coords. */
   let trackEl: HTMLDivElement | null = $state(null);

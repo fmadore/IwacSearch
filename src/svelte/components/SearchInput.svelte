@@ -8,7 +8,6 @@
    * to keep this component standalone-testable.
    */
 
-  import { untrack } from 'svelte';
   import Icon from './Icon.svelte';
   import { useI18n } from '../lib/i18n';
   import { refocus } from '../lib/refocus';
@@ -58,22 +57,13 @@
 
   const accessibleName = $derived(ariaLabel ?? t('search_placeholder'));
 
-  // svelte-ignore state_referenced_locally
-  // Initial seed only; the $effect below re-syncs if the parent pushes
-  // a new `value` (e.g. URL state restore, programmatic reset).
-  let local = $state(value);
+  // What the box says. A WRITABLE derived: typing overrides it, and a new
+  // `value` from the parent (URL state restore, programmatic reset) resets
+  // it — the job an effect mirroring the prop used to do, a tick late and
+  // with an untrack() to keep typing from re-triggering it.
+  let local = $derived(value);
   let timer = $state<number | null>(null);
   let inputEl: HTMLInputElement | null = $state(null);
-
-  // Keep `local` in sync if the parent resets us (e.g. URL state push).
-  // Read `local` via untrack so typing into the input — which updates
-  // `local` — does not re-trigger this effect and wipe the keystroke
-  // during the 250 ms debounce window before the parent's `value` catches up.
-  $effect(() => {
-    if (value !== untrack(() => local)) {
-      local = value;
-    }
-  });
 
   function handleInput(e: Event): void {
     const target = e.target as HTMLInputElement;
