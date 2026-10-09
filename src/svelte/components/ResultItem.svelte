@@ -621,6 +621,12 @@
   .iwac-card__type[data-entity-type='Organisations'] {
     --iwac-type-dot: var(--type-entity-organisations, #d66800);
   }
+  .iwac-card__type[data-entity-type='Sujets'] {
+    --iwac-type-dot: var(--type-entity-sujets, #7c5295);
+  }
+  .iwac-card__type[data-entity-type='Événements'] {
+    --iwac-type-dot: var(--type-entity-evenements, #4c9491);
+  }
 
   /*
    * SC 2.5.8: the card's facet toggles measured 20–21px tall at 375. They sit
@@ -876,6 +882,12 @@
   }
   .iwac-card__spark[data-entity-type='Organisations'] {
     color: var(--type-entity-organisations, #d66800);
+  }
+  .iwac-card__spark[data-entity-type='Sujets'] {
+    color: var(--type-entity-sujets, #7c5295);
+  }
+  .iwac-card__spark[data-entity-type='Événements'] {
+    color: var(--type-entity-evenements, #4c9491);
   }
 
   /*
