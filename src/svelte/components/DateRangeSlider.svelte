@@ -271,7 +271,9 @@
   });
 </script>
 
-<section class="iwac-daterange" aria-label={t('year_range')}>
+<!-- A group, not a named section: a region landmark per slider crowded the
+     landmark list; a group still names the two thumbs together. -->
+<div class="iwac-daterange" role="group" aria-label={t('year_range')}>
   <header class="iwac-daterange__header">
     <span class="iwac-daterange__label">{t('year')}</span>
     <span class="iwac-daterange__range" class:iwac-daterange__range--dirty={isDirty}>
@@ -345,7 +347,7 @@
       onblur={flushKeyCommit}
     ></div>
   </div>
-</section>
+</div>
 
 <style>
   .iwac-daterange {

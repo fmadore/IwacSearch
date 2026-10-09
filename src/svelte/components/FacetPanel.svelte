@@ -155,7 +155,10 @@
   }
 </script>
 
-<aside class="iwac-facets" aria-label={t('filters')} bind:this={panelEl}>
+<!-- A div, not an <aside>: the panel is rendered INTO the page's filter
+     landmark (App's sticky column) or the Drawer dialog, and an aside of its
+     own nested a second "Filters" landmark inside the first. -->
+<div class="iwac-facets" bind:this={panelEl}>
   <header class="iwac-facets__header">
     <h2 class="iwac-facets__heading">{t('filters')}</h2>
     {#if hasActive}
@@ -166,21 +169,22 @@
   </header>
 
   {#if hasActive}
-    <section
-      class="iwac-facets__section iwac-facets__section--active"
-      aria-label={t('active_filters')}
-    >
-      <ul class="iwac-facets__chips">
+    <!-- Not a named region: the summary strip is the page's one "Active
+         filters" region; here the list names itself. -->
+    <div class="iwac-facets__section iwac-facets__section--active">
+      <ul class="iwac-facets__chips" aria-label={t('active_filters')}>
         {#each activeChips as chip, i (chip.field + '|' + chip.value)}
           <li>
             <FilterChip {chip} onRemove={(c) => handleChipClick(c, i)} />
           </li>
         {/each}
       </ul>
-    </section>
+    </div>
   {/if}
 
-  <section class="iwac-facets__section" aria-label={t('year')}>
+  <!-- The slider labels its own group; a named section around it was a
+       second region for the same control. -->
+  <div class="iwac-facets__section iwac-facets__section--year">
     <DateRangeSlider
       value={yearRange}
       min={yearBounds.min}
@@ -188,7 +192,7 @@
       {distribution}
       onChange={onYearRangeChange}
     />
-  </section>
+  </div>
 
   {#if facets.length === 0}
     <p class="iwac-facets__empty">{t('search_to_see_options')}</p>
@@ -246,7 +250,7 @@
       {/if}
     </div>
   {/if}
-</aside>
+</div>
 
 <style>
   .iwac-facets {
@@ -299,7 +303,7 @@
     padding-block: var(--space-4, 1rem);
     border-bottom: 1px solid var(--border-light, #e2e5e8);
   }
-  .iwac-facets__section:last-of-type {
+  .iwac-facets__section--year {
     border-bottom: none;
   }
   .iwac-facets__section--active {
