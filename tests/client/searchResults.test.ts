@@ -301,7 +301,7 @@ describe('createSearchResults', () => {
     await flush();
     await flush();
     expect(onFruitfulQuery).not.toHaveBeenCalled();
-    expect(client.suggest).toHaveBeenCalledWith('tidjaniya', 3);
+    expect(client.suggest).toHaveBeenCalledWith('tidjaniya', 3, 'didYouMean');
     expect(results.didYouMean.map((e) => e.value)).toEqual(['T1', 'T2', 'T3', 'T4']);
   });
 
@@ -314,7 +314,7 @@ describe('createSearchResults', () => {
       expect.objectContaining({ semanticOnly: true, found: 100 }),
     );
     expect(onFruitfulQuery).not.toHaveBeenCalled();
-    expect(client.suggest).toHaveBeenCalledWith('zzkw', 3);
+    expect(client.suggest).toHaveBeenCalledWith('zzkw', 3, 'didYouMean');
   });
 
   it('offers no spelling help for a query under three characters', async () => {
@@ -375,6 +375,25 @@ describe('createSearchResults', () => {
     await flush();
     expect(results.isLoading).toBe(false);
     expect(results.response?.found).toBe(3);
+  });
+});
+
+describe('createSearchResults sequencing', () => {
+  /** S-09: an older answer that was never aborted still must not paint over a newer one. */
+  it('ignores a response that lands after a newer request settled', async () => {
+    const client = fakeClient();
+    const older = deferred<SearchOutcome>();
+    const newer = deferred<SearchOutcome>();
+    client.search.mockReturnValueOnce(older.promise).mockReturnValueOnce(newer.promise);
+    const { results } = make(client);
+    results.run(req({ q: 'isl' }));
+    results.run(req({ q: 'islam' }));
+    newer.resolve({ response: res(7) });
+    await flush();
+    older.resolve({ response: res(1) });
+    await flush();
+    expect(results.response?.found).toBe(7);
+    expect(results.isLoading).toBe(false);
   });
 });
 

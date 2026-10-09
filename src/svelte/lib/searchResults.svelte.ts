@@ -22,8 +22,9 @@
  *  - The histogram depends on the query + categorical filters ONLY, so it is
  *    requested as a second sub-search of the same POST just when that pair
  *    changed. Paging, sorting or moving the year range reuses the bars.
- *  - A superseded (aborted) request settles nothing: the newer one owns the
- *    loading flag, and clearing it would blank the skeleton under it.
+ *  - A superseded request settles nothing: the newer one owns the loading
+ *    flag, and clearing it would blank the skeleton under it. Abort covers
+ *    the network; a sequence ticket covers everything abort cannot reach.
  *  - A semantic-only response is a dead query wearing a full result list:
  *    it stays out of the recent-searches history and gets the spelling
  *    suggestions, exactly like a zero-hit one.
@@ -137,6 +138,7 @@ export function createSearchResults(
   // Mirrors `yearSpan !== null` without the reactive read: run() asking the
   // $state would re-run the calling effect — a second search — when it lands.
   let spanKnown = false;
+  const seq = new SeqGuard();
 
   function adoptSpan(span: YearSpan | undefined): void {
     if (!span || spanKnown) return;
@@ -151,7 +153,7 @@ export function createSearchResults(
    */
   function fetchDidYouMean(q: string): void {
     client
-      .suggest(q, 3)
+      .suggest(q, 3, 'didYouMean')
       .then((s) => {
         didYouMean = s.entities.slice(0, 4);
       })
@@ -193,6 +195,7 @@ export function createSearchResults(
     isLoading = true;
     error = null;
     didYouMean = [];
+    const ticket = seq.start();
     client
       .search({
         q,
@@ -206,6 +209,7 @@ export function createSearchResults(
         withYearSpan: opts.withHistogram && !spanKnown,
       })
       .then(({ response: r, years, yearsUnavailable: unavailable, span }) => {
+        if (seq.isStale(ticket)) return;
         adoptSpan(span);
         if (needHistogram) {
           yearsUnavailable = unavailable ?? false;
@@ -244,7 +248,7 @@ export function createSearchResults(
       })
       .catch((e: unknown) => {
         // Superseded: a newer request is in flight and will settle the UI.
-        if (isAbortError(e)) return;
+        if (seq.isStale(ticket) || isAbortError(e)) return;
         console.error('[iwac-search] search failed', e);
         error = e instanceof Error ? e.message : String(e);
         // Not the stale response: an error that left the previous results on

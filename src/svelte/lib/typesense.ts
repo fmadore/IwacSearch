@@ -204,9 +204,14 @@ export class TypesenseClient {
    * still-in-flight predecessor, so a fast typist can't get
    * out-of-order responses (or pay for their bandwidth). Callers swallow
    * the resulting AbortError via transport.isAbortError().
+   *
+   * One slot per CALLER, not per method: the typeahead and the zero-result
+   * "did you mean" both call suggest(), and on one shared slot each aborted
+   * the other — a dead query's suggestions vanished whenever the reader
+   * touched the box, and vice versa.
    */
   private readonly searchAbort = new AbortSlot();
-  private readonly suggestAbort = new AbortSlot();
+  private readonly suggestAbort = { typeahead: new AbortSlot(), didYouMean: new AbortSlot() };
   private readonly unionAbort = new AbortSlot();
 
   constructor(private readonly bootstrap: IwacBootstrap) {}
@@ -260,7 +265,13 @@ export class TypesenseClient {
      */
     withYearSpan?: boolean;
   }): Promise<SearchOutcome> {
+    // Take the signal BEFORE any await. It used to be taken at the POST, after
+    // resolveContext (which can wait on a key mint): a newer search() that
+    // began during that wait was aborted by the older one reaching its POST,
+    // and the older, stale results rendered. Checked again after each await.
+    const signal = this.searchAbort.next();
     const ctx = await this.resolveContext(args);
+    signal.throwIfAborted();
     const { collection, q, filterBy, isBrowse, exact } = ctx;
 
     let lastEnvelope: MultiSearchEnvelope | undefined;
@@ -269,6 +280,7 @@ export class TypesenseClient {
     const filterByWithoutYears = args.withYearDistribution
       ? (await this.resolveContext({ ...args, includeYearRange: false })).filterBy
       : '';
+    signal.throwIfAborted();
 
     const facets = args.facetBy ?? this.bootstrap.prominent_facets;
 
@@ -361,7 +373,7 @@ export class TypesenseClient {
       url: this.bootstrap.endpoints.search,
       key: ctx.key.key,
       // A newer search supersedes any in-flight one.
-      signal: this.searchAbort.next(),
+      signal,
       buildBody,
       pick: (raw) => (raw as MultiSearchEnvelope).results?.[0],
       // Keep the raw envelope so the histogram sub-search can be read off it.
@@ -499,8 +511,12 @@ export class TypesenseClient {
    * wrapper adds only the per-instance abort channel: a keystroke-driven
    * call must not let a slow response for "ram" paint over "ramadan".
    */
-  async suggest(prefix: string, perPage = 6): Promise<SuggestResult> {
-    return runSuggest(this.bootstrap, prefix, perPage, this.suggestAbort.next());
+  async suggest(
+    prefix: string,
+    perPage = 6,
+    caller: 'typeahead' | 'didYouMean' = 'typeahead',
+  ): Promise<SuggestResult> {
+    return runSuggest(this.bootstrap, prefix, perPage, this.suggestAbort[caller].next());
   }
 
   /**
@@ -653,7 +669,10 @@ export class TypesenseClient {
     perPage?: number;
     searches: Array<{ collection: string; queryBy: string; filterBy?: string }>;
   }): Promise<IwacSearchResponse> {
+    // Signal first, for the same reason as search().
+    const signal = this.unionAbort.next();
     const key = await this.getKey();
+    signal.throwIfAborted();
     const isBrowse = !args.q.trim();
     const q = isBrowse ? '*' : args.q;
     const exact = !isBrowse && isExactQuery(q);
@@ -682,7 +701,6 @@ export class TypesenseClient {
 
     // Union mode returns ONE merged result object, not {results: [...]},
     // so the payload IS the response — no `pick` needed.
-    const signal = this.unionAbort.next();
     const response = await this.withStopwordRetry({
       label: 'Everything',
       url: url.toString(),
