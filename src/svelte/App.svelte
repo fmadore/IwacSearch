@@ -14,7 +14,7 @@
   import { createTypeahead, dismissOnOutsidePointer, slashShortcut } from './lib/typeahead.svelte';
   import { clampYearRange, resolveYearBounds, sameYearRange } from './lib/yearBounds';
   import { untrack } from 'svelte';
-  import { refocus } from './lib/refocus';
+  import { landOnResults, refocus } from './lib/refocus';
   import SearchInput from './components/SearchInput.svelte';
   import SuggestDropdown from './components/SuggestDropdown.svelte';
   import ResultsList from './components/ResultsList.svelte';
@@ -475,21 +475,11 @@
   function handlePageChange(next: number): void {
     if (next === page) return;
     page = next;
-    // Focus follows the navigation. The pager button the user pressed is
-    // about to be re-rendered (the window shifts, the current page moves), so
-    // focus was landing on <body> and the next Tab restarted at the top of
-    // the document. preventScroll because the smooth scroll below owns the
-    // movement — letting focus() jump first would cancel it.
-    resultsRegion?.focus({ preventScroll: true });
-    if (resultsAnchor) {
-      const reduced =
-        typeof window !== 'undefined' &&
-        window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-      resultsAnchor.scrollIntoView({
-        behavior: reduced ? 'auto' : 'smooth',
-        block: 'start',
-      });
-    }
+    // Focus follows the navigation (the pager button pressed is about to be
+    // re-rendered), and the top of the new page comes into view. Compact and
+    // results-only blocks have no results landmark or toolbar, so their list
+    // wrapper stands in for both — they used to get neither.
+    landOnResults(resultsRegion ?? compactRegion, resultsAnchor ?? compactRegion);
   }
 
   // ── Announcements + the keyboard bypass ─────────────────────────────
@@ -501,6 +491,8 @@
 
   /** The results landmark, focused by the skip link and by pagination. */
   let resultsRegion: HTMLElement | null = $state(null);
+  /** The compact surfaces' result list wrapper — their pager's landing place. */
+  let compactRegion: HTMLElement | null = $state(null);
 
   // ── Semantic-only fallback ──────────────────────────────────────────
   // Did the keyword leg match nothing at all? (See lib/semanticFallback.ts.)
@@ -839,14 +831,16 @@
         onHide={hideSemantic}
       />
     {/if}
-    <ResultsList
-      {response}
-      {perPage}
-      onPageChange={handlePageChange}
-      activeFilters={filters}
-      onFacetToggle={(f, v, c) => filterState.toggle(f, v, c)}
-      {hideCountry}
-    />
+    <div class="iwac-search__compact-results" tabindex="-1" bind:this={compactRegion}>
+      <ResultsList
+        {response}
+        {perPage}
+        onPageChange={handlePageChange}
+        activeFilters={filters}
+        onFacetToggle={(f, v, c) => filterState.toggle(f, v, c)}
+        {hideCountry}
+      />
+    </div>
   {/if}
 </div>
 
@@ -983,7 +977,8 @@
        feedback now, keeping row geometry stable (punch-list item 2). aria-busy
        stays on the container for assistive tech. */
   }
-  .iwac-search__results:focus:not(:focus-visible) {
+  .iwac-search__results:focus:not(:focus-visible),
+  .iwac-search__compact-results:focus:not(:focus-visible) {
     outline: none;
   }
   .iwac-search__error {

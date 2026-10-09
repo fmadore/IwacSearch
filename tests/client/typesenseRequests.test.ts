@@ -109,7 +109,7 @@ describe('search()', () => {
 });
 
 describe('unionSearch()', () => {
-  it('pages in the URL, sorts every leg alike, then counts the keyword legs', async () => {
+  it('pages in the URL, sorts every leg alike, and counts the keyword legs alongside', async () => {
     const { bodies, urls } = serve((body) =>
       body.union ? page(12) : { results: [page(4), page(2)] },
     );
@@ -124,15 +124,30 @@ describe('unionSearch()', () => {
       ],
     });
 
-    const union = bodies[0];
-    expect(union.union).toBe(true);
-    expect(new URL(urls[0], 'http://x').searchParams.get('page')).toBe('3');
-    expect(new URL(urls[0], 'http://x').searchParams.get('per_page')).toBe('20');
+    const unionAt = bodies.findIndex((b) => b.union);
+    const union = bodies[unionAt];
+    const counts = bodies[1 - unionAt];
+    expect(bodies).toHaveLength(2);
+    expect(new URL(urls[unionAt], 'http://x').searchParams.get('page')).toBe('3');
+    expect(new URL(urls[unionAt], 'http://x').searchParams.get('per_page')).toBe('20');
     expect(union.searches!.map((s) => s.sort_by)).toEqual(['_text_match:desc', '_text_match:desc']);
     expect(union.searches![1].filter_by).toBe('entity_type_s:=Lieux');
     // The keyword-only legs drop the embedding.
-    expect(bodies[1].searches![0].query_by).toBe('title_txt');
+    expect(counts.searches![0].query_by).toBe('title_txt');
     expect(out.keyword_found).toBe(6);
+  });
+
+  /** S-10: paging the merged list used to re-send the keyword counts every time. */
+  it('reuses the keyword counts when only the page changes', async () => {
+    const { bodies } = serve((body) => (body.union ? page(12) : { results: [page(4)] }));
+    const client = new TypesenseClient(bootstrap());
+    const searches = [{ collection: 'iwac_current', queryBy: 'title_txt' }];
+    await client.unionSearch({ q: 'tabaski', page: 1, searches });
+    const second = await client.unionSearch({ q: 'tabaski', page: 2, searches });
+    expect(bodies.filter((b) => !b.union)).toHaveLength(1);
+    expect(second.keyword_found).toBe(4);
+    await client.unionSearch({ q: 'coran', page: 1, searches });
+    expect(bodies.filter((b) => !b.union)).toHaveLength(2);
   });
 
   it('sorts browse mode by date and asks for no keyword counts', async () => {

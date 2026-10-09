@@ -286,18 +286,14 @@
     .iwac-search__filters-trigger:hover .iwac-search__filters-trigger-icon {
       color: var(--primary, #ce4115);
     }
+    /* The active count as primary tabular text, as the facet headings show
+       theirs — not a filled pill, which the ledger grammar reserves for
+       nothing (DESIGN-PHILOSOPHY: "active counts as primary tabular text").
+       --primary-hover, the primary that clears 4.5:1 on every ground. */
     .iwac-search__filters-trigger-badge {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      min-width: 1.25rem;
-      height: 1.25rem;
-      padding: 0 0.375rem;
-      background: var(--primary, #ce4115);
-      color: var(--ink-on-primary, #fff);
-      border-radius: var(--radius-full, 9999px);
+      color: var(--primary-hover, #b03710);
       font-size: var(--text-xs, 0.8125rem);
-      font-weight: 600;
+      font-weight: 700;
       font-variant-numeric: tabular-nums;
     }
   }

@@ -5,6 +5,21 @@ export type FocusCandidate =
   HTMLElement | null | undefined | (() => HTMLElement | null | undefined);
 
 /**
+ * After a page change: focus the results region (the pager button pressed is
+ * about to be re-rendered, which would drop focus to <body>) and bring its top
+ * into view — smoothly unless the reader asked for reduced motion. Focus does
+ * not scroll (`preventScroll`), so the smooth scroll is not cancelled by it.
+ */
+export function landOnResults(
+  region: HTMLElement | null,
+  anchor: HTMLElement | null = region,
+): void {
+  region?.focus({ preventScroll: true });
+  const reduced = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+  anchor?.scrollIntoView({ behavior: reduced ? 'auto' : 'smooth', block: 'start' });
+}
+
+/**
  * Put focus back somewhere sensible after a control removed itself.
  *
  * A button that a click makes disappear — a chip that removes its filter, a

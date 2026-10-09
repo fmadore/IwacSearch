@@ -112,7 +112,24 @@ describe('stopword recovery', () => {
   });
 
   it('applies the same recovery to the federated union search', async () => {
-    const { sent, urls } = mockServer([STOPWORD_ERROR, HIT_PAGE]);
+    // The union and its keyword counts now go out together, so answer by
+    // request shape: the union POSTs fail once, the count POST succeeds.
+    const unionAnswers = [STOPWORD_ERROR, HIT_PAGE];
+    const sent: Sent[] = [];
+    const urls: string[] = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string, init?: RequestInit) => {
+        if (String(url).includes('/discovery/token')) {
+          return new Response(JSON.stringify(TOKEN), { status: 200 });
+        }
+        const body = JSON.parse(String(init?.body ?? '{}')) as Sent;
+        if (!body.union) return new Response(JSON.stringify({ results: [HIT_PAGE, HIT_PAGE] }));
+        sent.push(body);
+        urls.push(String(url));
+        return new Response(JSON.stringify(unionAnswers.shift() ?? HIT_PAGE), { status: 200 });
+      }),
+    );
     vi.spyOn(console, 'warn').mockImplementation(() => {});
 
     const result = await new TypesenseClient(bootstrap()).unionSearch({
@@ -124,10 +141,11 @@ describe('stopword recovery', () => {
     });
 
     expect(result.found).toBe(0);
-    expect(sent).toHaveLength(3);
+    expect(sent).toHaveLength(2);
     // Union mode returns ONE merged object rather than {results: [...]}, and
     // pages via the URL — both must survive the retry.
-    expect(sent[0].union).toBe(true);
+    expect(sent[1].union).toBe(true);
+    expect(sent[1].searches).toBeDefined();
     expect(urls[1]).toContain('page=1');
   });
 });

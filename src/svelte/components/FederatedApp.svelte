@@ -9,11 +9,14 @@
   import { isAbortError } from '../lib/transport';
   import { createTypingBurst } from '../lib/urlState';
   import { isSemanticOnlyResponse } from '../lib/semanticFallback';
+  import { resultAnnouncement } from '../lib/announce';
+  import { landOnResults, refocus } from '../lib/refocus';
   import { provideI18n, normalizeLocale, type Locale } from '../lib/i18n';
   import App from '../App.svelte';
   import ResultItem from './ResultItem.svelte';
   import Pagination from './Pagination.svelte';
   import SearchInput from './SearchInput.svelte';
+  import SemanticFallback from './SemanticFallback.svelte';
 
   /**
    * The federated "search everything" page. One instance per page.
@@ -48,7 +51,8 @@
   const locale: Locale = normalizeLocale(bootstrap.locale);
   // Context for the union tab's ResultItems (they detect entity docs by
   // shape); the per-tab Apps provide their own context on top.
-  const { t, tp, formatNumber } = provideI18n(locale, 'content');
+  const i18n = provideI18n(locale, 'content');
+  const { t, formatNumber } = i18n;
 
   // svelte-ignore state_referenced_locally
   const tabs = bootstrap.tabs;
@@ -73,6 +77,14 @@
   // svelte-ignore state_referenced_locally
   let inputValue = $state(bootstrap.initial_query ?? '');
   let activeTab = $state<TabId>(readTabFromUrl());
+  /**
+   * The tab holding the roving tabindex. It follows FOCUS, not selection:
+   * activation is manual (Enter / Space / click), because selecting a tab
+   * mounts a whole surface and runs its search — arrowing across three tabs
+   * used to fire three searches.
+   */
+  // svelte-ignore state_referenced_locally
+  let focusTab = $state<TabId>(activeTab);
   let counts = $state<Record<string, number | null>>({});
   let countsReady = $state(false);
 
@@ -136,12 +148,6 @@
   let unionLoading = $state(false);
   let unionError = $state<string | null>(null);
 
-  // A new committed query restarts the merged list at page 1.
-  $effect(() => {
-    void query;
-    unionPage = 1;
-  });
-
   $effect(() => {
     if (activeTab !== 'all') return;
     const q = query;
@@ -193,6 +199,44 @@
   /** True when the cap is actually hiding pages, not merely equal to them. */
   const unionCapped = $derived(unionNaturalPages > UNION_MAX_PAGES);
 
+  /** The merged list — where focus and the scroll land on a page change. */
+  let unionListEl: HTMLElement | null = $state(null);
+  let rootEl: HTMLElement | null = $state(null);
+
+  /**
+   * Union paging used to set the page and nothing else: no scroll, no focus
+   * (the pressed pager button re-renders, so focus fell to <body>) and no
+   * announcement — on the tab every masthead search lands on. Same landing
+   * as App's pager now.
+   */
+  function changeUnionPage(next: number): void {
+    if (next === unionPage) return;
+    unionPage = next;
+    landOnResults(unionListEl);
+  }
+
+  /** The offer and the banner are different buttons: focus follows to the other one. */
+  function setUnionSemantic(optIn: boolean): void {
+    unionSemanticOptInFor = optIn ? query : null;
+    void refocus(() => rootEl?.querySelector<HTMLElement>('.iwac-search__semantic-btn'));
+  }
+
+  /** The union tab's sentence for the live region — App speaks for the other tabs. */
+  const unionAnnouncement = $derived(
+    activeTab === 'all' && !unionLoading
+      ? resultAnnouncement(
+          {
+            response: unionResponse,
+            semanticHidden: unionSemanticHidden,
+            semanticOnly: unionSemanticOnly,
+            page: unionPage,
+            totalPages: unionTotalPages,
+          },
+          i18n,
+        )
+      : '',
+  );
+
   /**
    * A chip clicked on a union card hands off to the right per-collection
    * tab, pre-filtered via bootstrap.initial_filters — union responses have
@@ -203,7 +247,7 @@
     const target: TabId =
       field === 'entity_type_s' || field === 'is_part_of_ss' ? 'entities' : 'content';
     seed = { tab: target, filters: { [field]: [value] } };
-    activeTab = target;
+    activeTab = focusTab = target;
   }
 
   // Mirror state into the URL so a federated search is shareable /
@@ -247,9 +291,10 @@
     const onPop = (): void => {
       const params = new URLSearchParams(window.location.search);
       const q = params.get('q') ?? '';
+      if (q !== query) unionPage = 1;
       query = q;
       inputValue = q;
-      activeTab = readTabFromUrl();
+      activeTab = focusTab = readTabFromUrl();
     };
     window.addEventListener('popstate', onPop);
     return () => window.removeEventListener('popstate', onPop);
@@ -265,12 +310,17 @@
     // applied inside the mounted tab stays applied — same as typing a new
     // query on /search, where filters are the scope you search WITHIN.
     seed = null;
-    if (next.trim() !== query) typingCommit = true;
+    if (next.trim() !== query) {
+      typingCommit = true;
+      // A new query restarts the merged list — in the handler, not in an
+      // effect that watched `query` to undo a write it could not see coming.
+      unionPage = 1;
+    }
     query = next.trim();
   }
 
   function selectTab(id: TabId): void {
-    activeTab = id;
+    activeTab = focusTab = id;
   }
 
   /** Tab order: the merged ranking first, then the per-collection views. */
@@ -278,12 +328,12 @@
 
   /**
    * Keyboard support for the roving-tabindex tablist (WAI-ARIA tabs
-   * pattern): arrows move focus AND selection, Home/End jump to the ends.
-   * Without this, the inactive tabs (tabindex="-1") are unreachable by
-   * keyboard entirely.
+   * pattern, manual activation): arrows move focus, Home/End jump to the
+   * ends, Enter/Space (the buttons' own click) select. Without this, the
+   * inactive tabs (tabindex="-1") are unreachable by keyboard entirely.
    */
   function onTablistKeydown(e: KeyboardEvent): void {
-    const idx = tabIds.indexOf(activeTab);
+    const idx = tabIds.indexOf(focusTab);
     let nextIdx: number;
     switch (e.key) {
       case 'ArrowRight':
@@ -302,9 +352,16 @@
         return;
     }
     e.preventDefault();
-    const id = tabIds[nextIdx];
-    selectTab(id);
-    document.getElementById(`iwac-fed-tab-${id}`)?.focus();
+    focusTab = tabIds[nextIdx];
+    document.getElementById(`iwac-fed-tab-${focusTab}`)?.focus();
+  }
+
+  /** Leaving the tablist hands the tab stop back to the selected tab. */
+  function onTablistFocusout(e: FocusEvent): void {
+    const next = e.relatedTarget;
+    if (!(next instanceof Node && (e.currentTarget as HTMLElement).contains(next))) {
+      focusTab = activeTab;
+    }
   }
 
   function tabLabel(id: TabId): string {
@@ -341,7 +398,7 @@
   });
 </script>
 
-<div class="iwac-fed">
+<div class="iwac-fed" bind:this={rootEl}>
   <!-- Bubbling delegations from the input inside (see App's search form). -->
   <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
   <div
@@ -366,6 +423,7 @@
     role="tablist"
     aria-label={t('result_types')}
     onkeydown={onTablistKeydown}
+    onfocusout={onTablistFocusout}
   >
     {#each tabIds as id (id)}
       <button
@@ -377,7 +435,7 @@
         class="iwac-fed__tab"
         class:iwac-fed__tab--active={id === activeTab}
         class:iwac-fed__tab--empty={id !== 'all' && countsReady && (counts[id] ?? 0) === 0}
-        tabindex={id === activeTab ? 0 : -1}
+        tabindex={id === focusTab ? 0 : -1}
         onclick={() => selectTab(id)}
       >
         <span class="iwac-fed__tab-label">{tabLabel(id)}</span>
@@ -387,6 +445,10 @@
       </button>
     {/each}
   </div>
+
+  <!-- The union tab's live region; persistent, so it announces (App speaks
+       for the per-collection tabs). -->
+  <p class="iwac-fed__sr" role="status">{unionAnnouncement}</p>
 
   <div
     class="iwac-fed__panel"
@@ -398,51 +460,43 @@
       <!-- Union tab: one merged relevance ranking across both collections
            (no facets — union responses carry none; the per-collection tabs
            keep the full faceted experience). -->
-      <div class="iwac-fed__union" aria-busy={unionLoading}>
+      <div class="iwac-fed__union" aria-busy={unionLoading} tabindex="-1" bind:this={unionListEl}>
         {#if unionError}
           <div class="iwac-fed__union-error" role="alert">
             <strong>{t('search_unavailable')}</strong>
             <span>{unionError}</span>
           </div>
         {:else if unionLoading && !unionResponse}
-          <p class="iwac-fed__union-status" aria-live="polite">{t('searching')}</p>
+          <p class="iwac-fed__union-status">{t('searching')}</p>
         {:else if unionResponse}
           {#if unionResponse.found === 0 || unionSemanticHidden}
             <!-- Withheld exactly as the per-collection surfaces withhold: say
-                 nothing matched, then offer the near neighbours as an offer. -->
+                 nothing matched, then offer the near neighbours as an offer —
+                 the same SemanticFallback component, not a second copy. -->
             <p class="iwac-fed__union-status">{t('results_empty_list')}</p>
             {#if unionSemanticHidden}
-              <div class="iwac-fed__union-offer">
-                <button
-                  type="button"
-                  class="iwac-fed__semantic-btn"
-                  onclick={() => (unionSemanticOptInFor = query)}
-                >
-                  {tp('show_semantic', unionResponse.found)}
-                </button>
-              </div>
+              <SemanticFallback
+                found={unionResponse.found}
+                {query}
+                shown={false}
+                onShow={() => setUnionSemantic(true)}
+                onHide={() => setUnionSemantic(false)}
+              />
             {/if}
           {:else}
             {#if unionSemanticOnly}
               <!-- Opted in: rendered, but never unlabelled. -->
-              <div class="iwac-fed__semantic-banner" role="status">
-                <p class="iwac-fed__union-status">{t('semantic_only_banner', { q: query })}</p>
-                <button
-                  type="button"
-                  class="iwac-fed__semantic-btn"
-                  onclick={() => (unionSemanticOptInFor = null)}
-                >
-                  {t('hide_semantic')}
-                </button>
-              </div>
+              <SemanticFallback
+                found={unionResponse.found}
+                {query}
+                shown={true}
+                onShow={() => setUnionSemantic(true)}
+                onHide={() => setUnionSemantic(false)}
+              />
             {/if}
             <p class="iwac-fed__union-count">
               {formatNumber(unionResponse.found)}
-              {#if unionSemanticOnly}
-                {tp('semantic_result', unionResponse.found)}
-              {:else}
-                {tp('result', unionResponse.found)}
-              {/if}
+              {i18n.tp(unionSemanticOnly ? 'semantic_result' : 'result', unionResponse.found)}
             </p>
             <ol class="iwac-fed__union-list">
               {#each unionResponse.hits as hit (hit.document.id)}
@@ -455,7 +509,7 @@
               <Pagination
                 currentPage={unionPage}
                 totalPages={unionTotalPages}
-                onPageChange={(next) => (unionPage = next)}
+                onPageChange={changeUnionPage}
               />
             {/if}
             {#if unionCapped && unionPage >= unionTotalPages}
@@ -506,69 +560,76 @@
     text-align: center;
   }
 
-  /* Type tabs. */
+  /*
+   * Result-type tabs — the stack's RULED tab (the grammar of the theme's
+   * "How to cite" strip and its masthead nav): a tracked uppercase strip on a
+   * hairline, ink labels, and the selected tab in ink-strong over a 2px
+   * --primary underline. No fill, no pill, no radius: a filled orange tab was
+   * the one control here DESIGN-PHILOSOPHY rules out by name, and it needed
+   * twenty !importants to beat the theme's button base. The descendant
+   * selectors below outrank that base's hover rule
+   * (button:hover:not(:disabled):not(.disabled)) on specificity alone.
+   */
   .iwac-fed__tabs {
     display: flex;
     flex-wrap: wrap;
-    gap: var(--space-1, 0.25rem);
-    padding-block-end: var(--space-2, 0.5rem);
-    border-bottom: 1px solid var(--border-light, #e2e5e8);
+    gap: var(--space-6, 1.5rem);
+    border-block-end: 1px solid var(--border, #ced1d6);
   }
-  /*
-   * The IWAC theme styles every <button> as a primary pill; guard the
-   * hijacked properties so tabs read as quiet chips, with the active tab in
-   * the brand colour on purpose.
-   */
-  .iwac-fed__tab {
+  .iwac-fed__tabs .iwac-fed__tab {
     display: inline-flex;
-    align-items: center;
+    align-items: baseline;
     gap: 0.4rem;
-    padding: 0.4rem 0.85rem;
-    margin: 0;
-    border: 1px solid var(--border, #ced1d6) !important;
-    border-radius: var(--radius-full, 9999px);
-    background: var(--surface, #fdfcfb) !important;
-    color: var(--ink, #13161c) !important;
+    margin: 0 0 -1px; /* sit the underline on the strip's hairline */
+    padding: var(--space-2, 0.5rem) 0;
+    background: none;
+    color: var(--ink, #13161c);
+    border: 0;
+    border-block-end: 2px solid transparent;
+    border-radius: 0;
     font: inherit;
-    font-size: var(--text-sm, 0.9375rem);
-    line-height: 1.2;
-    cursor: pointer;
-    box-shadow: none !important;
-    transform: none !important;
-  }
-  .iwac-fed__tab:hover {
-    border-color: var(--primary, #ce4115) !important;
-    color: var(--primary, #ce4115) !important;
-    background: var(--surface, #fdfcfb) !important;
-  }
-  .iwac-fed__tab--active,
-  .iwac-fed__tab--active:hover {
-    background: var(--primary, #ce4115) !important;
-    border-color: var(--primary, #ce4115) !important;
-    color: var(--ink-on-primary, #fff) !important;
+    font-size: var(--text-xs, 0.8125rem);
     font-weight: 600;
+    letter-spacing: var(--tracking-wide, 0.04em);
+    text-transform: uppercase;
+    transition:
+      color var(--transition-fast, 150ms cubic-bezier(0.25, 1, 0.5, 1)),
+      border-color var(--transition-fast, 150ms cubic-bezier(0.25, 1, 0.5, 1));
   }
-  /*
-   * Quiet tabs step down by colour, never by opacity: an empty tab is still
-   * clickable, so its text owes 4.5:1, and ink at 0.55 opacity made 4.0:1.
-   * --muted is the token built to clear that bar on --surface.
-   */
-  .iwac-fed__tab--empty:not(.iwac-fed__tab--active):not(:hover) {
-    color: var(--muted, #66696e) !important;
+  .iwac-fed__tabs .iwac-fed__tab:hover:not(:disabled) {
+    background: none;
+    color: var(--ink-strong, #05070c);
+    border-color: transparent;
+    border-block-end-color: var(--border-strong, #aeb1b7);
   }
-  .iwac-fed__tab:focus-visible {
-    outline: var(--focus-outline, 2px solid #ce4115) !important;
+  .iwac-fed__tabs .iwac-fed__tab--active,
+  .iwac-fed__tabs .iwac-fed__tab--active:hover:not(:disabled) {
+    color: var(--ink-strong, #05070c);
+    border-block-end-color: var(--primary, #ce4115);
+  }
+  /* An empty tab steps down by colour, never by opacity: it is still a
+     control, and --muted is the token built to clear 4.5:1. */
+  .iwac-fed__tabs .iwac-fed__tab--empty:not(.iwac-fed__tab--active):not(:hover) {
+    color: var(--muted, #66696e);
+  }
+  .iwac-fed__tabs .iwac-fed__tab:focus-visible {
+    outline: var(--focus-outline, 2px solid #ce4115);
     outline-offset: 2px;
   }
-  /*
-   * No opacity here either: the active tab's --ink-on-primary clears AA on
-   * --primary with little to spare (4.78:1 light, 6.10:1 dark), and 0.85
-   * opacity took the light count to 3.87:1. The smaller step is the
-   * de-emphasis.
-   */
   .iwac-fed__tab-count {
     font-variant-numeric: tabular-nums;
-    font-size: var(--text-xs, 0.8125rem);
+    letter-spacing: 0;
+    color: var(--muted, #66696e);
+  }
+
+  .iwac-fed__sr {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
   }
 
   /* Union "All" tab — a lean merged list (ResultItem rows + pagination). */
@@ -577,6 +638,10 @@
     flex-direction: column;
     gap: var(--space-4, 1rem);
     min-width: 0;
+  }
+  /* Focused programmatically after a page change; :focus-visible untouched. */
+  .iwac-fed__union:focus:not(:focus-visible) {
+    outline: none;
   }
   .iwac-fed__union-list {
     list-style: none;
@@ -590,53 +655,6 @@
     margin: 0;
     color: var(--muted, #66696e);
     font-size: var(--text-sm, 0.9375rem);
-  }
-  /*
-   * Semantic fallback — same quiet vocabulary as App.svelte's: this offers a
-   * weaker kind of answer, so it must not out-shout the surface around it.
-   */
-  .iwac-fed__union-offer {
-    display: flex;
-    justify-content: center;
-  }
-  .iwac-fed__semantic-banner {
-    display: flex;
-    align-items: baseline;
-    flex-wrap: wrap;
-    gap: var(--space-1, 0.25rem) var(--space-4, 1rem);
-    padding-block-end: var(--space-2, 0.5rem);
-    border-block-end: 1px solid var(--border-light, #e2e5e8);
-  }
-  .iwac-fed__semantic-banner .iwac-fed__semantic-btn {
-    margin-inline-start: auto;
-  }
-  .iwac-fed__semantic-btn {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--space-1, 0.25rem);
-    padding: 0.4rem 0.75rem;
-    /* The IWAC theme paints every <button>; the resets keep this an outline. */
-    border: 1px solid var(--border, #ced1d6) !important;
-    border-radius: var(--radius-md, 0.5rem);
-    background: var(--surface, #fdfcfb) !important;
-    color: var(--ink, #13161c) !important;
-    box-shadow: none !important;
-    transform: none !important;
-    font: inherit;
-    font-size: var(--text-sm, 0.9375rem);
-    font-weight: 500;
-    cursor: pointer;
-    transition:
-      border-color var(--transition-fast, 150ms cubic-bezier(0.25, 1, 0.5, 1)),
-      color var(--transition-fast, 150ms cubic-bezier(0.25, 1, 0.5, 1));
-  }
-  .iwac-fed__semantic-btn:hover {
-    border-color: var(--primary, #ce4115) !important;
-    color: var(--primary, #ce4115) !important;
-  }
-  .iwac-fed__semantic-btn:focus-visible {
-    outline: var(--focus-outline, 2px solid #ce4115);
-    outline-offset: 2px;
   }
 
   .iwac-fed__union-error {

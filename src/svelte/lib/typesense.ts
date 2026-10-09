@@ -701,36 +701,60 @@ export class TypesenseClient {
 
     // Union mode returns ONE merged result object, not {results: [...]},
     // so the payload IS the response — no `pick` needed.
-    const response = await this.withStopwordRetry({
-      label: 'Everything',
-      url: url.toString(),
-      key: key.key,
-      signal,
-      buildBody,
-    });
-    if (!isBrowse) {
-      const counts = await this.auxiliary(
-        key.key,
-        (stopwords) => ({
-          searches: args.searches.map((s) => ({
-            collection: s.collection,
-            ...queryPolicy(q, s.queryBy, stopwords, true),
-            filter_by: s.filterBy || undefined,
-            per_page: 0,
-            enable_analytics: false,
-          })),
-        }),
-        'Keyword counts',
+    // The keyword counts that tell a real union from a vector-only one used
+    // to be a second POST awaited AFTER the union — serial latency on the tab
+    // every masthead search lands on — and re-sent on every page turn. They
+    // run alongside the union now, once per query (paging reuses them).
+    const countsKey = JSON.stringify([q, args.searches]);
+    const keywordFound =
+      isBrowse || this.unionKeywordCounts?.key === countsKey
+        ? Promise.resolve(isBrowse ? undefined : this.unionKeywordCounts?.value)
+        : this.unionKeywordFound(key.key, q, args.searches, signal).then((value) => {
+            if (value !== undefined) this.unionKeywordCounts = { key: countsKey, value };
+            return value;
+          });
+    const [response, keyword] = await Promise.all([
+      this.withStopwordRetry({
+        label: 'Everything',
+        url: url.toString(),
+        key: key.key,
         signal,
-      );
-      const values = counts.results?.map(readCount);
-      if (
-        values?.length === args.searches.length &&
-        values.every((n): n is number => n !== undefined)
-      )
-        response.keyword_found = values.reduce((a, b) => a + b, 0);
-    }
+        buildBody,
+      }),
+      keywordFound,
+    ]);
+    if (keyword !== undefined) response.keyword_found = keyword;
     return response;
+  }
+
+  /** Last union keyword total, keyed by query + legs, so paging does not recount. */
+  private unionKeywordCounts: { key: string; value: number } | null = null;
+
+  /** Sum of the keyword-only counts of every union leg; undefined if any failed. */
+  private async unionKeywordFound(
+    key: string,
+    q: string,
+    searches: Array<{ collection: string; queryBy: string; filterBy?: string }>,
+    signal: AbortSignal,
+  ): Promise<number | undefined> {
+    const counts = await this.auxiliary(
+      key,
+      (stopwords) => ({
+        searches: searches.map((s) => ({
+          collection: s.collection,
+          ...queryPolicy(q, s.queryBy, stopwords, true),
+          filter_by: s.filterBy || undefined,
+          per_page: 0,
+          enable_analytics: false,
+        })),
+      }),
+      'Keyword counts',
+      signal,
+    );
+    const values = counts.results?.map(readCount);
+    return values?.length === searches.length && values.every((n): n is number => n !== undefined)
+      ? values.reduce((a, b) => a + b, 0)
+      : undefined;
   }
 
   /** Hybrid totals paired with explicit keyword counts. Failed counts become blank badges. */
