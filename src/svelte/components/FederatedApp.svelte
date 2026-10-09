@@ -147,11 +147,14 @@
   let unionPage = $state(1);
   let unionLoading = $state(false);
   let unionError = $state<string | null>(null);
+  /** Bumped by the error state's Retry; read by the union effect to re-run it. */
+  let unionRetry = $state(0);
 
   $effect(() => {
     if (activeTab !== 'all') return;
     const q = query;
     const p = unionPage;
+    void unionRetry;
     unionLoading = true;
     unionError = null;
     countClient
@@ -162,6 +165,8 @@
       })
       .catch((e: unknown) => {
         if (isAbortError(e)) return; // superseded — a newer union call settles the state
+        // Operator detail to the console; the page says it in the reader's language.
+        console.error('[iwac-search] union search failed', e);
         unionError = e instanceof Error ? e.message : String(e);
         unionResponse = null;
         unionLoading = false;
@@ -464,7 +469,8 @@
         {#if unionError}
           <div class="iwac-fed__union-error" role="alert">
             <strong>{t('search_unavailable')}</strong>
-            <span>{unionError}</span>
+            <span>{t('search_failed_hint')}</span>
+            <button type="button" onclick={() => (unionRetry += 1)}>{t('retry_search')}</button>
           </div>
         {:else if unionLoading && !unionResponse}
           <p class="iwac-fed__union-status">{t('searching')}</p>
@@ -658,6 +664,7 @@
   }
 
   .iwac-fed__union-error {
+    align-items: flex-start;
     background: color-mix(in oklab, var(--error, #c9222b) 12%, var(--surface, #fdfcfb));
     border: 1px solid color-mix(in oklab, var(--error, #c9222b) 35%, transparent);
     border-radius: var(--radius-md, 0.5rem);

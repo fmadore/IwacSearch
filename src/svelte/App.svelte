@@ -648,9 +648,14 @@
     </p>
   {/if}
   {#if results.error}
+    <!-- The reader's language and a way forward. The raw transport message
+         ("Token HTTP 503: Typesense scoped-key minting failed…") is operator
+         detail, in English on the French site: it goes to the console, where
+         searchResults already logs it, not to the page. -->
     <div class="iwac-search__error" role="alert">
       <strong>{t('search_unavailable')}</strong>
-      <span>{results.error}</span>
+      <span>{t('search_failed_hint')}</span>
+      <button type="button" onclick={() => results.retry()}>{t('retry_search')}</button>
     </div>
   {/if}
 
@@ -712,7 +717,10 @@
         aria-busy={results.isLoading}
       >
         <h2 id={resultsHeadingId} class="iwac-search__sr-only">{t('results_heading')}</h2>
-        {#if response}
+        <!-- Kept through an error: the mobile Filters trigger is the only way to
+             the drawer, and the drawer is where the reader undoes the filter
+             that broke the search. -->
+        {#if response || results.error}
           <ResultsToolbar
             bind:anchor={resultsAnchor}
             {view}
@@ -720,15 +728,16 @@
             activeFilterCount={filterState.activeCount}
             onOpenFilters={() => drawer.show()}
             showCopyLink={syncUrl}
-            fetchDocs={card === 'content' && response.found > 0 && !semanticHidden
+            fetchDocs={card === 'content' && response && response.found > 0 && !semanticHidden
               ? handleExportFetch
               : null}
             {query}
-            found={response.found}
+            found={response?.found ?? 0}
             sort={effectiveSort}
             onSortChange={handleSortChange}
           />
-
+        {/if}
+        {#if response}
           <!-- Persistent count + scope + sort summary, visible on every
                viewport (the mobile filter readout). Closed by a 2px ink rule.
                Withheld for a semantic-only response: its count is the vector
@@ -989,6 +998,7 @@
     color: var(--ink-strong, #05070c);
     display: flex;
     flex-direction: column;
+    align-items: flex-start;
     gap: var(--space-1, 0.25rem);
   }
   .iwac-search__status {

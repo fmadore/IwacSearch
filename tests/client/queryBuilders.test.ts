@@ -53,6 +53,16 @@ describe('buildFilterBy', () => {
     expect(buildFilterBy({ gpt_5_6_luna_subjectivite: ['high', ''] })).toBe('');
   });
 
+  /** S-11: these all passed Number.isFinite and 422'd the whole surface. */
+  it('accepts decimal literals only — no hex, exponent or padded forms', () => {
+    expect(buildFilterBy({ gpt_5_6_luna_subjectivite: ['0x10', '1e3', ' 4', 'Infinity'] })).toBe(
+      '',
+    );
+    expect(buildFilterBy({ gpt_5_6_luna_subjectivite: ['2.5', '3'] })).toBe(
+      'gpt_5_6_luna_subjectivite:=[2.5,3]',
+    );
+  });
+
   it('ignores empty selections rather than emitting an empty clause', () => {
     expect(buildFilterBy({})).toBe('');
     expect(buildFilterBy({ country_ss: [] })).toBe('');

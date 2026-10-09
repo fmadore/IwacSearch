@@ -38,7 +38,10 @@ export function buildFilterBy(filters: ActiveFilters): string {
       // rejects a backticked number ("Numerical field has an invalid
       // comparator"), so e.g. gpt_5_6_luna_subjectivite:=[1,2] — never
       // [`1`,`2`].
-      const nums = values.filter((v) => v.trim() !== '' && Number.isFinite(Number(v)));
+      // A DECIMAL literal only. Number.isFinite(Number(v)) also passed
+      // "0x10", "1e3" and " 4", which Typesense rejects with a 422 — so a
+      // crafted ?f.…_subjectivite=0x10 error-stated the whole surface.
+      const nums = values.filter((v) => /^-?\d+(\.\d+)?$/.test(v));
       if (nums.length === 0) continue;
       parts.push(`${field}:=[${nums.join(',')}]`);
     } else if (BOOLEAN_FACET_FIELDS.has(field)) {
