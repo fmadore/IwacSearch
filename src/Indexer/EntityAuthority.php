@@ -124,7 +124,7 @@ final class EntityAuthority
     /**
      * Record one authority item into the cache.
      *
-     * @param array{id:int,title:string,is_public:bool,class:int,item_sets:list<int>} $item
+     * @param array{id:int,title:string,is_public:bool,class:int,template:?int,item_sets:list<int>} $item
      */
     private function addRecord(array $item, PropertyValues $values, ?string $thumbnail): void
     {

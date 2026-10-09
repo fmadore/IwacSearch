@@ -56,7 +56,7 @@ interface MapperInterface
      * photograph / reference mappers derive `country_ss` from per-country set
      * membership, and every subset emits `item_set_ids`.
      *
-     * @param  array{id:int,title:string,is_public:bool,class:int,item_sets:list<int>} $item
+     * @param  array{id:int,title:string,is_public:bool,class:int,template:?int,item_sets:list<int>} $item
      * @param  ?string $thumbnailUrl  first thumbnailed-media derivative URL, or null
      * @return array<string,mixed>|null  null = skip this item
      */

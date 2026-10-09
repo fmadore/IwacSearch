@@ -51,7 +51,7 @@ final class PublicationMapper extends AbstractMapper
         $this->addAuthorityEntities($doc, $values);
         $this->addDateFields($doc, $values);
         $this->addBodyFields($doc, $values);
-        $this->addTableOfContents($doc, $values);
+        $this->addTableOfContents($doc, $values, $item['template']);
 
         return $doc;
     }
@@ -61,9 +61,13 @@ final class PublicationMapper extends AbstractMapper
      * excerpt as the public card body. A future per-entry parser can coexist
      * with this field; preserving the source blob keeps that migration open.
      *
+     * On the templates where the ToC is a model's per-page summary
+     * ({@see IwacInstance::AI_TABLE_OF_CONTENTS_TEMPLATES}), the excerpt — and
+     * a toc_txt highlight shown in its place — is flagged `abstract_ai`.
+     *
      * @param array<string, mixed> $doc
      */
-    private function addTableOfContents(array &$doc, PropertyValues $values): void
+    private function addTableOfContents(array &$doc, PropertyValues $values, ?int $template): void
     {
         $toc = implode("\n\n", $values->publicLiterals('dcterms:tableOfContents'));
         if ($toc === '') {
@@ -74,5 +78,8 @@ final class PublicationMapper extends AbstractMapper
         $doc['abstract'] = mb_strlen($toc, 'UTF-8') <= self::ABSTRACT_MAX_CHARS
             ? $toc
             : rtrim(mb_substr($toc, 0, self::ABSTRACT_MAX_CHARS - 1, 'UTF-8')) . '…';
+        if ($template !== null && in_array($template, IwacInstance::AI_TABLE_OF_CONTENTS_TEMPLATES, true)) {
+            $doc['abstract_ai'] = true;
+        }
     }
 }

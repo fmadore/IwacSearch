@@ -45,6 +45,17 @@ export const CHIP_ICONS: Record<string, 'newspaper' | 'globe' | 'camera-video'> 
   country_ss: 'globe',
 };
 
+/** Highlight fields that can stand in for the card body, most contextual first. */
+const SNIPPET_FIELDS = ['ocr_text', 'toc_txt', 'abstract'] as const;
+
+/** Which field the body snippet comes from, or null when none matched. */
+export function snippetField(hit: IwacHit): (typeof SNIPPET_FIELDS)[number] | null {
+  for (const field of SNIPPET_FIELDS) {
+    if (hit.highlights?.some((h) => h.field === field && h.snippet)) return field;
+  }
+  return null;
+}
+
 /**
  * Body snippet: the OCR match first (most contextual), then the publication
  * table of contents, else the abstract match. Empty when none matched — the
@@ -52,12 +63,27 @@ export const CHIP_ICONS: Record<string, 'newspaper' | 'globe' | 'camera-video'> 
  * with only literal <mark> tags reinstated (see lib/sanitize.ts).
  */
 export function pickSnippet(hit: IwacHit): string {
-  const raw =
-    hit.highlights?.find((h) => h.field === 'ocr_text')?.snippet ??
-    hit.highlights?.find((h) => h.field === 'toc_txt')?.snippet ??
-    hit.highlights?.find((h) => h.field === 'abstract')?.snippet ??
-    '';
+  const field = snippetField(hit);
+  const raw = field ? (hit.highlights?.find((h) => h.field === field)?.snippet ?? '') : '';
   return sanitizeHighlight(raw);
+}
+
+/**
+ * Is the body text the card shows a model's? True when the document flags
+ * its `abstract` as AI (`abstract_ai`) and that is what is on the card: the
+ * plain abstract, an abstract highlight, or — the ToC being what a
+ * publication's abstract is excerpted from — a toc_txt highlight. An OCR
+ * snippet is the source's own words, whatever the record's summary is.
+ *
+ * DESIGN-PHILOSOPHY principle 7: AI text is never blended unmarked into the
+ * human record. The item page marks the same field with the EU label; a search
+ * card used to show it as a plain snippet.
+ */
+export function isAiBody(hit: IwacHit): boolean {
+  if (hit.document.abstract_ai !== true) return false;
+  const field = snippetField(hit);
+  if (field === 'ocr_text') return false;
+  return field !== null || (hit.document.abstract ?? '').trim() !== '';
 }
 
 /**

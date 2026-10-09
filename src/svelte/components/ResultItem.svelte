@@ -187,6 +187,21 @@
   {/if}
 {/snippet}
 
+<!-- The EU "AI generated" mark, ahead of a body text that is a model's (the
+     DescriptionAI summary, or an AI-summarised table of contents). Same mark
+     and wording as the theme's .property--ai on the item page; drawn by
+     asset/css/iwac-search.css as a theme-inked mask. lang is the PAGE's: the
+     body text around it may be in another language. -->
+{#snippet aiMark()}
+  {#if cardData.aiBody}<span
+      class="iwac-ai-mark"
+      role="img"
+      lang={locale}
+      aria-label={t('ai_generated')}
+      title={t('ai_generated_title')}
+    ></span>{/if}
+{/snippet}
+
 <!-- Title link, with the query match highlighted in place when present. -->
 {#snippet titleLink()}
   {#if cardData.titleMarkup}
@@ -340,11 +355,14 @@
 
         {#if cardData.snippet}
           <!-- cardData.snippet was HTML-escaped client-side; only literal mark tags survive -->
-          <!-- eslint-disable-next-line svelte/no-at-html-tags -->
-          <p class="iwac-card__snippet" lang={cardData.langTag}>{@html cardData.snippet}</p>
+          <p class="iwac-card__snippet" lang={cardData.langTag}>
+            {@render aiMark()}
+            <!-- eslint-disable-next-line svelte/no-at-html-tags -->
+            {@html cardData.snippet}
+          </p>
         {:else if cardData.abstract}
           <p class="iwac-card__snippet iwac-card__snippet--abstract" lang={cardData.langTag}>
-            {cardData.abstract}
+            {@render aiMark()}{cardData.abstract}
           </p>
         {/if}
 

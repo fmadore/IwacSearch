@@ -192,7 +192,7 @@ abstract class AbstractMapper implements MapperInterface
     /**
      * Identity + display + ACL skeleton common to every subset.
      *
-     * @param array{id:int,title:string,is_public:bool,class:int,item_sets:list<int>} $item
+     * @param array{id:int,title:string,is_public:bool,class:int,template:?int,item_sets:list<int>} $item
      * @return array<string, mixed>
      */
     protected function buildBase(array $item, PropertyValues $values, ?string $thumbnailUrl): array
@@ -445,15 +445,23 @@ abstract class AbstractMapper implements MapperInterface
      * sparse non-press records (notably photographs and audiovisual items) a
      * useful card body without changing the article/document preference.
      *
+     * The two sources are not the same kind of text, so the document says
+     * which one it got: `abstract_ai` is true when the body is the
+     * `bibo:shortDescription` model summary (DescriptionAI), so the result
+     * card can carry the EU "AI generated" mark the item page shows for the
+     * same field. Absent for the human `dcterms:description` fallback.
+     *
      * @param array<string, mixed> $doc
      */
     protected function addDescription(array &$doc, PropertyValues $values): void
     {
         $description = $values->firstPublicLiteral('bibo:shortDescription');
-        if ($description === '') {
-            $description = $values->firstPublicLiteral('dcterms:description');
+        if ($description !== '') {
+            $doc['abstract'] = $description;
+            $doc['abstract_ai'] = true;
+            return;
         }
-        $this->maybeAdd($doc, 'abstract', $description);
+        $this->maybeAdd($doc, 'abstract', $values->firstPublicLiteral('dcterms:description'));
     }
 
     /**

@@ -1,5 +1,18 @@
 # Deployment and acceptance checklist — 3.19.0
 
+## Unreleased (review fixes, October 2026)
+
+**Schema `iwac_v10` — a full reindex is required.** Content documents gain
+`abstract_ai`, true when the card body is a model's text (the
+`bibo:shortDescription` summary, or a publication ToC on template 21); the
+result card shows the EU "AI generated" mark for it. New field only. The
+indexer now also reads `resource.resource_template_id` (no migration — the
+column is Omeka core's).
+
+- [ ] Install the module update, then run the full reindex (admin button, `cli/reindex.php` or `omeka-cli discovery:reindex`) and confirm `iwac_current` points at `iwac_v10`. Until then cards render exactly as before (no flag, no mark).
+- [ ] Browse `/s/westafrica/search` with no query: article cards whose body is the AI summary open with the EU "AI generated" mark, light and dark; a query matching OCR text shows its snippet without the mark. A publication card's ToC excerpt carries it too.
+- [ ] Export RIS from a browse page: AI summaries carry an `N1` note beside their `AB`.
+
 ## 3.21.1 additions
 
 Dependencies only: no schema change, no reindex, no module upgrade step.

@@ -6,11 +6,13 @@ import {
   formatDate,
   formatDuration,
   formatYearRange,
+  isAiBody,
   pickExternalLink,
   pickMatchedIn,
   pickSnippet,
   pickTitleMarkup,
   resultLanguageTag,
+  snippetField,
 } from '../../src/svelte/lib/resultCard';
 
 /**
@@ -58,6 +60,41 @@ describe('pickSnippet', () => {
       { field: 'ocr_text', snippet: '<img src=x onerror=alert(1)> <mark>hit</mark>' },
     ]);
     expect(pickSnippet(h)).toBe('&lt;img src=x onerror=alert(1)&gt; <mark>hit</mark>');
+  });
+});
+
+/**
+ * X-05: an AI-written body (the DescriptionAI summary, an AI-summarised ToC)
+ * carries the EU mark; the source's own OCR words never do, whatever the
+ * record's summary is.
+ */
+describe('isAiBody', () => {
+  const ai = { abstract: 'Résumé', abstract_ai: true };
+
+  it('marks the plain AI abstract a browse card shows', () => {
+    expect(isAiBody(hit(undefined, ai))).toBe(true);
+  });
+
+  it('marks an abstract or ToC highlight standing in for the body', () => {
+    expect(isAiBody(hit([{ field: 'abstract', snippet: '<mark>R</mark>' }], ai))).toBe(true);
+    expect(isAiBody(hit([{ field: 'toc_txt', snippet: 'p. 2 <mark>x</mark>' }], ai))).toBe(true);
+  });
+
+  it('does not mark an OCR snippet, which is the source itself', () => {
+    const h = hit(
+      [
+        { field: 'ocr_text', snippet: 'le <mark>texte</mark>' },
+        { field: 'abstract', snippet: '<mark>R</mark>' },
+      ],
+      ai,
+    );
+    expect(snippetField(h)).toBe('ocr_text');
+    expect(isAiBody(h)).toBe(false);
+  });
+
+  it('does not mark a human abstract, or a card with no body at all', () => {
+    expect(isAiBody(hit(undefined, { abstract: 'Human' }))).toBe(false);
+    expect(isAiBody(hit(undefined, { abstract_ai: true }))).toBe(false);
   });
 });
 

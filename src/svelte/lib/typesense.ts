@@ -76,6 +76,8 @@ const EXPORT_INCLUDE_FIELDS = [
   'subjects_ss',
   'places_ss',
   'abstract',
+  // So an exported AI summary keeps saying what it is (export.ts).
+  'abstract_ai',
   'omeka_url',
   'source_url',
 ].join(',');

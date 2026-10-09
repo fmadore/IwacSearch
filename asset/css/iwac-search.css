@@ -175,3 +175,37 @@
   0%, 100% { opacity: 1; }
   50%      { opacity: 0.6; }
 }
+
+/*
+ * The EU "AI GENERATED" mark ahead of a result card's body text when that
+ * text is a model's — the DescriptionAI summary, or an AI-summarised table of
+ * contents (the document's `abstract_ai`; see ResultItem.svelte). The same
+ * official mark, from the same SVG, the theme draws on the item page
+ * (IWAC-theme .property--ai .property__ai-eu): a mask inked with --ink-light,
+ * so it reads near-black on the light surfaces and near-white in the lamplit
+ * dark set, the two EU colourways folded into one asset. The faint plate
+ * behind the wordmark is baked into the SVG at 50% alpha.
+ *
+ * It lives here rather than in the Svelte bundle because the mask is a file
+ * this stylesheet can address relatively (../img/), so the bundle carries no
+ * 6 KB of path data. Sized off the snippet's own font so it sits on its line.
+ */
+.iwac-search-block__root .iwac-ai-mark {
+  display: inline-block;
+  height: 1.05em;
+  aspect-ratio: 1401 / 283;
+  margin-inline-end: 0.45em;
+  vertical-align: -0.2em;
+  background-color: var(--ink-light, #3f4349);
+  -webkit-mask: url('../img/ai-generated-eu.svg') no-repeat center / contain;
+  mask: url('../img/ai-generated-eu.svg') no-repeat center / contain;
+}
+
+/* Forced colours drop background-color, which would leave an empty box:
+   paint the mark in the system text colour instead. */
+@media (forced-colors: active) {
+  .iwac-search-block__root .iwac-ai-mark {
+    forced-color-adjust: none;
+    background-color: CanvasText;
+  }
+}

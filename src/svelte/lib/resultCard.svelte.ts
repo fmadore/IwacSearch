@@ -9,6 +9,7 @@ import {
   formatDate,
   formatDuration,
   formatYearRange,
+  isAiBody,
   pickExternalLink,
   pickMatchedIn,
   pickSnippet,
@@ -132,6 +133,8 @@ export function createResultCard(input: () => { hit: IwacHit; hideCountry: boole
   const sourceChips = $derived(buildSourceChips(doc, { hideCountry, locale }));
 
   const snippet = $derived(pickSnippet(input().hit));
+  /** The body is AI text: the card shows the EU mark before it. */
+  const aiBody = $derived(isAiBody(input().hit));
   const titleMarkup = $derived(pickTitleMarkup(input().hit));
   const matchedIn = $derived(pickMatchedIn(input().hit, locale));
 
@@ -235,6 +238,9 @@ export function createResultCard(input: () => { hit: IwacHit; hideCountry: boole
     },
     get snippet() {
       return snippet;
+    },
+    get aiBody() {
+      return aiBody;
     },
     get abstract() {
       return abstract;

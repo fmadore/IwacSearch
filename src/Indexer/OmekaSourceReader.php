@@ -59,7 +59,7 @@ final class OmekaSourceReader
      * @param  list<int>|null $itemSetIds optional item-set scope (AND membership)
      * @param  bool           $withThumbnail resolve the item's first thumbnailed media
      * @return Generator<int, array{
-     *     item: array{id:int,title:string,is_public:bool,class:int,item_sets:list<int>},
+     *     item: array{id:int,title:string,is_public:bool,class:int,template:?int,item_sets:list<int>},
      *     values: PropertyValues,
      *     thumbnail: ?string
      * }>
@@ -87,7 +87,7 @@ final class OmekaSourceReader
         // :lastId the only bound params and the keyset page a single stable
         // prepared statement re-executed per page. Both are cast through
         // intval, so the inlining is safe by construction.
-        $sql = 'SELECT id, title, is_public, resource_class_id FROM resource'
+        $sql = 'SELECT id, title, is_public, resource_class_id, resource_template_id FROM resource'
             . ' WHERE resource_type = :rt'
             . ' AND resource_class_id IN (' . $classList . ')'
             . ' AND id > :lastId'
@@ -125,7 +125,7 @@ final class OmekaSourceReader
      * @param  list<int>    $ids
      * @param  list<string> $terms
      * @return array<int, array{
-     *     item: array{id:int,title:string,is_public:bool,class:int,item_sets:list<int>},
+     *     item: array{id:int,title:string,is_public:bool,class:int,template:?int,item_sets:list<int>},
      *     values: PropertyValues,
      *     thumbnail: ?string
      * }>
@@ -136,7 +136,7 @@ final class OmekaSourceReader
             return [];
         }
         $rows = $this->connection->executeQuery(
-            'SELECT id, title, is_public, resource_class_id FROM resource'
+            'SELECT id, title, is_public, resource_class_id, resource_template_id FROM resource'
             . ' WHERE resource_type = :rt AND id IN (:ids)',
             ['rt' => Item::class, 'ids' => $ids],
             ['ids' => Connection::PARAM_INT_ARRAY],
@@ -167,7 +167,7 @@ final class OmekaSourceReader
      * @param  array<int, list<int>> $sets
      * @param  array<int, string>    $thumbs
      * @return array{
-     *     item: array{id:int,title:string,is_public:bool,class:int,item_sets:list<int>},
+     *     item: array{id:int,title:string,is_public:bool,class:int,template:?int,item_sets:list<int>},
      *     values: PropertyValues,
      *     thumbnail: ?string
      * }
@@ -182,6 +182,10 @@ final class OmekaSourceReader
                 'title'     => $values->publicMetadata()->firstDisplay('dcterms:title'),
                 'is_public' => (bool) $row['is_public'],
                 'class'     => (int) $row['resource_class_id'],
+                // Some fields are AI-generated only on a given template (the
+                // periodical-issue ToC, template 21) — see
+                // IwacInstance::AI_TABLE_OF_CONTENTS_TEMPLATES.
+                'template'  => $row['resource_template_id'] !== null ? (int) $row['resource_template_id'] : null,
                 'item_sets' => $sets[$id] ?? [],
             ],
             'values'    => $values,

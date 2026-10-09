@@ -58,6 +58,12 @@ Changed in v6 (schema `iwac_v6`):
 | `gpt_5_6_luna_*` (surfaced sentiment trio)       | `iwac:gpt56Luna*` — replaces the generation-1 `gemini_3_flash_preview_*` trio     |
 | `mistral_small_2603_*`, `deepseek_v4_flash_0731_*` | `iwac:mistralSmall2603*` / `iwac:deepseekV4Flash0731*` — indexed, not surfaced  |
 
+Added in v10 (schema `iwac_v10`):
+
+| Search field  | Source / behavior                                                                                         |
+| ------------- | --------------------------------------------------------------------------------------------------------- |
+| `abstract_ai` | true when `abstract` came from `bibo:shortDescription`, or from `dcterms:tableOfContents` on template 21 (`IwacInstance::AI_TABLE_OF_CONTENTS_TEMPLATES`); display-only, drives the card's EU "AI generated" mark |
+
 Added in v9 (schema `iwac_v9`):
 
 | Search field                                     | Source / behavior                                                            |

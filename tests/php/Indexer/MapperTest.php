@@ -55,7 +55,7 @@ final class MapperTest extends TestCase
 
     /**
      * @param array<string, mixed> $overrides
-     * @return array{id:int,title:string,is_public:bool,class:int,item_sets:list<int>}
+     * @return array{id:int,title:string,is_public:bool,class:int,template:?int,item_sets:list<int>}
      */
     private static function item(array $overrides = []): array
     {
@@ -64,6 +64,7 @@ final class MapperTest extends TestCase
             'title' => 'Le ramadan à Cotonou',
             'is_public' => true,
             'class' => IwacInstance::CLASS_ARTICLE,
+            'template' => null,
             'item_sets' => [],
         ];
     }
@@ -427,6 +428,7 @@ final class MapperTest extends TestCase
             );
 
             self::assertSame('Curated description', $doc['abstract'], $subset);
+            self::assertArrayNotHasKey('abstract_ai', $doc, "$subset: a human description is not AI text");
         }
     }
 
@@ -442,6 +444,32 @@ final class MapperTest extends TestCase
         );
 
         self::assertSame('AI summary', $doc['abstract']);
+        self::assertTrue($doc['abstract_ai'], 'the card must be able to mark it as AI-generated');
+    }
+
+    /**
+     * The template-21 ToC is a model's per-page summary (IWAC-theme marks it
+     * on the item page), so its card excerpt is flagged; the same field on
+     * another template is not assumed to be.
+     */
+    public function testPublicationTocIsFlaggedAsAiOnlyOnItsTemplate(): void
+    {
+        $values = self::values(['dcterms:tableOfContents' => [['value' => 'p. 2 : Entretien']]]);
+        $publications = $this->registry->get('publications');
+
+        $ai = $publications->map(
+            self::item(['class' => IwacInstance::CLASS_PUBLICATION, 'template' => 21]),
+            $values,
+            null
+        );
+        self::assertTrue($ai['abstract_ai']);
+
+        $other = $publications->map(
+            self::item(['class' => IwacInstance::CLASS_PUBLICATION, 'template' => null]),
+            $values,
+            null
+        );
+        self::assertArrayNotHasKey('abstract_ai', $other);
     }
 
     // ── country_ss ───────────────────────────────────────────────────────
@@ -1139,5 +1167,6 @@ final class MapperTest extends TestCase
         );
 
         self::assertSame('A human-written abstract', $doc['abstract']);
+        self::assertArrayNotHasKey('abstract_ai', $doc);
     }
 }

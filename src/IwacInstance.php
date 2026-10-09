@@ -38,6 +38,20 @@ final class IwacInstance
     /** bibo:Issue — Islamic magazines / journals captured at issue level. */
     public const CLASS_PUBLICATION = 60;
 
+    /**
+     * Resource templates whose `dcterms:tableOfContents` is AI-generated (the
+     * periodical issues' per-page summaries). Mirrors IWAC-theme's
+     * AiGeneratedTerms helper, which marks the same field with the EU "AI
+     * generated" label on the item page — so a ToC excerpt on a search card
+     * carries the mark exactly where the item page does. All 1,501 class-60
+     * issues sat on template 21 in October 2026, but the rule is the
+     * template's, as the theme's is: a ToC on another template could be
+     * human-written.
+     *
+     * @var list<int>
+     */
+    public const AI_TABLE_OF_CONTENTS_TEMPLATES = [21];
+
     /** bibo:Document — letters, communiqués, sermons, leaflets, reports. */
     public const CLASS_DOCUMENT = 49;
 

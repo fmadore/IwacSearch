@@ -34,7 +34,7 @@
 #     dependency at search time.
 #
 # Versioning:
-#   - The actual collection is named `iwac_v9` and aliased as `iwac_current`.
+#   - The actual collection is named `iwac_v10` and aliased as `iwac_current`.
 #     (v1 → v2: French stemming + the `iwac_diversity` curation set.
 #      v2 → v3: accent-insensitive indexing (locale dropped), alt_title_txt,
 #      subjects_ss, searchable/facetable publisher_s + book_title_s, and the
@@ -76,8 +76,13 @@
 #      gemma-4-31b-it (Omeka `iwac:gemma431bIt*`, from 2026-08-14) and
 #      qwen3.8-27b (`iwac:qwen3827b*`, from 2026-08-25) — join the three
 #      already indexed, so the index carries all five models IwacVisualizations
-#      shows. New fields only; nothing existing is renamed.)
-#   - Schema changes ⇒ bump the name (`iwac_v8` → `iwac_v9`), atomic-swap
+#      shows. New fields only; nothing existing is renamed.
+#      v9 → v10: `abstract_ai` — whether the card body (`abstract`, and the
+#      publication ToC it may be excerpted from) is a model's text: the
+#      bibo:shortDescription summary, or a ToC on an AI-summarised template.
+#      The result card shows the EU "AI generated" mark for it, as the item
+#      page does for the same field. New field only.)
+#   - Schema changes ⇒ bump the name (`iwac_v9` → `iwac_v10`), atomic-swap
 #     the alias. The browser only ever queries the alias, so swaps are
 #     zero-downtime.
 #
@@ -87,7 +92,7 @@
 # both the bulk reindex and the M4 incremental path. No Hugging Face.
 # country_ss is derived (newspaper→country / item-set). See docs/data-sources.md.
 
-name: iwac_v9
+name: iwac_v10
 
 # Global curation set linked to this collection. The set itself is created
 # (idempotently) by src/Indexer/CurationSync.php during the bulk reindex.
@@ -268,6 +273,14 @@ fields:
   # the result card can show a couple of lines for every type. Also in
   # query_by, so the summary lightly improves recall.
   - { name: abstract,    type: string, stem: true, optional: true }
+  # True when `abstract` is AI-generated: the `bibo:shortDescription`
+  # summary (source 2 above, not its dcterms:description fallback), or a
+  # publication ToC on a template whose ToC is AI-summarised (source 3,
+  # IwacInstance::AI_TABLE_OF_CONTENTS_TEMPLATES) — in which case a toc_txt
+  # highlight shown on the card is AI text too. Absent means human-written.
+  # Display-only: the card carries the EU "AI generated" mark for it
+  # (DESIGN-PHILOSOPHY principle 7, computational honesty).
+  - { name: abstract_ai, type: bool, index: false, optional: true }
   # The 9 RDF classes that appear in the references subset:
   #   Article de revue · Chapitre · Thèse · Livre · Rapport ·
   #   Communication · Compte rendu · Ouvrage collectif · Article de blog.

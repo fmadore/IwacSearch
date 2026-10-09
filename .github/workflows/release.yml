@@ -180,6 +180,8 @@ jobs:
                    IwacSearch/asset/dist/iwac-search.css \
                    IwacSearch/asset/dist/iwac-search-header.js \
                    IwacSearch/asset/dist/iwac-search-header.css \
+                   IwacSearch/asset/css/iwac-search.css \
+                   IwacSearch/asset/img/ai-generated-eu.svg \
                    IwacSearch/data/schema.yaml \
                    IwacSearch/LICENSE; do
             unzip -l "$ZIP" "$f" > /dev/null 2>&1 \

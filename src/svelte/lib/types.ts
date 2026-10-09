@@ -107,6 +107,14 @@ export interface IwacDoc {
    * the scoped key excludes. Rendered as a couple of lines on the card.
    */
   abstract?: string;
+  /**
+   * True when `abstract` is a MODEL's text — the `bibo:shortDescription`
+   * summary, or a publication ToC on an AI-summarised template (in which case
+   * a toc_txt highlight shown in its place is too). Absent = human-written, or
+   * a collection built before iwac_v10. The card carries the EU "AI
+   * generated" mark for it (lib/resultCard.ts, isAiBody).
+   */
+  abstract_ai?: boolean;
   /** Author(s) / creator(s). Pipe-split upstream into one value per author. */
   creator_ss?: string[];
   /** Alternative titles (dcterms:alternative) — FTS channel, rarely shown. */
