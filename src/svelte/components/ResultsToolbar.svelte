@@ -86,20 +86,35 @@
         {/if}
       </button>
       {#if showCopyLink}
+        <!-- No aria-label: it pinned the name to "Copy link" over the swapped
+             visible text. The label span is the name (visually hidden, still
+             read, on the narrowest phones), and the outcome is spoken by the
+             status line beside it — a name change on a focused button is not
+             reliably announced. -->
         <button
           type="button"
           class="iwac-search__copylink"
           class:is-copied={copyLink.copied}
           onclick={() => copyLink.copy(window.location.href)}
-          aria-label={t('copy_link')}
         >
           <span class="iwac-search__copylink-icon" aria-hidden="true">
             <Icon name="link" />
           </span>
           <span class="iwac-search__copylink-label">
-            {copyLink.copied ? t('link_copied') : t('copy_link')}
+            {copyLink.status === 'copied'
+              ? t('link_copied')
+              : copyLink.status === 'failed'
+                ? t('copy_failed')
+                : t('copy_link')}
           </span>
         </button>
+        <span class="iwac-search__copylink-status" role="status"
+          >{copyLink.status === 'copied'
+            ? t('link_copied')
+            : copyLink.status === 'failed'
+              ? t('copy_failed')
+              : ''}</span
+        >
       {/if}
       {#if fetchDocs}
         <ExportMenu {fetchDocs} {query} {found} />
@@ -186,6 +201,15 @@
   .iwac-search__copylink.is-copied {
     border-color: var(--primary, #ce4115);
     color: var(--primary, #ce4115);
+  }
+  .iwac-search__copylink-status {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
   }
   .iwac-search__copylink-icon {
     display: inline-flex;

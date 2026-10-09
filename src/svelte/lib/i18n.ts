@@ -145,6 +145,7 @@ const STRINGS: Record<Locale, Record<string, string>> = {
     map_capped: 'Carte limitée aux {n} lieux les plus mentionnés.',
     copy_link: 'Copier le lien',
     link_copied: 'Lien copié !',
+    copy_failed: 'Copie impossible',
     did_you_mean: 'Vouliez-vous dire :',
     // Semantic fallback: a query the keyword leg didn't match at all. The
     // vector leg's top-k is offered, never asserted (see lib/semanticFallback.ts).
@@ -288,6 +289,7 @@ const STRINGS: Record<Locale, Record<string, string>> = {
     map_capped: 'Map limited to the {n} most-mentioned places.',
     copy_link: 'Copy link',
     link_copied: 'Link copied!',
+    copy_failed: 'Could not copy',
     did_you_mean: 'Did you mean:',
     show_semantic_one: 'Show {n} semantically related item',
     show_semantic_other: 'Show {n} semantically related items',

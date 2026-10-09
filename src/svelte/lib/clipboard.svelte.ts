@@ -42,24 +42,27 @@ export async function copyText(text: string): Promise<boolean> {
 }
 
 /**
- * "Copy" button state: call `copy()`, and `copied` stays true for
- * `resetMs` so the button can swap its label to a confirmation instead of
- * raising a toast. Repeated clicks restart the timer rather than stacking.
+ * "Copy" button state: call `copy()`, and `status` is 'copied' — or
+ * 'failed', which used to be silence: the button simply did nothing — for
+ * `resetMs`, so the button can swap its label instead of raising a toast.
+ * Repeated clicks restart the timer rather than stacking.
  */
 export function createCopyState(resetMs = 2000) {
-  let copied = $state(false);
+  let status = $state<'idle' | 'copied' | 'failed'>('idle');
   let timer: number | null = null;
 
   return {
+    get status(): 'idle' | 'copied' | 'failed' {
+      return status;
+    },
     get copied(): boolean {
-      return copied;
+      return status === 'copied';
     },
     async copy(text: string): Promise<void> {
-      if (!(await copyText(text))) return;
-      copied = true;
+      status = (await copyText(text)) ? 'copied' : 'failed';
       if (timer !== null) window.clearTimeout(timer);
       timer = window.setTimeout(() => {
-        copied = false;
+        status = 'idle';
         timer = null;
       }, resetMs);
     },
