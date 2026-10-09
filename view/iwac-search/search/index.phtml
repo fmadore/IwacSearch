@@ -20,15 +20,12 @@ $this->headTitle(($isEn ? 'Search' : 'Recherche') . ' · Islam West Africa Colle
     <h1 class="iwac-search-block__title"><?= $this->escapeHtml($heading) ?></h1>
 
     <noscript>
-        <p>This search requires JavaScript. Browse the
-            <a href="<?= $this->escapeHtmlAttr($this->basePath('/s/' . \IwacSearch\IwacInstance::SITE_SLUG_FR)) ?>">
-                French
-            </a>
-            or
-            <a href="<?= $this->escapeHtmlAttr($this->basePath('/s/' . \IwacSearch\IwacInstance::SITE_SLUG_EN)) ?>">
-                English
-            </a>
-            site instead.
+        <?php // The shell's own locale switch, like the heading: this route may
+        // have no site context, so Omeka's translator locale is not the page's. ?>
+        <p><?= $isEn ? 'This search requires JavaScript. Browse the' : 'Cette recherche nécessite JavaScript. Parcourez plutôt le site en' ?>
+            <a href="<?= $this->escapeHtmlAttr($this->basePath('/s/' . \IwacSearch\IwacInstance::SITE_SLUG_FR)) ?>"><?= $isEn ? 'French' : 'français' ?></a>
+            <?= $isEn ? 'or' : 'ou en' ?>
+            <a href="<?= $this->escapeHtmlAttr($this->basePath('/s/' . \IwacSearch\IwacInstance::SITE_SLUG_EN)) ?>"><?= $isEn ? 'English' : 'anglais' ?></a><?= $isEn ? ' site instead.' : '.' ?>
         </p>
     </noscript>
 

@@ -357,6 +357,22 @@ return [
         ],
     ],
 
+    // The PHP side's own strings (the block's landmark name, its noscript
+    // fallback) go through Omeka's translator; without a catalogue they were
+    // English on the French site. language/fr.mo is compiled from fr.po by
+    // `npm run build:mo` and committed — the release zip is `git archive`d.
+    // Same registration as IwacVisualizations.
+    'translator' => [
+        'translation_file_patterns' => [
+            [
+                'type' => 'gettext',
+                'base_dir' => dirname(__DIR__) . '/language',
+                'pattern' => '%s.mo',
+                'text_domain' => null,
+            ],
+        ],
+    ],
+
     // Module-scoped view helpers. Used by every mount-point PHTML to
     // serialise the bootstrap blob with one consistent set of JSON flags
     // (security-relevant — see View\Helper\IwacBootstrapJson docblock).

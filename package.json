@@ -13,6 +13,7 @@
     "build:public": "cross-env IWAC_BUNDLE=public vite build",
     "build:header": "cross-env IWAC_BUNDLE=header vite build",
     "check:size": "node scripts/check-bundle-size.js",
+    "build:mo": "node scripts/build-mo.js",
     "check": "svelte-check --tsconfig ./tsconfig.json",
     "check:versions": "node scripts/check-versions.js",
     "check:audit": "node scripts/check-audit.js",
@@ -24,7 +25,8 @@
     "lint:drift": "node scripts/check-schema-drift.js",
     "lint:i18n": "node scripts/check-i18n.js",
     "lint:docblocks": "node scripts/check-docblocks.js",
-    "lint": "npm run lint:theme && npm run lint:drift && npm run lint:i18n && npm run lint:docblocks && eslint src/svelte src/svelte-shared scripts tests && prettier --check \"src/svelte/**/*.{ts,svelte}\" \"src/svelte-shared/**/*.{ts,svelte}\" \"scripts/**/*.js\" \"tests/client/**/*.ts\" \"*.{ts,json,md}\"",
+    "lint:mo": "node scripts/build-mo.js --check",
+    "lint": "npm run lint:theme && npm run lint:drift && npm run lint:i18n && npm run lint:docblocks && npm run lint:mo && eslint src/svelte src/svelte-shared scripts tests && prettier --check \"src/svelte/**/*.{ts,svelte}\" \"src/svelte-shared/**/*.{ts,svelte}\" \"scripts/**/*.js\" \"tests/client/**/*.ts\" \"*.{ts,json,md}\"",
     "lint:fix": "eslint src/svelte src/svelte-shared scripts tests --fix && prettier --write \"src/svelte/**/*.{ts,svelte}\" \"src/svelte-shared/**/*.{ts,svelte}\" \"scripts/**/*.js\" \"tests/client/**/*.ts\" \"*.{ts,json,md}\"",
     "format": "prettier --write \"src/svelte/**/*.{ts,svelte}\" \"src/svelte-shared/**/*.{ts,svelte}\" \"scripts/**/*.js\" \"tests/client/**/*.ts\" \"*.{ts,json,md}\""
   },

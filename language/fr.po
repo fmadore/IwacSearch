@@ -1,0 +1,24 @@
+# IwacSearch — French translation of the PHP-side strings.
+#
+# The Svelte client carries its own FR/EN tables (src/svelte/lib/i18n.ts);
+# this catalogue covers what PHP renders through Omeka's translator. Compile
+# with `npm run build:mo` and commit both files; `npm run lint` fails when
+# fr.mo no longer matches.
+msgid ""
+msgstr ""
+"Project-Id-Version: IwacSearch\n"
+"Language: fr\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n > 1);\n"
+
+# Page block (view/common/block-layout/iwac-search-block.phtml)
+msgid "Search and filter the collection"
+msgstr "Rechercher et filtrer la collection"
+
+msgid "Search requires JavaScript."
+msgstr "La recherche nécessite JavaScript."
+
+msgid "Browse the items instead."
+msgstr "Parcourir plutôt les documents."

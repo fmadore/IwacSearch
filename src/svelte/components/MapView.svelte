@@ -23,7 +23,7 @@
     type MapLibreGlobal,
     type MapLibreMapLike,
   } from '../lib/maplibreLoader';
-  import { useI18n } from '../lib/i18n';
+  import { entityTypeLabel, useI18n } from '../lib/i18n';
   import { localizeSiteUrl } from '../lib/siteUrl';
 
   interface Props {
@@ -32,7 +32,7 @@
   }
 
   const { docs, loading }: Props = $props();
-  const { t, tp, formatNumber } = useI18n();
+  const { locale, t, tp, formatNumber } = useI18n();
 
   let container: HTMLDivElement | null = $state(null);
   let map: MapLibreMapLike | null = null;
@@ -228,7 +228,8 @@
               .setLngLat(f.geometry.coordinates)
               .setHTML(
                 `<div class="iwac-map__popup"><strong>${title}</strong>` +
-                  `<span>${esc(props.entityType)} · ${esc(mentions)}</span></div>`,
+                  // The raw value is a French data string ("Lieux"); label it.
+                  `<span>${esc(entityTypeLabel(props.entityType, locale))} · ${esc(mentions)}</span></div>`,
               )
               .addTo(map);
           });

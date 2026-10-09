@@ -24,6 +24,7 @@
 *.woff2 binary
 *.ttf  binary
 *.eot  binary
+*.mo   binary
 
 # Keep the dev toolchain out of `git archive` output (the source zip/tarball
 # GitHub attaches to every release, and the `composer create-project` path).

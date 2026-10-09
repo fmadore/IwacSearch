@@ -108,8 +108,10 @@ IwacSearch/
 │   ├── check-theme-tokens.js                   # CI gate: runs the theme's token guard over src/ + asset/css/
 │   ├── check-versions.js · bump-version.js     # version guard + its only writer (sites: lib/versions.js)
 │   ├── check-audit.js                          # CI gate: npm audit high+, minus lib/audit-exceptions.js
+│   ├── build-mo.js                             # fr.po → fr.mo; --check (in lint) asserts they agree
 │   ├── check-maplibre-pins.js                  # scheduled: MapLibre pins == IwacVisualizations main's
 │   └── theme-token-guard.cjs                   # SYNCED from IWAC-theme (npm run sync:tokens) — never edit here
+├── language/fr.po · fr.mo                      # PHP-side strings (Omeka translator); npm run build:mo
 ├── view/
 │   ├── iwac-search/search/{index,everything}.phtml
 │   ├── iwac-search/admin/maintenance/index.phtml      # Admin maintenance page
