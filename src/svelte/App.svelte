@@ -607,7 +607,10 @@
         // Enter settles the query (it may never reach onsubmit: the open
         // typeahead takes the key).
         if (e.key === 'Enter') typingBurst.end();
-        suggest.handleKeydown(e);
+        // Only the box's own keys drive the typeahead. Delegated from the
+        // whole form, Enter on the × or on "Clear history" ran the open
+        // panel's highlighted row instead of pressing the button.
+        if (e.target instanceof HTMLInputElement) suggest.handleKeydown(e);
       }}
       onsubmit={(e) => {
         e.preventDefault();
@@ -954,6 +957,18 @@
        stroke of a facet control's 2px focus outline is trimmed away. */
     padding-inline: 0.1875rem var(--space-4, 1rem);
     border-inline-end: 1px solid var(--border-light, #e2e5e8);
+  }
+  /* From the theme's lg breakpoint the masthead collapses to its section strip
+     on scroll and the strip stays pinned (IWAC-theme script.js), 2.5rem with
+     its 2px rule — measured on the live page, where the column's top 24px
+     sat under it. The theme publishes no token for the pinned height (only
+     the full --header-height*), hence the literal; scrolling back up shows
+     the full masthead over the column for as long as it is out. */
+  @media (min-width: 1024px) {
+    .iwac-search__facets-inline {
+      top: calc(2.5rem + var(--space-4, 1rem));
+      max-height: calc(100vh - 2.5rem - var(--space-8, 2rem));
+    }
   }
   .iwac-search__facets-body {
     /* Padding inside the drawer body. The drawer header already has
