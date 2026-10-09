@@ -73,8 +73,8 @@ use Omeka\Stdlib\HtmlPurifier;
  */
 class IwacSearchBlock extends AbstractBlockLayout
 {
-    /** Block-data key recording that intro_html was purified when stored. */
-    public const PURIFIED_FLAG = 'intro_html_purified';
+    /** Block-data key recording that intro_html was purified when stored ({@see IntroHtml}). */
+    public const PURIFIED_FLAG = IntroHtml::PURIFIED_FLAG;
 
     public function __construct(
         private readonly InitialResponseRenderer $initialRenderer,
@@ -616,10 +616,7 @@ class IwacSearchBlock extends AbstractBlockLayout
         // already purified; only an unflagged legacy value is purified here,
         // so a block saved before onHydrate() existed is never output raw —
         // even on an install whose upgrade migration has not run.
-        $introHtml = (string) ($data['intro_html'] ?? '');
-        if ($introHtml !== '' && empty($data[self::PURIFIED_FLAG])) {
-            $introHtml = $this->htmlPurifier->purify($introHtml);
-        }
+        $introHtml = IntroHtml::forRender($data, fn(string $html): string => (string) $this->htmlPurifier->purify($html));
 
         return $view->partial($templateViewScript, [
             'block'      => $block,
@@ -641,14 +638,13 @@ class IwacSearchBlock extends AbstractBlockLayout
     public static function purifyStoredIntros(Connection $connection, \Closure $purifier): int
     {
         $updated = 0;
+        $purify = fn(string $html): string => (string) $purifier()->purify($html);
         foreach ($connection->executeQuery("SELECT id, data FROM site_page_block WHERE layout = 'iwacSearch'")->fetchAllAssociative() as $row) {
             $data = json_decode((string) $row['data'], true);
-            if (!is_array($data) || !empty($data[self::PURIFIED_FLAG])) {
+            $data = is_array($data) ? IntroHtml::migrated($data, $purify) : null;
+            if ($data === null) {
                 continue;
             }
-            $intro = (string) ($data['intro_html'] ?? '');
-            $data['intro_html'] = $intro === '' ? '' : $purifier()->purify($intro);
-            $data[self::PURIFIED_FLAG] = true;
             $connection->executeStatement(
                 'UPDATE site_page_block SET data = ? WHERE id = ?',
                 [json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR), (int) $row['id']]

@@ -82,3 +82,44 @@ describe('scoped key persistence', () => {
     expect(fetch).toHaveBeenCalledTimes(1);
   });
 });
+
+/**
+ * S-14: the token endpoint's failure path. The PHP side answers 503 with a
+ * deliberately generic message (the exception chain goes to Omeka's log
+ * only); the client turns that into one thrown error — and must not cache
+ * the failure, or one blip would disable search for the whole tab.
+ */
+describe('token endpoint failures', () => {
+  it('throws the server message on a non-2xx answer, then retries on the next call', async () => {
+    const fetch = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            error: 'token_unavailable',
+            message: 'Typesense scoped-key minting failed.',
+          }),
+          { status: 503 },
+        ),
+      )
+      .mockResolvedValueOnce(new Response(JSON.stringify(token('fresh')), { status: 200 }));
+    vi.stubGlobal('fetch', fetch);
+    const getScopedKey = await freshPage();
+
+    await expect(getScopedKey(ENDPOINT)).rejects.toThrow(
+      'Token HTTP 503: Typesense scoped-key minting failed.',
+    );
+    expect(sessionStorage.getItem(STORED)).toBeNull();
+    expect((await getScopedKey(ENDPOINT)).key).toBe('fresh');
+    expect(fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it('refuses a 200 that carries no key', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(JSON.stringify({ key: '' }), { status: 200 })),
+    );
+    const getScopedKey = await freshPage();
+    await expect(getScopedKey(ENDPOINT)).rejects.toThrow('Token endpoint returned no key');
+  });
+});

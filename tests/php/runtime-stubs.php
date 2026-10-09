@@ -29,3 +29,38 @@ namespace Omeka\Settings {
         }
     }
 }
+
+namespace Laminas\View\Renderer {
+    if (!class_exists(PhpRenderer::class)) {
+        // Helpers resolve through __call in production; a test double extends
+        // this and declares the one helper it answers (see IwacLocaleTest).
+        class PhpRenderer
+        {
+            public function render($nameOrModel, $values = null)
+            {
+            }
+        }
+    }
+}
+
+namespace Laminas\View\Helper {
+    if (!class_exists(AbstractHelper::class)) {
+        abstract class AbstractHelper
+        {
+            /** @var \Laminas\View\Renderer\PhpRenderer|null */
+            protected $view;
+
+            public function setView(\Laminas\View\Renderer\PhpRenderer $view)
+            {
+                $this->view = $view;
+                return $this;
+            }
+
+            /** @return \Laminas\View\Renderer\PhpRenderer */
+            public function getView()
+            {
+                return $this->view;
+            }
+        }
+    }
+}
