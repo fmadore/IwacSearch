@@ -459,7 +459,9 @@
     inset-block: calc(50% - 3px);
     inset-inline: 0.625rem;
     height: 6px;
-    background: var(--surface-sunken, #f4f1ef);
+    /* 3:1 against the page in both themes (WCAG 1.4.11): --surface-sunken
+       alone measured 1.1:1, a track nobody could see. */
+    background: color-mix(in oklab, var(--muted, #66696e) 80%, var(--surface-sunken, #f4f1ef));
     border-radius: var(--radius-full, 9999px);
     pointer-events: none;
   }

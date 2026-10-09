@@ -10,6 +10,7 @@ import {
   formatDuration,
   formatYearRange,
   isAiBody,
+  isoDate,
   pickExternalLink,
   pickMatchedIn,
   pickSnippet,
@@ -49,6 +50,7 @@ export function createResultCard(input: () => { hit: IwacHit; hideCountry: boole
   const isReference = $derived(typeKey === 'reference');
   const referenceType = $derived(doc.reference_type_ss?.[0] ?? '');
   const dateLabel = $derived(formatDate(locale, doc.date, doc.pub_year, isReference));
+  const dateTime = $derived(isoDate(doc.date, doc.pub_year, isReference));
 
   // Thumbnail source. ONE derivation for both layouts now: `medium` is the
   // 1× answer at both the 112px list thumb and the ~190px gallery tile, and
@@ -178,6 +180,9 @@ export function createResultCard(input: () => { hit: IwacHit; hideCountry: boole
     },
     get dateLabel() {
       return dateLabel;
+    },
+    get dateTime() {
+      return dateTime;
     },
     get duration() {
       return duration;

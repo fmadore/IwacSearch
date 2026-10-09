@@ -7,6 +7,7 @@ import {
   formatDuration,
   formatYearRange,
   isAiBody,
+  isoDate,
   pickExternalLink,
   pickMatchedIn,
   pickSnippet,
@@ -235,6 +236,19 @@ describe('formatDate', () => {
   it('is empty when the document is undated, rather than showing 1970', () => {
     expect(formatDate('en', 0, undefined)).toBe('');
     expect(formatDate('en')).toBe('');
+  });
+});
+
+/** S-19: the <time datetime> beside each date label — the stored day, in UTC. */
+describe('isoDate', () => {
+  it('is the stored calendar day for dated content, wherever the reader is', () => {
+    expect(isoDate(626140800, 1989)).toBe('1989-11-04');
+  });
+
+  it('is the year alone where the card shows only a year, and undefined when undated', () => {
+    expect(isoDate(626140800, 1989, true)).toBe('1989');
+    expect(isoDate(undefined, 2016)).toBe('2016');
+    expect(isoDate(0, undefined)).toBeUndefined();
   });
 });
 

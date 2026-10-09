@@ -187,6 +187,16 @@ export function formatDate(
   return year ? String(year) : '';
 }
 
+/**
+ * The machine-readable twin of {@link formatDate}, for `<time datetime>`:
+ * `YYYY-MM-DD` (the stored calendar day, so UTC), or just `YYYY` where the
+ * card shows only a year. Undefined for an undated record.
+ */
+export function isoDate(epoch?: number, year?: number, yearOnly = false): string | undefined {
+  if (!yearOnly && epoch && epoch > 0) return new Date(epoch * 1000).toISOString().slice(0, 10);
+  return year ? String(year).padStart(4, '0') : undefined;
+}
+
 /** The mention span an entity card shows as its eyebrow: "1989 – 2004". */
 export function formatYearRange(first?: number, last?: number): string {
   if (first && last) return first === last ? String(first) : `${first} – ${last}`;

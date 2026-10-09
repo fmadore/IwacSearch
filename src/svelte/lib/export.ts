@@ -65,7 +65,9 @@ export function download(filename: string, mime: string, content: string): void 
   document.body.appendChild(a);
   a.click();
   a.remove();
-  URL.revokeObjectURL(url);
+  // Not synchronously: the download starts after click() returns, and a
+  // revoked URL can abort it (Firefox and Safari do).
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 export function exportFilename(extension: string): string {
@@ -240,7 +242,9 @@ function toRis(docs: IwacDoc[], locale: Locale): string {
   const out: string[] = [];
   for (const d of docs) {
     const tag = (name: string, value: string | undefined | null): void => {
-      const v = (value ?? '').trim();
+      // One line per tag: a newline inside a value (a multi-paragraph
+      // abstract) starts a line RIS readers parse as a broken tag.
+      const v = (value ?? '').replace(/\s*[\r\n]+\s*/g, ' ').trim();
       if (v !== '') out.push(`${name}  - ${v}`);
     };
     out.push(`TY  - ${risType(d)}`);

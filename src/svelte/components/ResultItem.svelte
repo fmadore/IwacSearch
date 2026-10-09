@@ -153,8 +153,11 @@
 <!-- Dateline eyebrow date (content: precise date; entity: mention year span). -->
 {#snippet eyebrowDate()}
   {#if cardData.isEntity}
-    {#if cardData.yearRange}<time class="iwac-card__eyebrow">{cardData.yearRange}</time>{/if}
-  {:else if cardData.dateLabel}<time class="iwac-card__eyebrow">{cardData.dateLabel}</time>{/if}
+    <!-- A span, not <time>: "1989 – 2004" is a range, which datetime cannot hold. -->
+    {#if cardData.yearRange}<span class="iwac-card__eyebrow">{cardData.yearRange}</span>{/if}
+  {:else if cardData.dateLabel}<time class="iwac-card__eyebrow" datetime={cardData.dateTime}
+      >{cardData.dateLabel}</time
+    >{/if}
 {/snippet}
 
 <!-- Running time, for the audiovisual records that carry one. Sits at the end

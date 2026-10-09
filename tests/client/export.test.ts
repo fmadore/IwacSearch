@@ -151,3 +151,15 @@ describe('result export serializers', () => {
     });
   });
 });
+
+describe('export details (S-19)', () => {
+  it('keeps every RIS value on one line', () => {
+    const ris = serialize(
+      'ris',
+      [{ ...publication, abstract: 'First paragraph.\n\nSecond paragraph.\r\nThird.' }],
+      meta,
+      'en',
+    );
+    expect(ris).toContain('AB  - First paragraph. Second paragraph. Third.');
+  });
+});

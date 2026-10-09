@@ -93,6 +93,8 @@
      * noise.
      */
     sortMode?: 'count' | 'value-asc';
+    /** Heading level: 3 under the panel's h2, 4 inside the sentiment group's h3. */
+    headingLevel?: 3 | 4;
   }
 
   const {
@@ -106,6 +108,7 @@
     onFacetSearch,
     label,
     sortMode = 'count',
+    headingLevel = 3,
   }: Props = $props();
 
   const { locale, t, tp, formatNumber } = useI18n();
@@ -248,23 +251,31 @@
 </script>
 
 <section class="iwac-facet" class:iwac-facet--collapsed={collapsed}>
-  <button
-    type="button"
-    class="iwac-facet__heading"
-    aria-expanded={!collapsed}
-    aria-controls={!collapsed ? bodyId : undefined}
-    onclick={() => (collapsed = !collapsed)}
-  >
-    <span class="iwac-facet__label">{heading}</span>
-    {#if selected.length > 0}
-      <span class="iwac-facet__active-count" aria-label={tp('n_active', selected.length)}>
-        {selected.length}
-      </span>
-    {/if}
-    <span class="iwac-facet__chevron" aria-hidden="true"
-      ><Icon name={collapsed ? 'chevron-right' : 'chevron-down'} /></span
+  <!-- The disclosure button INSIDE a heading, so a screen reader's heading
+       list reaches every facet (they were bare buttons, invisible to heading
+       navigation). Level 3 under the panel's h2, 4 inside the sentiment
+       group's h3; role=heading rather than a dynamic h3/h4 element, which
+       cost the bundle twice as much for the same semantics. -->
+  <div class="iwac-facet__h" role="heading" aria-level={headingLevel}>
+    <button
+      type="button"
+      class="iwac-facet__heading"
+      aria-expanded={!collapsed}
+      aria-controls={!collapsed ? bodyId : undefined}
+      onclick={() => (collapsed = !collapsed)}
     >
-  </button>
+      <span class="iwac-facet__label">{heading}</span>
+      {#if selected.length > 0}
+        <!-- Visible digit, spoken phrase: aria-label on a plain span is not
+             reliably read. -->
+        <span class="iwac-facet__active-count" aria-hidden="true">{selected.length}</span>
+        <span class="iwac-facet__sr">{tp('n_active', selected.length)}</span>
+      {/if}
+      <span class="iwac-facet__chevron" aria-hidden="true"
+        ><Icon name={collapsed ? 'chevron-right' : 'chevron-down'} /></span
+      >
+    </button>
+  </div>
 
   {#if !collapsed}
     <div id={bodyId}>
@@ -300,6 +311,7 @@
           <p class="iwac-facet__empty">{t('no_matches')}</p>
         {:else}
           <ul
+            id="{bodyId}-list"
             class="iwac-facet__list"
             class:iwac-facet__list--bounded={listBounded}
             onfocusin={freezeOrder}
@@ -337,7 +349,13 @@
             })}
           </p>
         {:else if hiddenCount > 0}
-          <button type="button" class="iwac-facet__more" onclick={() => (expanded = !expanded)}>
+          <button
+            type="button"
+            class="iwac-facet__more"
+            aria-expanded={expanded}
+            aria-controls="{bodyId}-list"
+            onclick={() => (expanded = !expanded)}
+          >
             {expanded ? t('show_less') : t('show_more', { n: formatNumber(hiddenCount) })}
           </button>
         {/if}
@@ -395,6 +413,21 @@
   }
   .iwac-facet__label {
     flex: 1;
+  }
+  /* The heading wrapper carries no type of its own: the button inside is the eyebrow. */
+  .iwac-facet__h {
+    margin: 0;
+    font: inherit;
+    letter-spacing: normal;
+  }
+  .iwac-facet__sr {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
   }
   .iwac-facet__active-count {
     color: var(--primary-hover, #b03710);

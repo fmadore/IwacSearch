@@ -208,21 +208,23 @@
 
       {#if sentimentFacets.length > 0}
         <section class="iwac-facets__group" class:iwac-facets__group--open={sentimentOpen}>
-          <button
-            type="button"
-            class="iwac-facets__group-heading"
-            aria-expanded={sentimentOpen}
-            aria-controls={sentimentOpen ? sentimentBodyId : undefined}
-            onclick={() => (sentimentOpen = !sentimentOpen)}
-          >
-            <span class="iwac-facets__group-label">{t('sentiment')}</span>
-            {#if sentimentActiveCount > 0}
-              <span class="iwac-facets__group-count">{sentimentActiveCount}</span>
-            {/if}
-            <span class="iwac-facets__group-chevron" aria-hidden="true">
-              {sentimentOpen ? '▾' : '▸'}
-            </span>
-          </button>
+          <h3 class="iwac-facets__group-h">
+            <button
+              type="button"
+              class="iwac-facets__group-heading"
+              aria-expanded={sentimentOpen}
+              aria-controls={sentimentOpen ? sentimentBodyId : undefined}
+              onclick={() => (sentimentOpen = !sentimentOpen)}
+            >
+              <span class="iwac-facets__group-label">{t('sentiment')}</span>
+              {#if sentimentActiveCount > 0}
+                <span class="iwac-facets__group-count">{sentimentActiveCount}</span>
+              {/if}
+              <span class="iwac-facets__group-chevron" aria-hidden="true">
+                {sentimentOpen ? '▾' : '▸'}
+              </span>
+            </button>
+          </h3>
           {#if sentimentOpen}
             <div class="iwac-facets__group-body" id={sentimentBodyId}>
               {#each sentimentFacets as f (f.field_name)}
@@ -233,6 +235,7 @@
                   selected={selected[f.field_name] ?? []}
                   label={labels?.[f.field_name]}
                   sortMode={NUMERIC_FACET_FIELDS.has(f.field_name) ? 'value-asc' : 'count'}
+                  headingLevel={4}
                   onToggle={toggleFacet}
                   {onFacetSearch}
                 />
@@ -354,6 +357,11 @@
   }
   .iwac-facets__group-label {
     flex: 1;
+  }
+  .iwac-facets__group-h {
+    margin: 0;
+    font: inherit;
+    letter-spacing: normal;
   }
   .iwac-facets__group-count {
     color: var(--primary-hover, #b03710);
