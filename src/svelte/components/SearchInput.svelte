@@ -11,6 +11,7 @@
   import { untrack } from 'svelte';
   import Icon from './Icon.svelte';
   import { useI18n } from '../lib/i18n';
+  import { refocus } from '../lib/refocus';
 
   interface Props {
     value: string;
@@ -62,6 +63,7 @@
   // a new `value` (e.g. URL state restore, programmatic reset).
   let local = $state(value);
   let timer = $state<number | null>(null);
+  let inputEl: HTMLInputElement | null = $state(null);
 
   // Keep `local` in sync if the parent resets us (e.g. URL state push).
   // Read `local` via untrack so typing into the input — which updates
@@ -94,6 +96,8 @@
     }
     onInput?.('');
     onChange('');
+    // The × removes itself with the text: keep the reader in the box.
+    void refocus(inputEl);
   }
 </script>
 
@@ -106,6 +110,7 @@
     dangle at a removed element. role/aria-* are inert when listboxId is unset.
   -->
   <input
+    bind:this={inputEl}
     class="iwac-input__field"
     type="search"
     role={listboxId ? 'combobox' : undefined}

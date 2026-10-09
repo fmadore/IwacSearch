@@ -19,6 +19,7 @@
   import { deriveActiveChips, type ActiveFilterChip } from '../lib/filterChips';
   import type { YearBounds } from '../lib/yearBounds';
   import FilterChip from './FilterChip.svelte';
+  import { refocus } from '../lib/refocus';
 
   interface Props {
     found: number;
@@ -69,26 +70,19 @@
    */
   let stripEl: HTMLElement | null = $state(null);
   let chipsEl: HTMLElement | null = $state(null);
-  let focusAfterRemoval: number | null = null;
 
   function handleRemove(chip: ActiveFilterChip, index: number): void {
-    focusAfterRemoval = index;
     onRemoveChip(chip);
+    void refocus(() => {
+      const buttons = chipsEl?.querySelectorAll<HTMLElement>('.iwac-chip');
+      return buttons?.length ? buttons[Math.min(index, buttons.length - 1)] : null;
+    }, stripEl);
   }
 
-  $effect(() => {
-    // Track the chip list so this runs on the render that followed the removal.
-    const n = chips.length;
-    if (focusAfterRemoval === null) return;
-    const index = focusAfterRemoval;
-    focusAfterRemoval = null;
-    if (n === 0) {
-      stripEl?.focus();
-      return;
-    }
-    const buttons = chipsEl?.querySelectorAll<HTMLElement>('.iwac-chip') ?? [];
-    (buttons[Math.min(index, n - 1)] ?? stripEl)?.focus();
-  });
+  function handleClearAll(): void {
+    onClearAll();
+    void refocus(stripEl);
+  }
 
   // Human label for the active sort (e.g. "Newest first"); empty if the value
   // isn't in this surface's option set, in which case the readout is hidden.
@@ -124,7 +118,7 @@
           </li>
         {/each}
       </ul>
-      <button type="button" class="iwac-summary__clear" onclick={onClearAll}
+      <button type="button" class="iwac-summary__clear" onclick={handleClearAll}
         >{t('clear_all')}</button
       >
     {/if}

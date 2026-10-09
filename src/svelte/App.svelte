@@ -14,6 +14,7 @@
   import { createTypeahead, dismissOnOutsidePointer, slashShortcut } from './lib/typeahead.svelte';
   import { clampYearRange, resolveYearBounds, sameYearRange } from './lib/yearBounds';
   import { untrack } from 'svelte';
+  import { refocus } from './lib/refocus';
   import SearchInput from './components/SearchInput.svelte';
   import SuggestDropdown from './components/SuggestDropdown.svelte';
   import ResultsList from './components/ResultsList.svelte';
@@ -229,12 +230,32 @@
    */
   let semanticOptInFor = $state<string | null>(null);
 
+  /** The surface's root, for finding where focus lands after a swap. */
+  let rootEl: HTMLElement | null = $state(null);
+
+  /** The offer and the banner are different buttons: focus follows to the other one. */
+  function focusSemanticToggle(): void {
+    void refocus(() => rootEl?.querySelector<HTMLElement>('.iwac-search__semantic-btn'));
+  }
+
   function showSemantic(): void {
     semanticOptInFor = query;
+    focusSemanticToggle();
   }
 
   function hideSemantic(): void {
     semanticOptInFor = null;
+    focusSemanticToggle();
+  }
+
+  /**
+   * A control in the empty state (a scope chip, Clear all, a did-you-mean
+   * entity) starts a search, and the skeleton that replaces the empty state
+   * takes the control with it: focus goes to the results landmark.
+   */
+  function thenFocusResults(action: () => void): void {
+    action();
+    void refocus(resultsRegion, rootEl);
   }
 
   // Anchor element above the result list — page changes scroll back
@@ -408,6 +429,8 @@
   function handlePerPageChange(next: number): void {
     perPageChoice = next;
     page = 1;
+    // The pager (and this select) unmounts under the skeleton.
+    void refocus(resultsRegion);
   }
 
   /**
@@ -559,7 +582,11 @@
   />
 {/snippet}
 
-<div class="iwac-search" class:iwac-search--compact={bootstrap.mode === 'compact'}>
+<div
+  class="iwac-search"
+  class:iwac-search--compact={bootstrap.mode === 'compact'}
+  bind:this={rootEl}
+>
   {#if showSearchBox && bootstrap.mode !== 'results-only'}
     <!--
       <form role="search"> is the canonical container for a search UI.
@@ -742,7 +769,7 @@
           {#if results.didYouMean.length > 0}
             <DidYouMean
               suggestions={results.didYouMean}
-              onPick={(field, value) => suggest.pickEntity(field, value)}
+              onPick={(field, value) => thenFocusResults(() => suggest.pickEntity(field, value))}
             />
           {/if}
           <ResultsEmpty
@@ -750,8 +777,8 @@
             {yearRange}
             {yearBounds}
             {query}
-            onRemoveChip={(c) => filterState.removeChip(c)}
-            onClearAll={() => filterState.clearAll()}
+            onRemoveChip={(c) => thenFocusResults(() => filterState.removeChip(c))}
+            onClearAll={() => thenFocusResults(() => filterState.clearAll())}
           />
           {#if semanticHidden}
             <SemanticFallback

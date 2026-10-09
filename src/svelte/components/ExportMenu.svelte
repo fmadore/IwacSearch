@@ -19,6 +19,7 @@
   } from '../lib/export';
   import { useI18n } from '../lib/i18n';
   import Icon from './Icon.svelte';
+  import { refocus } from '../lib/refocus';
 
   /**
    * "Export" disclosure in the results toolbar: a small outlined trigger
@@ -46,6 +47,7 @@
   let busy = $state(false);
   let error = $state<string | null>(null);
   let root: HTMLElement | null = $state(null);
+  let trigger: HTMLButtonElement | null = $state(null);
 
   // Close when focus/clicks land outside the component.
   $effect(() => {
@@ -58,6 +60,8 @@
     const onKeydown = (e: KeyboardEvent): void => {
       if (e.key === 'Escape') {
         open = false;
+        // Focus was in the menu that just closed: back to its trigger.
+        void refocus(trigger);
       }
     };
     window.addEventListener('pointerdown', onPointerDown);
@@ -83,6 +87,9 @@
     } finally {
       busy = false;
     }
+    // The format button went with the menu (and the trigger was disabled
+    // while busy): hand focus back to the trigger once it is enabled again.
+    if (!open) void refocus(trigger);
   }
 </script>
 
@@ -91,6 +98,7 @@
        navigation + focus management this simple format list doesn't implement.
        Plain buttons are natively Tab-reachable, which is the honest contract. -->
   <button
+    bind:this={trigger}
     type="button"
     class="iwac-export__trigger"
     aria-expanded={open}

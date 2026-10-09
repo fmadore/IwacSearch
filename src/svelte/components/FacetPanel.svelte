@@ -21,6 +21,7 @@
   import FacetGroup from './FacetGroup.svelte';
   import DateRangeSlider from './DateRangeSlider.svelte';
   import FilterChip from './FilterChip.svelte';
+  import { refocus } from '../lib/refocus';
 
   /**
    * Filters sidebar.
@@ -124,20 +125,41 @@
     }
   }
 
-  function handleChipClick(chip: { field: string; kind: 'facet' | 'year'; value: string }): void {
+  let panelEl: HTMLElement | null = $state(null);
+
+  /** The first control left in the panel — where focus goes when its own control vanished. */
+  function firstControl(): HTMLElement | null {
+    return panelEl?.querySelector<HTMLElement>('button, input, [tabindex="0"]') ?? null;
+  }
+
+  function handleChipClick(
+    chip: { field: string; kind: 'facet' | 'year'; value: string },
+    index: number,
+  ): void {
     if (chip.kind === 'year') {
       onYearRangeChange(null);
     } else {
       onToggle(chip.field, chip.value, false);
     }
+    // The chip removed itself: the one that took its place, else the last,
+    // else the panel's first control (same rule as ResultSummary's strip).
+    void refocus(() => {
+      const chips = panelEl?.querySelectorAll<HTMLElement>('.iwac-facets__chips .iwac-chip');
+      return chips?.length ? chips[Math.min(index, chips.length - 1)] : null;
+    }, firstControl);
+  }
+
+  function handleClearAll(): void {
+    onClearAll();
+    void refocus(firstControl);
   }
 </script>
 
-<aside class="iwac-facets" aria-label={t('filters')}>
+<aside class="iwac-facets" aria-label={t('filters')} bind:this={panelEl}>
   <header class="iwac-facets__header">
     <h2 class="iwac-facets__heading">{t('filters')}</h2>
     {#if hasActive}
-      <button type="button" class="iwac-facets__clear-all" onclick={onClearAll}
+      <button type="button" class="iwac-facets__clear-all" onclick={handleClearAll}
         >{t('clear_all')}</button
       >
     {/if}
@@ -149,9 +171,9 @@
       aria-label={t('active_filters')}
     >
       <ul class="iwac-facets__chips">
-        {#each activeChips as chip (chip.field + '|' + chip.value)}
+        {#each activeChips as chip, i (chip.field + '|' + chip.value)}
           <li>
-            <FilterChip {chip} onRemove={handleChipClick} />
+            <FilterChip {chip} onRemove={(c) => handleChipClick(c, i)} />
           </li>
         {/each}
       </ul>

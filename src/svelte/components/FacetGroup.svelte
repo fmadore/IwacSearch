@@ -26,6 +26,7 @@
   import { facetLabel, facetValueLabel, useI18n } from '../lib/i18n';
   import { MAX_FACET_VALUES } from '../lib/typesense';
   import Icon from './Icon.svelte';
+  import { refocus } from '../lib/refocus';
 
   /**
    * One facet field rendered as a collapsible checklist with an optional
@@ -115,6 +116,13 @@
   let expanded = $state(false);
   let collapsed = $state(false); // user-collapsed (whole group)
   let filterText = $state('');
+  let searchInputEl: HTMLInputElement | null = $state(null);
+
+  /** The × clears the box and disappears with the text: focus goes back to the box. */
+  function clearFilterText(): void {
+    filterText = '';
+    void refocus(searchInputEl);
+  }
 
   /**
    * The row order the list had when focus entered it, or null when focus is
@@ -271,13 +279,14 @@
               placeholder={t('search_values', { name: heading.toLowerCase() })}
               aria-label={t('filter_values', { name: heading })}
               bind:value={filterText}
+              bind:this={searchInputEl}
             />
             {#if isFiltering}
               <button
                 type="button"
                 class="iwac-facet__search-clear"
                 aria-label={t('clear_filter')}
-                onclick={() => (filterText = '')}
+                onclick={clearFilterText}
               >
                 <Icon name="x" />
               </button>

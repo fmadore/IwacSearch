@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { YearBucket, YearRange } from '../lib/types';
   import { useI18n } from '../lib/i18n';
+  import { refocus } from '../lib/refocus';
   import { DEFAULT_YEAR_MIN, defaultYearMax } from '../lib/yearBounds';
 
   /**
@@ -202,10 +203,14 @@
     scheduleKeyCommit();
   }
 
+  let fromThumb: HTMLElement | null = $state(null);
+
   function reset(): void {
     fromHandle = min;
     toHandle = max;
     emit();
+    // Reset hides itself once the range is clean: land on the first thumb.
+    void refocus(fromThumb);
   }
 
   /**
@@ -314,6 +319,7 @@
     <div class="iwac-daterange__filled" aria-hidden="true"></div>
 
     <div
+      bind:this={fromThumb}
       class="iwac-daterange__thumb iwac-daterange__thumb--from"
       class:iwac-daterange__thumb--dragging={dragging === 'from'}
       style="inset-inline-start: {fillStart}%;"
