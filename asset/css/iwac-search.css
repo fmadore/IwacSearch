@@ -58,12 +58,21 @@
 }
 
 /*
- * Embedded page blocks sit inside editorial prose, so they keep a
- * readable max-width and centre within their column.
+ * Every surface starts at the theme's content edge — where the page title
+ * above it starts. Blocks used to centre a 72.5rem column inside the page, so
+ * on the Browse page the search box began ~110px right of the "Browse" title
+ * at the 30px gutter, and /search/everything (full width) did not match it.
+ * A FULL block is a discovery surface and fills the column like the shells;
+ * compact and results-only blocks sit in editorial prose and keep a readable
+ * measure, aligned to the same edge rather than centred.
  */
 .iwac-search-block {
   max-width: var(--measure-wide, 72.5rem);
-  margin-inline: auto;
+  margin-inline: 0;
+}
+
+.iwac-search-block--full {
+  max-width: none;
 }
 
 /*
@@ -81,11 +90,21 @@
   max-width: none;
 }
 
+/*
+ * A block's own (optional) title is a SECTION head on the page that holds it:
+ * the newspaper section-opener — a 2px ink rule above a compact Besley head —
+ * that "How to cite" and "Linked resources" use. The shells' page titles are
+ * not styled here: they carry the theme's own `h1.title` (see the templates).
+ */
 .iwac-search-block__title {
-  font-size: var(--text-2xl, 1.875rem);
+  margin-block: 0 var(--space-4, 1rem);
+  padding-block-start: var(--space-2, 0.5rem);
+  border-block-start: 2px solid var(--ink-strong, #05070c);
   color: var(--ink-strong, #05070c);
-  margin-block-end: var(--space-4, 1rem);
-  letter-spacing: var(--tracking-tight, -0.02em);
+  font-family: var(--font-headings, 'Besley', 'Source Serif 4', Georgia, 'Times New Roman', serif);
+  font-size: var(--text-lg, 1.1875rem);
+  font-weight: 800;
+  letter-spacing: var(--tracking-display, -0.01em);
 }
 
 .iwac-search-block__intro {

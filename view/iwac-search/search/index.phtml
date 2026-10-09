@@ -17,7 +17,9 @@ $heading = $isEn ? 'Search the IWAC archive' : 'Rechercher dans les archives IWA
 $this->headTitle(($isEn ? 'Search' : 'Recherche') . ' · Islam West Africa Collection');
 ?>
 <div class="iwac-search-shell">
-    <h1 class="iwac-search-block__title"><?= $this->escapeHtml($heading) ?></h1>
+    <?php // The theme's page-title treatment (h1.title: a 2px ink rule above a
+    // compact section head), exactly like its own page titles ("Browse"). ?>
+    <h1 class="title"><?= $this->escapeHtml($heading) ?></h1>
 
     <noscript>
         <?php // The shell's own locale switch, like the heading: this route may
