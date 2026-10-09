@@ -56,10 +56,11 @@
    *   - Counts come from Typesense's facet_counts response — they're
    *     post-filter, so they update as other facets are toggled.
    *
-   * Theme defence: the IWAC theme paints every <button> with primary
-   * orange + glow-sm + hover-translate. Our class-level overrides win on
-   * specificity, but we also explicitly zero out `box-shadow` and
-   * `transform` on hover so the theme can't leak through.
+   * The buttons here reset only what the theme's base <button> gives every
+   * control — its border, padding and radius. That base is quiet since
+   * IWAC-theme 2.10 (no fill, shadow or lift), so there is nothing louder to
+   * defend against; the box-shadow / transform resets this used to carry on
+   * every hover are gone.
    */
 
   interface Props {
@@ -374,9 +375,8 @@
   }
 
   /*
-   * Heading button. The IWAC theme paints every <button> primary + glow,
-   * so we explicitly nuke background, padding, shadow, and the hover
-   * translate to keep the heading reading like an eyebrow label.
+   * Heading button: the base button's border, padding and background are
+   * reset so the heading reads as an eyebrow label, not a control box.
    */
   .iwac-facet__heading {
     display: flex;
@@ -404,8 +404,6 @@
   .iwac-facet__heading:hover {
     color: var(--primary-hover, #b03710);
     background: none;
-    box-shadow: none;
-    transform: none;
   }
   .iwac-facet__heading:focus-visible {
     outline: var(--focus-outline, 2px solid #ce4115);
@@ -509,7 +507,6 @@
     background: var(--surface-sunken, #f4f1ef);
     color: var(--ink, #13161c);
     transform: translateY(-50%);
-    box-shadow: none;
   }
   .iwac-facet__search-clear:focus-visible {
     outline: var(--focus-outline, 2px solid #ce4115);
@@ -631,8 +628,6 @@
   }
   .iwac-facet__more:hover {
     background: none;
-    box-shadow: none;
-    transform: none;
     text-decoration: underline;
     text-underline-offset: 2px;
   }

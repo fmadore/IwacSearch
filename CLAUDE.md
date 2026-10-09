@@ -163,11 +163,13 @@ step is fixed on purpose — so that a 15px facet label doesn't quietly become
   now inside `npm run lint:theme`'s walk; it was outside it until 2026-08,
   which is how every colour fallback in it stayed on the pre-v2.6 blue-grey
   palette while `src/` was spotless.
-- **A `var()` fallback must be a flat literal.** No `var(--a, var(--b, …))`
-  chains: the fallback only ever renders when the theme is absent, in which
-  case the inner token is absent too — so the chain rescues nothing and
-  asserts a substitution nobody meant (`var(--ink-strong, var(--ink, …))`
-  claimed a headline ink degrades to body ink). `lint:theme` fails on them.
+- **Prefer a flat-literal `var()` fallback.** A `var(--a, var(--b, …))` chain
+  only renders when the theme is absent, in which case the inner token is
+  absent too, so the chain rescues nothing. `lint:theme` does not ban chains:
+  it resolves them and fails one whose final literal differs from `--a`'s
+  canonical light value (`var(--ink-strong, var(--ink, …))` claimed a headline
+  ink degrades to body ink, and failed); a chain that resolves to the same
+  value — the compact block's `var(--panel-bg, var(--surface, …))` — passes.
 - All selectors are scoped under `.iwac-search-block` / the standalone shell —
   no global rules — so the module never collides with theme styles.
 - **The token guard's rules are the theme's.** `scripts/check-theme-tokens.js`

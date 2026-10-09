@@ -4,8 +4,7 @@
    * (default) plus whatever the surface offers: Gallery on content surfaces
    * (design review §01), Map on the entity index. Mirrors the toolbar's
    * control vocabulary (outlined, surface ground, primary on engagement).
-   * The IWAC theme paints every <button> primary + glow + hover-translate, so
-   * the resets below are deliberate.
+   * Its segments set their own border and fill over the theme's base <button> is quiet (outlined, ink, no shadow or lift — IWAC-theme 2.10+).
    *
    * ── Semantics ────────────────────────────────────────────────────────
    * A RADIOGROUP, not a group of toggle buttons. `aria-pressed` on each
@@ -144,8 +143,6 @@
   .iwac-view__btn:hover:not(.is-active) {
     background: color-mix(in oklab, var(--primary, #ce4115) 6%, transparent);
     color: var(--ink-strong, #05070c);
-    box-shadow: none;
-    transform: none;
   }
   .iwac-view__btn.is-active {
     /* Current state = full-contrast label under a 2px brand rule (the toggle

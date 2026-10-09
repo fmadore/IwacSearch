@@ -19,37 +19,30 @@
  *      pages. They benefit from a clear card frame so they don't blend
  *      into the surrounding prose.
  *
- * Token vocabulary used:
- *   spacing   --space-{xs,sm,md,lg,xl,2xl}
- *   color     --primary, --ink, --ink-strong, --muted, --surface, --surface-raised
+ * Token vocabulary used (tokens.json is the authority; `npm run lint:theme`
+ * checks every name and fallback here):
+ *   spacing   --space-N (the numeric scale; the size-name aliases are
+ *             deprecated and refused by the guard)
+ *   color     --primary, --primary-hover (primary TEXT, which must clear
+ *             4.5:1), --ink, --ink-light, --ink-strong, --muted, --surface,
+ *             --surface-sunken, --surface-raised
  *   border    --border, --border-light
- *   radius    --radius-{sm,md,lg}
- *   text      --text-{sm,base,lg,2xl}
+ *   radius    --radius-{sm,md}
+ *   text      --text-{lg,base}, --font-headings, --tracking-display
  *   panel     --panel-bg, --panel-border, --panel-shadow, --panel-radius
  *   focus     --focus-outline (every control indicator); --ring-focus only
  *             for the compact block's :focus-within ambience, which is not
  *             an indicator — the input inside carries its own outline
- *   measure   --measure-wide
+ *   measure   --measure-wide, --measure-narrow
  *
- * KNOWN, UPSTREAM (theme, 2026-08-24): --focus-outline and --ring-focus are
- * declared once at :root as `2px solid var(--focus-color)` / `0 0 0 3px
- * var(--focus-ring-color)`, while the dark palette is applied at <body>. A
- * custom property is substituted at the element that DECLARES it, so both
- * compose against the LIGHT colour and inherit down frozen — measured on the
- * rig, dark <body> reports --focus-color as the dark mix and --focus-outline
- * as the light one. Every focus ring on this module therefore paints the
- * light primary in dark mode. It still passes comfortably (4.25:1 measured
- * against the dark ground, vs the 3:1 non-text minimum), so nothing is worked
- * around here: forking the composed-outline decision in one of three consuming
- * repos would be wrong again the moment the theme fixes the declaration site.
- * Note tokens.json publishes values.dark['--focus-outline'] as the dark
- * colour — the generator resolves what was meant, the browser delivers
- * something else, and the guard cannot see it because it only compares LIGHT
- * fallbacks.
+ * (The dark-mode focus note that used to sit here — composed focus tokens
+ * frozen at their light value — was fixed at the source in IWAC-theme 2.13:
+ * composed tokens are redeclared in the dark block, and the theme's guard
+ * now asserts it.)
  *
  * No global selectors — everything scoped under .iwac-search-block,
- * .iwac-search-shell, or the standalone shell — so the module never
- * collides with theme styles.
+ * .iwac-search-shell, or the mount root (.iwac-search-block__root, which
+ * every surface renders) — so the module never collides with theme styles.
  */
 
 .iwac-search-block,

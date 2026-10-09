@@ -43,6 +43,8 @@ clearly flow, re-point the rules at the concrete collection name in
 - **Typesense server releases** — integration-tested on v30.2 for 3.19.0. Union search
   responses currently carry no per-hit source marker and no facet_counts;
   if a later release adds them, the federated "All" tab can gain facets.
-- **MapLibre pin** — `5.24.0` from jsDelivr, deliberately the SAME exact
-  pin as IwacVisualizations so the browser cache is shared. Bump the two
-  repos together (`src/svelte/lib/maplibreLoader.ts` here).
+- **MapLibre pin** — `6.12.0` from jsDelivr, deliberately the SAME exact
+  files and SRI hashes as IwacVisualizations so the browser cache (and
+  `window.maplibregl`) is shared. Bump the two repos together
+  (`src/svelte/lib/maplibreLoader.ts` here); `npm run check:maplibre`, weekly
+  in CI, fails when this module falls behind IwacVisualizations `main`.

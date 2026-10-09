@@ -61,9 +61,15 @@ view is shareable / bookmarkable / back-button-able:
 ```
 
 Defaults are omitted (clean URL on a fresh `/search`). Pagination uses
-`replaceState` to avoid history spam; everything else uses `pushState`.
-Page blocks intentionally skip URL sync — multiple block instances on
-one page would clobber each other.
+`replaceState` to avoid history spam, and so does a typing burst after its
+first commit (one history entry per search, not one per pause — see
+`createTypingBurst`); everything else uses `pushState`.
+
+Full-mode page blocks sync too, with every key namespaced by the block id
+(`?b42.q=…&b42.f.country_ss=…`), so several blocks on one page — and the
+host page's own `?page=` — never clobber each other. Compact and
+results-only blocks, and the federated page's inner tabs (the page owns
+`?q` and `?tab`), keep their state in memory.
 
 ### The retired query form
 

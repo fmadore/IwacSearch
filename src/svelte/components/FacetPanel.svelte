@@ -289,8 +289,6 @@
   }
   .iwac-facets__clear-all:hover {
     background: none;
-    box-shadow: none;
-    transform: none;
     text-decoration: underline;
     text-underline-offset: 2px;
   }
@@ -320,8 +318,8 @@
   /*
    * Sentiment parent group — wraps the polarity / centrality /
    * subjectivity sub-facets so they collapse together. Heading mirrors
-   * the FacetGroup eyebrow; the IWAC theme paints every <button>, so we
-   * zero out its background / shadow / hover-translate explicitly.
+   * the FacetGroup eyebrow, so it resets the border, padding and background
+   * the theme's base <button> is quiet (outlined, ink, no shadow or lift — IWAC-theme 2.10+).
    */
   .iwac-facets__group {
     padding-block: var(--space-4, 1rem);
@@ -352,8 +350,6 @@
   .iwac-facets__group-heading:hover {
     color: var(--primary-hover, #b03710);
     background: none;
-    box-shadow: none;
-    transform: none;
   }
   .iwac-facets__group-heading:focus-visible {
     outline: var(--focus-outline, 2px solid #ce4115);

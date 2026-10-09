@@ -47,9 +47,8 @@
 
 <style>
   /*
-   * Outlined pill, primary border, value in ink. The IWAC theme paints every
-   * <button>, so the background/box-shadow/transform resets are load-bearing —
-   * without them this renders as a filled theme button.
+   * Outlined chip, primary border, value in ink. It sets its own border and
+   * background over the theme's base <button> is quiet (outlined, ink, no shadow or lift — IWAC-theme 2.10+).
    */
   .iwac-chip {
     display: inline-flex;
@@ -81,8 +80,6 @@
     background: color-mix(in oklab, var(--primary, #ce4115) 10%, transparent);
     border-color: var(--primary, #ce4115);
     color: var(--ink-strong, #05070c);
-    box-shadow: none;
-    transform: none;
   }
   .iwac-chip:hover .iwac-chip__field,
   .iwac-chip:hover .iwac-chip__x {

@@ -406,9 +406,9 @@
   }
   /*
    * Rows are a mix of <a> (article hits → real links, new-tab friendly)
-   * and <button> (the "Search for…" + entity actions). The theme paints
-   * every <button> primary, so this rule resets appearance/border/
-   * background/shadow for both element types to one shared look.
+   * and <button> (the "Search for…" + entity actions). This rule gives both
+   * element types one row look, resetting the border, padding and radius of
+   * the theme's base <button> is quiet (outlined, ink, no shadow or lift — IWAC-theme 2.10+).
    */
   .iwac-suggest__item {
     display: flex;
@@ -438,8 +438,6 @@
   .iwac-suggest__item:hover,
   .iwac-suggest__item:focus-visible {
     background: color-mix(in oklab, var(--primary, #ce4115) 8%, var(--surface, #fdfcfb));
-    box-shadow: none;
-    transform: none;
   }
   /* --active is the aria-activedescendant highlight (focus stays in the
      input), so it keeps the tint alone. Real keyboard focus on the row gets a
@@ -493,8 +491,6 @@
   .iwac-suggest__clear:focus-visible {
     color: var(--primary, #ce4115);
     background: transparent;
-    box-shadow: none;
-    transform: none;
     text-decoration: underline;
   }
   .iwac-suggest__clear:focus-visible {

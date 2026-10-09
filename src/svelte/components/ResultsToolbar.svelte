@@ -268,8 +268,6 @@
       background: var(--surface, #fdfcfb);
       border-color: var(--primary, #ce4115);
       color: var(--primary, #ce4115);
-      box-shadow: none;
-      transform: none;
     }
     .iwac-search__filters-trigger:focus-visible {
       outline: var(--focus-outline, 2px solid #ce4115);

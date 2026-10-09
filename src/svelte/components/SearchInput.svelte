@@ -190,7 +190,5 @@
   .iwac-input__clear:hover {
     background: var(--surface-sunken, #f4f1ef);
     color: var(--ink, #13161c);
-    box-shadow: none;
-    transform: none;
   }
 </style>

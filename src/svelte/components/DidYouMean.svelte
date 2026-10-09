@@ -65,8 +65,6 @@
     border-color: var(--primary, #ce4115);
     color: var(--primary, #ce4115);
     background: var(--surface, #fdfcfb);
-    box-shadow: none;
-    transform: none;
   }
   .iwac-search__didyoumean-chip:focus-visible {
     outline: var(--focus-outline, 2px solid #ce4115);

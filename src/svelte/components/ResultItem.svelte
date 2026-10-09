@@ -623,10 +623,6 @@
   }
 
   /*
-   * Clickable type badge. The IWAC theme paints every <button> primary + glow +
-   * hover-translate; we zero box-shadow/transform explicitly so it can't leak.
-   */
-  /*
    * SC 2.5.8: the card's facet toggles measured 20–21px tall at 375. They sit
    * INSIDE running text — a dateline, a byline, a source line, each with
    * non-target interpuncts between them — so the Inline exception arguably
@@ -644,8 +640,6 @@
   .iwac-card__type--filter:hover {
     background: transparent;
     color: var(--ink-strong, #05070c);
-    box-shadow: none;
-    transform: none;
   }
   /* Active type filter: the label goes primary; the categorical dot keeps its
      own colour. No pill fill on every row. */
@@ -714,8 +708,6 @@
   .iwac-card__author:hover {
     color: var(--primary-hover, #b03710);
     background: none;
-    box-shadow: none;
-    transform: none;
     text-decoration: underline;
     text-underline-offset: 2px;
   }
@@ -788,6 +780,11 @@
     font-size: var(--text-xs, 0.8125rem);
     color: var(--muted, #66696e);
     line-height: 1.5;
+  }
+  /* The matched term in ink: --muted on the mark's primary tint measured
+     3.56:1 (axe, 12 nodes on a /search page). */
+  .iwac-card__matched :global(mark) {
+    color: var(--ink-strong, #05070c);
   }
   .iwac-card__matched-label {
     font-weight: 600;
@@ -929,8 +926,6 @@
     color: var(--primary-hover, #b03710);
     text-decoration: underline;
     text-underline-offset: 2px;
-    box-shadow: none;
-    transform: none;
   }
   .iwac-card__chip--filter.is-active {
     background: transparent;

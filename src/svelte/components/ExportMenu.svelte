@@ -141,13 +141,8 @@
     display: inline-flex;
   }
 
-  /*
-   * Trigger mirrors the toolbar's control vocabulary (Filters trigger /
-   * SortSelect): outlined, surface background, primary on hover. The IWAC
-   * theme paints every <button> primary + glow + hover-translate, so the
-   * resets below are deliberate.
-   */
-  /* The module's quiet control (.iwac-quiet-btn), at the toolbar's height. */
+  /* The trigger is the module's quiet control (.iwac-quiet-btn, in
+     asset/css/iwac-search.css), at the toolbar's height. */
   .iwac-export__trigger {
     height: var(--size-control-md, 2.5rem);
   }
@@ -227,8 +222,6 @@
   .iwac-export__item:hover,
   .iwac-export__item:focus-visible {
     background: color-mix(in oklab, var(--primary, #ce4115) 8%, var(--surface, #fdfcfb));
-    box-shadow: none;
-    transform: none;
   }
   .iwac-export__item:focus-visible {
     /* Inset: the menu is a rounded, clipped panel and these items run its full

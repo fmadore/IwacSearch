@@ -205,8 +205,8 @@
 
   /*
    * Removable scope chip — outlined in primary (current state), value in ink.
-   * Same vocabulary as the FacetPanel chips so the two read as one system. The
-   * IWAC theme paints every <button>; resets keep this an outline, not a pill.
+   * Same vocabulary as the FacetPanel chips so the two read as one system
+   * (FilterChip.svelte); the clear link below resets the base button to text.
    */
 
   .iwac-summary__clear {
@@ -224,8 +224,6 @@
   }
   .iwac-summary__clear:hover {
     background: none;
-    box-shadow: none;
-    transform: none;
     color: var(--primary-hover, #b03710);
   }
   .iwac-summary__clear:focus-visible {

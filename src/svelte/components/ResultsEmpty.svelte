@@ -98,7 +98,7 @@
   /*
    * Removable scope token. Outlined in primary like the summary chips, but the
    * offending value is the headline here, so it carries a touch more weight.
-   * The IWAC theme paints every <button>; resets keep it an outline chip.
+   * Its own border and colour sit over the theme's base <button> is quiet (outlined, ink, no shadow or lift — IWAC-theme 2.10+).
    */
   .iwac-empty__sep {
     color: var(--primary, #ce4115);
@@ -125,8 +125,6 @@
   .iwac-empty__clear:hover {
     background: var(--primary, #ce4115);
     color: var(--ink-on-primary, #fff);
-    box-shadow: none;
-    transform: none;
   }
   .iwac-empty__clear:focus-visible {
     outline: var(--focus-outline, 2px solid #ce4115);
