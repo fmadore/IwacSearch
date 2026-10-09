@@ -3,7 +3,7 @@
   import { TypesenseClient } from './lib/typesense';
   import { effectiveSortValue } from './lib/queryBuilders';
   import { isSemanticOnlyResponse } from './lib/semanticFallback';
-  import { FALLBACK_SORT, createUrlSync, onUrlPop } from './lib/urlState';
+  import { FALLBACK_SORT, createTypingBurst, createUrlSync, onUrlPop } from './lib/urlState';
   import { adoptableSnapshot, initialSearchState } from './lib/initialState';
   import { resultAnnouncement } from './lib/announce';
   import { normalizeCard, normalizeLocale, provideI18n } from './lib/i18n';
@@ -248,6 +248,13 @@
   // svelte-ignore state_referenced_locally
   const urlSync = createUrlSync(urlPrefix, defaultSort);
 
+  // Search-as-you-type writes ONE history entry per typing burst (see
+  // createTypingBurst): the debounced commit flags itself here, and the URL
+  // effect below turns the burst's later commits into replaceState. Plain
+  // variables — the effect must not depend on them.
+  const typingBurst = createTypingBurst();
+  let typingCommit = false;
+
   // A year range outside the data (a hand-edited `?date.from=2050`, an old
   // link from before the corpus grew) is brought inside the span once the
   // span is known — the slider can only show what is on its track, and the
@@ -267,7 +274,7 @@
   });
   $effect(() => {
     if (!syncUrl) return;
-    urlSync.push({
+    const state = {
       q: query,
       page,
       sort,
@@ -275,7 +282,15 @@
       yearRange,
       perPage: perPageChoice,
       view: view.explicit ? view.mode : null,
-    });
+    };
+    if (typingCommit) {
+      if (typingBurst.typed()) urlSync.replaceNext();
+    } else {
+      // Any other change — a facet, a sort, a page, a pick — ends the burst.
+      typingBurst.end();
+    }
+    typingCommit = false;
+    urlSync.push(state);
   });
 
   // Back / forward → re-hydrate state from URL.
@@ -328,6 +343,7 @@
   /** The debounce fired: this is the search commit. `typedQuery` already
       matches (SearchInput wrote it on the keystroke), so no setQuery here. */
   function handleQueryChange(next: string): void {
+    if (next !== query) typingCommit = true;
     query = next;
     page = 1; // any new query resets pagination
   }
@@ -564,9 +580,20 @@
       role="search"
       bind:this={searchFormEl}
       onfocusin={() => suggest.handleFocus()}
-      onfocusout={() => suggest.handleBlur()}
-      onkeydown={(e) => suggest.handleKeydown(e)}
-      onsubmit={(e) => e.preventDefault()}
+      onfocusout={() => {
+        suggest.handleBlur();
+        typingBurst.end();
+      }}
+      onkeydown={(e) => {
+        // Enter settles the query (it may never reach onsubmit: the open
+        // typeahead takes the key).
+        if (e.key === 'Enter') typingBurst.end();
+        suggest.handleKeydown(e);
+      }}
+      onsubmit={(e) => {
+        e.preventDefault();
+        typingBurst.end();
+      }}
     >
       <SearchInput
         value={query}

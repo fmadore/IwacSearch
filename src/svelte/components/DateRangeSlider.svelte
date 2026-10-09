@@ -136,6 +136,30 @@
   }
 
   /**
+   * Keys move a thumb at once but COMMIT after a pause (or when the thumb
+   * loses focus). Each arrow press used to emit — a search and a history
+   * entry per year, so walking 1990 → 2000 left ten Back steps behind it.
+   */
+  const KEY_COMMIT_MS = 400;
+  let keyTimer: number | null = null;
+
+  function scheduleKeyCommit(): void {
+    if (keyTimer !== null) clearTimeout(keyTimer);
+    keyTimer = window.setTimeout(flushKeyCommit, KEY_COMMIT_MS);
+  }
+
+  function flushKeyCommit(): void {
+    if (keyTimer === null) return;
+    clearTimeout(keyTimer);
+    keyTimer = null;
+    emit();
+  }
+
+  $effect(() => () => {
+    if (keyTimer !== null) clearTimeout(keyTimer);
+  });
+
+  /**
    * Keyboard controls — match the native <input type="range"> shortcuts
    * so the affordance feels like a real range, even though we're not
    * using one. Arrow ± 1, Page ± 10, Home/End to bounds.
@@ -175,7 +199,7 @@
       const next = absolute ?? toHandle + delta;
       toHandle = Math.min(max, Math.max(next, fromHandle));
     }
-    emit();
+    scheduleKeyCommit();
   }
 
   function reset(): void {
@@ -304,6 +328,7 @@
       onpointerup={endDrag}
       onpointercancel={endDrag}
       onkeydown={(e) => handleKeydown('from', e)}
+      onblur={flushKeyCommit}
     ></div>
 
     <div
@@ -321,6 +346,7 @@
       onpointerup={endDrag}
       onpointercancel={endDrag}
       onkeydown={(e) => handleKeydown('to', e)}
+      onblur={flushKeyCommit}
     ></div>
   </div>
 </section>

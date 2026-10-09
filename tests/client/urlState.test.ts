@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   FALLBACK_SORT,
+  createTypingBurst,
   createUrlSync,
   readUrlState,
   snapshotState,
@@ -342,5 +343,49 @@ describe('createUrlSync', () => {
     // A filter was added, so it is a navigation — had `prev` aliased `live`,
     // the two would compare equal and the change would be a silent replace.
     expect(push).toHaveBeenCalledTimes(1);
+  });
+});
+
+/**
+ * S-05: one history entry per typing burst, not one per debounced commit.
+ */
+describe('createTypingBurst', () => {
+  it('pushes the first commit of a burst and replaces the ones after it', () => {
+    const burst = createTypingBurst(1500);
+    expect(burst.typed(0)).toBe(false); // "tabaski" — a new entry
+    expect(burst.typed(400)).toBe(true); // "tabaski au" — the same entry
+    expect(burst.typed(800)).toBe(true); // "tabaski au Bur"
+  });
+
+  it('starts a new entry after Enter, a blur or a pick', () => {
+    const burst = createTypingBurst(1500);
+    burst.typed(0);
+    burst.end();
+    expect(burst.typed(100)).toBe(false);
+  });
+
+  it('starts a new entry after the reader paused long enough to read', () => {
+    const burst = createTypingBurst(1500);
+    burst.typed(0);
+    expect(burst.typed(2000)).toBe(false);
+  });
+
+  it('turns a burst into replaceState through createUrlSync', () => {
+    window.history.replaceState({}, '', '/search');
+    const push = vi.spyOn(window.history, 'pushState');
+    const sync = createUrlSync('', FALLBACK_SORT);
+    const burst = createTypingBurst(1500);
+    sync.push(state({ q: '' }));
+    for (const [q, at] of [
+      ['tab', 0],
+      ['tabaski', 300],
+      ['tabaski au', 600],
+    ] as const) {
+      if (burst.typed(at)) sync.replaceNext();
+      sync.push(state({ q }));
+    }
+    expect(push).toHaveBeenCalledTimes(1);
+    expect(window.location.search).toBe('?q=tabaski+au');
+    window.history.replaceState({}, '', '/');
   });
 });

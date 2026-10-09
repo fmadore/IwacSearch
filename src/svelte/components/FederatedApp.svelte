@@ -7,6 +7,7 @@
   } from '../lib/types';
   import { TypesenseClient } from '../lib/typesense';
   import { isAbortError } from '../lib/transport';
+  import { createTypingBurst } from '../lib/urlState';
   import { isSemanticOnlyResponse } from '../lib/semanticFallback';
   import { provideI18n, normalizeLocale, type Locale } from '../lib/i18n';
   import App from '../App.svelte';
@@ -209,8 +210,11 @@
   // bookmarkable. A changed committed query or tab PUSHES (back-button-able,
   // matching the per-collection App); the first sync after mount replaces.
   // The early return when the URL already matches is what keeps popstate
-  // re-hydration from pushing a duplicate entry.
+  // re-hydration from pushing a duplicate entry. A typing burst writes one
+  // entry, not one per debounced commit (lib/urlState.ts, createTypingBurst).
   let prevUrlState: { q: string; tab: TabId } | null = null;
+  const typingBurst = createTypingBurst();
+  let typingCommit = false;
   $effect(() => {
     if (typeof window === 'undefined') return;
     const next = { q: query, tab: activeTab };
@@ -224,8 +228,13 @@
 
     const prev = prevUrlState;
     prevUrlState = next;
+    const typed = typingCommit;
+    typingCommit = false;
+    let continuesBurst = false;
+    if (typed) continuesBurst = typingBurst.typed();
+    else typingBurst.end();
     if (url.toString() === window.location.href) return;
-    if (prev === null) {
+    if (prev === null || continuesBurst) {
       window.history.replaceState(window.history.state, '', url.toString());
     } else {
       window.history.pushState(window.history.state, '', url.toString());
@@ -256,6 +265,7 @@
     // applied inside the mounted tab stays applied — same as typing a new
     // query on /search, where filters are the scope you search WITHIN.
     seed = null;
+    if (next.trim() !== query) typingCommit = true;
     query = next.trim();
   }
 
@@ -332,7 +342,14 @@
 </script>
 
 <div class="iwac-fed">
-  <div class="iwac-fed__search" role="search">
+  <!-- Bubbling delegations from the input inside (see App's search form). -->
+  <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+  <div
+    class="iwac-fed__search"
+    role="search"
+    onfocusout={() => typingBurst.end()}
+    onkeydown={(e) => e.key === 'Enter' && typingBurst.end()}
+  >
     <SearchInput
       value={inputValue}
       placeholder={t('search_everything')}

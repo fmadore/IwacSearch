@@ -374,6 +374,39 @@ export function createUrlSync(
 }
 
 /**
+ * One history entry per typing burst.
+ *
+ * Search-as-you-type commits the query 250 ms after each pause, and every
+ * commit that changed `q` used to PUSH a history entry — so Back stepped
+ * through "tabaski", "tabaski au", "tabaski au Bur" before it left the page.
+ * The first commit of a burst still pushes (Back returns to where the reader
+ * was before they started typing); the commits after it REPLACE that entry,
+ * so it ends up holding the query they settled on. A burst ends on Enter, on
+ * leaving the box, on a pick or any other control (the caller says so with
+ * `end()`), or after `idleMs` without a commit — a query the reader stopped
+ * to read is a step worth going Back to.
+ */
+export function createTypingBurst(idleMs = 1500): {
+  /** A typing commit happened: true when it should replace the current entry. */
+  typed(now?: number): boolean;
+  end(): void;
+} {
+  let open = false;
+  let last = 0;
+  return {
+    typed(now = Date.now()): boolean {
+      const replace = open && now - last < idleMs;
+      open = true;
+      last = now;
+      return replace;
+    },
+    end(): void {
+      open = false;
+    },
+  };
+}
+
+/**
  * Listen for popstate (back/forward button) and re-hydrate state from URL.
  * Returns a cleanup function suitable for $effect's destructor.
  */

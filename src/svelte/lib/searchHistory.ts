@@ -27,12 +27,24 @@ export function readHistory(): string[] {
  * Record a query the user actually ran (a committed search that FOUND
  * something — the caller gates on that, so typo dead-ends don't pollute
  * the list). Moves an existing entry to the front.
+ *
+ * Search-as-you-type commits after every pause, so one typed query used to
+ * leave its fragments behind: "tabaski", "tabaski au", "tabaski au Bur" —
+ * eight slots filled by one search. A query that extends (or, backspacing,
+ * shortens) the NEWEST entry replaces it instead of joining it. Only the
+ * newest: an older "islam" is a search the reader made, not a fragment.
  */
 export function recordSearch(q: string): void {
   const query = q.trim();
   if (query.length < 3) return;
   try {
-    const next = [query, ...readHistory().filter((h) => h.toLowerCase() !== query.toLowerCase())];
+    const lower = query.toLowerCase();
+    let history = readHistory();
+    const newest = history[0]?.toLowerCase();
+    if (newest !== undefined && (lower.startsWith(newest) || newest.startsWith(lower))) {
+      history = history.slice(1);
+    }
+    const next = [query, ...history.filter((h) => h.toLowerCase() !== lower)];
     window.localStorage.setItem(KEY, JSON.stringify(next.slice(0, MAX)));
   } catch {
     /* storage disabled — history just doesn't persist */
