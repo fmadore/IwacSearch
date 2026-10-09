@@ -30,13 +30,13 @@
 {#if shown}
   <div class="iwac-search__semantic-banner">
     <p class="iwac-search__semantic-banner-text">{t('semantic_only_banner', { q: query })}</p>
-    <button type="button" class="iwac-search__semantic-btn" onclick={onHide}>
+    <button type="button" class="iwac-search__semantic-btn iwac-quiet-btn" onclick={onHide}>
       {t('hide_semantic')}
     </button>
   </div>
 {:else}
   <div class="iwac-search__semantic-offer">
-    <button type="button" class="iwac-search__semantic-btn" onclick={onShow}>
+    <button type="button" class="iwac-search__semantic-btn iwac-quiet-btn" onclick={onShow}>
       {tp('show_semantic', found)}
     </button>
   </div>
@@ -66,35 +66,7 @@
     color: var(--ink, #13161c);
     font-size: var(--text-sm, 0.9375rem);
   }
-  .iwac-search__semantic-btn {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--space-1, 0.25rem);
-    padding: 0.4rem 0.75rem;
-    border: 1px solid var(--border, #ced1d6);
-    border-radius: var(--radius-md, 0.5rem);
-    background: var(--surface, #fdfcfb);
-    color: var(--ink, #13161c);
-    box-shadow: none;
-    font: inherit;
-    font-size: var(--text-sm, 0.9375rem);
-    font-weight: 500;
-    cursor: pointer;
-    transition:
-      border-color var(--transition-fast, 150ms cubic-bezier(0.25, 1, 0.5, 1)),
-      color var(--transition-fast, 150ms cubic-bezier(0.25, 1, 0.5, 1));
-  }
-  .iwac-search__semantic-btn:hover {
-    background: var(--surface, #fdfcfb);
-    border-color: var(--primary, #ce4115);
-    color: var(--primary, #ce4115);
-    box-shadow: none;
-    transform: none;
-  }
-  .iwac-search__semantic-btn:focus-visible {
-    outline: var(--focus-outline, 2px solid #ce4115);
-    outline-offset: 2px;
-  }
+  /* The button itself is the module's quiet control (.iwac-quiet-btn). */
   .iwac-search__semantic-banner .iwac-search__semantic-btn {
     /* Tail of the banner line, like the summary strip's sort readout. */
     margin-inline-start: auto;

@@ -146,7 +146,7 @@
           <span class="iwac-pager__jump-total"
             >{t('jump_of_total', { total: formatNumber(totalPages) })}</span
           >
-          <button type="submit" class="iwac-pager__jump-go">{t('jump_go')}</button>
+          <button type="submit" class="iwac-pager__jump-go iwac-quiet-btn">{t('jump_go')}</button>
         </form>
       {/if}
       {#if sizeOptions.length > 1 && onPerPageChange}
@@ -315,34 +315,13 @@
     outline: var(--focus-outline, 2px solid #ce4115);
     outline-offset: 2px;
   }
+  /* A SUBMIT control, which the theme paints filled-and-glowing ("the loud
+     one opts in" — submit opts in implicitly). This is a utility beside a
+     pager, not the page's primary action: it is the module's quiet control
+     (.iwac-quiet-btn), whose rules outrank the theme's submit treatment. */
   .iwac-pager__jump-go {
     height: var(--size-control-sm, 2.25rem);
-    padding-inline: var(--space-4, 1rem);
-    /* A SUBMIT control, which the theme paints filled-and-glowing by default
-       (see IWAC-theme CLAUDE.md, "the loud one opts in" — submit opts in
-       implicitly). This is a utility beside a pager, not the page's primary
-       action, so it is quieted back to the toolbar's outlined vocabulary. */
-    background: var(--surface, #fdfcfb);
-    color: var(--ink, #13161c);
-    border: 1px solid var(--border, #ced1d6);
-    border-radius: var(--radius-md, 0.5rem);
-    box-shadow: none;
-    font: inherit;
-    font-size: var(--text-sm, 0.9375rem);
-    font-weight: 500;
-    cursor: pointer;
-    transition:
-      border-color var(--transition-fast, 150ms cubic-bezier(0.25, 1, 0.5, 1)),
-      color var(--transition-fast, 150ms cubic-bezier(0.25, 1, 0.5, 1));
   }
-  .iwac-pager__jump-go:hover {
-    background: var(--surface, #fdfcfb);
-    border-color: var(--primary, #ce4115);
-    color: var(--primary, #ce4115);
-    box-shadow: none;
-    transform: none;
-  }
-  .iwac-pager__jump-go:focus-visible,
   .iwac-pager__size-select:focus-visible {
     outline: var(--focus-outline, 2px solid #ce4115);
     outline-offset: 2px;

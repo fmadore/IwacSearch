@@ -100,7 +100,7 @@
   <button
     bind:this={trigger}
     type="button"
-    class="iwac-export__trigger"
+    class="iwac-export__trigger iwac-quiet-btn"
     aria-expanded={open}
     aria-controls={open ? menuId : undefined}
     aria-label={t('export_results')}
@@ -147,35 +147,9 @@
    * theme paints every <button> primary + glow + hover-translate, so the
    * resets below are deliberate.
    */
+  /* The module's quiet control (.iwac-quiet-btn), at the toolbar's height. */
   .iwac-export__trigger {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--space-1, 0.25rem);
     height: var(--size-control-md, 2.5rem);
-    padding-inline: var(--space-4, 1rem);
-    border: 1px solid var(--border, #ced1d6);
-    border-radius: var(--radius-md, 0.5rem);
-    background: var(--surface, #fdfcfb);
-    color: var(--ink, #13161c);
-    box-shadow: none;
-    font: inherit;
-    font-size: var(--text-sm, 0.9375rem);
-    font-weight: 500;
-    cursor: pointer;
-    transition:
-      border-color var(--transition-fast, 150ms cubic-bezier(0.25, 1, 0.5, 1)),
-      color var(--transition-fast, 150ms cubic-bezier(0.25, 1, 0.5, 1));
-  }
-  .iwac-export__trigger:hover {
-    background: var(--surface, #fdfcfb);
-    border-color: var(--primary, #ce4115);
-    color: var(--primary, #ce4115);
-    box-shadow: none;
-    transform: none;
-  }
-  .iwac-export__trigger:focus-visible {
-    outline: var(--focus-outline, 2px solid #ce4115);
-    outline-offset: 2px;
   }
   .iwac-export__trigger:disabled {
     opacity: 0.6;

@@ -145,17 +145,43 @@
   border-radius: var(--radius-md, 0.5rem);
 }
 
+/*
+ * Ledger rows, the shape of the client's ResultSkeleton (a hairline-ruled
+ * row, a 7rem thumbnail, a title bar), not the bordered, rounded 5.5rem cards
+ * this used to draw: the boxes contradicted the ledger grammar, and the swap
+ * to the client's taller rows shifted the page on mount.
+ */
 .iwac-search-block__skeleton-results {
   display: flex;
   flex-direction: column;
-  gap: var(--space-4, 1rem);
+  border-block-end: 1px solid var(--border-light, #e2e5e8);
 }
 
 .iwac-search-block__skeleton-row {
-  height: 5.5rem;
-  background: var(--surface-raised, #faf8f6);
-  border: 1px solid var(--border-light, #e2e5e8);
-  border-radius: var(--radius-md, 0.5rem);
+  position: relative;
+  height: 9rem;
+  border-block-start: 1px solid var(--border-light, #e2e5e8);
+}
+
+.iwac-search-block__skeleton-row::before,
+.iwac-search-block__skeleton-row::after {
+  content: '';
+  position: absolute;
+  inset-block-start: var(--space-4, 1rem);
+  border-radius: var(--radius-sm, 0.375rem);
+  background: var(--surface-sunken, #f4f1ef);
+}
+
+.iwac-search-block__skeleton-row::before {
+  inset-inline-start: var(--space-2, 0.5rem);
+  width: 7rem;
+  height: 7rem;
+}
+
+.iwac-search-block__skeleton-row::after {
+  inset-inline-start: calc(7rem + var(--space-6, 1.5rem));
+  width: min(55%, 28rem);
+  height: 1.25rem;
 }
 
 /* Compact widgets only need the input — not a full card-list preview. */
@@ -208,4 +234,54 @@
     forced-color-adjust: none;
     background-color: CanvasText;
   }
+}
+
+/*
+ * The module's one quiet control: the outlined, ink-on-surface button the
+ * toolbar, the export trigger, the semantic offer and the pager's Go share.
+ * It used to be copied into each component (about six times, each copy
+ * restating the same eleven declarations); a component now adds the class
+ * and keeps only what is its own (height, padding on phones, disabled).
+ *
+ * The hover rule outranks the theme's base `button:hover:not(:disabled)
+ * :not(.disabled)` — and its filled SUBMIT twin, which the pager's Go is —
+ * on specificity. The copies did not: their primary hover never showed, and
+ * Go turned filled-and-glowing under the pointer. Hover text is --primary-hover, the primary that clears
+ * 4.5:1 on every ground; the border may stay --primary (non-text, 3:1).
+ */
+.iwac-search-block__root .iwac-quiet-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1, 0.25rem);
+  min-height: var(--size-control-sm, 2.25rem);
+  padding-inline: var(--space-4, 1rem);
+  border: 1px solid var(--border, #ced1d6);
+  border-radius: var(--radius-md, 0.5rem);
+  background: var(--surface, #fdfcfb);
+  color: var(--ink, #13161c);
+  box-shadow: none;
+  font: inherit;
+  font-size: var(--text-sm, 0.9375rem);
+  font-weight: 500;
+  cursor: pointer;
+  transition:
+    border-color var(--transition-fast, 150ms cubic-bezier(0.25, 1, 0.5, 1)),
+    color var(--transition-fast, 150ms cubic-bezier(0.25, 1, 0.5, 1));
+}
+
+.iwac-search-block__root .iwac-quiet-btn:hover:not(:disabled):not(.disabled),
+.iwac-search-block__root .iwac-quiet-btn:active:not(:disabled):not(.disabled) {
+  background: var(--surface, #fdfcfb);
+  border-color: var(--primary, #ce4115);
+  color: var(--primary-hover, #b03710);
+  box-shadow: none;
+  transform: none;
+}
+
+/* The colour too: on a SUBMIT control (the pager's Go) the theme's filled
+   treatment sets --ink-on-primary on focus — white text on this surface. */
+.iwac-search-block__root .iwac-quiet-btn:focus-visible {
+  color: var(--ink, #13161c);
+  outline: var(--focus-outline, 2px solid #ce4115);
+  outline-offset: 2px;
 }

@@ -93,7 +93,7 @@
              reliably announced. -->
         <button
           type="button"
-          class="iwac-search__copylink"
+          class="iwac-search__copylink iwac-quiet-btn"
           class:is-copied={copyLink.copied}
           onclick={() => copyLink.copy(window.location.href)}
         >
@@ -165,42 +165,16 @@
   }
 
   /*
-   * Copy-link — quiet outlined control matching the toolbar vocabulary.
-   * Swaps its label to a confirmation for 2 s after a successful copy.
+   * Copy-link — the module's quiet control (.iwac-quiet-btn, in
+   * asset/css/iwac-search.css), at the toolbar's height. Swaps its label to
+   * a confirmation for 2 s after a copy.
    */
   .iwac-search__copylink {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--space-1, 0.25rem);
     height: var(--size-control-md, 2.5rem);
-    padding-inline: var(--space-4, 1rem);
-    border: 1px solid var(--border, #ced1d6);
-    border-radius: var(--radius-md, 0.5rem);
-    background: var(--surface, #fdfcfb);
-    color: var(--ink, #13161c);
-    box-shadow: none;
-    font: inherit;
-    font-size: var(--text-sm, 0.9375rem);
-    font-weight: 500;
-    cursor: pointer;
-    transition:
-      border-color var(--transition-fast, 150ms cubic-bezier(0.25, 1, 0.5, 1)),
-      color var(--transition-fast, 150ms cubic-bezier(0.25, 1, 0.5, 1));
-  }
-  .iwac-search__copylink:hover {
-    background: var(--surface, #fdfcfb);
-    border-color: var(--primary, #ce4115);
-    color: var(--primary, #ce4115);
-    box-shadow: none;
-    transform: none;
-  }
-  .iwac-search__copylink:focus-visible {
-    outline: var(--focus-outline, 2px solid #ce4115);
-    outline-offset: 2px;
   }
   .iwac-search__copylink.is-copied {
     border-color: var(--primary, #ce4115);
-    color: var(--primary, #ce4115);
+    color: var(--primary-hover, #b03710);
   }
   .iwac-search__copylink-status {
     position: absolute;
