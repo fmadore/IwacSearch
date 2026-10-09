@@ -46,7 +46,7 @@ final class FacetCatalog
         'publisher_s'        => 'Journal / Publisher',
         // MERGED dcterms:subject facet (persons + organisations + topics in
         // one list) — used on the references scope.
-        'subjects_ss'        => 'Subjects (combined)',
+        'subjects_ss'        => 'Subject headings (combined)',
         // dcterms:isPartOf on entity items — organisation category on the
         // entity index.
         'is_part_of_ss'      => 'Part of (entity category)',
@@ -68,8 +68,10 @@ final class FacetCatalog
         'media_platform_s'   => 'Format / Platform',
         'rights_s'           => 'Rights',
         'language_ss'        => 'Language',
-        'topics_ss'          => 'Topics',
-        'persons_ss'         => 'Persons',
+        // The stack's entity labels (People, Places, Organisations, Subjects,
+        // Events); "Subjects", never "Topics", which means LDA topics here.
+        'topics_ss'          => 'Subjects',
+        'persons_ss'         => 'People',
         'places_ss'          => 'Places',
         'organisations_ss'   => 'Organisations',
         'events_ss'          => 'Events',

@@ -519,7 +519,7 @@
     padding: 0 0.125em;
     font-weight: 500;
   }
-  /* Entity rows get a small field-type tag (Place / Topic / …). */
+  /* Entity rows get a small field-type tag (Place / Subject / …). */
   .iwac-suggest__tag {
     flex-shrink: 0;
     font-size: var(--text-xs, 0.8125rem);
