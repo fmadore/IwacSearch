@@ -1,6 +1,8 @@
 # Deployment and acceptance checklist — 3.19.0
 
-## 3.22.0 (2026-10-10): review fixes
+## 3.22.1 (2026-10-10): review fixes
+
+The first release carrying these changes. 3.22.0 was tagged but never published: its release build wrote the zip to the wrong path (an env var named `ZIP`, which Info-ZIP reads as options). 3.22.1 is 3.22.0 plus that workflow fix.
 
 **Schema `iwac_v10` — a full reindex is required.** Content documents gain
 `abstract_ai`, true when the card body is a model's text (the
