@@ -1,6 +1,6 @@
 # Deployment and acceptance checklist — 3.19.0
 
-## 3.22.0 (2026-10-09): review fixes
+## 3.22.0 (2026-10-10): review fixes
 
 **Schema `iwac_v10` — a full reindex is required.** Content documents gain
 `abstract_ai`, true when the card body is a model's text (the
