@@ -54,6 +54,13 @@ provides the Typesense container, nginx `/search-api/` proxy, and backups.
 - `SearchControllerFactory` — injects the scoped-key provider, the SSR
   renderer and module config into the controller (deliberately NOT the
   Typesense client itself).
+- `iwacItemSetSearch` (view helper, `Search\ItemSetSurface`) — the item-set
+  page's Typesense surface, scoped by `item_set_ids:=[N]` under the `bset.`
+  URL prefix. IWAC-theme's item-set template calls it guarded on its presence
+  and renders its own ledger whenever it returns `''`: Typesense down, a set
+  the index does not cover (authority sets; an editor's count with private
+  items), any exception. Its core count uses `limit`, never `page`/`per_page`,
+  which would reconfigure the ledger's shared `Omeka\Paginator`.
 
 The cutover, retention and retry contracts are documented in `docs/operations-3.19.md` and, for what 3.20 changed (phased cutover, write gate, batched drain, retention), `docs/operations-3.20.md`. Run the real integration suite when editing these boundaries.
 

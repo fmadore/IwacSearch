@@ -1,0 +1,37 @@
+<?php
+/**
+ * The Typesense surface on an item set's page, rendered by the
+ * iwacItemSetSearch helper (src/View/Helper/IwacItemSetSearch.php) — only
+ * when the index covers the set; otherwise the helper returns '' and the
+ * theme renders its own ledger. The theme prints the section heading.
+ *
+ * @var \Laminas\View\Renderer\PhpRenderer $this
+ * @var array<string, mixed> $bootstrap   Built by ItemSetSurface::bootstrap().
+ * @var string $block_id                  ItemSetSurface::BLOCK_ID.
+ * @var int $item_set_id
+ */
+$noScriptSite = $this->currentSite();
+?>
+<section
+    class="iwac-search-block iwac-search-block--full iwac-search-block--item-set"
+    aria-label="<?= $this->escapeHtmlAttr($this->translate('Search the items in this set')) ?>"
+>
+    <?php // Without JavaScript, core's item browse of the same set: the
+          // listing the theme would have rendered here. ?>
+    <noscript>
+        <p>
+            <?= $this->translate('Search requires JavaScript.') ?>
+            <?php if ($noScriptSite !== null): ?>
+                <a href="<?= $this->escapeHtmlAttr($this->url('site/resource', ['site-slug' => $noScriptSite->slug(), 'controller' => 'item', 'action' => 'browse'], ['query' => ['item_set_id' => $item_set_id]])) ?>">
+                    <?= $this->translate('Browse the items instead.') ?>
+                </a>
+            <?php endif; ?>
+        </p>
+    </noscript>
+
+    <?= $this->partial('common/iwac-search-mount', [
+        'bootstrap'     => $bootstrap,
+        'block_id'      => $block_id,
+        'skeleton_rows' => 5,
+    ]) ?>
+</section>

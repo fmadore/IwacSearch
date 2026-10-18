@@ -104,6 +104,20 @@ namespace Omeka\Api {
     }
 }
 
+namespace Omeka\View\Helper {
+    /** The api() view helper: the API manager, as templates and helpers reach it. */
+    class Api
+    {
+        /**
+         * @param array<string, mixed> $data
+         * @param array<string, mixed> $options
+         */
+        public function search(string $resource, array $data = [], array $options = []): \Omeka\Api\Response
+        {
+        }
+    }
+}
+
 namespace Omeka\Api\Representation {
     abstract class AbstractRepresentation
     {

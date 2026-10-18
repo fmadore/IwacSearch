@@ -50,7 +50,8 @@ IwacSearch/
 │   │   ├── OmekaPsrLogger.php                  # PSR-3 ↔ Laminas\Log adapter (psr/log 3.x-safe)
 │   │   └── LoggerResolver.php                  # static helper: container → wrapped PSR-3 logger
 │   ├── Util/ExceptionMessage.php               # flattens exception chains for logging
-│   ├── View/Helper/                            # IwacBootstrapJson · IwacLocale · IwacSearchUrl
+│   ├── View/Helper/                            # IwacBootstrapJson · IwacLocale · IwacSearchUrl ·
+│   │                                           #   IwacItemSetSearch (item-set page surface, or '' → theme ledger)
 │   ├── Search/
 │   │   ├── PresetCatalog.php · Preset.php      # page-block scopes (all / country / references / entity index)
 │   │   ├── ScopeFilters.php                    # page-block value pickers → filter_by (multi type/country/…)
@@ -58,6 +59,7 @@ IwacSearch/
 │   │   ├── SearchDefaults.php                  # per-collection query_by / highlights / default facet stack
 │   │   ├── InitialResponseRenderer.php         # SSR: PHP→Typesense, inlines first page into bootstrap
 │   │   ├── SearchStateQuery.php                # does the raw URL carry client state? (skip SSR)
+│   │   ├── ItemSetSurface.php                  # item-set page: item_set_ids scope + index-coverage guard
 │   │   ├── TypesenseSearchKeyProvider.php      # mints scoped keys for the browser
 │   │   └── ValidatedKeyMemo.php                # APCu memo of mounted-secret scope validation
 │   ├── svelte/                                 # Svelte 5 + TS client source — public bundle
@@ -88,7 +90,8 @@ IwacSearch/
 │       ├── BlockLayout/IwacSearchBlockFactory.php
 │       ├── Controller/MaintenanceControllerFactory.php
 │       ├── Indexer/{IncrementalIndexerFactory,ItemEventListenerFactory}.php
-│       └── Search/InitialResponseRendererFactory.php
+│       ├── Search/InitialResponseRendererFactory.php
+│       └── ViewHelper/IwacItemSetSearchFactory.php
 ├── cli/
 │   ├── bootstrap.php                           # shared CLI bootstrap (autoload, logger, client)
 │   ├── reindex.php                             # `discovery:reindex` entry point
@@ -117,6 +120,7 @@ IwacSearch/
 │   ├── iwac-search/admin/maintenance/index.phtml      # Admin maintenance page
 │   ├── common/iwac-search-mount.phtml                 # Shared Svelte mount partial (one source of truth)
 │   ├── common/iwac-federated-mount.phtml
+│   ├── common/iwac-item-set-search.phtml              # Item-set page surface (theme calls iwacItemSetSearch)
 │   └── common/block-layout/iwac-search-block.phtml
 ├── asset/
 │   ├── css/iwac-search.css                     # Block container + skeleton (consumes IWAC-theme tokens)

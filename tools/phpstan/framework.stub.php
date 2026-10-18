@@ -211,7 +211,7 @@ namespace Laminas\View\Renderer {
      * TYPO in a helper name is still an error, and the list doubles as the
      * inventory of what this module asks of the view layer.
      *
-     * Omeka core helpers first, then Laminas', then the module's own three
+     * Omeka core helpers first, then Laminas', then the module's own four
      * (registered in config/module.config.php under `view_helpers`).
      *
      * @method string assetUrl(string $file, ?string $module = null)
@@ -229,6 +229,8 @@ namespace Laminas\View\Renderer {
      * @method string iwacBootstrapJson(array<string, mixed> $bootstrap)
      * @method string iwacLocale()
      * @method string iwacSearchUrl()
+     * @method string iwacItemSetSearch(object $itemSet)
+     * @method \Omeka\View\Helper\Api api()
      */
     class PhpRenderer
     {
