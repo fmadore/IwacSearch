@@ -22,3 +22,7 @@ msgstr "La recherche nécessite JavaScript."
 
 msgid "Browse the items instead."
 msgstr "Parcourir plutôt les documents."
+
+# Item-set search surface (view/common/iwac-item-set-search.phtml)
+msgid "Search the items in this set"
+msgstr "Rechercher parmi les contenus de cette collection"

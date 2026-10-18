@@ -387,6 +387,12 @@ return [
             // the theme and the legacy-search redirect controller.
             'iwacSearchUrl'     => View\Helper\IwacSearchUrl::class,
         ],
+        'factories' => [
+            // The Typesense surface for an item set's page, or '' to keep the
+            // theme's ledger (IWAC-theme's item-set template calls it,
+            // guarded on its presence). Takes the SSR renderer.
+            'iwacItemSetSearch' => Service\ViewHelper\IwacItemSetSearchFactory::class,
+        ],
     ],
 
     // Sidebar entry under Omeka's "Modules" admin menu.
