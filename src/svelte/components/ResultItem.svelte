@@ -551,7 +551,11 @@
   .iwac-card__type {
     --iwac-type-dot: var(--muted, #66696e);
     display: inline-flex;
-    align-items: center;
+    /* Baseline, not center: a flex box takes its baseline from the first item
+       that aligns on one, else from the first item — here the text-less dot,
+       whose bottom edge would set the dateline's baseline and leave the date
+       sitting off the type label. The dot re-centres itself below. */
+    align-items: baseline;
     gap: 0.4em;
     padding: 0;
     background: transparent;
@@ -590,6 +594,7 @@
     border-radius: 50%;
     background: var(--iwac-type-dot);
     flex-shrink: 0;
+    align-self: center;
   }
   /* Categorical dot colours come from the theme's single-source --type-* map
      (IWAC-theme docs/DESIGN-SYSTEM.md §3); the hex is the degraded-mode
