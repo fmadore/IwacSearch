@@ -20,6 +20,7 @@
    */
   import type { ActiveFilterChip } from '../lib/filterChips';
   import { useI18n } from '../lib/i18n';
+  import Icon from './Icon.svelte';
 
   interface Props {
     chip: ActiveFilterChip;
@@ -42,7 +43,7 @@
 >
   {#if showField}<span class="iwac-chip__field">{chip.label}:</span>{/if}
   <span class="iwac-chip__value">{chip.displayValue}</span>
-  <span class="iwac-chip__x" aria-hidden="true">×</span>
+  <span class="iwac-chip__x" aria-hidden="true"><Icon name="x" /></span>
 </button>
 
 <style>
@@ -98,8 +99,8 @@
     font-weight: 600;
   }
   .iwac-chip__x {
+    display: inline-flex;
     color: var(--muted, #66696e);
     font-size: var(--text-sm, 0.9375rem);
-    line-height: 1;
   }
 </style>

@@ -21,6 +21,7 @@
   import FacetGroup from './FacetGroup.svelte';
   import DateRangeSlider from './DateRangeSlider.svelte';
   import FilterChip from './FilterChip.svelte';
+  import Icon from './Icon.svelte';
   import { refocus } from '../lib/refocus';
 
   /**
@@ -224,9 +225,9 @@
               {#if sentimentActiveCount > 0}
                 <span class="iwac-facets__group-count">{sentimentActiveCount}</span>
               {/if}
-              <span class="iwac-facets__group-chevron" aria-hidden="true">
-                {sentimentOpen ? '▾' : '▸'}
-              </span>
+              <span class="iwac-facets__group-chevron" aria-hidden="true"
+                ><Icon name={sentimentOpen ? 'chevron-down' : 'chevron-right'} /></span
+              >
             </button>
           </h3>
           {#if sentimentOpen}
@@ -386,9 +387,10 @@
     text-transform: none;
   }
   .iwac-facets__group-chevron {
+    display: inline-flex;
+    align-items: center;
     color: var(--muted, #66696e);
     font-size: var(--text-xs, 0.8125rem);
-    letter-spacing: 0;
   }
   .iwac-facets__group-body {
     margin-block-start: var(--space-1, 0.25rem);

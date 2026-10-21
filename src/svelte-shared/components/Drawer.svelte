@@ -178,7 +178,20 @@
       <div class="iwac-drawer__header">
         <h2 id={titleId} class="iwac-drawer__title">{title}</h2>
         <button type="button" class="iwac-drawer__close" aria-label={closeLabel} onclick={onClose}>
-          ×
+          <!-- Lucide `x`, inlined: this file serves the admin bundle too and
+               does not reach into the public app's Icon component. -->
+          <svg
+            viewBox="0 0 24 24"
+            width="1em"
+            height="1em"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+            focusable="false"><path d="M18 6 6 18" /><path d="m6 6 12 12" /></svg
+          >
         </button>
       </div>
     {/if}
@@ -291,7 +304,7 @@
     flex-shrink: 0;
     border: none;
     background: none;
-    font-size: var(--text-2xl, 1.875rem);
+    font-size: var(--text-lg, 1.1875rem);
     color: var(--muted, #66696e);
     cursor: pointer;
     width: 2rem;
