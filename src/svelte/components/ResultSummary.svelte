@@ -202,6 +202,22 @@
     color: var(--muted, #66696e);
     font-weight: 500;
   }
+  /* A list for assistive tech, a run of chips for the eye. This reset left
+     with the chip styles when FilterChip was extracted (7540821), and the
+     theme's base `ul` rules took over: a 2rem indent, a 1.5rem bottom margin
+     and a primary ::marker bullet in front of every chip, and the margin pushed
+     the sort readout onto a line of its own. */
+  .iwac-summary__chips {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: var(--space-1, 0.25rem);
+  }
+  .iwac-summary__chips li {
+    margin: 0;
+  }
 
   /*
    * Removable scope chip — outlined in primary (current state), value in ink.

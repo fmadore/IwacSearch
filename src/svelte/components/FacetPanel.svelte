@@ -309,6 +309,20 @@
        the old block-level orange wash made the whole corner shout. */
     padding-block-start: var(--space-2, 0.5rem);
   }
+  /* Same reset as the summary strip's chip list, lost in the same FilterChip
+     extraction: left to the theme's base `ul` rules, each chip sat behind a
+     primary bullet on a 2rem indent. */
+  .iwac-facets__chips {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-1, 0.25rem);
+  }
+  .iwac-facets__chips li {
+    margin: 0;
+  }
 
   .iwac-facets__groups {
     display: flex;
