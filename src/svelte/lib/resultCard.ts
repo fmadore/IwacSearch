@@ -120,15 +120,32 @@ export function pickMatchedIn(hit: IwacHit, locale: Locale): MatchedIn[] {
 }
 
 /**
+ * One run of a citation line: plain text, or a container name — the journal,
+ * the book, the publisher — that filters the results to that container when
+ * clicked (`chip`).
+ */
+export interface CitationPart {
+  text: string;
+  chip?: CardChip;
+}
+
+/**
  * Bibliographic source line for a reference, shaped by its reference type:
  * a chapter cites its book + editors, an article its journal + volume(issue)
  * + pages, everything else falls back to book — publisher — edition.
  * Every part is optional, so the separators are added only between parts
  * that exist (a stray " — " reads as missing data).
  *
+ * The journal or publisher (`publisher_s`), the containing book
+ * (`book_title_s`) and each of a chapter's editors (`editor_ss`) come back as
+ * chips: all are facets, so the card can narrow the results to everything
+ * else in that journal, book or catalogue, or edited by that person — the way
+ * a reader follows a citation. Volume, pages and edition stay text (the index
+ * does not facet them).
+ *
  * @param citeEds Localised "eds." label, from the caller's translator.
  */
-export function buildCitation(d: IwacDoc, citeEds: string): string {
+export function buildCitationParts(d: IwacDoc, citeEds: string): CitationPart[] {
   const rt = d.reference_type_ss?.[0] ?? '';
   const pub = (d.publisher_s ?? '').trim();
   const book = (d.book_title_s ?? '').trim();
@@ -136,23 +153,140 @@ export function buildCitation(d: IwacDoc, citeEds: string): string {
   const iss = (d.issue_s ?? '').trim();
   const pages = (d.pages_s ?? '').trim();
   const edition = (d.edition_s ?? '').trim();
-  const editors = (d.editor_ss ?? []).join(', ');
+  const editors = (d.editor_ss ?? []).filter((e) => e.trim() !== '');
   const volIss = vol && iss ? `${vol}(${iss})` : vol || (iss ? `(${iss})` : '');
 
+  const parts: CitationPart[] = [];
+  const text = (s: string): void => {
+    if (s) parts.push({ text: s });
+  };
+  // The chip carries the INDEXED value (the filter must match it exactly);
+  // it was only trimmed for display, which the facet value never needs.
+  const chip = (field: 'publisher_s' | 'book_title_s' | 'editor_ss', value: string): void => {
+    if (value) parts.push({ text: value, chip: { field, value, display: value } });
+  };
+  const sep = (s: string): void => {
+    if (parts.length > 0) text(s);
+  };
+
   if (rt === 'Chapitre') {
-    let s = book;
-    if (editors) s += ` (${citeEds} ${editors})`;
-    if (pages) s += `${s ? ', ' : ''}${pages}`;
-    if (pub) s += `${s ? ' — ' : ''}${pub}`;
-    return s.trim();
+    chip('book_title_s', book);
+    if (editors.length > 0) {
+      text(`${parts.length > 0 ? ' ' : ''}(${citeEds} `);
+      editors.forEach((editor, i) => {
+        if (i > 0) text(', ');
+        chip('editor_ss', editor);
+      });
+      text(')');
+    }
+    if (pages) {
+      sep(', ');
+      text(pages);
+    }
+    if (pub) {
+      sep(' — ');
+      chip('publisher_s', pub);
+    }
+    return parts;
   }
   if (rt === 'Article de revue' || rt === 'Compte rendu') {
-    let s = pub;
-    if (volIss) s += `${s ? ' ' : ''}${volIss}`;
-    if (pages) s += `${s ? ', ' : ''}${pages}`;
-    return s.trim();
+    chip('publisher_s', pub);
+    if (volIss) {
+      sep(' ');
+      text(volIss);
+    }
+    if (pages) {
+      sep(', ');
+      text(pages);
+    }
+    return parts;
   }
-  return [book, pub, edition].filter(Boolean).join(' — ');
+  for (const [field, value] of [
+    ['book_title_s', book],
+    ['publisher_s', pub],
+    [null, edition],
+  ] as const) {
+    if (!value) continue;
+    sep(' — ');
+    if (field) chip(field, value);
+    else text(value);
+  }
+  return parts;
+}
+
+/**
+ * Who made the work, for the card's byline: its authors, each a facet chip;
+ * or, when it has none of its own — an edited volume catalogues only its
+ * editors (`bibo:editorList`) — those editors, marked "(eds.)", so the card
+ * no longer shows nobody at all. A chapter's editors are its BOOK's: they stay
+ * in the citation line and never stand in for its author.
+ *
+ * @param citeEds Localised "eds." label, from the caller's translator.
+ */
+export function buildByline(d: IwacDoc, citeEds: string): { chips: CardChip[]; role: string } {
+  const authors = (d.creator_ss ?? []).filter((a) => a.trim() !== '');
+  if (authors.length > 0) {
+    return {
+      chips: authors.map((a) => ({ field: 'creator_ss', value: a, display: a })),
+      role: '',
+    };
+  }
+  const editors =
+    d.reference_type_ss?.[0] === 'Chapitre'
+      ? []
+      : (d.editor_ss ?? []).filter((e) => e.trim() !== '');
+  return {
+    chips: editors.map((e) => ({ field: 'editor_ss', value: e, display: e })),
+    role: editors.length > 0 ? `(${citeEds})` : '',
+  };
+}
+
+/** The citation line as plain text — {@link buildCitationParts}, joined. */
+export function buildCitation(d: IwacDoc, citeEds: string): string {
+  return buildCitationParts(d, citeEds)
+    .map((p) => p.text)
+    .join('');
+}
+
+/** An outbound identifier link: a DOI or a Wikidata entity. */
+export interface IdentifierLink {
+  scheme: 'doi' | 'wikidata';
+  /** The identifier as printed: "10.48734/…" or "Q141697087". */
+  id: string;
+  url: string;
+  /** The scheme's name, which the mark stands for: "DOI", "Wikidata". */
+  label: string;
+}
+
+const DOI = /^(?:https?:\/\/(?:dx\.)?doi\.org\/|doi:\s*)?(10\.\d{4,9}\/\S+)$/i;
+const QID = /^Q[1-9]\d*$/i;
+
+/**
+ * The record's DOI and Wikidata entity, as links that leave the site. Both
+ * fields are stored bare by the indexer (src/Indexer/ExternalIds.php); the DOI
+ * is still read tolerantly, because a collection built before iwac_v11 holds
+ * whatever bibo:doi carried. A value that is not an identifier yields no link
+ * rather than a dead one. The URL is built here, never taken from the index.
+ */
+export function pickIdentifierLinks(d: IwacDoc): IdentifierLink[] {
+  const out: IdentifierLink[] = [];
+  const doi = DOI.exec((d.doi ?? '').trim())?.[1];
+  if (doi) {
+    // doi.org resolves / ( ) ; : unencoded; only what ends a URL path is escaped.
+    const path = doi.replace(/[%#?"<>]/g, (c) => encodeURIComponent(c));
+    out.push({ scheme: 'doi', id: doi, url: `https://doi.org/${path}`, label: 'DOI' });
+  }
+  const qid = (d.wikidata_id ?? '').trim();
+  if (QID.test(qid)) {
+    const id = qid.toUpperCase();
+    out.push({
+      scheme: 'wikidata',
+      id,
+      url: `https://www.wikidata.org/wiki/${id}`,
+      label: 'Wikidata',
+    });
+  }
+  return out;
 }
 
 /**

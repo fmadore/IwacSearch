@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import type { IwacDoc, IwacHit } from '../../src/svelte/lib/types';
 import {
+  buildByline,
   buildCitation,
+  buildCitationParts,
   buildSourceChips,
   formatDate,
   formatDuration,
@@ -9,6 +11,7 @@ import {
   isAiBody,
   isoDate,
   pickExternalLink,
+  pickIdentifierLinks,
   pickMatchedIn,
   pickSnippet,
   pickTitleMarkup,
@@ -199,6 +202,155 @@ describe('buildCitation', () => {
       buildCitation(doc({ reference_type_ss: ['Livre'], publisher_s: 'Karthala' }), 'éds.'),
     ).toBe('Karthala');
     expect(buildCitation(doc({}), 'éds.')).toBe('');
+  });
+});
+
+describe('buildCitationParts', () => {
+  const doc = (d: Partial<IwacDoc>): IwacDoc => ({ id: '1', title: 'T', ...d }) as IwacDoc;
+  /** The chips of a line, as field=value. */
+  const chips = (d: Partial<IwacDoc>): string[] =>
+    buildCitationParts(doc(d), 'éds.').flatMap((p) =>
+      p.chip ? [`${p.chip.field}=${p.chip.value}`] : [],
+    );
+
+  it("makes a journal article's journal a filter, and nothing else", () => {
+    const parts = buildCitationParts(
+      doc({
+        reference_type_ss: ['Article de revue'],
+        publisher_s: 'Revue Akofena',
+        volume_s: '18',
+        issue_s: '1',
+        pages_s: '155-168',
+      }),
+      'éds.',
+    );
+    expect(parts).toEqual([
+      {
+        text: 'Revue Akofena',
+        chip: { field: 'publisher_s', value: 'Revue Akofena', display: 'Revue Akofena' },
+      },
+      { text: ' ' },
+      { text: '18(1)' },
+      { text: ', ' },
+      { text: '155-168' },
+    ]);
+  });
+
+  it("makes a chapter's book, each of its editors and its publisher filters", () => {
+    expect(
+      chips({
+        reference_type_ss: ['Chapitre'],
+        book_title_s: 'Islam et société',
+        editor_ss: ['Madore', 'Sounaye'],
+        publisher_s: 'Brill',
+      }),
+    ).toEqual([
+      'book_title_s=Islam et société',
+      'editor_ss=Madore',
+      'editor_ss=Sounaye',
+      'publisher_s=Brill',
+    ]);
+  });
+
+  it("makes a book's publisher a filter and leaves the edition as text", () => {
+    expect(
+      chips({ reference_type_ss: ['Livre'], publisher_s: 'Karthala', edition_s: '2e éd.' }),
+    ).toEqual(['publisher_s=Karthala']);
+    expect(
+      buildCitation(
+        doc({ reference_type_ss: ['Livre'], publisher_s: 'Karthala', edition_s: '2e éd.' }),
+        'éds.',
+      ),
+    ).toBe('Karthala — 2e éd.');
+  });
+
+  it('offers no chip for a container the record does not name', () => {
+    expect(chips({ reference_type_ss: ['Article de revue'], volume_s: '3' })).toEqual([]);
+    expect(buildCitationParts(doc({}), 'éds.')).toEqual([]);
+  });
+});
+
+describe('buildByline', () => {
+  const doc = (d: Partial<IwacDoc>): IwacDoc => ({ id: '1', title: 'T', ...d }) as IwacDoc;
+  const fields = (d: Partial<IwacDoc>): string[] =>
+    buildByline(doc(d), 'dir.').chips.map((c) => `${c.field}=${c.value}`);
+
+  it('names the authors, with no role', () => {
+    expect(
+      buildByline(doc({ creator_ss: ['Mara Vitale'], editor_ss: ['Alice Degorce'] }), 'dir.'),
+    ).toEqual({
+      chips: [{ field: 'creator_ss', value: 'Mara Vitale', display: 'Mara Vitale' }],
+      role: '',
+    });
+  });
+
+  /** As catalogued live (item 15710): editors only, on bibo:editorList. */
+  it('gives an edited volume with no author its editors, marked as such', () => {
+    const byline = buildByline(
+      doc({ reference_type_ss: ['Ouvrage collectif'], editor_ss: ['Gilles Holder', 'Moussa Sow'] }),
+      'dir.',
+    );
+    expect(byline.chips.map((c) => `${c.field}=${c.value}`)).toEqual([
+      'editor_ss=Gilles Holder',
+      'editor_ss=Moussa Sow',
+    ]);
+    expect(byline.role).toBe('(dir.)');
+  });
+
+  it("never credits a chapter to its book's editors", () => {
+    expect(fields({ reference_type_ss: ['Chapitre'], editor_ss: ['Alice Degorce'] })).toEqual([]);
+  });
+
+  it('is empty when nobody is named', () => {
+    expect(buildByline(doc({ creator_ss: [' '] }), 'dir.')).toEqual({ chips: [], role: '' });
+  });
+});
+
+describe('pickIdentifierLinks', () => {
+  const doc = (d: Partial<IwacDoc>): IwacDoc => ({ id: '1', title: 'T', ...d }) as IwacDoc;
+
+  it('links the DOI and the Wikidata entity, in that order', () => {
+    expect(
+      pickIdentifierLinks(
+        doc({ doi: '10.48734/akofena.n018.vol.1.13.2025', wikidata_id: 'Q141697087' }),
+      ),
+    ).toEqual([
+      {
+        scheme: 'doi',
+        id: '10.48734/akofena.n018.vol.1.13.2025',
+        url: 'https://doi.org/10.48734/akofena.n018.vol.1.13.2025',
+        label: 'DOI',
+      },
+      {
+        scheme: 'wikidata',
+        id: 'Q141697087',
+        url: 'https://www.wikidata.org/wiki/Q141697087',
+        label: 'Wikidata',
+      },
+    ]);
+  });
+
+  /** A collection built before iwac_v11 holds whatever bibo:doi carried. */
+  it('reads a DOI stored as a doi.org address or with a doi: prefix', () => {
+    for (const raw of [
+      'https://doi.org/10.1000/182',
+      'http://dx.doi.org/10.1000/182',
+      'doi:10.1000/182',
+    ]) {
+      expect(pickIdentifierLinks(doc({ doi: raw }))[0]?.url).toBe('https://doi.org/10.1000/182');
+    }
+  });
+
+  it('escapes only the characters that would end the URL path', () => {
+    const [link] = pickIdentifierLinks(doc({ doi: '10.1002/(SICI)49:8<693::AID>3.0.CO;2-#' }));
+    expect(link?.id).toBe('10.1002/(SICI)49:8<693::AID>3.0.CO;2-#');
+    expect(link?.url).toBe('https://doi.org/10.1002/(SICI)49:8%3C693::AID%3E3.0.CO;2-%23');
+  });
+
+  it('offers no link for a value that is not an identifier', () => {
+    expect(pickIdentifierLinks(doc({ doi: 'en cours', wikidata_id: 'P31' }))).toEqual([]);
+    expect(pickIdentifierLinks(doc({ doi: 'javascript:alert(1)' }))).toEqual([]);
+    expect(pickIdentifierLinks(doc({}))).toEqual([]);
   });
 });
 

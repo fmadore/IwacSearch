@@ -200,6 +200,7 @@ final class EntityPipelineTest extends TestCase
             'description' => '',
             'coordinates' => '',
             'identifier' => '',
+            'wikidata_id' => '',
             'is_part_of' => [],
             'thumbnail' => null,
             'is_public' => true,
@@ -329,12 +330,23 @@ final class EntityPipelineTest extends TestCase
         self::assertArrayNotHasKey('pub_year', $doc);
     }
 
+    public function testTheWikidataEntityIsCarriedToTheCard(): void
+    {
+        $doc = (new IndexEntityMapper())->map(self::entity(['wikidata_id' => 'Q216920']), self::aggregate());
+        self::assertSame('Q216920', $doc['wikidata_id']);
+
+        // A record built before the field existed maps as it did.
+        $legacy = self::entity();
+        unset($legacy['wikidata_id']);
+        self::assertArrayNotHasKey('wikidata_id', (new IndexEntityMapper())->map($legacy, self::aggregate()));
+    }
+
     public function testOptionalFieldsAreOmittedRatherThanEmptied(): void
     {
         // Typesense optional fields are ABSENT, not empty strings.
         $doc = (new IndexEntityMapper())->map(self::entity(), self::aggregate());
 
-        foreach (['identifier', 'description', 'coordinates', 'thumbnail_url', 'country_ss', 'is_part_of_ss', 'entity_aliases_txt'] as $field) {
+        foreach (['identifier', 'wikidata_id', 'description', 'coordinates', 'thumbnail_url', 'country_ss', 'is_part_of_ss', 'entity_aliases_txt'] as $field) {
             self::assertArrayNotHasKey($field, $doc, $field);
         }
     }

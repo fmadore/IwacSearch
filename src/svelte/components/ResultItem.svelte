@@ -33,10 +33,14 @@
    *     retina one the `large` — instead of every screen taking `large` for a
    *     190px tile (see lib/thumbnail.ts for the measured tier sizes).
    *
-   * Clickable metadata: the type badge, author byline, newspaper and country
-   * are facet-toggle buttons calling onFacetToggle — the same handler the
+   * Clickable metadata: the type badge, author byline (an edited volume's
+   * editors), newspaper and country, and a reference's journal, book,
+   * publisher and book editors in its citation line, are
+   * facet-toggle buttons calling onFacetToggle — the same handler the
    * FacetPanel uses — so a card doubles as a filter affordance. Active filters
-   * render brand-coloured (aria-pressed reflects it).
+   * render brand-coloured (aria-pressed reflects it). The DOI and Wikidata
+   * links are the opposite: they leave the site, so they are links, closing
+   * the source line after the filters.
    *
    * Snippet sanitisation: Typesense returns highlighted HTML with <mark> tags.
    * We HTML-escape the snippet client-side and only reinstate literal
@@ -190,6 +194,34 @@
   {/if}
 {/snippet}
 
+<!-- DOI and Wikidata entity, each led by its scheme's official mark (drawn by
+     asset/css/iwac-search.css from the theme's two SVGs) and closed by the
+     outbound arrow. The mark names the scheme, so the link reads "Wikidata
+     Q141697087"; the identifier is machine text, kept left-to-right and out
+     of page translation. -->
+{#snippet identifierLinks()}
+  {#each cardData.identifierLinks as link (link.scheme)}
+    <li>
+      <a
+        class="iwac-card__chip iwac-card__chip--external iwac-card__chip--id"
+        href={link.url}
+        target="_blank"
+        rel="noopener noreferrer external"
+        dir="ltr"
+        translate="no"
+        ><span
+          class="iwac-id-mark iwac-id-mark--{link.scheme}"
+          role="img"
+          aria-label={link.label}
+          title={link.label}
+        ></span>{link.id}<span class="iwac-card__external-icon" aria-hidden="true"
+          ><Icon name="external" /></span
+        ></a
+      >
+    </li>
+  {/each}
+{/snippet}
+
 <!-- The EU "AI generated" mark, ahead of a body text that is a model's (the
      DescriptionAI summary, or an AI-summarised table of contents). Same mark
      and wording as the theme's .property--ai on the item page; drawn by
@@ -316,7 +348,7 @@
           </div>
         {/if}
 
-        {#if cardData.entityPartOfChips.length > 0 || cardData.entityCountryChips.length > 0}
+        {#if cardData.entityPartOfChips.length > 0 || cardData.entityCountryChips.length > 0 || cardData.identifierLinks.length > 0}
           <ul class="iwac-card__source" aria-label={t('source')}>
             {#each cardData.entityPartOfChips as chip (chip.field + '|' + chip.value)}
               {@render filterChip(chip)}
@@ -324,6 +356,7 @@
             {#each cardData.entityCountryChips as chip (chip.field + '|' + chip.value)}
               {@render filterChip(chip)}
             {/each}
+            {@render identifierLinks()}
           </ul>
         {/if}
       {:else}
@@ -333,26 +366,40 @@
 
         <h3 class="iwac-card__title">{@render titleLink()}</h3>
 
-        {#if cardData.authors.length > 0}
+        {#if cardData.byline.chips.length > 0}
+          <!-- Authors, or an edited volume's editors followed by "(eds.)". -->
           <p class="iwac-card__byline">
             <span class="iwac-card__meta-icon" aria-hidden="true"><Icon name="person" /></span
-            >{#each cardData.authors as author, i (author)}<button
+            >{#each cardData.byline.chips as chip, i (chip.field + '|' + chip.value)}<button
                 type="button"
                 class="iwac-card__author"
-                class:is-active={isActive('creator_ss', author)}
-                aria-pressed={isActive('creator_ss', author)}
-                aria-label={chipAria({ field: 'creator_ss', value: author, display: author })}
-                onclick={() => toggle('creator_ss', author)}>{author}</button
-              >{#if i < cardData.authors.length - 1}<span class="iwac-card__byline-sep"
-                ></span>{/if}{/each}
+                class:is-active={isActive(chip.field, chip.value)}
+                aria-pressed={isActive(chip.field, chip.value)}
+                aria-label={chipAria(chip)}
+                onclick={() => toggle(chip.field, chip.value)}>{chip.display}</button
+              >{#if i < cardData.byline.chips.length - 1}<span class="iwac-card__byline-sep"
+                ></span>{/if}{/each}{#if cardData.byline.role}<span class="iwac-card__byline-role"
+                >{cardData.byline.role}</span
+              >{/if}
           </p>
         {/if}
 
-        {#if cardData.citation}
+        {#if cardData.citationParts.length > 0}
+          <!-- The journal / book / publisher and a chapter's editors are facet
+               toggles, like the byline above; the rest is plain text. -->
           <p class="iwac-card__citation">
             <span class="iwac-card__meta-icon" aria-hidden="true"
               ><Icon name={cardData.citationIcon} /></span
-            >{cardData.citation}
+            >{#each cardData.citationParts as part, i (i)}{#if part.chip}{@const chip =
+                  part.chip}<button
+                  type="button"
+                  class="iwac-card__cite-link"
+                  class:is-active={isActive(chip.field, chip.value)}
+                  aria-pressed={isActive(chip.field, chip.value)}
+                  aria-label={chipAria(chip)}
+                  title={part.text}
+                  onclick={() => toggle(chip.field, chip.value)}>{part.text}</button
+                >{:else}{part.text}{/if}{/each}
           </p>
         {/if}
 
@@ -382,12 +429,13 @@
           </p>
         {/if}
 
-        {#if cardData.sourceChips.length > 0 || cardData.externalLink}
+        {#if cardData.sourceChips.length > 0 || cardData.externalLink || cardData.identifierLinks.length > 0}
           <ul class="iwac-card__source" aria-label={t('source')}>
             {#each cardData.sourceChips as chip (chip.field + '|' + chip.value)}
               {@render filterChip(chip)}
             {/each}
             {@render externalAction()}
+            {@render identifierLinks()}
           </ul>
         {/if}
       {/if}
@@ -736,6 +784,11 @@
     content: ', ';
     color: var(--ink-light, #3f4349);
   }
+  /* "(eds.)" after an edited volume's editors: the role, not a name. */
+  .iwac-card__byline-role {
+    margin-inline-start: 0.3em;
+    color: var(--muted, #66696e);
+  }
 
   .iwac-card__meta-icon {
     display: inline-block;
@@ -745,7 +798,14 @@
   }
 
   .iwac-card__citation {
+    position: relative;
     margin: 0;
+    /* Hanging indent: the icon sits in the gutter and every line of the
+       citation starts at the same edge. It has to, now that the book and the
+       journal are buttons — a button is one unbreakable box, so a long book
+       title used to drop to the next line and leave the icon alone above it.
+       The gutter is the icon (0.875em) plus its 0.35em gap. */
+    padding-inline-start: 1.225em;
     font-size: var(--text-sm, 0.9375rem);
     font-style: italic;
     color: var(--muted, #66696e);
@@ -755,6 +815,63 @@
     line-clamp: 2;
     -webkit-box-orient: vertical;
     overflow: hidden;
+  }
+  /* 1.6 = the citation's 1.4 line at the icon's 0.875em, so the glyph sits
+     on the first line exactly as it did inline. */
+  .iwac-card__citation > .iwac-card__meta-icon {
+    position: absolute;
+    inset-block-start: 0;
+    inset-inline-start: 0;
+    margin: 0;
+    line-height: 1.6;
+  }
+
+  /* The journal / book / publisher in a citation: a facet toggle in the
+     citation's own italic muted voice, behaving like the byline's authors —
+     no affordance at rest beyond the pointer, primary + underline on hover,
+     and the pressed state when its filter is on.
+
+     A button is one unbreakable box whatever its `display`, so a book title
+     longer than the line took the whole line and wrapped inside it, pushing
+     the pages and publisher onto a third line past the two-line clamp. It is
+     held to one line instead, ellipsised at the line's width; the full name
+     is its `title` and, through chipAria, its accessible name. The negative
+     block margin cancels the hit-area padding, so the box is exactly one
+     text line tall and `bottom` puts its baseline on the line's. */
+  .iwac-card__cite-link {
+    display: inline-block;
+    max-width: 100%;
+    margin: -0.15rem 0;
+    /* See the SC 2.5.8 note on .iwac-card__type--filter. */
+    padding: 0.15rem 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    vertical-align: bottom;
+    border: none;
+    background: none;
+    box-shadow: none;
+    font: inherit;
+    color: inherit;
+    cursor: pointer;
+    text-align: start;
+    transition: color var(--transition-fast, 150ms cubic-bezier(0.25, 1, 0.5, 1));
+  }
+  .iwac-card__cite-link:hover {
+    color: var(--primary-hover, #b03710);
+    background: none;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+  .iwac-card__cite-link.is-active {
+    color: var(--primary-hover, #b03710);
+    font-weight: 600;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+  .iwac-card__cite-link:focus-visible {
+    outline: var(--focus-outline, 2px solid #ce4115);
+    outline-offset: 2px;
   }
 
   .iwac-card__snippet {
@@ -975,6 +1092,18 @@
   .iwac-card__chip--external:focus-visible {
     outline: var(--focus-outline, 2px solid #ce4115);
     outline-offset: 2px;
+  }
+  /* DOI / Wikidata: a DOI has no break opportunity of its own and outruns a
+     phone's line. The arrow is the theme's external-link glyph, quieter than
+     the identifier it follows. */
+  .iwac-card__chip--id {
+    overflow-wrap: anywhere;
+  }
+  .iwac-card__external-icon {
+    display: inline-block;
+    margin-inline-start: 0.25em;
+    font-size: 0.85em;
+    opacity: 0.7;
   }
 
   /* Compact entity meta in a gallery tile (e.g. "312 mentions"). */

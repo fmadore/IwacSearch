@@ -249,6 +249,42 @@
 }
 
 /*
+ * A result card's DOI and Wikidata links open on the scheme's official mark —
+ * the same two SVGs IWAC-theme draws before those identifiers on the item page
+ * (components/external-id), from Simple Icons (CC0). Masks inked in the
+ * label's --muted rather than either brand colour: one quiet glyph on the
+ * source line, like the AI mark above, reading the same in both themes. The
+ * Wikidata barcode is cropped to its own 24 × 14.834 box, so it is sized by
+ * height and sits on the text line.
+ */
+.iwac-search-block__root .iwac-id-mark {
+  display: inline-block;
+  margin-inline-end: 0.35em;
+  background-color: var(--muted, #66696e);
+}
+.iwac-search-block__root .iwac-id-mark--doi {
+  width: 1em;
+  height: 1em;
+  vertical-align: -0.15em;
+  -webkit-mask: url('../img/doi.svg') no-repeat center / contain;
+  mask: url('../img/doi.svg') no-repeat center / contain;
+}
+.iwac-search-block__root .iwac-id-mark--wikidata {
+  -webkit-mask: url('../img/wikidata.svg') no-repeat center / contain;
+  mask: url('../img/wikidata.svg') no-repeat center / contain;
+  height: 0.75em;
+  aspect-ratio: 24 / 14.834;
+  vertical-align: -0.02em;
+}
+
+@media (forced-colors: active) {
+  .iwac-search-block__root .iwac-id-mark {
+    forced-color-adjust: none;
+    background-color: LinkText;
+  }
+}
+
+/*
  * The module's one quiet control: the outlined, ink-on-surface button the
  * toolbar, the export trigger, the semantic offer and the pager's Go share.
  * It used to be copied into each component (about six times, each copy

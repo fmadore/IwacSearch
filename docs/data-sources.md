@@ -58,6 +58,14 @@ Changed in v6 (schema `iwac_v6`):
 | `gpt_5_6_luna_*` (surfaced sentiment trio)       | `iwac:gpt56Luna*` — replaces the generation-1 `gemini_3_flash_preview_*` trio     |
 | `mistral_small_2603_*`, `deepseek_v4_flash_0731_*` | `iwac:mistralSmall2603*` / `iwac:deepseekV4Flash0731*` — indexed, not surfaced  |
 
+Added in v11 (schema `iwac_v11`, entity schema `iwac_index_v5`):
+
+| Search field  | Source / behavior                                                                                         |
+| ------------- | --------------------------------------------------------------------------------------------------------- |
+| `wikidata_id` | the bare QID of the first wikidata.org entity URI on `dcterms:identifier` (`ExternalIds::wikidataQid`), on content documents and entity documents alike; display-only, linked out from the card with the Wikidata mark |
+| `editor_ss` (changed) | now faceted (was display-only): a chapter's book editors and an edited volume's editors are facet toggles on the card |
+| `doi` (changed) | now always the bare `10.…` DOI: the doi.org address of a `bibo:doi` URI value first, else a typed DOI (`ExternalIds::doi`); a value that is not a DOI is dropped |
+
 Added in v10 (schema `iwac_v10`):
 
 | Search field  | Source / behavior                                                                                         |

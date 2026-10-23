@@ -103,6 +103,19 @@ final class PropertyValuesTest extends TestCase
         self::assertSame('1994-03', $v->firstScalar('dcterms:date'));
     }
 
+    public function testUrisReturnTheAddressesNotTheirLabels(): void
+    {
+        // A URI value's label lands in `value` — what literals() would read.
+        $v = PropertyValues::fromRows(['dcterms:identifier' => [
+            self::row(['uri' => 'https://www.wikidata.org/wiki/Q216920', 'value' => 'Q216920']),
+            self::row(['value' => 'iwac-index-0000001']),
+            self::row(['uri' => 'https://www.wikidata.org/wiki/Q216920']),
+        ]]);
+
+        self::assertSame(['https://www.wikidata.org/wiki/Q216920'], $v->uris('dcterms:identifier'));
+        self::assertSame([], $v->uris('bibo:doi'));
+    }
+
     public function testLinkedIdsReturnOnlyResourceTargetsAndKeepRepeats(): void
     {
         // Not deduped on purpose: a repeated link is a repeated occurrence,

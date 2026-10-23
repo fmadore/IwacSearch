@@ -4,7 +4,8 @@ import { sizedThumbnail, thumbnailSrcset } from './thumbnail';
 import { itemPath, localizeSiteUrl } from './siteUrl';
 import { densifyByYear, parseMentionsByYear } from './sparkline';
 import {
-  buildCitation,
+  buildByline,
+  buildCitationParts,
   buildSourceChips,
   formatDate,
   formatDuration,
@@ -12,6 +13,7 @@ import {
   isAiBody,
   isoDate,
   pickExternalLink,
+  pickIdentifierLinks,
   pickMatchedIn,
   pickSnippet,
   pickTitleMarkup,
@@ -19,7 +21,13 @@ import {
   type CardChip,
 } from './resultCard';
 
-export { CHIP_ICONS, type CardChip, type MatchedIn } from './resultCard';
+export {
+  CHIP_ICONS,
+  type CardChip,
+  type CitationPart,
+  type IdentifierLink,
+  type MatchedIn,
+} from './resultCard';
 
 /**
  * Everything a card renders, kept reactive to the hit and the surrounding
@@ -155,10 +163,15 @@ export function createResultCard(input: () => { hit: IwacHit; hideCountry: boole
     return link ? { url: link.url, label: t(link.labelKey) } : null;
   });
 
-  const citation = $derived(buildCitation(doc, t('cite_eds')));
+  // The citation line, its journal / book / publisher as facet chips.
+  const citationParts = $derived(buildCitationParts(doc, t('cite_eds')));
+  // DOI + Wikidata entity, linked out beside the source line (content and
+  // entity cards alike — an authority is reconciled with Wikidata too).
+  const identifierLinks = $derived(pickIdentifierLinks(doc));
   const abstract = $derived((doc.abstract ?? '').trim());
-  // Author byline — essential for references, informative for signed articles.
-  const authors = $derived(doc.creator_ss ?? []);
+  // Byline — essential for references, informative for signed articles: the
+  // authors, or an edited volume's editors with their "(eds.)" role.
+  const byline = $derived(buildByline(doc, t('cite_eds')));
   // The index stores every omeka_url against the canonical FRENCH site, so it
   // is rewritten onto the site the reader is on (see lib/siteUrl.ts). The
   // fallback used to hardcode the French slug too, which sent an English
@@ -253,11 +266,14 @@ export function createResultCard(input: () => { hit: IwacHit; hideCountry: boole
     get matchedIn() {
       return matchedIn;
     },
-    get authors() {
-      return authors;
+    get byline() {
+      return byline;
     },
-    get citation() {
-      return citation;
+    get citationParts() {
+      return citationParts;
+    },
+    get identifierLinks() {
+      return identifierLinks;
     },
     get citationIcon() {
       return citationIcon;

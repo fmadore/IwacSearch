@@ -228,6 +228,47 @@ final class MapperTest extends TestCase
         self::assertArrayNotHasKey('iiif_manifest', $without);
     }
 
+    public function testAWikidataIdentifierBecomesTheBareQidBesideTheIwacKey(): void
+    {
+        // As catalogued live (item 125674): the Wikidata URI, labelled with
+        // its QID, on dcterms:identifier — alone, or beside the IWAC key.
+        $doc = $this->registry->get('references')->map(
+            self::item(['class' => IwacInstance::CLASS_CHAPTER]),
+            self::values(['dcterms:identifier' => [
+                ['uri' => 'https://www.wikidata.org/wiki/Q141697087', 'value' => 'Q141697087'],
+                ['value' => 'iwac-reference-0000123'],
+            ]]),
+            null
+        );
+        self::assertSame('Q141697087', $doc['wikidata_id']);
+
+        // Any other URI on the property is not a reconciliation.
+        $other = $this->registry->get('articles')->map(
+            self::item(),
+            self::values(['dcterms:identifier' => [['uri' => 'https://example.org/Q1', 'value' => 'Q1']]]),
+            null
+        );
+        self::assertArrayNotHasKey('wikidata_id', $other);
+    }
+
+    public function testTheDoiIsStoredBareWhicheverWayItWasCatalogued(): void
+    {
+        $map = fn (array $doi): array => $this->registry->get('references')->map(
+            self::item(['class' => IwacInstance::CLASS_CHAPTER]),
+            self::values(['bibo:doi' => $doi]),
+            null
+        );
+
+        // A URI value: its address wins, whatever its label says.
+        self::assertSame('10.48734/akofena.n018.vol.1.13.2025', $map([
+            ['uri' => 'https://doi.org/10.48734/akofena.n018.vol.1.13.2025', 'value' => 'DOI'],
+        ])['doi']);
+        // A typed DOI, bare or prefixed.
+        self::assertSame('10.1017/S0001972000000000', $map([['value' => 'doi:10.1017/S0001972000000000']])['doi']);
+        // Not a DOI at all: nothing, rather than a broken link on the card.
+        self::assertArrayNotHasKey('doi', $map([['value' => 'en cours']]));
+    }
+
     public function testItemSetIdsAreOmittedWhenTheItemBelongsToNoSet(): void
     {
         $doc = $this->registry->get('articles')->map(self::item(), self::values([]), null);

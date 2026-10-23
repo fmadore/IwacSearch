@@ -61,7 +61,7 @@ final class IncrementalApplyTest extends TestCase
     {
         return [
             'id' => $id, 'type' => 'Sujets', 'title' => $title, 'aliases' => [], 'description' => '',
-            'coordinates' => '', 'identifier' => '', 'is_part_of' => [], 'thumbnail' => null, 'is_public' => true,
+            'coordinates' => '', 'identifier' => '', 'wikidata_id' => '', 'is_part_of' => [], 'thumbnail' => null, 'is_public' => true,
         ];
     }
 

@@ -58,7 +58,7 @@ final class EntityAuthority
 
     /** @var array<int, array{
      *   class:int, type:string, bucket:?string, title:string, aliases:list<string>,
-     *   description:string, coordinates:string, identifier:string,
+     *   description:string, coordinates:string, identifier:string, wikidata_id:string,
      *   is_part_of:list<string>, thumbnail:?string, is_public:bool
      * }> */
     private array $byId = [];
@@ -151,6 +151,9 @@ final class EntityAuthority
             'description' => $values->firstLiteral('dcterms:description'),
             'coordinates' => $values->firstLiteral('curation:coordinates'),
             'identifier'  => $values->firstLiteral('dcterms:identifier'),
+            // The Wikidata entity the authority is reconciled with — a URI
+            // on dcterms:identifier, read by its address, not its label.
+            'wikidata_id' => ExternalIds::wikidataQid($values->uris('dcterms:identifier')),
             // Linked-resource title OR literal — isPartOf is catalogued both
             // ways in the IWAC index.
             'is_part_of'  => $values->displays('dcterms:isPartOf'),
@@ -249,8 +252,8 @@ final class EntityAuthority
      *
      * @return iterable<int, array{
      *   id:int, type:string, title:string, aliases:list<string>, description:string,
-     *   coordinates:string, identifier:string, is_part_of:list<string>,
-     *   thumbnail:?string, is_public:bool
+     *   coordinates:string, identifier:string, wikidata_id:string,
+     *   is_part_of:list<string>, thumbnail:?string, is_public:bool
      * }>
      */
     public function entities(): iterable
@@ -264,6 +267,7 @@ final class EntityAuthority
                 'description' => $e['description'],
                 'coordinates' => $e['coordinates'],
                 'identifier'  => $e['identifier'],
+                'wikidata_id' => $e['wikidata_id'],
                 'is_part_of'  => $e['is_part_of'],
                 'thumbnail'   => $e['thumbnail'],
                 'is_public'   => $e['is_public'],

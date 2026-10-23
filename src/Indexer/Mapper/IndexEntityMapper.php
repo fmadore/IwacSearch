@@ -21,8 +21,8 @@ final class IndexEntityMapper
     /**
      * @param array{
      *   id:int, type:string, title:string, aliases:list<string>, description:string,
-     *   coordinates:string, identifier:string, is_part_of:list<string>,
-     *   thumbnail:?string, is_public:bool
+     *   coordinates:string, identifier:string, wikidata_id?:string,
+     *   is_part_of:list<string>, thumbnail:?string, is_public:bool
      * } $entity
      * @param array{
      *   frequency:int, authored_count?:int, countries:list<string>,
@@ -54,6 +54,7 @@ final class IndexEntityMapper
         ];
 
         $this->maybeAdd($doc, 'identifier',    $entity['identifier']);
+        $this->maybeAdd($doc, 'wikidata_id',   $entity['wikidata_id'] ?? '');
         $this->maybeAdd($doc, 'thumbnail_url', $entity['thumbnail'] ?? '');
         $this->maybeAdd($doc, 'description',   $entity['description']);
         $this->maybeAdd($doc, 'coordinates',   $entity['coordinates']);

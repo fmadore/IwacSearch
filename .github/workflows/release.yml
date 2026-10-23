@@ -187,6 +187,8 @@ jobs:
                    IwacSearch/asset/dist/iwac-search-header.css \
                    IwacSearch/asset/css/iwac-search.css \
                    IwacSearch/asset/img/ai-generated-eu.svg \
+                   IwacSearch/asset/img/doi.svg \
+                   IwacSearch/asset/img/wikidata.svg \
                    IwacSearch/language/fr.mo \
                    IwacSearch/data/schema.yaml \
                    IwacSearch/LICENSE; do

@@ -56,6 +56,9 @@ final class FacetCatalog
         // the admin or survive a save (normaliseFacets dropped it). Used on the
         // references browse page.
         'creator_ss'         => 'Author',
+        // Book editors (bibo:editorList on references): a chapter's book
+        // editors and an edited volume's editors, clickable on the card.
+        'editor_ss'          => 'Editor',
         'country_ss'         => 'Country',
         'newspaper_ss'       => 'Newspaper',
         // Audiovisual: the producing channel / broadcaster (dcterms:publisher

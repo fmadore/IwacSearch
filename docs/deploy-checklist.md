@@ -1,5 +1,21 @@
 # Deployment and acceptance checklist — 3.19.0
 
+## Unreleased: DOI and Wikidata links, clickable containers and editors
+
+**Schemas `iwac_v11` and `iwac_index_v5` — a full reindex is required.** Content
+and entity documents gain `wikidata_id`, the QID of the Wikidata entity the
+record is reconciled with (a wikidata.org URI on `dcterms:identifier`), and
+`doi` is stored as the bare DOI; `editor_ss` becomes a facet. Reindex right
+after installing: until the new collection is live, clicking an editor's name
+filters on a field the old collection does not index, and the search errors. Ship with IWAC-theme's
+DOI/Wikidata marks on the item page (same two SVGs).
+
+- [ ] Install the module update, then run the full reindex and confirm `iwac_current` points at `iwac_v11` and `iwac_index_current` at `iwac_index_v5`. Until then the DOI link already shows (the field existed), the Wikidata link does not.
+- [ ] References scope: a reconciled journal article (e.g. item 125674) ends its source line with the DOI mark + `10.48734/…` and the Wikidata mark + `Q141697087`, each opening in a new tab, light and dark.
+- [ ] Entity index: a reconciled authority (Laïcité, Revue Akofena) shows its Wikidata link on the card's source line.
+- [ ] Click a journal, book or publisher name in a reference card's citation line: the results narrow to it, the chip turns primary, and a second click removes the filter.
+- [ ] Click an editor in a chapter's "(dir. …)" and in an edited volume's byline (Ouvrage collectif, e.g. item 15710, "Gilles Holder, Moussa Sow (dir.)"): the results narrow to that editor's books and chapters.
+
 ## 3.22.1 (2026-10-10): review fixes
 
 The first release carrying these changes. 3.22.0 was tagged but never published: its release build wrote the zip to the wrong path (an env var named `ZIP`, which Info-ZIP reads as options). 3.22.1 is 3.22.0 plus that workflow fix.

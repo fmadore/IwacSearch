@@ -166,6 +166,25 @@ final class PropertyValues
     }
 
     /**
+     * URI addresses (@id) only, without their labels — for the identifiers
+     * whose address, not their label, says what they are (a Wikidata entity,
+     * a DOI). Deduplicated, order preserved.
+     *
+     * @return list<string>
+     */
+    public function uris(string $term): array
+    {
+        $out = [];
+        foreach ($this->byTerm[$term] ?? [] as $v) {
+            $s = trim((string) ($v['uri'] ?? ''));
+            if ($s !== '') {
+                $out[] = $s;
+            }
+        }
+        return array_values(array_unique($out));
+    }
+
+    /**
      * value_resource ids for a term (linked-resource targets only) — the
      * entity-authority lookup key. NOT deduplicated: a repeated link is a
      * repeated occurrence, and the callers that care dedupe themselves.

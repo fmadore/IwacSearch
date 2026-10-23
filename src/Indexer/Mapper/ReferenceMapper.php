@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace IwacSearch\Indexer\Mapper;
 
 use IwacSearch\IwacInstance;
+use IwacSearch\Indexer\ExternalIds;
 use IwacSearch\Indexer\PropertyValues;
 
 /**
@@ -100,7 +101,12 @@ final class ReferenceMapper extends AbstractMapper
         // ── Body = the real abstract; outbound links ────────────────────────
         $this->maybeAdd($doc, 'abstract',   $values->firstLiteral('dcterms:abstract'));
         $this->maybeAdd($doc, 'source_url', $values->firstScalar('fabio:hasURL'));
-        $this->maybeAdd($doc, 'doi',        $values->firstScalar('bibo:doi'));
+        // The bare DOI, whichever way it was catalogued: the doi.org address
+        // of a URI value first (its label can be anything), else a typed one.
+        $this->maybeAdd($doc, 'doi', ExternalIds::doi([
+            ...$values->uris('bibo:doi'),
+            ...$values->literals('bibo:doi'),
+        ]));
 
         // ── Shared: authority entities + dates ──────────────────────────────
         // Authorship overrides the default `dcterms:creator`: a reference

@@ -103,6 +103,13 @@ export interface IwacDoc {
   id: string;
   /** Citation key (dcterms:identifier), e.g. "iwac-0001234". */
   identifier?: string;
+  /**
+   * The Wikidata entity the record — or, on the index, the authority — is
+   * reconciled with: the bare QID ("Q141697087"), read from the wikidata.org
+   * URI on dcterms:identifier. Absent on collections built before iwac_v11 /
+   * iwac_index_v5; the card then simply shows no Wikidata link.
+   */
+  wikidata_id?: string;
   title: string;
   type_s?: 'article' | 'publication' | 'document' | 'audiovisual' | 'photograph' | 'reference';
   date?: number; // unix epoch seconds
@@ -142,6 +149,7 @@ export interface IwacDoc {
   pages_s?: string;
   editor_ss?: string[];
   edition_s?: string;
+  /** The bare DOI ("10.…"); the card builds the doi.org link from it. */
   doi?: string;
   country_ss?: string[];
   newspaper_ss?: string[];

@@ -5,6 +5,7 @@ namespace IwacSearch\Indexer\Mapper;
 
 use IwacSearch\Indexer\CountryResolver;
 use IwacSearch\Indexer\EntityAuthority;
+use IwacSearch\Indexer\ExternalIds;
 use IwacSearch\Indexer\PropertyValues;
 
 /**
@@ -218,6 +219,10 @@ abstract class AbstractMapper implements MapperInterface
         }
 
         $this->maybeAdd($doc, 'identifier', $values->firstScalar('dcterms:identifier'));
+        // The Wikidata entity the record is reconciled with (a URI on
+        // dcterms:identifier, beside or instead of the IWAC key). The card
+        // links it out with the Wikidata mark.
+        $this->maybeAdd($doc, 'wikidata_id', ExternalIds::wikidataQid($values->uris('dcterms:identifier')));
         // Alternative titles (dcterms:alternative) — a second FTS channel so
         // searching a variant title finds the item (and the autocomplete can
         // reconcile it). Display keeps the main title.

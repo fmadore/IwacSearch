@@ -34,7 +34,7 @@
 #     dependency at search time.
 #
 # Versioning:
-#   - The actual collection is named `iwac_v10` and aliased as `iwac_current`.
+#   - The actual collection is named `iwac_v11` and aliased as `iwac_current`.
 #     (v1 → v2: French stemming + the `iwac_diversity` curation set.
 #      v2 → v3: accent-insensitive indexing (locale dropped), alt_title_txt,
 #      subjects_ss, searchable/facetable publisher_s + book_title_s, and the
@@ -81,8 +81,13 @@
 #      publication ToC it may be excerpted from) is a model's text: the
 #      bibo:shortDescription summary, or a ToC on an AI-summarised template.
 #      The result card shows the EU "AI generated" mark for it, as the item
-#      page does for the same field. New field only.)
-#   - Schema changes ⇒ bump the name (`iwac_v9` → `iwac_v10`), atomic-swap
+#      page does for the same field. New field only.
+#      v10 → v11: `wikidata_id` — the Wikidata entity a record is reconciled
+#      with (a wikidata.org URI on dcterms:identifier), which the card links
+#      out beside the DOI; and `editor_ss` becomes a facet, so a book's
+#      editors filter like its authors. `doi` also becomes the bare `10.…`
+#      form whichever way bibo:doi was catalogued.)
+#   - Schema changes ⇒ bump the name (`iwac_v10` → `iwac_v11`), atomic-swap
 #     the alias. The browser only ever queries the alias, so swaps are
 #     zero-downtime.
 #
@@ -92,7 +97,7 @@
 # both the bulk reindex and the M4 incremental path. No Hugging Face.
 # country_ss is derived (newspaper→country / item-set). See docs/data-sources.md.
 
-name: iwac_v10
+name: iwac_v11
 
 # Global curation set linked to this collection. The set itself is created
 # (idempotently) by src/Indexer/CurationSync.php during the bulk reindex.
@@ -145,6 +150,10 @@ fields:
   # ── Identity ──────────────────────────────────────────────────────────
   - { name: id,          type: string }                       # Omeka o:id
   - { name: identifier,  type: string, optional: true }       # citation key
+  # Bare QID ("Q141697087") read from the wikidata.org URI on
+  # dcterms:identifier (src/Indexer/ExternalIds.php). Display-only: the card
+  # links it out with the Wikidata mark.
+  - { name: wikidata_id, type: string, index: false, optional: true }
   - { name: omeka_url,   type: string, index: false, optional: true }
   - { name: source_url,  type: string, index: false, optional: true }  # original publisher
 
@@ -288,7 +297,9 @@ fields:
   # UI treats it the same as country_ss / newspaper_ss.
   - { name: reference_type_ss, type: "string[]", facet: true, optional: true }
   # DOI is stored for outbound linking but not searchable (matching DOIs
-  # by typo or partial string isn't a useful workflow).
+  # by typo or partial string isn't a useful workflow). Always the bare
+  # `10.…` form (ExternalIds::doi), so the card and the exports build the
+  # doi.org link themselves.
   - { name: doi, type: string, index: false, optional: true }
 
   # Reference bibliographic detail, rendered as the source/citation line on
@@ -301,14 +312,17 @@ fields:
   # v3: publisher_s and book_title_s are INDEXED + FACETED (they were
   # display-only) so the references scope can filter by journal/publisher
   # and the autocomplete can suggest journals, publishers and book titles
-  # (facet_query + query_by). volume/issue/pages/editor/edition stay
-  # display-only.
+  # (facet_query + query_by). volume/issue/pages/edition stay display-only.
+  #
+  # v11: editor_ss is FACETED too (it was display-only). The card makes a
+  # chapter's book editors and an edited volume's editors facet toggles, as
+  # it does the authors.
   - { name: publisher_s,  type: string,     facet: true, optional: true }
   - { name: book_title_s, type: string,     facet: true, optional: true }
   - { name: volume_s,     type: string,     index: false, optional: true }
   - { name: issue_s,      type: string,     index: false, optional: true }
   - { name: pages_s,      type: string,     index: false, optional: true }
-  - { name: editor_ss,    type: "string[]", index: false, optional: true }
+  - { name: editor_ss,    type: "string[]", facet: true, optional: true }
   - { name: edition_s,    type: string,     index: false, optional: true }
 
   # ── AI sentiment (5 models — keep every one for cross-model queries) ──
