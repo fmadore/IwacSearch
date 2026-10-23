@@ -1,14 +1,14 @@
 # Deployment and acceptance checklist — 3.19.0
 
-## Unreleased: DOI and Wikidata links, clickable containers and editors
+## 3.25.0 (2026-10-23): DOI and Wikidata links, clickable containers and editors
 
 **Schemas `iwac_v11` and `iwac_index_v5` — a full reindex is required.** Content
 and entity documents gain `wikidata_id`, the QID of the Wikidata entity the
 record is reconciled with (a wikidata.org URI on `dcterms:identifier`), and
 `doi` is stored as the bare DOI; `editor_ss` becomes a facet. Reindex right
 after installing: until the new collection is live, clicking an editor's name
-filters on a field the old collection does not index, and the search errors. Ship with IWAC-theme's
-DOI/Wikidata marks on the item page (same two SVGs).
+filters on a field the old collection does not index, and the search errors. Ship with IWAC-theme
+2.28.0, which draws the same two marks on the item page.
 
 - [ ] Install the module update, then run the full reindex and confirm `iwac_current` points at `iwac_v11` and `iwac_index_current` at `iwac_index_v5`. Until then the DOI link already shows (the field existed), the Wikidata link does not.
 - [ ] References scope: a reconciled journal article (e.g. item 125674) ends its source line with the DOI mark + `10.48734/…` and the Wikidata mark + `Q141697087`, each opening in a new tab, light and dark.
