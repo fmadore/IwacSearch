@@ -26,7 +26,7 @@
  * module — see MapView.svelte.
  */
 
-const MAPLIBRE_VERSION = '6.12.0';
+const MAPLIBRE_VERSION = '6.16.0';
 const CDN = `https://cdn.jsdelivr.net/npm/maplibre-gl@${MAPLIBRE_VERSION}/dist/`;
 
 export const MAPLIBRE_FILES = {
@@ -38,9 +38,9 @@ export const MAPLIBRE_FILES = {
 /** sha384 per pinned file — identical to IwacVisualizations' `$cdnIntegrity`. */
 export const MAPLIBRE_INTEGRITY: Readonly<Record<string, string>> = {
   [MAPLIBRE_FILES.module]:
-    'sha384-vBS3VmrCg3Nx8PUcTevNEjjj7+TCKU6VjJdezON8yplGOARpTkld7CN+keiqcPmj',
-  [MAPLIBRE_FILES.chunk]: 'sha384-OGp4zg2g805tukqDpmZzKOURd8MNCD2kvcC/OxRKuwSGKokyy00oiZ5ULT1Gl99V',
-  [MAPLIBRE_FILES.css]: 'sha384-pGcTesCDxgCFx0yvZdwOw9yHx4Gw6kQK19wigRk1RcuDoLTLdbPMEnK7w8e9MgjS',
+    'sha384-uLwQnFL74rrONqIWx/ubL4wcAtA2h08tbMDZd9U4KbQ7GhaA7S1XKepHU89UkU7C',
+  [MAPLIBRE_FILES.chunk]: 'sha384-OLBgp1GsljhM2TJ+sbHjaiH9txEUvgdDTAzHv2P24donTt6/529l+9Ua0vFImLlb',
+  [MAPLIBRE_FILES.css]: 'sha384-S+OnE5M4U3Qc2nR0RgljGrVs06xqfRg8L7uFk/pOF5+sRuSDG4oKkqKZmFrx7w09',
 };
 
 /**
