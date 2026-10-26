@@ -9,7 +9,7 @@ the two together, or a visitor moving between a search map and a dashboard map d
 MapLibre twice.
 
 - [ ] Install the module update alongside IwacVisualizations 1.85.0 and IWAC-theme 2.30.0.
-- [ ] Entity index in map view (`?view=map`): the map renders in light and dark, the browser console shows no SRI or module errors, and the network panel loads `maplibre-gl@6.16.0`.
+- [ ] Entity index in map view (the List | Map switch; the URL gains `?b<block id>.view=map`, e.g. `b1168` on the English Index page): the map renders in light and dark, the browser console shows no SRI or module errors, and the network panel loads `maplibre-gl@6.16.0`.
 - [ ] Open a dashboard map, then the search map in the same tab: MapLibre is not downloaded a second time.
 
 ## 3.25.0 (2026-10-23): DOI and Wikidata links, clickable containers and editors
