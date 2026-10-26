@@ -10,9 +10,11 @@
    * CARTO positron basemap, cooperative gestures, compact attribution.
    * Markers cluster via the GeoJSON source's built-in clustering — click a
    * cluster to zoom in, click a point for a popup linking to the entity.
+   * Entities sharing coordinates never split apart, so a cluster or dot that
+   * stands for several of them opens one popup listing them all.
    */
   import type { IwacDoc } from '../lib/types';
-  import { escapeHtml } from '../lib/sanitize';
+  import { mapPopupHtml, type MapPointProps } from '../lib/mapPopup';
   import { MAP_MAX_HITS } from '../lib/typesense';
   import {
     basemapStyleUrl,
@@ -41,6 +43,28 @@
   let loadError = $state<string | null>(null);
 
   const SOURCE_ID = 'iwac-entities';
+  /** Above this zoom nothing clusters; a cluster that only splits past it is a stack. */
+  const CLUSTER_MAX_ZOOM = 11;
+
+  type PointFeature = {
+    geometry: { coordinates: [number, number] };
+    properties: MapPointProps;
+  };
+
+  /** One popup for every entity at a spot (mapPopup.ts decides the markup). */
+  function openPopup(at: [number, number], points: MapPointProps[]): void {
+    if (!lib || !map || points.length === 0) return;
+    new lib.Popup({ maxWidth: '320px', closeButton: true })
+      .setLngLat(at)
+      .setHTML(
+        mapPopupHtml(points, {
+          typeLabel: (type) => entityTypeLabel(type, locale),
+          mentions: (n) => tp('mention', n),
+          here: (n) => tp('map_here', n),
+        }),
+      )
+      .addTo(map);
+  }
 
   /**
    * The page's theme, watched rather than sampled.
@@ -131,7 +155,7 @@
             type: 'geojson',
             data: featureCollection,
             cluster: true,
-            clusterMaxZoom: 11,
+            clusterMaxZoom: CLUSTER_MAX_ZOOM,
             clusterRadius: 42,
           });
           map.addLayer({
@@ -184,54 +208,51 @@
             },
           });
 
-          // Cluster click → zoom one expansion step in.
+          // Cluster click → zoom one expansion step in. The geometry is read
+          // before the await: MapLibre deletes `features` from the event once
+          // the handler returns, so reading it in `.then()` threw and the
+          // click did nothing (3.25.0 and earlier).
           map.on('click', 'clusters', (e: unknown) => {
-            const evt = e as { features?: Array<{ properties: { cluster_id: number } }> };
-            const feature = evt.features?.[0];
-            const src = map?.getSource(SOURCE_ID) as {
-              getClusterExpansionZoom(id: number): Promise<number>;
-            } | null;
-            if (!feature || !src) return;
-            void src.getClusterExpansionZoom(feature.properties.cluster_id).then((zoom) => {
-              const geom = (
-                evt.features?.[0] as unknown as {
-                  geometry: { coordinates: [number, number] };
-                }
-              ).geometry;
-              map?.easeTo({ center: geom.coordinates, zoom });
-            });
-          });
-
-          // Point click → popup with the entity link.
-          map.on('click', 'unclustered-point', (e: unknown) => {
             const evt = e as {
               features?: Array<{
                 geometry: { coordinates: [number, number] };
-                properties: {
-                  title: string;
-                  entityType: string;
-                  frequency: number;
-                  url: string;
-                };
+                properties: { cluster_id: number };
               }>;
             };
+            const feature = evt.features?.[0];
+            const src = map?.getSource(SOURCE_ID) as {
+              getClusterExpansionZoom(id: number): Promise<number>;
+              getClusterLeaves(id: number, limit: number, offset: number): Promise<PointFeature[]>;
+            } | null;
+            if (!feature || !src) return;
+            const center = feature.geometry.coordinates;
+            const clusterId = feature.properties.cluster_id;
+            void src.getClusterExpansionZoom(clusterId).then(async (zoom) => {
+              if (zoom <= CLUSTER_MAX_ZOOM) {
+                map?.easeTo({ center, zoom });
+                return;
+              }
+              // Past clusterMaxZoom the cluster would only become a stack of
+              // dots at one spot: its members share coordinates. List them.
+              const leaves = await src.getClusterLeaves(clusterId, MAP_MAX_HITS, 0);
+              map?.easeTo({ center, zoom: Math.max(map.getZoom(), CLUSTER_MAX_ZOOM) });
+              openPopup(
+                center,
+                leaves.map((l) => l.properties),
+              );
+            });
+          });
+
+          // Point click → popup with the entity link. `features` holds every
+          // marker under the pointer, so stacked dots are listed together.
+          map.on('click', 'unclustered-point', (e: unknown) => {
+            const evt = e as { features?: PointFeature[] };
             const f = evt.features?.[0];
-            if (!f || !lib || !map) return;
-            const props = f.properties;
-            const esc = escapeHtml;
-            const mentions = tp('mention', props.frequency);
-            const title = props.url
-              ? `<a href="${esc(props.url)}">${esc(props.title)}</a>`
-              : esc(props.title);
-            const popup = new lib.Popup({ maxWidth: '320px', closeButton: true });
-            popup
-              .setLngLat(f.geometry.coordinates)
-              .setHTML(
-                `<div class="iwac-map__popup"><strong>${title}</strong>` +
-                  // The raw value is a French data string ("Lieux"); label it.
-                  `<span>${esc(entityTypeLabel(props.entityType, locale))} · ${esc(mentions)}</span></div>`,
-              )
-              .addTo(map);
+            if (!f) return;
+            openPopup(
+              f.geometry.coordinates,
+              (evt.features ?? []).map((p) => p.properties),
+            );
           });
 
           // Pointer affordance on interactive layers.
@@ -366,5 +387,29 @@
   }
   .iwac-map :global(.iwac-map__popup span) {
     color: var(--muted, #66696e);
+  }
+  /* Several entities at one spot: a short scrolling ledger, one per row. */
+  .iwac-map :global(.iwac-map__popup-head) {
+    margin: 0;
+    /* Clear MapLibre's close button, which sits over the top-end corner. */
+    padding-inline-end: var(--space-5, 1.25rem);
+    color: var(--muted, #66696e);
+  }
+  .iwac-map :global(.iwac-map__popup--list ul) {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2, 0.5rem);
+    max-height: 16rem;
+    margin: 0;
+    padding: 0;
+    overflow-y: auto;
+    list-style: none;
+  }
+  .iwac-map :global(.iwac-map__popup--list li) {
+    display: flex;
+    flex-direction: column;
+    gap: 0.125rem;
+    padding-block-start: var(--space-2, 0.5rem);
+    border-block-start: 1px solid var(--border, #ced1d6);
   }
 </style>

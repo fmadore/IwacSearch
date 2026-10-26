@@ -143,6 +143,9 @@ const STRINGS: Record<Locale, Record<string, string>> = {
     search_failed_hint: "La recherche n'a pas pu aboutir. Réessayez dans un instant.",
     map_empty: 'Aucun lieu géolocalisé dans ces résultats.',
     map_capped: 'Carte limitée aux {n} lieux les plus mentionnés.',
+    // Plusieurs entrées aux mêmes coordonnées : aucun zoom ne les sépare.
+    map_here_one: '{n} entrée à cet endroit',
+    map_here_other: '{n} entrées à cet endroit',
     copy_link: 'Copier le lien',
     link_copied: 'Lien copié !',
     copy_failed: 'Copie impossible',
@@ -287,6 +290,9 @@ const STRINGS: Record<Locale, Record<string, string>> = {
     search_failed_hint: 'The search could not be completed. Try again in a moment.',
     map_empty: 'No geo-located places in these results.',
     map_capped: 'Map limited to the {n} most-mentioned places.',
+    // Several entries at identical coordinates: no zoom level separates them.
+    map_here_one: '{n} entry at this location',
+    map_here_other: '{n} entries at this location',
     copy_link: 'Copy link',
     link_copied: 'Link copied!',
     copy_failed: 'Could not copy',

@@ -114,6 +114,7 @@ export interface MapLibreMapLike {
   addControl(control: unknown, position?: string): void;
   fitBounds(bounds: [[number, number], [number, number]], opts?: unknown): void;
   easeTo(opts: unknown): void;
+  getZoom(): number;
   getCanvas(): HTMLCanvasElement;
   remove(): void;
 }
