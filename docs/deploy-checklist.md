@@ -1,5 +1,16 @@
 # Deployment and acceptance checklist — 3.19.0
 
+## 3.26.1 (2026-10-26): map clusters open
+
+**No reindex.** Clicking a cluster on the entity map did nothing: the handler read the
+cluster's position after MapLibre had already cleared it from the click event, and threw.
+A cluster now zooms in one step, as intended. Entities that share exact coordinates (Mô
+and Djarkpanga in Togo, for one) never split apart at any zoom, so a cluster or dot that
+stands for several of them now opens one popup listing every entity, most-mentioned first.
+
+- [ ] Entity index → Map: click a numbered cluster; the map zooms in on it, light and dark, with no console error.
+- [ ] Zoom into Togo near Kpangam and click the "2" there: a popup headed "2 entries at this location" ("2 entrées à cet endroit" on the French site) lists Mô and Djarkpanga, each linking to its record.
+
 ## 3.26.0 (2026-10-26): MapLibre 6.16.0, PHP 8.4 and a dependency refresh
 
 **No reindex.** The schemas are unchanged. The module now requires **PHP 8.4** (the live
