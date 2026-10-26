@@ -1,5 +1,17 @@
 # Deployment and acceptance checklist — 3.19.0
 
+## 3.26.0 (2026-10-26): MapLibre 6.16.0, PHP 8.4 and a dependency refresh
+
+**No reindex.** The schemas are unchanged. The module now requires **PHP 8.4** (the live
+server runs 8.5), and its PHP dependencies move to symfony/yaml 8 and PHPUnit 13. Maps load
+MapLibre GL 6.16.0 with the same files and SRI hashes as IwacVisualizations 1.85.0: deploy
+the two together, or a visitor moving between a search map and a dashboard map downloads
+MapLibre twice.
+
+- [ ] Install the module update alongside IwacVisualizations 1.85.0 and IWAC-theme 2.30.0.
+- [ ] Entity index in map view (`?view=map`): the map renders in light and dark, the browser console shows no SRI or module errors, and the network panel loads `maplibre-gl@6.16.0`.
+- [ ] Open a dashboard map, then the search map in the same tab: MapLibre is not downloaded a second time.
+
 ## 3.25.0 (2026-10-23): DOI and Wikidata links, clickable containers and editors
 
 **Schemas `iwac_v11` and `iwac_index_v5` — a full reindex is required.** Content
