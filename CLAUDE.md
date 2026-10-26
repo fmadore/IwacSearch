@@ -66,7 +66,7 @@ The cutover, retention and retry contracts are documented in `docs/operations-3.
 
 ## Conventions
 
-- PHP 8.2+, strict types on every file.
+- PHP 8.4+, strict types on every file.
 - PSR-4 autoloading under `IwacSearch\` namespace, `src/` root.
 - Composer deps live in `composer.json`; install with
   `composer install --no-dev` inside the php container after copying the

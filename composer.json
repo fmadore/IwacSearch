@@ -4,12 +4,12 @@
   "type": "omeka-module",
   "license": "GPL-3.0-or-later",
   "require": {
-    "php": ">=8.2",
+    "php": ">=8.4",
     "ext-curl": "*",
     "ext-json": "*",
     "ext-mbstring": "*",
     "guzzlehttp/guzzle": "^8.2",
-    "symfony/yaml": "^7.0",
+    "symfony/yaml": "^8.1",
     "typesense/typesense-php": "^6.0"
   },
   "autoload": {
@@ -19,7 +19,7 @@
   },
   "require-dev": {
     "phpstan/phpstan": "^2.0",
-    "phpunit/phpunit": "^11.0"
+    "phpunit/phpunit": "^13.4"
   },
   "autoload-dev": {
     "psr-4": {
@@ -31,7 +31,7 @@
   },
   "config": {
     "platform": {
-      "php": "8.2.0"
+      "php": "8.4.1"
     },
     "sort-packages": true
   }

@@ -87,10 +87,9 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        # 8.2 = composer.json floor (production containers may lag);
-        # 8.4 = intermediate;
+        # 8.4 = composer.json floor;
         # 8.5 = the live server's runtime — the leg that must stay green.
-        php-version: ['8.2', '8.4', '8.5']
+        php-version: ['8.4', '8.5']
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -129,7 +128,7 @@ jobs:
           persist-credentials: false
       - uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # 2.40.0
         with:
-          php-version: '8.3'
+          php-version: '8.4'
           extensions: curl, mbstring, pdo_mysql
           tools: composer:v2
           coverage: none

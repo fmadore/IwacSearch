@@ -131,7 +131,7 @@ IwacSearch/
 │   ├── dependabot.yml                          # weekly grouped updates: npm + composer + actions
 │   └── workflows/
 │       ├── ci.yml                              # versions + audit + lint + svelte-check + vitest + build + dist diff;
-│       │                                       #   PHP lint/PHPUnit/PHPStan 8.2/8.4/8.5; integration (also workflow_call)
+│       │                                       #   PHP lint/PHPUnit/PHPStan 8.4/8.5; integration (also workflow_call)
 │       ├── release.yml                         # gates (= ci.yml) → build zip → publish
 │       ├── theme-contract.yml                  # weekly: tokens.json + guard engine vs IWAC-theme master
 │       └── maplibre-pins.yml                   # weekly: MapLibre pins vs IwacVisualizations main

@@ -139,9 +139,9 @@ npm run lint             # eslint + prettier + schema/theme drift gates
 
 ## Quality stack
 
-- **PHP** 8.2+, strict types throughout, PSR-4 (`IwacSearch\` → `src/`). CI
-  runs `composer validate --strict`, `php -l`, PHPUnit and PHPStan on 8.2 /
-  8.4 / 8.5.
+- **PHP** 8.4+, strict types throughout, PSR-4 (`IwacSearch\` → `src/`). CI
+  runs `composer validate --strict`, `php -l`, PHPUnit and PHPStan on 8.4 /
+  8.5.
 - **JS/TS** Vite 8, Svelte 5, TypeScript 6, ESLint 10 (flat config),
   Prettier 3, Vitest.
 - **Drift gates** `npm run lint` fails if `FacetCatalog::FACETABLE_FIELDS`,

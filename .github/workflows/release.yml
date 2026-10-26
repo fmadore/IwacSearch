@@ -12,7 +12,7 @@
 # to boot: Module.php, config/, src/ PHP, view/, data/, cli/, asset/ (with the
 # committed asset/dist bundles) and vendor/.
 #
-# Release dependencies come from the committed PHP-8.2-compatible composer.lock.
+# Release dependencies come from the committed PHP-8.4-compatible composer.lock.
 #
 # Three jobs, so that nothing ships unchecked and no third-party code runs with
 # a write token:
@@ -118,11 +118,11 @@ jobs:
           git diff --exit-code -- asset/dist \
             || (echo '::error::asset/dist is stale at this tag — rebuild and retag' && exit 1)
 
-      # 8.2 is the composer.json floor. Resolving there yields a vendor tree
+      # 8.4 is the composer.json floor. Resolving there yields a vendor tree
       # that runs on every supported PHP, including the live server's 8.5.
       - uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # 2.40.0
         with:
-          php-version: '8.2'
+          php-version: '8.4'
           coverage: none
           tools: composer:v2
 
