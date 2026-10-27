@@ -7,7 +7,9 @@
  * as a FederatedApp (Content + Entities tabs over both collections).
  *
  * Touching this file means re-checking the mount contract in
- * src/svelte/main.ts (`mountFederatedRoots`).
+ * src/svelte/main.ts (`mountFederatedRoots`), and re-capturing
+ * tests/lighthouse/fixtures/ (`npm run capture:lighthouse`), which copy this
+ * markup from the live site, once the change is live.
  *
  * @var \Laminas\View\Renderer\PhpRenderer $this
  * @var array<string, mixed> $bootstrap   Federated config blob (variant=federated).
