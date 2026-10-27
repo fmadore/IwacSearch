@@ -17,6 +17,8 @@
  * Touching this file means re-checking the mount contract in:
  *   - src/svelte/main.ts (`readBootstrap`)
  *   - the block layout PHTML, /search PHTML, /browse PHTML
+ *   - tests/lighthouse/fixtures/, which copy this markup from the live site:
+ *     re-capture them (`npm run capture:lighthouse`) once the change is live
  *
  * @var \Laminas\View\Renderer\PhpRenderer $this
  * @var array<string, mixed> $bootstrap          Server-built config blob.

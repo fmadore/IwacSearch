@@ -149,8 +149,9 @@ or requests than `tests/lighthouse/baseline.json` records, makes one more
 Typesense round trip on load, loses any accessibility or best-practices
 points, or falls below its performance floor. SEO is left out: a fixture's
 `<head>` is the harness's. `-- --update` re-baselines a deliberate change;
-performance figures come from the workflow's `lighthouse` artifact, never a
-laptop. Locally, set `CHROME_PATH` to a Chrome 156 build to match CI.
+outside CI it rewrites only the counts, because the scores depend on the
+host's CPU and fonts, so they come from the workflow's `lighthouse` artifact,
+never a laptop. Locally, set `CHROME_PATH` to a Chrome 156 build to match CI.
 
 ## Quality stack
 

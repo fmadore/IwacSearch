@@ -16,7 +16,8 @@
 #   - the Typesense round trips made on load may not grow at all — the first
 #     page is server-rendered, so a new one is a reader waiting on the search
 #     server;
-#   - the accessibility and best-practices scores may not fall;
+#   - the accessibility and best-practices scores may not fall (they repeat
+#     run to run on one host);
 #   - the performance score may fall by at most the margin the script states,
 #     measured from repeated runs on this runner.
 #
@@ -24,9 +25,10 @@
 # lighter, or whose accessibility or best-practices score rose, fails too
 # until the baseline is rewritten, so an improvement is locked in rather than
 # left as headroom. Re-baseline with `npm run check:lighthouse -- --update`;
-# performance figures come from this job's `lighthouse` artifact
-# (baseline.json), never from a laptop. The artifact also holds each page's
-# median-run HTML report.
+# the scores come from this job's `lighthouse` artifact (baseline.json), never
+# from a laptop, whose CPU and fonts are not the runner's (target-size passed
+# here and failed on Windows). The artifact also holds each page's median-run
+# HTML report.
 #
 # It measures the committed asset/dist/ bundles, which the client job above
 # already proves match the source, so it needs no build of its own.
