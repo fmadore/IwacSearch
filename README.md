@@ -135,7 +135,22 @@ npm run build            # both bundles; build:public / build:header for one
 npm run dev              # vite watch (bundle chosen by IWAC_BUNDLE)
 npm run check            # svelte-check
 npm run lint             # eslint + prettier + schema/theme drift gates
+npm run check:lighthouse # Lighthouse budgets for /search and /search/everything
 ```
+
+`npm run check:size` (the last step of `build`) budgets each bundle's gzipped
+bytes. `npm run check:lighthouse` (the `Lighthouse budgets` workflow, on every
+push and pull request) budgets the pages: it loads the two fixtures in
+`tests/lighthouse/fixtures/`, which carry the live routes' own markup and
+server-rendered first page (`npm run capture:lighthouse` rebuilds them),
+three times each in Lighthouse 13 on a mobile profile. It fails when the
+median run loads more than 10% more script, stylesheet, image or font bytes
+or requests than `tests/lighthouse/baseline.json` records, makes one more
+Typesense round trip on load, loses any accessibility or best-practices
+points, or falls below its performance floor. SEO is left out: a fixture's
+`<head>` is the harness's. `-- --update` re-baselines a deliberate change;
+performance figures come from the workflow's `lighthouse` artifact, never a
+laptop. Locally, set `CHROME_PATH` to a Chrome 156 build to match CI.
 
 ## Quality stack
 
@@ -147,6 +162,10 @@ npm run lint             # eslint + prettier + schema/theme drift gates
 - **Drift gates** `npm run lint` fails if `FacetCatalog::FACETABLE_FIELDS`,
   the schema YAMLs and the client's facet labels disagree, or if a CSS
   custom-property fallback diverges from the theme's token snapshot.
+- **Page budgets** `npm run check:lighthouse` holds `/search` and
+  `/search/everything` to measured Lighthouse baselines: bytes, requests,
+  Typesense round trips on load, and the accessibility, best-practices and
+  performance scores (see _Building the Svelte clients_).
 - **Security** snippet rendering uses `{@html}` only after sanitisation that
   permits literal `<mark>` and nothing else.
 

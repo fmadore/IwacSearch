@@ -1,0 +1,90 @@
+# Lighthouse budgets for the public search pages, on every PR + push to main.
+#
+# The two fixtures under tests/lighthouse/fixtures/ are the live /search and
+# /search/everything routes' own rendered markup — mount root, skeleton and
+# the bootstrap JSON with its server-rendered first page of results —
+# captured by scripts/lighthouse/capture.js, with the module's asset URLs
+# pointed at this checkout. scripts/lighthouse/server.js serves them gzipped,
+# as the live site serves the module, and stands in for the thumbnails and
+# for Typesense. scripts/check-lighthouse.js loads each three times in
+# Lighthouse (mobile, simulated slow 4G) and holds the median run against
+# tests/lighthouse/baseline.json:
+#
+#   - script / stylesheet / image / font transfer bytes and the request count
+#     may grow by at most 10% (deterministic: every run must load the same
+#     bytes, or the page is reported as unstable);
+#   - the Typesense round trips made on load may not grow at all — the first
+#     page is server-rendered, so a new one is a reader waiting on the search
+#     server;
+#   - the accessibility and best-practices scores may not fall;
+#   - the performance score may fall by at most the margin the script states,
+#     measured from repeated runs on this runner.
+#
+# SEO is not scored: a fixture's <head> is the harness's. A page that got 20%
+# lighter, or whose accessibility or best-practices score rose, fails too
+# until the baseline is rewritten, so an improvement is locked in rather than
+# left as headroom. Re-baseline with `npm run check:lighthouse -- --update`;
+# performance figures come from this job's `lighthouse` artifact
+# (baseline.json), never from a laptop. The artifact also holds each page's
+# median-run HTML report.
+#
+# It measures the committed asset/dist/ bundles, which the client job above
+# already proves match the source, so it needs no build of its own.
+
+name: Lighthouse budgets
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: lighthouse-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lighthouse:
+    name: Lighthouse budgets (search pages)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          cache: 'npm'
+
+      - name: Install
+        run: npm ci --no-audit --no-fund
+
+      # An exact Chrome for Testing build, not the runner image's Chrome, so an
+      # image update cannot move the scores under an unchanged tree. Keep it on
+      # the major IwacVisualizations' @playwright/test pins.
+      - name: Install Chrome
+        id: chrome
+        uses: browser-actions/setup-chrome@48ad923757ca74d66703209fe939badbdf80f2f4 # v2.2.0
+        with:
+          chrome-version: 156.0.8078.47
+          install-dependencies: true
+
+      - name: Lighthouse budgets, median of three runs per page
+        run: npm run check:lighthouse
+        env:
+          CHROME_PATH: ${{ steps.chrome.outputs.chrome-path }}
+
+      - name: Keep the reports and the measured baseline
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: lighthouse
+          path: test-results/lighthouse/
+          retention-days: 14
+          if-no-files-found: ignore

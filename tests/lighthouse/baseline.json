@@ -1,0 +1,30 @@
+{
+  "_": "Written by `npm run check:lighthouse -- --update` (scripts/check-lighthouse.js), never by hand.",
+  "lighthouse": "13.5.0",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/156.0.0.0 Safari/537.36",
+  "runs": 3,
+  "pages": {
+    "search": {
+      "performance": 0.8,
+      "accessibility": 0.97,
+      "best-practices": 1,
+      "script": 69123,
+      "stylesheet": 15277,
+      "image": 401009,
+      "font": 0,
+      "requests": 16,
+      "typesense": 2
+    },
+    "everything": {
+      "performance": 0.74,
+      "accessibility": 0.97,
+      "best-practices": 1,
+      "script": 69123,
+      "stylesheet": 15277,
+      "image": 401009,
+      "font": 0,
+      "requests": 17,
+      "typesense": 3
+    }
+  }
+}
