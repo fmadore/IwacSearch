@@ -1,5 +1,14 @@
 # Deployment and acceptance checklist — 3.19.0
 
+## 3.26.2 (2026-10-27): DOI and Wikidata marks in colour
+
+**No reindex.** A result card's DOI and Wikidata marks are drawn in their own colours (the
+DOI's yellow disc, Wikidata's red, green and blue barcode) instead of muted single-colour
+masks, the same files IWAC-theme 2.30.1 draws on the item page.
+
+- [ ] Install alongside IWAC-theme 2.30.1.
+- [ ] Search for a work with a DOI and an entity with a Wikidata id: both marks show in colour on the result card, light and dark.
+
 ## 3.26.1 (2026-10-26): map clusters open
 
 **No reindex.** Clicking a cluster on the entity map did nothing: the handler read the
