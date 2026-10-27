@@ -7,6 +7,8 @@ vendor/
 node_modules/
 .svelte-kit/
 coverage/
+# Lighthouse reports and the measured baseline (scripts/check-lighthouse.js).
+test-results/
 
 # Editor / OS
 .idea/
