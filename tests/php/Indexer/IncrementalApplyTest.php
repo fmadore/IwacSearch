@@ -138,6 +138,55 @@ final class IncrementalApplyTest extends TestCase
         self::assertSame([], $this->server->exports, 'no entity to read aggregates for');
     }
 
+    // ── Rejected documents in the live drain ─────────────────────────────
+
+    /** @return list<array{id:int, content:?array<string,mixed>, entity:?array<string,mixed>}> */
+    private static function badAndGoodArticles(): array
+    {
+        return [
+            ['id' => 5, 'content' => ['id' => '5', 'type_s' => 'article', 'is_public' => true, 'bad' => true], 'entity' => null],
+            ['id' => 6, 'content' => ['id' => '6', 'type_s' => 'article', 'is_public' => true], 'entity' => null],
+        ];
+    }
+
+    public function testTheDrainRemovesARejectedDocumentAndKeepsTheRest(): void
+    {
+        // The stale copy of 5 may show metadata that has since changed — a
+        // withdrawal included — so it leaves search rather than lingering.
+        $this->server->collections['content'][] = ['id' => '5', 'type_s' => 'article', 'title_txt' => 'stale'];
+        $this->server->importDecision = static fn(array $doc): bool => !isset($doc['bad']);
+
+        $outcome = $this->indexer()->applySnapshot(self::badAndGoodArticles(), tolerateRejected: true);
+
+        self::assertSame(['6'], array_column($this->server->collections['content'], 'id'));
+        self::assertSame([5], $outcome['rejected']);
+        self::assertSame([5 => null, 6 => 'article'], $outcome['content']);
+    }
+
+    public function testTheRebuildCutoverStillFailsOnARejection(): void
+    {
+        $this->server->importDecision = static fn(array $doc): bool => !isset($doc['bad']);
+
+        $this->expectException(RuntimeException::class);
+        $this->indexer()->applySnapshot(self::badAndGoodArticles());
+    }
+
+    public function testABatchWithNothingAcceptedIsAServerFailureNotARejection(): void
+    {
+        // The embedding model not loaded rejects every document: removing
+        // them would empty the index, so the rows stay pending instead.
+        $this->server->collections['content'][] = ['id' => '5', 'type_s' => 'article', 'title_txt' => 'live'];
+        $this->server->importDecision = static fn(array $doc): bool => false;
+
+        try {
+            $this->indexer()->applySnapshot(self::badAndGoodArticles(), tolerateRejected: true);
+            self::fail('A batch with nothing accepted must throw.');
+        } catch (RuntimeException) {
+        }
+
+        self::assertSame(['5'], array_column($this->server->collections['content'], 'id'));
+    }
+
     public function testIdFiltersRefuseAnythingButDigits(): void
     {
         $this->expectException(RuntimeException::class);

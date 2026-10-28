@@ -131,6 +131,33 @@ final class InitialResponseRendererTest extends TestCase
         self::assertSame('is_public:=true && (country_ss:=Bénin || country_ss:=Togo)', $this->sent->entries[0]['searches'][0]['filter_by']);
     }
 
+    public function testALockedFilterThatEscapesThePublicGuardIsNeverRun(): void
+    {
+        // Saved before the block form checked it: rendered, this would read
+        // `is_public:=true && (type_s:=article) || (type_s:=document)` and
+        // inline private documents into the page and the shared cache.
+        $out = $this->renderer([['results' => [self::page()]]])
+            ->render(self::bootstrap(['locked_filters' => 'type_s:=article) || (type_s:=document']));
+
+        self::assertNull($out);
+        self::assertSame([], $this->sent->entries, 'nothing may be sent with the admin key');
+    }
+
+    public function testARefusedSurfaceDoesNotCostItsSiblingTheSnapshot(): void
+    {
+        $renderer = $this->renderer([['results' => [self::page(2)]]]);
+
+        $out = $renderer->renderMany([
+            self::bootstrap(['locked_filters' => 'is_public:=false']),
+            self::bootstrap(['collection_alias' => 'iwac_index_current']),
+        ]);
+
+        self::assertNull($out[0]);
+        self::assertSame(2, $out[1]['found'] ?? null);
+        self::assertCount(1, $this->sent->entries[0]['searches']);
+        self::assertSame('iwac_index_current', $this->sent->entries[0]['searches'][0]['collection']);
+    }
+
     public function testAppliedChangesInvalidateAnOtherwiseIdenticalSsrSnapshot(): void
     {
         $version = 'before';

@@ -299,6 +299,10 @@ export interface MapRequest {
 export interface MapResults {
   readonly docs: IwacDoc[];
   readonly loading: boolean;
+  /** The last fetch failed: the map says so and offers a retry, rather than "no places". */
+  readonly failed: boolean;
+  /** Re-run the current fetch (the failure notice's button). */
+  retry(): void;
   /** Run inside an $effect while the Map view is active; returns its cleanup. */
   run(req: MapRequest): () => void;
 }
@@ -307,11 +311,14 @@ export interface MapResults {
  * Every geo-tagged entity matching the current query + filters, for the Map
  * view. One abort signal cancels the whole paging loop; the sequence ticket
  * also guards the settle, so a fetch that lost the race to a newer one can
- * never overwrite it.
+ * never overwrite it. Like {@link createSearchResults}, `run()` reads the retry
+ * counter, so `retry()` re-runs the effect by itself.
  */
 export function createMapResults(client: Pick<TypesenseClient, 'fetchForMap'>): MapResults {
   let docs = $state<IwacDoc[]>([]);
   let loading = $state(false);
+  let failed = $state(false);
+  let retryVersion = $state(0);
   const seq = new SeqGuard();
 
   return {
@@ -321,10 +328,18 @@ export function createMapResults(client: Pick<TypesenseClient, 'fetchForMap'>): 
     get loading() {
       return loading;
     },
+    get failed() {
+      return failed;
+    },
+    retry(): void {
+      retryVersion += 1;
+    },
     run({ q, filters, yearRange }: MapRequest): () => void {
+      void retryVersion;
       const ticket = seq.start();
       const controller = new AbortController();
       loading = true;
+      failed = false;
       client
         .fetchForMap({ q, activeFilters: filters, yearRange, signal: controller.signal })
         .then((next) => {
@@ -337,6 +352,7 @@ export function createMapResults(client: Pick<TypesenseClient, 'fetchForMap'>): 
           console.warn('[iwac-search] map fetch failed', e);
           docs = [];
           loading = false;
+          failed = true;
         });
       return () => {
         controller.abort();

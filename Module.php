@@ -25,7 +25,24 @@ namespace IwacSearch;
 // resolve even on first-time install, where Omeka instantiates Module and
 // calls install() directly without going through the ModuleManager pipeline
 // (so init() wouldn't fire yet). Matches the ImageServer / IiifServer pattern.
-require_once __DIR__ . '/vendor/autoload.php';
+//
+// Omeka require_once's every active module's Module.php on EVERY request, so
+// a missing vendor/ (a source checkout without `composer install`, GitHub's
+// "Source code" archive) must not fatal the whole site. Without it the
+// module's own classes still load and only the Typesense SDK is absent: the
+// search surfaces then degrade as they do when Typesense is unreachable.
+if (is_readable(__DIR__ . '/vendor/autoload.php')) {
+    require_once __DIR__ . '/vendor/autoload.php';
+} else {
+    spl_autoload_register(static function (string $class): void {
+        if (str_starts_with($class, 'IwacSearch\\')) {
+            $file = __DIR__ . '/src/' . str_replace('\\', '/', substr($class, 11)) . '.php';
+            if (is_file($file)) {
+                require $file;
+            }
+        }
+    });
+}
 
 use Laminas\EventManager\Event;
 use Laminas\EventManager\SharedEventManagerInterface;
@@ -324,9 +341,25 @@ class Module extends AbstractModule
         // it. Never touches Typesense data (may be shared with another install).
         $connection->executeStatement('DROP TABLE IF EXISTS iwac_browse_config');
 
-        // Clean up the cached search-only key so a fresh install bootstraps
-        // a new one rather than reusing a key the previous install owned.
-        $settings = $services->get('Omeka\Settings');
-        $settings->delete('iwac_search_typesense_search_key');
+        // Clean up the cached search-only parent keys so a fresh install
+        // bootstraps a new one rather than reusing a key the previous install
+        // owned. The slot name carries a hash of the collection scope, so
+        // there is one slot per scope ever configured plus the legacy one —
+        // deleting only the legacy name left the live key behind. Each key is
+        // revoked in Typesense first, best effort: an unreachable server or a
+        // missing vendor/ must not block the uninstall.
+        $prefix = Search\TypesenseSearchKeyProvider::SETTINGS_KEY;
+        $slots = 'id = ? OR LEFT(id, ?) = ?';
+        $slotParams = [$prefix, strlen($prefix) + 1, $prefix . '_'];
+        try {
+            $values = array_values(array_filter(array_map(
+                static fn(mixed $raw): mixed => json_decode((string) $raw, true),
+                $connection->fetchFirstColumn('SELECT value FROM setting WHERE ' . $slots, $slotParams)
+            ), static fn(mixed $value): bool => is_string($value) && $value !== ''));
+            Search\TypesenseSearchKeyProvider::revokeCached($values, Service\TypesenseClientLazy::fromContainer($services));
+        } catch (\Throwable $e) {
+            $services->get('Omeka\Logger')->warn('IwacSearch uninstall: could not revoke the cached Typesense search key: ' . $e->getMessage());
+        }
+        $connection->executeStatement('DELETE FROM setting WHERE ' . $slots, $slotParams);
     }
 }

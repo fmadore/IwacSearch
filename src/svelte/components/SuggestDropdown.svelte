@@ -88,7 +88,7 @@
   let articles = $state<IwacHit[]>([]);
   let entities = $state<EntitySuggestion[]>([]);
   let highlightedIndex = $state(0);
-  let lastError = $state<string | null>(null);
+  let suggestFailed = $state(false);
   // Between a keystroke and its answer there is nothing true to report yet:
   // "No matches" used to show (and would now be announced) while loading.
   let pending = $state(false);
@@ -125,14 +125,20 @@
   }
 
   /**
-   * What the status line says: nothing while a request is out, the error if
-   * one failed, "No matches" if the answer was empty. Shown in the panel and
+   * What the status line says: nothing while a request is out, a short
+   * notice if one failed, "No matches" if the answer was empty. Shown in the panel and
    * spoken by the persistent region below it — which lives OUTSIDE the
    * listbox (a listbox may own only options) and outside the panel's {#if},
    * since a live region created already populated announces nothing.
    */
   const statusText = $derived(
-    !isPrefixMode || pending ? '' : (lastError ?? (hasSuggestions ? '' : t('no_matches'))),
+    !isPrefixMode || pending
+      ? ''
+      : suggestFailed
+        ? t('suggestions_unavailable')
+        : hasSuggestions
+          ? ''
+          : t('no_matches'),
   );
 
   // Re-fetch suggestions whenever the query (or enabled flag) changes.
@@ -143,7 +149,7 @@
     if (!isOpen || q.trim().length < 2) {
       articles = [];
       entities = [];
-      lastError = null;
+      suggestFailed = false;
       highlightedIndex = 0;
       pending = false;
       // A request already out answers a box that has since closed or emptied.
@@ -162,7 +168,7 @@
           articles = r.articles;
           entities = r.entities;
           highlightedIndex = 0; // re-arm on the search action
-          lastError = null;
+          suggestFailed = false;
           pending = false;
         })
         .catch((e: unknown) => {
@@ -171,7 +177,10 @@
           // never an error state. Other typeahead failures shouldn't bother
           // the user either; the main search bar still works.
           if (isAbortError(e)) return;
-          lastError = e instanceof Error ? e.message : String(e);
+          // The transport message is operator detail, in English on the
+          // French site: the console gets it, the status line a short notice.
+          console.warn('[iwac-search] typeahead failed', e);
+          suggestFailed = true;
           articles = [];
           entities = [];
           pending = false;

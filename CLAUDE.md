@@ -35,7 +35,11 @@ provides the Typesense container, nginx `/search-api/` proxy, and backups.
   `transport.ts` and the drift check keeps the two equal — raise both if a
   request needs more. A page block's
   `locked_filters` are NOT part of this boundary — they are cosmetic
-  client-side scoping only.
+  client-side scoping only. They DO run with the admin key in the
+  server-side first-page render, though, so `Search\FilterExpression`
+  refuses one that could escape that render's `is_public:=true` group (an
+  unbalanced `)`, an unpaired backtick, a backslash, any `is_public`): on
+  save in the block's `onHydrate()`, and again before every render.
 
 - **Admin API key never reaches the browser.** It's read from
   `/run/secrets/typesense_api_key` by `TypesenseClientFactory` (the only

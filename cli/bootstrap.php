@@ -40,6 +40,12 @@ if (!is_readable($autoload)) {
 // DBAL for the reindex script). NOT bundled in the module's own composer.json
 // on purpose (would collide with Omeka's versions at runtime). Override the
 // path with IWAC_OMEKA_VENDOR for non-Docker dev.
+//
+// The autoloader is enough here, unlike Omeka's own bootstrap.php: from 4.2.1
+// that file swaps in PHP 8.5-patched Laminas Escaper / SplPriorityQueue and
+// Doctrine ORM proxy factories, and these scripts use none of them — only
+// DBAL, PSR Log and the Typesense client. Booting the Omeka application here
+// would need bootstrap.php.
 $omekaVendor = getenv('IWAC_OMEKA_VENDOR') ?: '/var/www/html/vendor/autoload.php';
 if (is_readable($omekaVendor)) {
     require_once $omekaVendor;

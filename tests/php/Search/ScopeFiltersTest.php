@@ -135,6 +135,19 @@ final class ScopeFiltersTest extends TestCase
         );
     }
 
+    public function testNormaliseDropsValuesTypesenseWouldNotMatchLiterally(): void
+    {
+        // Inside backtick quotes a trailing `*` is a prefix wildcard, a
+        // "…"-wrapped value a phrase, and a backslash may escape the closing
+        // backtick — letting the rest run as syntax in the admin-key SSR.
+        self::assertSame(
+            ['newspaper_ss' => ['Sidwaya', '"']],
+            ScopeFilters::normalise([
+                'newspaper_ss' => ['Sidwaya', 'Sid*', '"Sidwaya"', 'x\\', 'a\\b', '"'],
+            ])
+        );
+    }
+
     public function testNormaliseDropsNonNumericValuesOnTheNumericField(): void
     {
         // A non-numeric value here makes Typesense reject the entire search,

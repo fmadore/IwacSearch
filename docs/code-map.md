@@ -55,6 +55,7 @@ IwacSearch/
 │   ├── Search/
 │   │   ├── PresetCatalog.php · Preset.php      # page-block scopes (all / country / references / entity index)
 │   │   ├── ScopeFilters.php                    # page-block value pickers → filter_by (multi type/country/…)
+│   │   ├── FilterExpression.php                #   structural check of a hand-written locked_filters (admin-key SSR)
 │   │   ├── FacetValueLookup.php                #   live facet values for those pickers (degrades to null)
 │   │   ├── SearchDefaults.php                  # per-collection query_by / highlights / default facet stack
 │   │   ├── InitialResponseRenderer.php         # SSR: PHP→Typesense, inlines first page into bootstrap

@@ -31,16 +31,19 @@
   interface Props {
     docs: IwacDoc[];
     loading: boolean;
+    /** The places could not be fetched — said as such, not as "no places". */
+    failed?: boolean;
+    onRetry?: () => void;
   }
 
-  const { docs, loading }: Props = $props();
+  const { docs, loading, failed = false, onRetry }: Props = $props();
   const { locale, t, tp, formatNumber } = useI18n();
 
   let container: HTMLDivElement | null = $state(null);
   let map: MapLibreMapLike | null = null;
   let lib: MapLibreGlobal | null = null;
   let styleReady = $state(false);
-  let loadError = $state<string | null>(null);
+  let loadFailed = $state(false);
 
   const SOURCE_ID = 'iwac-entities';
   /** Above this zoom nothing clusters; a cluster that only splits past it is a stack. */
@@ -268,8 +271,10 @@
           styleReady = true;
         });
       })
-      .catch((e: Error) => {
-        if (!cancelled) loadError = e.message;
+      .catch((e: unknown) => {
+        // Operator detail, in English: the console, not the page.
+        console.warn('[iwac-search] map library failed to load', e);
+        if (!cancelled) loadFailed = true;
       });
 
     return () => {
@@ -313,12 +318,19 @@
 </script>
 
 <div class="iwac-map" role="region" aria-label={t('map_label')}>
-  {#if loadError}
-    <p class="iwac-map__status" role="alert">{t('map_error')} <span>{loadError}</span></p>
+  {#if loadFailed}
+    <p class="iwac-map__status" role="alert">{t('map_error')}</p>
   {:else}
     <div class="iwac-map__canvas" bind:this={container}></div>
     {#if loading || !styleReady}
       <p class="iwac-map__status" aria-live="polite">{t('map_loading')}</p>
+    {:else if failed}
+      <p class="iwac-map__status" role="alert">
+        {t('map_fetch_failed')}
+        {#if onRetry}
+          <button type="button" onclick={onRetry}>{t('retry_search')}</button>
+        {/if}
+      </p>
     {:else if isEmpty}
       <p class="iwac-map__status">{t('map_empty')}</p>
     {:else if isCapped}

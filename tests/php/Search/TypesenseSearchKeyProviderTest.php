@@ -12,6 +12,7 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use RuntimeException;
 use Typesense\Client as TypesenseClient;
+use Typesense\Key;
 use Typesense\Keys;
 
 /**
@@ -361,6 +362,86 @@ final class TypesenseSearchKeyProviderTest extends TestCase
         $this->expectException(RuntimeException::class);
         $this->expectExceptionMessageMatches('/connection refused.*no route/s');
         $provider->mintPublicScopedKey();
+    }
+
+    // ---- uninstall ----
+
+    /**
+     * @param  list<array<string, mixed>> $listed keys->retrieve() rows
+     * @return \Closure(): TypesenseClient
+     */
+    private static function keyServer(array $listed, CallLog $deleted): \Closure
+    {
+        $client = (new \ReflectionClass(TypesenseClient::class))->newInstanceWithoutConstructor();
+        $client->keys = new class ($listed, $deleted) extends Keys {
+            /** @param list<array<string, mixed>> $listed */
+            public function __construct(private array $listed, private CallLog $deleted)
+            {
+            }
+
+            /** @return array<string, mixed> */
+            public function retrieve(): array
+            {
+                return ['keys' => $this->listed];
+            }
+
+            /** @param mixed $offset */
+            public function offsetGet($offset): Key
+            {
+                $deleted = $this->deleted;
+                return new class ((string) $offset, $deleted) extends Key {
+                    public function __construct(private string $id, private CallLog $deleted)
+                    {
+                    }
+
+                    /** @return array<string, mixed> */
+                    public function delete(): array
+                    {
+                        $this->deleted->record(['id' => $this->id]);
+                        return ['id' => $this->id];
+                    }
+                };
+            }
+        };
+        return static fn(): TypesenseClient => $client;
+    }
+
+    public function testUninstallRevokesOnlyTheKeysThisInstallMinted(): void
+    {
+        $deleted = new CallLog();
+        $minted = 'IwacSearch public search-only parent (auto-created)';
+        $server = self::keyServer([
+            ['id' => 11, 'value_prefix' => 'abcd', 'description' => $minted],
+            // A mounted secret or an operator's key with the same prefix.
+            ['id' => 12, 'value_prefix' => 'wxyz', 'description' => 'Production search key'],
+            ['id' => 13, 'value_prefix' => 'efgh', 'description' => $minted],
+        ], $deleted);
+
+        $revoked = TypesenseSearchKeyProvider::revokeCached(['abcd-cached-value', 'wxyz-cached-value'], $server);
+
+        self::assertSame(1, $revoked);
+        self::assertSame([['id' => '11']], $deleted->entries);
+    }
+
+    public function testUninstallLeavesAnAmbiguousMatchAlone(): void
+    {
+        // Two installs sharing one Typesense can mint keys with one prefix.
+        $deleted = new CallLog();
+        $minted = 'IwacSearch public search-only parent (auto-created)';
+        $server = self::keyServer([
+            ['id' => 11, 'value_prefix' => 'abcd', 'description' => $minted],
+            ['id' => 14, 'value_prefix' => 'abcd', 'description' => $minted],
+        ], $deleted);
+
+        self::assertSame(0, TypesenseSearchKeyProvider::revokeCached(['abcd-cached-value'], $server));
+        self::assertSame([], $deleted->entries);
+    }
+
+    public function testUninstallWithNothingCachedNeverReachesTypesense(): void
+    {
+        self::assertSame(0, TypesenseSearchKeyProvider::revokeCached([], static function (): TypesenseClient {
+            throw new RuntimeException('Typesense must not be contacted');
+        }));
     }
 
     /** A key that was never returned must not be cached as the empty string. */

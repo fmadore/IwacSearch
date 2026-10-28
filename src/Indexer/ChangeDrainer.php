@@ -7,7 +7,11 @@ namespace IwacSearch\Indexer;
 use Doctrine\DBAL\Connection;
 use Closure;
 
-/** Bounded, serialized consumer. Failed rows remain retryable, including deletes. */
+/**
+ * Bounded, serialized consumer. Failed rows remain retryable, including
+ * deletes; a document Typesense rejects is removed from search and its rows
+ * acknowledged, so it cannot hold the journal (see IncrementalIndexer::applySnapshot()).
+ */
 final class ChangeDrainer
 {
     public function __construct(private readonly Connection $connection, private readonly IncrementalIndexer $indexer)
@@ -48,7 +52,7 @@ final class ChangeDrainer
                 if ($rows === []) {
                     break;
                 }
-                $this->indexer->applySnapshot($snapshot);
+                $this->indexer->applySnapshot($snapshot, tolerateRejected: true);
                 $journal->acknowledge(array_column($rows, 'id'));
                 $count += count($rows);
             } finally {

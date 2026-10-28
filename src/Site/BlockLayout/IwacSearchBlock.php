@@ -8,6 +8,7 @@ use IwacSearch\Asset\SvelteAssets;
 use IwacSearch\Browse\FacetCatalog;
 use IwacSearch\IwacInstance;
 use IwacSearch\Search\FacetValueLookup;
+use IwacSearch\Search\FilterExpression;
 use IwacSearch\Search\InitialResponseRenderer;
 use IwacSearch\Search\PresetCatalog;
 use IwacSearch\Search\ScopeFilters;
@@ -69,7 +70,9 @@ use Omeka\Stdlib\HtmlPurifier;
  * client can drop them and search the whole public corpus. Privacy is
  * enforced solely by the scoped key's own constraints (is_public:=true +
  * ocr_text exclusion, minted in TypesenseSearchKeyProvider). Never use
- * locked_filters to hide non-public data.
+ * locked_filters to hide non-public data. They DO run with the admin key in
+ * the server-side first-page render, though, so onHydrate() refuses one that
+ * could escape that render's public guard ({@see FilterExpression}).
  */
 class IwacSearchBlock extends AbstractBlockLayout
 {
@@ -99,6 +102,10 @@ class IwacSearchBlock extends AbstractBlockLayout
      * against a bad `preset` / `default_sort` anyway, but `mode` used to flow
      * unvalidated into the bootstrap, and half-validating on save meant a
      * stale value could sit in block data misbehaving only at render time.
+     *
+     * locked_filters is free text, so it is checked rather than normalised: a
+     * fragment that could escape the server-side render's public guard is an
+     * error, and the page is not saved.
      */
     public function onHydrate(SitePageBlock $block, ErrorStore $errorStore): void
     {
@@ -107,6 +114,15 @@ class IwacSearchBlock extends AbstractBlockLayout
         $introHtml = (string) ($data['intro_html'] ?? '');
         $data['intro_html'] = $introHtml === '' ? '' : $this->htmlPurifier->purify($introHtml);
         $data[self::PURIFIED_FLAG] = true;
+
+        // Checked whatever the scope: a preset block ignores the field, but
+        // switching it back to Custom would make the stored value live.
+        $lockedFilters = trim((string) ($data['locked_filters'] ?? ''));
+        $problem = FilterExpression::problem($lockedFilters);
+        if ($problem !== null) {
+            $errorStore->addError('o:block[o:data][locked_filters]', $problem);
+        }
+        $data['locked_filters'] = $lockedFilters;
 
         $data['prominent_facets'] = FacetCatalog::normaliseFacets(
             is_iterable($data['prominent_facets'] ?? null) ? $data['prominent_facets'] : []

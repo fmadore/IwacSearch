@@ -13,7 +13,10 @@ use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
 use RuntimeException;
 
-/** Strict indexing core. Jobs acknowledge only successful writes. */
+/**
+ * Strict indexing core. Jobs acknowledge only successful writes; the live
+ * drain alone tolerates documents Typesense rejects (see applySnapshot()).
+ */
 final class IncrementalIndexer
 {
     /**
@@ -124,15 +127,25 @@ final class IncrementalIndexer
      * Order: withdrawals first (entity and content deletes), then authority
      * metadata, then content — whose import may run embedding inference.
      *
+     * With $tolerateRejected (the live drain), a document Typesense rejects —
+     * a schema violation in the source data — is removed from its collection
+     * (fail closed: its old copy may show metadata that has since changed,
+     * a withdrawal included) and reported, instead of failing the batch. One
+     * bad record then no longer holds every later change in the journal
+     * behind it. When nothing in the snapshot was accepted, the failure is
+     * treated as server-side (the embedding model not loaded, a schema out of
+     * step) and still throws, so an outage never empties the index. The
+     * rebuild cutover stays strict.
+     *
      * @param  list<array{id:int, content:?array<string,mixed>, entity:?array<string,mixed>}> $snapshot
-     * @return array{content: array<int, ?string>, entity: array<int, bool>}
+     * @return array{content: array<int, ?string>, entity: array<int, bool>, rejected: list<int>}
      *   Per ID: the content type now indexed (null = no content document),
      *   and whether an entity document now exists (only when an entity
-     *   collection is maintained).
+     *   collection is maintained); plus the IDs removed after a rejection.
      */
-    public function applySnapshot(array $snapshot): array
+    public function applySnapshot(array $snapshot, bool $tolerateRejected = false): array
     {
-        $outcome = ['content' => [], 'entity' => []];
+        $outcome = ['content' => [], 'entity' => [], 'rejected' => []];
         $docs = $contentDeletes = [];
         foreach ($snapshot as $change) {
             if ($change['content'] === null) {
@@ -182,21 +195,52 @@ final class IncrementalIndexer
         $this->ops->deleteDocuments($this->collectionAlias, $contentDeletes);
 
         // Authority visibility/metadata is applied before potentially expensive content embeddings.
+        $accepted = 0;
+        $rejected = [];
         if ($this->indexAlias !== null) {
-            $this->import($this->indexAlias, $entityDocs);
+            [$ok, $rejected[$this->indexAlias]] = $this->import($this->indexAlias, $entityDocs, $tolerateRejected);
+            $accepted += $ok;
         }
-        $this->import($this->collectionAlias, $docs);
+        [$ok, $rejected[$this->collectionAlias]] = $this->import($this->collectionAlias, $docs, $tolerateRejected);
+        $accepted += $ok;
+
+        $rejectedIds = array_merge(...array_values($rejected));
+        if ($rejectedIds !== []) {
+            if ($accepted === 0) {
+                throw new RuntimeException(sprintf('Typesense rejected every document in the batch (%d); not removing them.', count($rejectedIds)));
+            }
+            foreach ($rejected as $collection => $ids) {
+                $this->ops->deleteDocuments($collection, $ids);
+            }
+            foreach ($rejected[$this->collectionAlias] as $id) {
+                $outcome['content'][(int) $id] = null;
+            }
+            foreach ($this->indexAlias === null ? [] : $rejected[$this->indexAlias] as $id) {
+                $outcome['entity'][(int) $id] = false;
+            }
+            $outcome['rejected'] = array_values(array_unique(array_map('intval', $rejectedIds)));
+            $this->logger->warning('Typesense rejected documents; they are removed from search until the items are fixed and saved again', [
+                'ids' => $outcome['rejected'],
+            ]);
+        }
         $this->logger->debug('Processed index change batch', ['items' => count($snapshot)]);
         return $outcome;
     }
 
-    /** @param list<array<string,mixed>> $docs */
-    private function import(string $collection, array $docs): void
+    /**
+     * @param  list<array<string,mixed>> $docs
+     * @return array{0: int, 1: list<string>} [accepted, IDs rejected (only when tolerated)]
+     */
+    private function import(string $collection, array $docs, bool $tolerateRejected): array
     {
-        [$ok, $failed] = $this->ops->flushBatch($collection, $docs);
-        if ($failed !== 0 || $ok !== count($docs)) {
+        [$ok, $failed, $rejectedIds] = $this->ops->flushBatch($collection, $docs);
+        if ($failed === 0 && $ok === count($docs)) {
+            return [$ok, []];
+        }
+        if (!$tolerateRejected || $ok + count($rejectedIds) !== count($docs)) {
             throw new RuntimeException(sprintf('Incomplete import into %s: %d accepted, %d failed.', $collection, $ok, $failed));
         }
+        return [$ok, $rejectedIds];
     }
 
     public function deleteItem(int $itemId): void

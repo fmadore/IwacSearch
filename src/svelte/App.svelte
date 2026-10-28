@@ -764,7 +764,12 @@
           <!-- The map owns its own loading/empty states and reflects the
                live query + filters; the summary strip above still shows
                the textual result count. -->
-          <MapView docs={map.docs} loading={map.loading} />
+          <MapView
+            docs={map.docs}
+            loading={map.loading}
+            failed={map.failed}
+            onRetry={() => map.retry()}
+          />
         {:else if results.isLoading}
           <!-- Galley-proof skeleton in the active view (replaces the opacity
                dim) — holds geometry so the page doesn't jump (§03A). -->

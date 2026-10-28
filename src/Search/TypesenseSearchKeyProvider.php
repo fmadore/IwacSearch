@@ -43,7 +43,8 @@ use Typesense\Client as TypesenseClient;
  */
 final class TypesenseSearchKeyProvider
 {
-    private const SETTINGS_KEY    = 'iwac_search_typesense_search_key';
+    /** Legacy slot; every scoped slot is this plus `_` and a scope hash ({@see settingsKey()}). */
+    public const SETTINGS_KEY     = 'iwac_search_typesense_search_key';
     private const KEY_DESCRIPTION = 'IwacSearch public search-only parent (auto-created)';
 
     /**
@@ -190,6 +191,43 @@ final class TypesenseSearchKeyProvider
         } finally {
             $lock->release();
         }
+    }
+
+    /**
+     * Uninstall: revoke the parent keys this install minted and cached.
+     *
+     * A key is revoked only when exactly one listed key carries both the
+     * cached value's prefix and the auto-created description — never a
+     * mounted secret, and never an ambiguous match that could be another
+     * install's. Unlike the collections, which uninstall leaves in place,
+     * these are this install's own credentials.
+     *
+     * @param  list<string> $values cached parent-key values
+     * @param  Closure(): TypesenseClient $clientFactory
+     * @return int keys revoked
+     */
+    public static function revokeCached(array $values, Closure $clientFactory): int
+    {
+        if ($values === []) {
+            return 0;
+        }
+        $keys = $clientFactory()->keys;
+        $listed = $keys->retrieve()['keys'] ?? [];
+        $revoked = 0;
+        foreach ($values as $value) {
+            $matches = array_values(array_filter(
+                is_array($listed) ? $listed : [],
+                static fn(mixed $key): bool => is_array($key)
+                    && ($key['description'] ?? null) === self::KEY_DESCRIPTION
+                    && ($key['value_prefix'] ?? null) === substr($value, 0, 4)
+            ));
+            if (count($matches) !== 1 || !isset($matches[0]['id'])) {
+                continue;
+            }
+            $keys[(string) $matches[0]['id']]->delete();
+            $revoked++;
+        }
+        return $revoked;
     }
 
     /** Mounted secrets cannot silently bypass the configured collection/action restrictions. */

@@ -83,7 +83,10 @@
       download(exportFilename(spec.extension), spec.mime, serialize(format, docs, meta, locale));
       open = false;
     } catch (e) {
-      error = t('export_failed', { message: e instanceof Error ? e.message : String(e) });
+      // The transport message is operator detail, in English on the French
+      // site: the console gets it, the reader gets their language.
+      console.warn('[iwac-search] export failed', e);
+      error = t('export_failed');
     } finally {
       busy = false;
     }

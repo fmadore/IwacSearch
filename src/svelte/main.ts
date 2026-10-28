@@ -16,6 +16,7 @@
 import { mount } from 'svelte';
 import App from './App.svelte';
 import FederatedApp from './components/FederatedApp.svelte';
+import { translate, type Locale } from './lib/i18n';
 import type { IwacBootstrap, IwacFederatedBootstrap } from './lib/types';
 
 function parseState<T>(scriptId: string): T | null {
@@ -32,6 +33,26 @@ function parseState<T>(scriptId: string): T | null {
   }
 }
 
+/**
+ * Swap the server-rendered skeleton for a surface. A component that throws
+ * while mounting must neither leave its container empty (or shimmering
+ * forever) nor stop the roots after it from mounting: the container gets a
+ * notice in the reader's language, and the error goes to the console.
+ */
+function mountRoot(rootEl: HTMLElement, locale: Locale | undefined, render: () => void): void {
+  rootEl.innerHTML = ''; // clear server-rendered skeleton
+  rootEl.dataset.iwacMounted = '1';
+  try {
+    render();
+  } catch (err) {
+    console.error('[iwac-search] mount failed', err);
+    const notice = document.createElement('p');
+    notice.setAttribute('role', 'alert');
+    notice.textContent = `${translate(locale ?? 'fr', 'search_unavailable')} ${translate(locale ?? 'fr', 'search_failed_hint')}`;
+    rootEl.replaceChildren(notice);
+  }
+}
+
 function mountSearchRoots(): void {
   const roots = document.querySelectorAll<HTMLElement>('[data-iwac-search-root]');
   roots.forEach((rootEl) => {
@@ -43,9 +64,7 @@ function mountSearchRoots(): void {
     if (!bootstrap) {
       return;
     }
-    rootEl.innerHTML = ''; // clear server-rendered skeleton
-    rootEl.dataset.iwacMounted = '1';
-    mount(App, { target: rootEl, props: { bootstrap } });
+    mountRoot(rootEl, bootstrap.locale, () => mount(App, { target: rootEl, props: { bootstrap } }));
   });
 }
 
@@ -60,9 +79,9 @@ function mountFederatedRoots(): void {
     if (!bootstrap) {
       return;
     }
-    rootEl.innerHTML = '';
-    rootEl.dataset.iwacMounted = '1';
-    mount(FederatedApp, { target: rootEl, props: { bootstrap } });
+    mountRoot(rootEl, bootstrap.locale, () =>
+      mount(FederatedApp, { target: rootEl, props: { bootstrap } }),
+    );
   });
 }
 

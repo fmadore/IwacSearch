@@ -251,13 +251,13 @@ final class CollectionOps
      * Bulk-import a batch via the JSONL endpoint.
      *
      * @param  list<array<string,mixed>> $batch
-     * @return array{0: int, 1: int} [ok, errors]
+     * @return array{0: int, 1: int, 2: list<string>} [ok, errors, ids of the rejected documents]
      */
     public function flushBatch(string $collection, array $batch): array
     {
         $this->checkCancellation();
         if ($batch === []) {
-            return [0, 0];
+            return [0, 0, []];
         }
         $jsonl = '';
         foreach ($batch as $doc) {
@@ -274,6 +274,7 @@ final class CollectionOps
             throw new RuntimeException('Import response count does not match submitted documents.');
         }
         $ok = $err = 0;
+        $rejected = [];
         foreach ($lines as $offset => $line) {
             if ($line === '') {
                 continue;
@@ -287,12 +288,16 @@ final class CollectionOps
                 $ok++;
             } else {
                 $err++;
+                $id = $batch[$offset]['id'] ?? null;
+                if (is_string($id) || is_int($id)) {
+                    $rejected[] = (string) $id;
+                }
                 if ($err <= 3) {
-                    $this->logger->warning("Document import failed ({$this->logLabel})", ['id' => $batch[$offset]['id'] ?? null, 'code' => $row['code'] ?? null]);
+                    $this->logger->warning("Document import failed ({$this->logLabel})", ['id' => $id, 'code' => $row['code'] ?? null]);
                 }
             }
         }
-        return [$ok, $err];
+        return [$ok, $err, $rejected];
     }
 
     /** The collection an alias currently points at, or null if absent; transport failures propagate. */

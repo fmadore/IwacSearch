@@ -119,6 +119,31 @@ final class InitialResponseRenderer
             return array_fill(0, count($bootstraps), null);
         }
 
+        // A locked filter that could escape the public guard (stored before
+        // the block form checked it, or written to the database directly) is
+        // never run with the admin key: that surface falls back to the client,
+        // whose scoped key enforces is_public itself. The others still render.
+        $safe = [];
+        foreach ($bootstraps as $i => $bootstrap) {
+            $problem = FilterExpression::problem(trim((string) ($bootstrap['locked_filters'] ?? '')));
+            if ($problem === null) {
+                $safe[$i] = $bootstrap;
+                continue;
+            }
+            $this->logger->warning('IwacSearch SSR: locked filter refused, falling back to client-side fetch', [
+                'problem'    => $problem,
+                'collection' => (string) ($bootstrap['collection_alias'] ?? $this->defaultCollection),
+            ]);
+        }
+        if (count($safe) < count($bootstraps)) {
+            $out = array_fill(0, count($bootstraps), null);
+            $rendered = $this->renderMany(array_values($safe));
+            foreach (array_keys($safe) as $n => $i) {
+                $out[$i] = $rendered[$n];
+            }
+            return $out;
+        }
+
         $searches = array_map(fn(array $b): array => $this->buildSearch($b), $bootstraps);
         $collections = array_map(
             fn(array $b): string => (string) ($b['collection_alias'] ?? $this->defaultCollection),

@@ -450,7 +450,7 @@ describe('createMapResults', () => {
     expect(map.docs.map((d) => d.id)).toEqual(['new']);
   });
 
-  it('empties the map on a failure', async () => {
+  it('empties the map on a failure and reports it, rather than "no places"', async () => {
     vi.spyOn(console, 'warn').mockImplementation(() => {});
     const fetchForMap = vi.fn(async () => {
       throw new Error('down');
@@ -460,5 +460,22 @@ describe('createMapResults', () => {
     await flush();
     expect(map.docs).toEqual([]);
     expect(map.loading).toBe(false);
+    expect(map.failed).toBe(true);
+  });
+
+  it('clears the failure once a fetch runs again', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const fetchForMap = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('down'))
+      .mockResolvedValueOnce([doc('back')]);
+    const map = createMapResults({ fetchForMap });
+    map.run({ q: 'x', filters: {}, yearRange: null });
+    await flush();
+    map.retry();
+    map.run({ q: 'x', filters: {}, yearRange: null });
+    expect(map.failed).toBe(false);
+    await flush();
+    expect(map.docs.map((d) => d.id)).toEqual(['back']);
   });
 });

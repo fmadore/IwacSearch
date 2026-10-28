@@ -274,6 +274,18 @@ final class ScopeFilters
                 if (self::isNumeric($field) && !is_numeric($value)) {
                     continue;
                 }
+                // Inside the backtick quotes compile() adds, Typesense still
+                // reads a trailing `*` as a prefix wildcard, a "…"-wrapped
+                // value as a phrase, and a backslash as escaping the closing
+                // backtick — which would let the rest of the clause run as
+                // filter syntax in the admin-key SSR. No picker value needs
+                // them, so they are dropped rather than reinterpreted.
+                if (
+                    str_contains($value, '\\') || str_ends_with($value, '*')
+                    || (strlen($value) > 1 && str_starts_with($value, '"') && str_ends_with($value, '"'))
+                ) {
+                    continue;
+                }
                 if (!in_array($value, $clean, true)) {
                     $clean[] = $value;
                 }
