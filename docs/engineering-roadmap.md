@@ -1,5 +1,41 @@
 # Engineering follow-ups
 
+## In progress: the cross-module review with DRESearch (2026-10-28)
+
+The two modules were compared file by file; what DRESearch does better is being
+brought here, and the reverse there.
+
+- **Done:** locked filters are checked before they reach the admin-key SSR; the
+  drain removes a rejected document instead of stopping on it; uninstall
+  revokes every cached search key; a missing `vendor/` degrades the module
+  instead of the site; translated error states for mount, typeahead, export
+  and map.
+- **Static quality:** PHP_CodeSniffer (PSR-12) and PHPStan level 8 in CI;
+  type-aware ESLint; `tests/client` type-checked, `noUncheckedIndexedAccess`;
+  PHPUnit fails on deprecations and notices.
+- **Indexing:** a generation ledger with orphan cleanup, automatic retention
+  and a per-type shrink guard against the live alias; readiness wait before a
+  rebuild; typed cancellation; drain dispatch through a lease (no lost
+  wake-up); writers no longer queue behind one global lock; journaled ids
+  hidden from the SSR and from freshly minted keys; dead code and vacuous tests
+  removed.
+- **Omeka integration:** the block form moves to a view partial, the block
+  becomes templateable and searchable (`getFulltextText`); public ACL actions
+  in a tested constant; locale route aliases generated; a health endpoint and a
+  request-id error envelope; PHP strings extracted to `template.pot` with a
+  coverage check.
+- **Client:** Playwright + axe tests against the built bundle; heading levels
+  from context; did-you-mean guarded by the sequence ticket; `history.state`
+  preserved.
+- **Release:** `CHANGELOG.md`, from which release notes are built; sha256 and
+  build provenance for the zip; CodeQL; `composer audit`; job timeouts;
+  Dependabot cooldown; `asset/dist` built by CI and the release instead of
+  committed.
+- **Decided against:** `IwacInstance` constants as configuration — the aliases
+  are deliberately not configuration and there is one IWAC instance; running
+  the CLI through Omeka's `bootstrap.php` — it uses none of the classes that
+  file patches for PHP 8.5.
+
 Updated for 3.19.0. The July and September implementation work is complete. The [27 September 2026 review](module-review-2026-09-27.md) of 3.19.1 is implemented in 3.20.0 ([operations-3.20.md](operations-3.20.md)); its one deliberately open item is typeahead server-side caching (measure `use_cache` first). The [September closure report](module-review-2026-09.md) and [operations guide](operations-3.19.md) replace the old phased implementation plan. PHPStan is a blocking CI gate; SQL/event/key/rebuild contracts have a real Omeka/Typesense integration lane.
 
 ## Remaining measurement and operational work
