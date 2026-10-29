@@ -54,9 +54,10 @@ fmadore/IwacSearch` that this repository's release workflow built it.
 Then run a bulk reindex — the module ships no data and search stays empty
 until the first collection is built.
 
-Installing from a git checkout instead means running `composer install
---no-dev` inside the php container yourself; the source tree deliberately
-does not carry `vendor/`.
+Installing from a git checkout instead means building what the zip
+carries yourself: `npm ci && npm run build` for the client bundles, then
+`composer install --no-dev` inside the php container. The source tree
+deliberately carries neither `vendor/` nor `asset/dist/`.
 
 ## Companion stack
 
@@ -88,7 +89,7 @@ browser — see [SECURITY.md](SECURITY.md).
 | `src/svelte/`         | Svelte 5 + TS client source (public bundle and header typeahead)      |
 | `data/`               | Collection schemas, stopwords, synonyms, newspaper→country map        |
 | `cli/`                | Reindex and sync entry points, runnable inside the php container      |
-| `asset/dist/`         | Compiled bundles — committed, so production needs no Node             |
+| `asset/dist/`         | Compiled bundles — built, not tracked; the release zip carries them   |
 | `view/`, `asset/css/` | Templates and block CSS                                               |
 
 Full annotated tree, including why `src/Indexer/` mirrors
@@ -129,9 +130,11 @@ Two Vite builds emit two IIFE bundles: `iwac-search.{js,css}` from
 `iwac-search-header.{js,css}` from `src/svelte/header.ts` for the theme
 header search box on every site page.
 
-Both are committed to `asset/dist/` so production deployments need no Node
-toolchain — CI diffs a fresh build against the committed output and fails on
-drift, so rebuild and commit whenever you touch `src/svelte*`.
+Both are written to `asset/dist/`, which is a build product and not
+tracked. Production still needs no Node toolchain: the release workflow
+builds the bundles from the tagged source and puts them in the zip, which
+checks that it carries exactly those four files. Build before anything that
+loads them locally (`npm run check:lighthouse`, a hand-copied deploy).
 
 ```bash
 npm install

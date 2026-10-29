@@ -274,9 +274,26 @@ function compare(page, row, base, problems) {
   return cells;
 }
 
+/**
+ * The fixtures load the bundles from asset/dist, which is a build product, not
+ * tracked. Without them every page would 404 its scripts and fail as "much
+ * lighter than its baseline", which reads like an improvement, not a missing
+ * build.
+ */
+const BUNDLES = [
+  'iwac-search.js',
+  'iwac-search.css',
+  'iwac-search-header.js',
+  'iwac-search-header.css',
+];
+
 async function main() {
   const args = parseArgs(process.argv.slice(2));
   const pages = args.only || PAGES;
+  const unbuilt = BUNDLES.filter((file) => !existsSync(join(ROOT, 'asset', 'dist', file)));
+  if (unbuilt.length) {
+    throw new Error(`asset/dist has no ${unbuilt.join(', ')}: run \`npm run build\` first`);
+  }
   const committed = existsSync(BASELINE)
     ? JSON.parse(readFileSync(BASELINE, 'utf8'))
     : { pages: {} };

@@ -7,6 +7,9 @@ vendor/
 node_modules/
 .svelte-kit/
 coverage/
+# The compiled client bundles (npm run build). A build product: the release
+# zip carries the copy release.yml builds from the tag.
+asset/dist/
 # Lighthouse reports and the measured baseline (scripts/check-lighthouse.js).
 test-results/
 
@@ -23,7 +26,7 @@ Thumbs.db
 .claude/
 
 # Notes:
-# - asset/dist/ IS tracked. The compiled Svelte bundle ships in the repo
-#   so production deployments don't need a Node toolchain — composer
-#   install + module activation is enough. CI rebuilds it on every PR
-#   to ensure it stays in sync with src/svelte/.
+# - asset/dist/ is NOT tracked (it was through 3.26.x). Production installs the
+#   release zip, which carries vendor/ and the bundle built from the tag, so
+#   the server still needs no Node toolchain. A checkout deployed by hand
+#   needs `npm ci && npm run build` (and `composer install --no-dev`) first.

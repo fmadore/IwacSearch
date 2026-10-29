@@ -8,9 +8,10 @@
 # The zip is assembled from `git archive`, so the `export-ignore` rules in
 # .gitattributes decide what ships; the Svelte sources and docs/ come out on
 # top of that (they are build inputs and prose, not runtime code), and a
-# production `vendor/` goes in. What is left is exactly what the module needs
-# to boot: Module.php, config/, src/ PHP, view/, data/, cli/, asset/ (with the
-# committed asset/dist bundles) and vendor/.
+# production `vendor/` goes in, and so does the asset/dist bundle this job
+# builds: it is a build product and no longer tracked, so `git archive` cannot
+# carry it. What is left is exactly what the module needs to boot: Module.php,
+# config/, src/ PHP, view/, data/, cli/, asset/ (with asset/dist) and vendor/.
 #
 # Release dependencies come from the committed PHP-8.4-compatible composer.lock.
 #
@@ -18,7 +19,7 @@
 # a write token:
 #
 #   gates    the whole push/PR suite (ci.yml, called as a reusable workflow) on
-#            the tagged tree — lint, svelte-check, vitest, build + bundle diff,
+#            the tagged tree — lint, svelte-check, vitest, build + size budget,
 #            PHP lint, PHPUnit, PHPStan on every matrix leg, the integration
 #            contracts. Reusable calls ignore path filters, so every gate runs.
 #   build    resolves and checks the version, builds the release notes from
@@ -129,19 +130,13 @@ jobs:
       - name: Install client deps
         run: npm ci --no-audit --no-fund
 
-      # The gates job ran the full suite; this rebuild exists only because the
-      # zip is assembled from THIS job's tree, and must carry the bundle the
-      # source produces.
+      # The bundle the zip carries is built here, from the tagged source, by
+      # the same `npm run build` the gates job ran (theme, drift, i18n and size
+      # gates included). It used to be committed, and this step was followed
+      # by a byte diff against the committed copy; with nothing committed, a
+      # stale bundle has nowhere to come from.
       - name: Build client
         run: npm run build
-
-      # Same guard as CI. asset/dist is committed because production has no
-      # Node toolchain, and the zip ships the committed copy — so a tag whose
-      # bundle is stale would ship stale JS to every install. Fail loudly.
-      - name: Verify committed bundles match the source
-        run: |
-          git diff --exit-code -- asset/dist \
-            || (echo '::error::asset/dist is stale at this tag — rebuild and retag' && exit 1)
 
       # 8.4 is the composer.json floor. Resolving there yields a vendor tree
       # that runs on every supported PHP, including the live server's 8.5.
@@ -162,6 +157,14 @@ jobs:
           rm -rf build/IwacSearch/src/svelte \
                  build/IwacSearch/src/svelte-shared \
                  build/IwacSearch/docs
+          # The client bundle built above: untracked, so not in the archive. If
+          # it is, someone committed a build again, and the archive's copy
+          # would silently shadow the one built from the tagged source.
+          if [ -e build/IwacSearch/asset/dist ]; then
+            echo "::error::asset/dist is tracked again — it is a build product (see .gitignore)"
+            exit 1
+          fi
+          cp -R asset/dist build/IwacSearch/asset/dist
           test -f build/IwacSearch/composer.lock
           composer install \
             --working-dir=build/IwacSearch \
@@ -222,6 +225,27 @@ jobs:
                    IwacSearch/LICENSE; do
             unzip -l "$ZIP_FILE" "$f" > /dev/null 2>&1 \
               || { echo "::error::missing from zip: $f"; exit 1; }
+          done
+
+          # The client bundle is the one piece git does not carry, so its
+          # shape is asserted on its own: asset/dist holds exactly the four
+          # files Module.php and SvelteAssets.php link (the Vite lib build has
+          # fixed names and no chunks), each byte-identical to what this job
+          # built and not empty. A blank or missing bundle renders a search
+          # page that never leaves its skeleton.
+          BUNDLES="iwac-search.js iwac-search.css iwac-search-header.js iwac-search-header.css"
+          SHIPPED="$(unzip -Z1 "$ZIP_FILE" | { grep '^IwacSearch/asset/dist/.' || true; } \
+            | sed 's|^IwacSearch/asset/dist/||' | sort)"
+          EXPECTED="$(printf '%s\n' $BUNDLES | sort)"
+          if [ "$SHIPPED" != "$EXPECTED" ]; then
+            echo "::error::asset/dist in the zip is not exactly the four bundles:"
+            diff <(echo "$EXPECTED") <(echo "$SHIPPED") || true
+            exit 1
+          fi
+          for f in $BUNDLES; do
+            test -s "asset/dist/$f" || { echo "::error::asset/dist/$f is empty"; exit 1; }
+            unzip -p "$ZIP_FILE" "IwacSearch/asset/dist/$f" | cmp -s - "asset/dist/$f" \
+              || { echo "::error::the zip's asset/dist/$f is not the bundle this job built"; exit 1; }
           done
 
           # Only the module's own tree is policed. Third-party packages ship

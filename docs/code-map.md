@@ -126,7 +126,7 @@ IwacSearch/
 │   └── common/block-layout/iwac-search-block.phtml
 ├── asset/
 │   ├── css/iwac-search.css                     # Block container + skeleton (consumes IWAC-theme tokens)
-│   └── dist/                                   # Compiled bundles (committed; CI diffs them vs source)
+│   └── dist/                                   # Compiled bundles (npm run build; untracked, in the release zip)
 │       ├── iwac-search.{js,css}                #   public client
 │       └── iwac-search-header.{js,css}         #   site-wide header typeahead
 ├── .github/

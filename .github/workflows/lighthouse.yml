@@ -30,8 +30,10 @@
 # here and failed on Windows). The artifact also holds each page's median-run
 # HTML report.
 #
-# It measures the committed asset/dist/ bundles, which the client job above
-# already proves match the source, so it needs no build of its own.
+# It measures the bundles this job builds from the checked-out source:
+# asset/dist/ is a build product, no longer committed, so the job runs
+# `npm run build` first (the same build the release zip carries, size budget
+# included) and check-lighthouse.js refuses to run without the four files.
 
 name: Lighthouse budgets
 
@@ -66,6 +68,9 @@ jobs:
 
       - name: Install
         run: npm ci --no-audit --no-fund
+
+      - name: Build the bundles the fixtures load
+        run: npm run build
 
       # An exact Chrome for Testing build, not the runner image's Chrome, so an
       # image update cannot move the scores under an unchanged tree. Keep it on

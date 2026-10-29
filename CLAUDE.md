@@ -75,6 +75,13 @@ The cutover, retention and retry contracts are documented in `docs/operations-3.
 - Composer deps live in `composer.json`; install with
   `composer install --no-dev` inside the php container after copying the
   module to the `omeka_files` volume.
+- **`asset/dist/` is a build product, not tracked** (it was through 3.26.x).
+  The release zip carries the bundle `release.yml` builds from the tag, and
+  asserts it holds exactly the four files the module links; CI, Lighthouse and
+  the release each run `npm run build` themselves. A checkout copied to a
+  server by hand needs `npm ci && npm run build` first, or every search
+  surface stays on its skeleton. Never commit a build: the release refuses a
+  tree that tracks `asset/dist` again.
 - French stopwords live in `data/stopwords-fr.json` and are PUT into
   Typesense as the `fr_default` set during the bulk reindex CLI.
 - Synonyms (Arabic-transliteration variants) live in `data/synonyms-fr.json`

@@ -72,21 +72,13 @@ jobs:
       - name: Unit tests (vitest)
         run: npm test
 
+      # asset/dist is a build product, not tracked: the release zip carries
+      # the bundle release.yml builds from the tag, so there is no committed
+      # copy to fall out of step with the source (this job used to diff one).
+      # check:size, the build's last step, reads all four bundles, so a build
+      # that failed to write one fails here.
       - name: Build
         run: npm run build
-
-      # asset/dist is committed (production has no Node toolchain), so a PR
-      # that edits src/svelte* without rebuilding would ship a stale bundle.
-      # The Vite lib build has fixed filenames and no content hashes, so a
-      # byte diff against the committed output is the sync check.
-      - name: Verify committed bundles match the source
-        run: |
-          test -f asset/dist/iwac-search.js
-          test -f asset/dist/iwac-search.css
-          test -f asset/dist/iwac-search-header.js
-          test -f asset/dist/iwac-search-header.css
-          git diff --exit-code -- asset/dist \
-            || (echo '::error::asset/dist is stale — run `npm run build` and commit the result' && exit 1)
 
   php:
     name: PHP module (syntax + unit tests)
