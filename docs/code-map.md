@@ -46,6 +46,7 @@ IwacSearch/
 │   │   ├── BlockForm.php                       #   admin form's view model (partial: view/common/block-layout/)
 │   │   ├── IntroHtml.php                       #   intro purification rules + plain text for site search
 │   │   └── IntroMigration.php                  #   3.20 upgrade step: purify + flag stored intros
+│   ├── Site/PublicRoutes.php                   # every public route once → root + site (+ French) route tables
 │   ├── Job/                                    # Omeka background jobs (admin maintenance buttons)
 │   │   └── BulkReindex · SyncStopwords · SyncSynonyms · ProvisionAnalytics
 │   ├── Form/MaintenanceForm.php                # CSRF-bearing POST forms for the maintenance page

@@ -12,22 +12,6 @@ namespace IwacSearch;
 
 use Typesense\Client as TypesenseClient;
 
-$legacySearchRoute = static fn(string $resource): array => [
-    'type' => \Laminas\Router\Http\Literal::class,
-    'options' => [
-        'route' => sprintf('/%s/search', $resource),
-        'defaults' => [
-            '__NAMESPACE__' => 'IwacSearch\Controller',
-            'controller' => Controller\LegacySearchController::class,
-            'action' => 'redirect',
-        ],
-    ],
-    // Omeka's generic /:controller[/:action] route also matches these URLs.
-    // A literal route with an explicit priority makes module ownership
-    // deterministic regardless of module/config merge order.
-    'priority' => 1000,
-];
-
 return [
     'service_manager' => [
         'factories' => [
@@ -169,184 +153,15 @@ return [
                 ],
             ],
 
-            // Public search page — HTML shell + (M1) compiled Svelte bundle.
-            'iwac-search' => [
-                'type' => \Laminas\Router\Http\Literal::class,
-                'options' => [
-                    'route'    => '/search',
-                    'defaults' => [
-                        'controller' => Controller\SearchController::class,
-                        'action'     => 'index',
-                    ],
-                ],
-            ],
-
-            // Federated "search everything" page — Content + Entities tabs over
-            // both Typesense collections. Literal route, so it never shadows
-            // /search above. Global root for back-compat / external links.
-            'iwac-search-everything' => [
-                'type' => \Laminas\Router\Http\Literal::class,
-                'options' => [
-                    'route'    => '/search/everything',
-                    'defaults' => [
-                        'controller' => Controller\SearchController::class,
-                        'action'     => 'everything',
-                    ],
-                ],
-            ],
-
-            // Scoped-key endpoint — PHP inspects the Omeka session and mints
-            // a short-lived Typesense scoped key (1h, public OR admin variant).
-            'iwac-search-token' => [
-                'type' => \Laminas\Router\Http\Literal::class,
-                'options' => [
-                    'route'    => '/discovery/token',
-                    'defaults' => [
-                        'controller' => Controller\SearchController::class,
-                        'action'     => 'token',
-                    ],
-                ],
-            ],
-
-            // Legacy browse routes — kept only to redirect old bookmarks to
-            // /search (the curated browse-config system was retired). URLs like
-            // https://islam.zmo.de/browse/benin 302 to /search?f.country_ss=…;
-            // /browse/index → /search/everything?tab=entities. See
-            // SearchController::browseAction.
-            'iwac-browse' => [
-                'type'    => \Laminas\Router\Http\Segment::class,
-                'options' => [
-                    'route'       => '/browse[/:slug]',
-                    'constraints' => ['slug' => '[a-zA-Z0-9_-]+'],
-                    'defaults'    => [
-                        'controller' => Controller\SearchController::class,
-                        'action'     => 'browse',
-                    ],
-                ],
-            ],
-
-            // French-language alias of /browse — same redirect action.
-            'iwac-parcourir' => [
-                'type'    => \Laminas\Router\Http\Segment::class,
-                'options' => [
-                    'route'       => '/parcourir[/:slug]',
-                    'constraints' => ['slug' => '[a-zA-Z0-9_-]+'],
-                    'defaults'    => [
-                        'controller' => Controller\SearchController::class,
-                        'action'     => 'browse',
-                    ],
-                ],
-            ],
-
-            // Site-scoped variants of the legacy browse redirect: a bookmarked
-            // /s/{site-slug}/browse/{slug} redirects to that site's own /search
-            // (preserving the language site). Also holds the site-scoped /search
-            // + /search/everything routes the header search form targets.
+            // The public surfaces — /search, /search/everything,
+            // /discovery/token and the legacy /browse redirects — on the
+            // site-less root, then under every language site with the French
+            // paths the French site links to (/recherche, /recherche/tout,
+            // /parcourir) and the handoffs from Omeka's own advanced search.
+            // Each route is written once, in Site\PublicRoutes.
+            ...Site\PublicRoutes::root(),
             'site' => [
-                'child_routes' => [
-                    // Replace Omeka's public advanced-search entry points with
-                    // the locale-aware Typesense surface while this module is
-                    // active. Item sets and media intentionally share the same
-                    // federated destination: neither has a separate Typesense
-                    // collection, and the companion theme already presents all
-                    // three links as "Search the collection".
-                    'iwac-legacy-item-search' => $legacySearchRoute('item'),
-                    'iwac-legacy-item-set-search' => $legacySearchRoute('item-set'),
-                    'iwac-legacy-media-search' => $legacySearchRoute('media'),
-
-                    'iwac-browse' => [
-                        'type'    => \Laminas\Router\Http\Segment::class,
-                        'options' => [
-                            'route'       => '/browse[/:slug]',
-                            'constraints' => ['slug' => '[a-zA-Z0-9_-]+'],
-                            'defaults'    => [
-                                '__NAMESPACE__' => 'IwacSearch\Controller',
-                                'controller'    => Controller\SearchController::class,
-                                'action'        => 'browse',
-                            ],
-                        ],
-                    ],
-                    // French alias: /s/{site-slug}/parcourir[/:slug]. The
-                    // French site's nav links resolve to this route so the
-                    // public URL reads /s/afrique_ouest/parcourir/benin.
-                    'iwac-parcourir' => [
-                        'type'    => \Laminas\Router\Http\Segment::class,
-                        'options' => [
-                            'route'       => '/parcourir[/:slug]',
-                            'constraints' => ['slug' => '[a-zA-Z0-9_-]+'],
-                            'defaults'    => [
-                                '__NAMESPACE__' => 'IwacSearch\Controller',
-                                'controller'    => Controller\SearchController::class,
-                                'action'        => 'browse',
-                            ],
-                        ],
-                    ],
-
-                    // Site-scoped search landing page (English sites):
-                    // /s/{site-slug}/search. The IWAC-theme header search
-                    // form posts here (via the iwacSearchUrl helper) so a
-                    // visitor who submits the header box lands on the faceted
-                    // Typesense surface inside their own language site. Same
-                    // controller/action as the global /search route;
-                    // readUrlState() hydrates ?q= + ?f.<field>= deep links
-                    // on the client, so no extra controller wiring is needed.
-                    'iwac-search' => [
-                        'type'    => \Laminas\Router\Http\Literal::class,
-                        'options' => [
-                            'route'    => '/search',
-                            'defaults' => [
-                                '__NAMESPACE__' => 'IwacSearch\Controller',
-                                'controller'    => Controller\SearchController::class,
-                                'action'        => 'index',
-                            ],
-                        ],
-                    ],
-                    // French alias: /s/{site-slug}/recherche. The French site
-                    // (afrique_ouest) links here; iwacLocale() maps the slug
-                    // to pick /recherche vs /search — mirrors /parcourir vs
-                    // /browse.
-                    'iwac-recherche' => [
-                        'type'    => \Laminas\Router\Http\Literal::class,
-                        'options' => [
-                            'route'    => '/recherche',
-                            'defaults' => [
-                                '__NAMESPACE__' => 'IwacSearch\Controller',
-                                'controller'    => Controller\SearchController::class,
-                                'action'        => 'index',
-                            ],
-                        ],
-                    ],
-
-                    // Site-scoped federated page (English sites):
-                    // /s/{site-slug}/search/everything. The theme header search
-                    // form posts here (via iwacSearchUrl) so a visitor lands on
-                    // the Content+Entities surface inside their own language site.
-                    'iwac-search-everything' => [
-                        'type'    => \Laminas\Router\Http\Literal::class,
-                        'options' => [
-                            'route'    => '/search/everything',
-                            'defaults' => [
-                                '__NAMESPACE__' => 'IwacSearch\Controller',
-                                'controller'    => Controller\SearchController::class,
-                                'action'        => 'everything',
-                            ],
-                        ],
-                    ],
-                    // French alias: /s/{site-slug}/recherche/tout. iwacSearchUrl
-                    // maps the French site slug to this route — mirrors
-                    // /recherche vs /search.
-                    'iwac-recherche-tout' => [
-                        'type'    => \Laminas\Router\Http\Literal::class,
-                        'options' => [
-                            'route'    => '/recherche/tout',
-                            'defaults' => [
-                                '__NAMESPACE__' => 'IwacSearch\Controller',
-                                'controller'    => Controller\SearchController::class,
-                                'action'        => 'everything',
-                            ],
-                        ],
-                    ],
-                ],
+                'child_routes' => Site\PublicRoutes::site(),
             ],
         ],
     ],

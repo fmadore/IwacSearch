@@ -31,7 +31,7 @@ final class AclContractTest extends TestCase
     public function testEveryPublicControllerHasAnEntry(): void
     {
         $controllers = [];
-        foreach (glob(dirname(__DIR__, 3) . '/src/Controller/*.php') ?: [] as $file) {
+        foreach (glob(dirname(__DIR__, 3) . '/src/Controller/*Controller.php') ?: [] as $file) {
             $controllers[] = 'IwacSearch\\Controller\\' . basename($file, '.php');
         }
         sort($controllers);

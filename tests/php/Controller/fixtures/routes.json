@@ -1,0 +1,258 @@
+{
+    "admin": {
+        "child_routes": {
+            "iwac-search": {
+                "type": "Laminas\\Router\\Http\\Literal",
+                "options": {
+                    "route": "/iwac-search",
+                    "defaults": {
+                        "__NAMESPACE__": "IwacSearch\\Controller\\Admin",
+                        "controller": "IwacSearch\\Controller\\Admin\\MaintenanceController",
+                        "action": "index"
+                    }
+                },
+                "may_terminate": true,
+                "child_routes": {
+                    "maintenance": {
+                        "type": "Laminas\\Router\\Http\\Literal",
+                        "options": {
+                            "route": "/maintenance",
+                            "defaults": {
+                                "controller": "IwacSearch\\Controller\\Admin\\MaintenanceController",
+                                "action": "index"
+                            }
+                        }
+                    },
+                    "maintenance-retry-changes": {
+                        "type": "Laminas\\Router\\Http\\Literal",
+                        "options": {
+                            "route": "/maintenance/retry-changes",
+                            "defaults": {
+                                "controller": "IwacSearch\\Controller\\Admin\\MaintenanceController",
+                                "action": "retryChanges"
+                            }
+                        }
+                    },
+                    "maintenance-prune-collections": {
+                        "type": "Laminas\\Router\\Http\\Literal",
+                        "options": {
+                            "route": "/maintenance/prune-collections",
+                            "defaults": {
+                                "controller": "IwacSearch\\Controller\\Admin\\MaintenanceController",
+                                "action": "pruneCollections"
+                            }
+                        }
+                    },
+                    "maintenance-reindex": {
+                        "type": "Laminas\\Router\\Http\\Literal",
+                        "options": {
+                            "route": "/maintenance/reindex",
+                            "defaults": {
+                                "controller": "IwacSearch\\Controller\\Admin\\MaintenanceController",
+                                "action": "reindex"
+                            }
+                        }
+                    },
+                    "maintenance-sync-stopwords": {
+                        "type": "Laminas\\Router\\Http\\Literal",
+                        "options": {
+                            "route": "/maintenance/sync-stopwords",
+                            "defaults": {
+                                "controller": "IwacSearch\\Controller\\Admin\\MaintenanceController",
+                                "action": "syncStopwords"
+                            }
+                        }
+                    },
+                    "maintenance-sync-synonyms": {
+                        "type": "Laminas\\Router\\Http\\Literal",
+                        "options": {
+                            "route": "/maintenance/sync-synonyms",
+                            "defaults": {
+                                "controller": "IwacSearch\\Controller\\Admin\\MaintenanceController",
+                                "action": "syncSynonyms"
+                            }
+                        }
+                    },
+                    "maintenance-provision-analytics": {
+                        "type": "Laminas\\Router\\Http\\Literal",
+                        "options": {
+                            "route": "/maintenance/provision-analytics",
+                            "defaults": {
+                                "controller": "IwacSearch\\Controller\\Admin\\MaintenanceController",
+                                "action": "provisionAnalytics"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    },
+    "iwac-search": {
+        "type": "Laminas\\Router\\Http\\Literal",
+        "options": {
+            "route": "/search",
+            "defaults": {
+                "controller": "IwacSearch\\Controller\\SearchController",
+                "action": "index"
+            }
+        }
+    },
+    "iwac-search-everything": {
+        "type": "Laminas\\Router\\Http\\Literal",
+        "options": {
+            "route": "/search/everything",
+            "defaults": {
+                "controller": "IwacSearch\\Controller\\SearchController",
+                "action": "everything"
+            }
+        }
+    },
+    "iwac-search-token": {
+        "type": "Laminas\\Router\\Http\\Literal",
+        "options": {
+            "route": "/discovery/token",
+            "defaults": {
+                "controller": "IwacSearch\\Controller\\SearchController",
+                "action": "token"
+            }
+        }
+    },
+    "iwac-browse": {
+        "type": "Laminas\\Router\\Http\\Segment",
+        "options": {
+            "route": "/browse[/:slug]",
+            "constraints": {
+                "slug": "[a-zA-Z0-9_-]+"
+            },
+            "defaults": {
+                "controller": "IwacSearch\\Controller\\SearchController",
+                "action": "browse"
+            }
+        }
+    },
+    "iwac-parcourir": {
+        "type": "Laminas\\Router\\Http\\Segment",
+        "options": {
+            "route": "/parcourir[/:slug]",
+            "constraints": {
+                "slug": "[a-zA-Z0-9_-]+"
+            },
+            "defaults": {
+                "controller": "IwacSearch\\Controller\\SearchController",
+                "action": "browse"
+            }
+        }
+    },
+    "site": {
+        "child_routes": {
+            "iwac-legacy-item-search": {
+                "type": "Laminas\\Router\\Http\\Literal",
+                "options": {
+                    "route": "/item/search",
+                    "defaults": {
+                        "__NAMESPACE__": "IwacSearch\\Controller",
+                        "controller": "IwacSearch\\Controller\\LegacySearchController",
+                        "action": "redirect"
+                    }
+                },
+                "priority": 1000
+            },
+            "iwac-legacy-item-set-search": {
+                "type": "Laminas\\Router\\Http\\Literal",
+                "options": {
+                    "route": "/item-set/search",
+                    "defaults": {
+                        "__NAMESPACE__": "IwacSearch\\Controller",
+                        "controller": "IwacSearch\\Controller\\LegacySearchController",
+                        "action": "redirect"
+                    }
+                },
+                "priority": 1000
+            },
+            "iwac-legacy-media-search": {
+                "type": "Laminas\\Router\\Http\\Literal",
+                "options": {
+                    "route": "/media/search",
+                    "defaults": {
+                        "__NAMESPACE__": "IwacSearch\\Controller",
+                        "controller": "IwacSearch\\Controller\\LegacySearchController",
+                        "action": "redirect"
+                    }
+                },
+                "priority": 1000
+            },
+            "iwac-browse": {
+                "type": "Laminas\\Router\\Http\\Segment",
+                "options": {
+                    "route": "/browse[/:slug]",
+                    "constraints": {
+                        "slug": "[a-zA-Z0-9_-]+"
+                    },
+                    "defaults": {
+                        "__NAMESPACE__": "IwacSearch\\Controller",
+                        "controller": "IwacSearch\\Controller\\SearchController",
+                        "action": "browse"
+                    }
+                }
+            },
+            "iwac-parcourir": {
+                "type": "Laminas\\Router\\Http\\Segment",
+                "options": {
+                    "route": "/parcourir[/:slug]",
+                    "constraints": {
+                        "slug": "[a-zA-Z0-9_-]+"
+                    },
+                    "defaults": {
+                        "__NAMESPACE__": "IwacSearch\\Controller",
+                        "controller": "IwacSearch\\Controller\\SearchController",
+                        "action": "browse"
+                    }
+                }
+            },
+            "iwac-search": {
+                "type": "Laminas\\Router\\Http\\Literal",
+                "options": {
+                    "route": "/search",
+                    "defaults": {
+                        "__NAMESPACE__": "IwacSearch\\Controller",
+                        "controller": "IwacSearch\\Controller\\SearchController",
+                        "action": "index"
+                    }
+                }
+            },
+            "iwac-recherche": {
+                "type": "Laminas\\Router\\Http\\Literal",
+                "options": {
+                    "route": "/recherche",
+                    "defaults": {
+                        "__NAMESPACE__": "IwacSearch\\Controller",
+                        "controller": "IwacSearch\\Controller\\SearchController",
+                        "action": "index"
+                    }
+                }
+            },
+            "iwac-search-everything": {
+                "type": "Laminas\\Router\\Http\\Literal",
+                "options": {
+                    "route": "/search/everything",
+                    "defaults": {
+                        "__NAMESPACE__": "IwacSearch\\Controller",
+                        "controller": "IwacSearch\\Controller\\SearchController",
+                        "action": "everything"
+                    }
+                }
+            },
+            "iwac-recherche-tout": {
+                "type": "Laminas\\Router\\Http\\Literal",
+                "options": {
+                    "route": "/recherche/tout",
+                    "defaults": {
+                        "__NAMESPACE__": "IwacSearch\\Controller",
+                        "controller": "IwacSearch\\Controller\\SearchController",
+                        "action": "everything"
+                    }
+                }
+            }
+        }
+    }
+}
