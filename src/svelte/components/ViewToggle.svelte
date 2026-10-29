@@ -169,12 +169,22 @@
     font-size: 0.95em;
   }
 
-  /* On the narrowest screens the labels drop; the icons keep the meaning. */
+  /* On the narrowest screens the labels drop from sight; the icons keep the
+     meaning. Visually hidden rather than `display: none`, which took each
+     radio's only accessible name with it (the icon is aria-hidden): below
+     400px the control announced as three unnamed radios. */
   @media (max-width: 399px) {
     .iwac-view__label {
-      display: none;
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      margin: -1px;
+      overflow: hidden;
+      clip-path: inset(50%);
+      white-space: nowrap;
     }
     .iwac-view__btn {
+      position: relative;
       padding-inline: var(--space-2, 0.5rem);
     }
   }
