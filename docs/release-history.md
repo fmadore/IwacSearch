@@ -1,8 +1,10 @@
 # Release history
 
-Per-version notes that used to sit in the README's status section.
-From v3.9.0 onward, GitHub release notes are the primary record — this
-file preserves the entries written before releases carried them.
+**The record of changes is now [CHANGELOG.md](../CHANGELOG.md)**, one
+section per release from 0.2.5 on; each GitHub release's notes are built
+from its section. This file only preserves the longer notes that sat in
+the README's status section before releases carried notes of their own
+(3.6.0 to 3.9.0).
 
 **M4 coverage (complete as of 3.6.0):** every Omeka write path that affects the index now re-maps in the same request. Item create / update / delete were already wired; 3.6.0 adds the paths that silently bypassed them: **batch operations** (Omeka's batchCreate/batchUpdate/batchDelete hydrate entities directly and never fire the per-item events — privacy-relevant, since a batch visibility flip must reach the `is_public` filter promptly), **direct media edits** (thumbnail / IIIF presence derive from the item's primary media), and **item-set deletion** (membership drives `country_ss` on references / documents / photographs; members are captured at `api.delete.pre` and re-mapped after, capped + logged for very large sets). Entity-collection occurrence aggregates still refresh on the bulk reindex by design.
 

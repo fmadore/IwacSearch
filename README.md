@@ -35,9 +35,9 @@ rules in `Module::onBootstrap`.
 | M6         | 🟡 partial | Mobile filter drawer, result count, empty-state polish; cutover still planned      |
 | 3.6–3.9    |  ✅ done   | Synonyms, analytics, union "All" tab, Map view, ToC search, legacy-route redirects |
 
-Per-version notes: [docs/release-history.md](docs/release-history.md) and the
-[releases](https://github.com/fmadore/IwacSearch/releases). Things to verify
-after a deploy: [docs/deploy-checklist.md](docs/deploy-checklist.md).
+Per-version notes: [CHANGELOG.md](CHANGELOG.md), from which each
+[release](https://github.com/fmadore/IwacSearch/releases)'s notes are built.
+Things to verify after a deploy: [docs/deploy-checklist.md](docs/deploy-checklist.md).
 
 ## Install
 
