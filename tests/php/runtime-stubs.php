@@ -64,3 +64,23 @@ namespace Laminas\View\Helper {
         }
     }
 }
+
+// The two base classes the ACL contract test needs to load the module class
+// and reflect on the controllers (tests/php/Controller/AclContractTest.php).
+// Empty on purpose: the test reads constants and the classes' OWN public
+// methods, never anything inherited, so nothing here can mask a mismatch.
+namespace Omeka\Module {
+    if (!class_exists(AbstractModule::class)) {
+        abstract class AbstractModule
+        {
+        }
+    }
+}
+
+namespace Laminas\Mvc\Controller {
+    if (!class_exists(AbstractActionController::class)) {
+        abstract class AbstractActionController
+        {
+        }
+    }
+}

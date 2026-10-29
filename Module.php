@@ -76,20 +76,42 @@ class Module extends AbstractModule
     }
 
     /**
+     * Every action anonymous visitors may reach, per public controller.
+     *
+     * A new public action MUST be listed here. Omeka's ACL denies by default,
+     * so an unlisted one throws PermissionDeniedException before the action
+     * runs — for /discovery/token that is the Svelte client's "Search
+     * unavailable. Token HTTP 500" on every public surface, page blocks
+     * included. tests/php/Controller/AclContractTest.php asserts that this
+     * list and the controllers' own *Action methods agree, and that every
+     * listed action is routed.
+     */
+    public const PUBLIC_ACTIONS = [
+        Controller\SearchController::class => ['index', 'everything', 'token', 'browse'],
+        Controller\LegacySearchController::class => ['redirect'],
+    ];
+
+    /**
+     * Every Maintenance page action, for the editor tier and up. Listed — and
+     * tested — for the same reason as PUBLIC_ACTIONS, with one twist: a global
+     * admin is allowed everything anyway, so an action missing here works for
+     * whoever wrote it and fails only for the editors it was meant for.
+     */
+    public const MAINTENANCE_ACTIONS = [
+        'index', 'reindex', 'syncStopwords', 'syncSynonyms', 'provisionAnalytics', 'retryChanges', 'pruneCollections',
+    ];
+
+    /**
      * Register ACL rules before dispatch reaches a controller.
      *
      * Two zones:
      *
-     *   1. Public discovery (SearchController + LegacySearchController) —
-     *      index / token / browse / everything plus the core-search handoff.
-     *      Granted to the null role so anonymous site visitors can hit /search,
-     *      /search/everything, /discovery/token, and both families of legacy
-     *      redirects. Without this, Omeka's deny-by-default ACL throws
-     *      PermissionDeniedException for every anonymous request and the Svelte
-     *      client shows "Search unavailable. Token HTTP 500" on every public
-     *      surface (including page blocks, whose JS still calls /discovery/token).
+     *   1. Public discovery ({@see PUBLIC_ACTIONS}: SearchController +
+     *      LegacySearchController) — granted to the null role so anonymous
+     *      site visitors can hit /search, /search/everything,
+     *      /discovery/token and both families of legacy redirects.
      *
-     *   2. Admin Maintenance (Admin\MaintenanceController) — restricted to
+     *   2. Admin Maintenance ({@see MAINTENANCE_ACTIONS}) — restricted to
      *      editor + site-admin + global-admin. The /admin/ parent route already
      *      guarantees authentication, so this `allow` only narrows *which* admin
      *      roles pass the check.
@@ -107,16 +129,9 @@ class Module extends AbstractModule
 
         // Public — anonymous visitors are the primary audience for
         // /search, /browse, and the page block's /discovery/token call.
-        $acl->allow(
-            null,
-            [Controller\SearchController::class],
-            ['index', 'token', 'browse', 'everything']
-        );
-        $acl->allow(
-            null,
-            [Controller\LegacySearchController::class],
-            ['redirect']
-        );
+        foreach (self::PUBLIC_ACTIONS as $controller => $actions) {
+            $acl->allow(null, [$controller], $actions);
+        }
 
         // Maintenance page — same role tier. Lets editors dispatch
         // reindex / stopwords-sync jobs from the admin UI without
@@ -130,7 +145,7 @@ class Module extends AbstractModule
                 Acl::ROLE_GLOBAL_ADMIN,
             ],
             [Controller\Admin\MaintenanceController::class],
-            ['index', 'reindex', 'syncStopwords', 'syncSynonyms', 'provisionAnalytics', 'retryChanges', 'pruneCollections']
+            self::MAINTENANCE_ACTIONS
         );
     }
 
