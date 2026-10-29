@@ -28,13 +28,36 @@ class TypesenseClientFactory implements FactoryInterface
      */
     public function __invoke(ContainerInterface $container, $requestedName, ?array $options = null): TypesenseClient
     {
+        return self::build(
+            $container,
+            connectTimeout: 2,
+            timeout:        PHP_SAPI === 'cli' ? 120 : 4,
+            retries:        PHP_SAPI === 'cli' ? 2 : 0,
+        );
+    }
+
+    /**
+     * A client on the configured node with the admin key, and timeouts of
+     * its own. The service above is the one every search, render and job
+     * shares; this exists for a caller that must not wait as long as they
+     * may — the health probe ({@see \IwacSearch\Search\HealthProbe}) — and
+     * keeps the secret read in this one class all the same.
+     *
+     * @throws RuntimeException when no API key can be found
+     */
+    public static function build(
+        ContainerInterface $container,
+        float $connectTimeout,
+        float $timeout,
+        int $retries,
+    ): TypesenseClient {
         $config = $container->get('Config')['iwac_search']['typesense'] ?? [];
 
         $host     = $config['host']     ?? 'typesense';
         $port     = (int) ($config['port'] ?? 8108);
         $protocol = $config['protocol'] ?? 'http';
 
-        $apiKey = $this->readApiKey($config['api_key_file'] ?? '/run/secrets/typesense_api_key');
+        $apiKey = self::readApiKey($config['api_key_file'] ?? '/run/secrets/typesense_api_key');
 
         return new TypesenseClient([
             'api_key'         => $apiKey,
@@ -43,11 +66,11 @@ class TypesenseClientFactory implements FactoryInterface
                 'port'     => (string) $port,
                 'protocol' => $protocol,
             ]],
-            'num_retries' => PHP_SAPI === 'cli' ? 2 : 0,
+            'num_retries' => $retries,
             'retry_interval_seconds' => 0.5,
             'client' => new \GuzzleHttp\Client([
-                'connect_timeout' => 2,
-                'timeout' => PHP_SAPI === 'cli' ? 120 : 4,
+                'connect_timeout' => $connectTimeout,
+                'timeout' => $timeout,
             ]),
         ]);
     }
@@ -58,7 +81,7 @@ class TypesenseClientFactory implements FactoryInterface
      *   2. IWAC_TYPESENSE_API_KEY env var (local dev fallback)
      *   3. throw — never silently mint an empty key
      */
-    private function readApiKey(string $secretPath): string
+    private static function readApiKey(string $secretPath): string
     {
         if (is_readable($secretPath)) {
             $key = trim((string) file_get_contents($secretPath));

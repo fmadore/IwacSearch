@@ -117,6 +117,16 @@
             }
         }
     },
+    "iwac-search-health": {
+        "type": "Laminas\\Router\\Http\\Literal",
+        "options": {
+            "route": "/discovery/health",
+            "defaults": {
+                "controller": "IwacSearch\\Controller\\SearchController",
+                "action": "health"
+            }
+        }
+    },
     "iwac-browse": {
         "type": "Laminas\\Router\\Http\\Segment",
         "options": {

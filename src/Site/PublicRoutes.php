@@ -33,7 +33,8 @@ final class PublicRoutes
      * A path with a `:` parameter becomes a Segment route (the only
      * parameter is a legacy browse slug); any other path is a Literal. The
      * root carries no French aliases except /parcourir, and only the root
-     * mints keys — exactly the set the module has always registered.
+     * mints keys and answers health probes — the set the hand-written
+     * config registered, plus /discovery/health.
      *
      * @var array<string, array{0: string, 1: string, 2: bool, 3: bool}>
      */
@@ -52,6 +53,9 @@ final class PublicRoutes
         // Global only — the client resolves it through basePath(), never
         // under a site.
         'iwac-search-token'      => ['/discovery/token', 'token', true, false],
+        // Health probe for an uptime monitor (Typesense reachability and the
+        // indexing backlog — see Search\HealthProbe). Global, like the key.
+        'iwac-search-health'     => ['/discovery/health', 'health', true, false],
         // Legacy browse routes — kept only to redirect old bookmarks: a
         // /browse/benin bookmark 302s to /search?f.country_ss=…, and the
         // site-scoped ones keep the visitor's language site (see

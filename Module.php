@@ -87,7 +87,7 @@ class Module extends AbstractModule
      * listed action is routed.
      */
     public const PUBLIC_ACTIONS = [
-        Controller\SearchController::class => ['index', 'everything', 'token', 'browse'],
+        Controller\SearchController::class => ['index', 'everything', 'token', 'browse', 'health'],
         Controller\LegacySearchController::class => ['redirect'],
     ];
 
@@ -109,7 +109,8 @@ class Module extends AbstractModule
      *   1. Public discovery ({@see PUBLIC_ACTIONS}: SearchController +
      *      LegacySearchController) — granted to the null role so anonymous
      *      site visitors can hit /search, /search/everything,
-     *      /discovery/token and both families of legacy redirects.
+     *      /discovery/token, /discovery/health and both families of legacy
+     *      redirects.
      *
      *   2. Admin Maintenance ({@see MAINTENANCE_ACTIONS}) — restricted to
      *      editor + site-admin + global-admin. The /admin/ parent route already

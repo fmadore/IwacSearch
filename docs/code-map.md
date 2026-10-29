@@ -11,7 +11,8 @@ IwacSearch/
 │   └── module.config.php                       # Routes, controllers, blocks, services
 ├── src/
 │   ├── Controller/
-│   │   ├── SearchController.php                # /search, /search/everything, /discovery/token, /browse redirect
+│   │   ├── SearchController.php                # /search, /search/everything, /discovery/token + /health, /browse redirect
+│   │   ├── ErrorEnvelope.php                   #   JSON error body: stable code + request_id (also X-Request-ID)
 │   │   └── Admin/MaintenanceController.php     # /admin/iwac-search/maintenance (reindex, syncs, status)
 │   ├── Asset/SvelteAssets.php                  # ONE place that knows the compiled bundle's file set
 │   ├── Indexer/                                # Bulk + incremental indexing (reads Omeka MySQL)
@@ -66,6 +67,7 @@ IwacSearch/
 │   │   ├── SearchStateQuery.php                # does the raw URL carry client state? (skip SSR)
 │   │   ├── ItemSetSurface.php                  # item-set page: item_set_ids scope + index-coverage guard
 │   │   ├── TypesenseSearchKeyProvider.php      # mints scoped keys for the browser
+│   │   ├── HealthProbe.php                     # /discovery/health: Typesense reachable? journal backlog
 │   │   └── ValidatedKeyMemo.php                # APCu memo of mounted-secret scope validation
 │   ├── svelte/                                 # Svelte 5 + TS client source — public bundle
 │   │   ├── App.svelte                          #   per-mount root: owns search state, wires the rest

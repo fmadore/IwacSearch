@@ -5,6 +5,7 @@ namespace IwacSearch\Controller;
 
 use IwacSearch\Indexer\CurationSync;
 use IwacSearch\IwacInstance;
+use IwacSearch\Search\HealthProbe;
 use IwacSearch\Search\InitialResponseRenderer;
 use IwacSearch\Search\PresetCatalog;
 use IwacSearch\Search\RetiredQuery;
@@ -27,11 +28,18 @@ use Throwable;
  *   GET /search             — HTML shell + Svelte bundle (standalone surface)
  *   GET /search/everything  — federated Content + Entities surface
  *   GET /discovery/token    — mints a 1h scoped key for the browser
+ *   GET /discovery/health   — Typesense reachability + indexing backlog
  *   GET /browse[/:slug]     — legacy redirect to /search (the curated
  *                             browse-config system was retired)
  *
  * Same root + state script contract as IwacSearchBlock so the same
  * Svelte client mounts on every surface.
+ *
+ * Every JSON response carries an X-Request-ID header, and every JSON error
+ * the {@see ErrorEnvelope} body (a stable `code` plus that `request_id`); the
+ * cause goes to the Omeka log under the same id, never into the response.
+ * A new action must also be added to Module::PUBLIC_ACTIONS, or anonymous
+ * visitors are refused it before it runs.
  */
 class SearchController extends AbstractActionController
 {
@@ -40,7 +48,10 @@ class SearchController extends AbstractActionController
         private readonly InitialResponseRenderer $initialRenderer,
         /** @var array<string, mixed> */
         private readonly array $config = [],
-        private readonly LoggerInterface $logger = new NullLogger()
+        private readonly LoggerInterface $logger = new NullLogger(),
+        // Defaults to a probe that can reach nothing: it reports unhealthy
+        // rather than pretending, should a caller forget to wire it.
+        private readonly HealthProbe $health = new HealthProbe(null, null),
     ) {
     }
 
@@ -210,6 +221,7 @@ class SearchController extends AbstractActionController
      */
     public function tokenAction(): JsonModel
     {
+        $requestId = ErrorEnvelope::requestId();
         try {
             $expiresIn = (int) ($this->config['public_search_key']['expires_at_seconds'] ?? 3600);
 
@@ -220,9 +232,7 @@ class SearchController extends AbstractActionController
 
             // No-store: scoped keys are short-lived and per-request; if a
             // proxy cached this, every visitor would share one key.
-            $this->getResponse()->getHeaders()
-                ->addHeaderLine('Cache-Control', 'no-store, max-age=0')
-                ->addHeaderLine('Pragma', 'no-cache');
+            $this->jsonHeaders($requestId);
 
             return new JsonModel($minted);
         } catch (Throwable $e) {
@@ -232,16 +242,49 @@ class SearchController extends AbstractActionController
             // hosts/ports and the Docker secret path, so it must never
             // reach the anonymous caller's response body.
             $this->logger->error('IwacSearch token mint failed', [
-                'detail' => ExceptionMessage::chain($e),
+                'request_id' => $requestId,
+                'detail'     => ExceptionMessage::chain($e),
             ]);
 
-            $this->getResponse()->setStatusCode(Response::STATUS_CODE_503);
-            return new JsonModel([
-                'error'   => 'token_unavailable',
-                'message' => 'Typesense scoped-key minting failed. Is the typesense service up?'
+            return $this->jsonError(
+                Response::STATUS_CODE_503,
+                'token_unavailable',
+                'Typesense scoped-key minting failed. Is the typesense service up?'
                     . ' Details are in the Omeka log.',
-            ]);
+                $requestId
+            );
         }
+    }
+
+    /**
+     * GET /discovery/health — for an uptime monitor: 200 while Typesense
+     * answers and the change journal can be read, 503 (with the same status
+     * body, plus the error envelope) otherwise. See {@see HealthProbe} for
+     * what is checked and why nothing in it is secret.
+     *
+     * Never cached, by the browser or by a proxy: a cached 200 would hide
+     * the outage it exists to report.
+     */
+    public function healthAction(): JsonModel
+    {
+        $requestId = ErrorEnvelope::requestId();
+        $method = strtoupper((string) $this->getRequest()->getMethod());
+        if ($method !== 'GET' && $method !== 'HEAD') {
+            $this->getResponse()->getHeaders()->addHeaderLine('Allow', 'GET, HEAD');
+            return $this->jsonError(Response::STATUS_CODE_405, 'method_not_allowed', 'Use GET.', $requestId);
+        }
+
+        $status = $this->health->check();
+        if ($status['ok']) {
+            $this->jsonHeaders($requestId);
+            return new JsonModel($status);
+        }
+
+        // The probe has already logged the cause; it is not repeated here,
+        // since a monitor polls on through an outage.
+        return $status['typesense']['reachable']
+            ? $this->jsonError(Response::STATUS_CODE_503, 'journal_unavailable', 'The change journal could not be read.', $requestId, $status)
+            : $this->jsonError(Response::STATUS_CODE_503, 'search_unavailable', 'Typesense is unreachable.', $requestId, $status);
     }
 
     /**
@@ -296,5 +339,28 @@ class SearchController extends AbstractActionController
         $params  = $siteSlug !== null ? ['site-slug' => $siteSlug] : [];
         $options = $query === [] ? [] : ['query' => $query];
         return $this->redirect()->toRoute($route, $params, $options);
+    }
+
+    /**
+     * Answer with the error envelope. The message is written for an operator
+     * reading a browser console, and is the same for every caller: nothing
+     * request-specific goes in it except the id.
+     *
+     * @param array<string, mixed> $extra
+     */
+    private function jsonError(int $status, string $code, string $message, string $requestId, array $extra = []): JsonModel
+    {
+        $this->getResponse()->setStatusCode($status);
+        $this->jsonHeaders($requestId);
+        return new JsonModel(ErrorEnvelope::body($code, $message, $requestId, $extra));
+    }
+
+    /** Never cacheable, and traceable to the log lines of this request. */
+    private function jsonHeaders(string $requestId): void
+    {
+        $this->getResponse()->getHeaders()
+            ->addHeaderLine('Cache-Control', 'no-store, max-age=0')
+            ->addHeaderLine('Pragma', 'no-cache')
+            ->addHeaderLine('X-Request-ID', $requestId);
     }
 }

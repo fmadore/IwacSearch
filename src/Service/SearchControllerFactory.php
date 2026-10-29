@@ -5,8 +5,10 @@ namespace IwacSearch\Service;
 
 use IwacSearch\Controller\SearchController;
 use IwacSearch\Indexer\AdvisoryLock;
+use IwacSearch\Indexer\ChangeJournal;
 use IwacSearch\Indexer\DatabaseLock;
 use IwacSearch\Log\LoggerResolver;
+use IwacSearch\Search\HealthProbe;
 use IwacSearch\Search\InitialResponseRenderer;
 use IwacSearch\Search\TypesenseSearchKeyProvider;
 use Laminas\ServiceManager\Factory\FactoryInterface;
@@ -19,6 +21,8 @@ use Psr\Container\ContainerInterface;
  *   - TypesenseSearchKeyProvider — mints scoped keys on /discovery/token
  *   - InitialResponseRenderer    — the SSR first page (admin key, public
  *                                  constraints applied explicitly)
+ *   - HealthProbe                — /discovery/health: its own short-timeout
+ *                                  client and the change journal's backlog
  *   - module config              — typesense conn + scoped-key constraints
  *
  * The TypesenseClient itself is not injected into the controller — the
@@ -73,11 +77,37 @@ class SearchControllerFactory implements FactoryInterface
             },
         );
 
+        // Both closures run only when /discovery/health is requested, so no
+        // other action pays for them. The probe's client is NOT the shared
+        // service: it waits HealthProbe::TIMEOUT_SECONDS, not the 4 s a page
+        // render may.
+        $health = new HealthProbe(
+            clientFactory: static fn() => TypesenseClientFactory::build(
+                $container,
+                connectTimeout: HealthProbe::TIMEOUT_SECONDS,
+                timeout:        HealthProbe::TIMEOUT_SECONDS,
+                retries:        0,
+            ),
+            // The pending count is the journal's own definition; the age is
+            // computed by the database, against the clock that stamped the
+            // rows, so the server's time zone cannot skew it.
+            backlog: static function () use ($container): array {
+                $connection = $container->get('Omeka\Connection');
+                $status = (new ChangeJournal($connection))->status();
+                $age = $status['oldest'] === null ? null : (int) $connection
+                    ->executeQuery('SELECT TIMESTAMPDIFF(SECOND, ?, NOW())', [$status['oldest']])
+                    ->fetchOne();
+                return ['pending' => $status['pending'], 'oldest_seconds' => $age];
+            },
+            logger: $logger,
+        );
+
         return new SearchController(
             keyProvider:        $keyProvider,
             initialRenderer:    $container->get(InitialResponseRenderer::class),
             config:             $config,
-            logger:             $logger
+            logger:             $logger,
+            health:             $health,
         );
     }
 }
