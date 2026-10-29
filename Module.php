@@ -194,7 +194,7 @@ class Module extends AbstractModule
     /**
      * Append the Svelte bundle's JS + CSS to the layout when the
      * SearchController renders. headScript/headLink dedupe by URL, so
-     * having the page block call appendFile() inside its render() too is
+     * having the page block call appendFile() in its prepareRender() too is
      * harmless — the asset still loads exactly once per page.
      */
     public function injectSvelteAssets(Event $event): void
@@ -203,7 +203,7 @@ class Module extends AbstractModule
         if (!$view instanceof \Laminas\View\Renderer\PhpRenderer) {
             return;
         }
-        // Shared with IwacSearchBlock::render — one source of truth for the
+        // Shared with IwacSearchBlock::prepareRender — one source of truth for the
         // bundle's file set (see Asset\SvelteAssets for the why of each file).
         Asset\SvelteAssets::injectSearchApp($view);
     }
@@ -325,7 +325,7 @@ class Module extends AbstractModule
             $connection->executeStatement('DROP TABLE IF EXISTS iwac_browse_config');
         }
         if (version_compare((string) $oldVersion, self::INTRO_FLAG_ADDED_IN, '<')) {
-            Site\BlockLayout\IwacSearchBlock::purifyStoredIntros(
+            Site\BlockLayout\IntroMigration::run(
                 $connection,
                 static fn () => $services->get('Omeka\HtmlPurifier')
             );

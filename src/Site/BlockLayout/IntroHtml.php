@@ -14,7 +14,7 @@ use Closure;
  *
  *   - saved through the form   → purified and flagged at save (onHydrate);
  *   - saved before that existed → purified and flagged by the upgrade
- *                                 migration (IwacSearchBlock::purifyStoredIntros);
+ *                                 migration ({@see IntroMigration});
  *   - neither yet               → purified at render, every time.
  *
  * Pulled out of IwacSearchBlock — which extends Omeka's AbstractBlockLayout
@@ -60,5 +60,27 @@ final class IntroHtml
         $data['intro_html'] = $intro === '' ? '' : $purify($intro);
         $data[self::PURIFIED_FLAG] = true;
         return $data;
+    }
+
+    /**
+     * The intro as words for Omeka's own site-page search (the block's
+     * getFulltextText()): tags dropped, entities decoded, whitespace folded.
+     *
+     * A space goes in before every tag first, so `<p>Bénin</p><p>Togo</p>`
+     * reads as two words rather than "BéninTogo". Nothing here is printed —
+     * the result only feeds the fulltext index — so it needs no purifier.
+     */
+    public static function plainText(string $html): string
+    {
+        if ($html === '') {
+            return '';
+        }
+        $text = html_entity_decode(
+            strip_tags(str_replace('<', ' <', $html)),
+            ENT_QUOTES | ENT_SUBSTITUTE | ENT_HTML5,
+            'UTF-8'
+        );
+        // \p{Z} as well: a decoded &nbsp; is U+00A0, which \s alone misses.
+        return trim((string) preg_replace('/[\s\p{Z}]+/u', ' ', $text));
     }
 }

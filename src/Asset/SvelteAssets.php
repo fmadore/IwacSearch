@@ -9,9 +9,9 @@ use Laminas\View\Renderer\PhpRenderer;
  * The one place that knows which files make up the compiled search app.
  *
  * Called from Module::injectSvelteAssets (the /search routes' view.layout
- * listener) and IwacSearchBlock::render (page blocks) — both surfaces must
- * ship the identical asset set, and the Vite bundle layout only has to be
- * updated here when it changes.
+ * listener), IwacSearchBlock::prepareRender (page blocks) and the item-set
+ * surface — every surface must ship the identical asset set, and the Vite
+ * bundle layout only has to be updated here when it changes.
  *
  * Idempotent per page: headLink/headScript dedupe by URL, so a page with a
  * block AND the controller listener (or several blocks) still emits each

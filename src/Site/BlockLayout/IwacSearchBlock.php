@@ -3,7 +3,6 @@ declare(strict_types=1);
 
 namespace IwacSearch\Site\BlockLayout;
 
-use Doctrine\DBAL\Connection;
 use IwacSearch\Asset\SvelteAssets;
 use IwacSearch\Browse\FacetCatalog;
 use IwacSearch\IwacInstance;
@@ -12,7 +11,6 @@ use IwacSearch\Search\FilterExpression;
 use IwacSearch\Search\InitialResponseRenderer;
 use IwacSearch\Search\PresetCatalog;
 use IwacSearch\Search\ScopeFilters;
-use IwacSearch\Search\SearchDefaults;
 use IwacSearch\Search\SearchStateQuery;
 use IwacSearch\Search\SurfaceBootstrap;
 use Laminas\View\Renderer\PhpRenderer;
@@ -21,6 +19,7 @@ use Omeka\Api\Representation\SitePageRepresentation;
 use Omeka\Api\Representation\SiteRepresentation;
 use Omeka\Entity\SitePageBlock;
 use Omeka\Site\BlockLayout\AbstractBlockLayout;
+use Omeka\Site\BlockLayout\TemplateableBlockLayoutInterface;
 use Omeka\Stdlib\ErrorStore;
 use Omeka\Stdlib\HtmlPurifier;
 
@@ -74,10 +73,13 @@ use Omeka\Stdlib\HtmlPurifier;
  * the server-side first-page render, though, so onHydrate() refuses one that
  * could escape that render's public guard ({@see FilterExpression}).
  */
-class IwacSearchBlock extends AbstractBlockLayout
+class IwacSearchBlock extends AbstractBlockLayout implements TemplateableBlockLayoutInterface
 {
     /** Block-data key recording that intro_html was purified when stored ({@see IntroHtml}). */
     public const PURIFIED_FLAG = IntroHtml::PURIFIED_FLAG;
+
+    /** The module's own public template; a theme's block template replaces it. */
+    public const TEMPLATE = 'common/block-layout/iwac-search-block';
 
     public function __construct(
         private readonly InitialResponseRenderer $initialRenderer,
@@ -86,7 +88,7 @@ class IwacSearchBlock extends AbstractBlockLayout
         private readonly string $indexAlias = IwacInstance::INDEX_ALIAS,
         // Live facet values for the form's value pickers. Null (or an
         // unreachable index) degrades to the static option lists — see
-        // renderValuePickers(). Never touched by render(), only by form().
+        // BlockForm::pickers(). Never touched by render(), only by form().
         private readonly ?FacetValueLookup $facetValues = null,
     ) {
     }
@@ -166,9 +168,9 @@ class IwacSearchBlock extends AbstractBlockLayout
     }
 
     /**
-     * Admin form. Hand-rolled HTML rather than Laminas Form — Omeka's block
-     * form contract uses the o:block[__blockIndex__][o:data][...] name pattern
-     * which Laminas Form doesn't support cleanly without a lot of ceremony.
+     * Admin form. The markup is the {@see BlockForm::TEMPLATE} partial; what
+     * it shows (default scope, stale saved values, truncated pickers) is
+     * worked out by {@see BlockForm::variables()}.
      *
      * @return string Rendered form markup.
      */
@@ -178,32 +180,6 @@ class IwacSearchBlock extends AbstractBlockLayout
         ?SitePageRepresentation $page = null,
         ?SitePageBlockRepresentation $block = null
     ) {
-        $data = $block ? $block->data() : [];
-        // New blocks default to the whole-corpus scope; blocks saved before
-        // the Scope dropdown existed (no `preset` key) default to Custom so
-        // their stored locked_filters keep driving the surface.
-        $preset           = $data['preset']
-            ?? ($block !== null ? PresetCatalog::CUSTOM : PresetCatalog::DEFAULT_KEY);
-        $mode             = $data['mode']             ?? 'full';
-        $title            = $data['title']            ?? '';
-        $introHtml        = $data['intro_html']       ?? '';
-        $lockedFilters    = $data['locked_filters']   ?? '';
-        $filterValues     = ScopeFilters::normalise($data['filter_values'] ?? null);
-        // Default mirrors what the standalone /search route shows — the
-        // SAME constant, so the two can't drift. Block admin can override
-        // per-instance via the form below.
-        $prominentFacets  = $data['prominent_facets']
-            ?? SearchDefaults::CONTENT_PROMINENT_FACETS;
-        // Empty = "use the scope's own default sort". An explicit choice
-        // overrides it (when valid for the scope's collection — see render()).
-        $defaultSort      = $data['default_sort']     ?? '';
-        $resultsPerPage   = (int) ($data['results_per_page'] ?? 10);
-
-        $esc     = fn(string $s): string => $view->escapeHtml($s);
-        $escAttr = fn(string $s): string => $view->escapeHtmlAttr($s);
-        $t       = fn(string $s): string => (string) $view->translate($s);
-
-        $namePrefix = 'o:block[__blockIndex__][o:data]';
         // Unique id suffix so each field's <label for> stays associated when
         // several IWAC blocks are edited on one page (identical ids would
         // otherwise collide and break label binding / fail an a11y audit).
@@ -211,333 +187,69 @@ class IwacSearchBlock extends AbstractBlockLayout
             ? (string) $block->id()
             : substr(bin2hex(random_bytes(4)), 0, 8);
 
-        ob_start();
-        ?>
-        <div class="field">
-            <div class="field-meta">
-                <label for="iwac-search-preset-<?= $escAttr($uid) ?>"><?= $esc($t('Scope')) ?></label>
-                <div class="field-description">
-                    <?= $esc($t('What this block searches. Pick a ready-made scope, or “Custom…” to set your own content filter + facets in the advanced fields below.')) ?>
-                </div>
-            </div>
-            <div class="inputs">
-                <select id="iwac-search-preset-<?= $escAttr($uid) ?>" name="<?= $escAttr($namePrefix) ?>[preset]">
-                    <?php foreach (PresetCatalog::optionsList() as $opt): ?>
-                        <option value="<?= $escAttr($opt['value']) ?>"<?= $opt['value'] === $preset ? ' selected' : '' ?>>
-                            <?= $esc($t($opt['label'])) ?>
-                        </option>
-                    <?php endforeach; ?>
-                    <option value="<?= $escAttr(PresetCatalog::CUSTOM) ?>"<?= $preset === PresetCatalog::CUSTOM ? ' selected' : '' ?>>
-                        <?= $esc($t('Custom…')) ?>
-                    </option>
-                </select>
-            </div>
-        </div>
-
-        <div class="field">
-            <div class="field-meta">
-                <label for="iwac-search-mode-<?= $escAttr($uid) ?>"><?= $esc($t('Render mode')) ?></label>
-                <div class="field-description">
-                    <?= $esc($t('Full = standalone discovery surface. Compact = header search box. Results only = curated grid (e.g. "latest from Sidwaya").')) ?>
-                </div>
-            </div>
-            <div class="inputs">
-                <select id="iwac-search-mode-<?= $escAttr($uid) ?>" name="<?= $escAttr($namePrefix) ?>[mode]">
-                    <?php foreach (FacetCatalog::RENDER_MODES as $key => $label): ?>
-                        <option value="<?= $escAttr($key) ?>"<?= $key === $mode ? ' selected' : '' ?>>
-                            <?= $esc($t($label)) ?>
-                        </option>
-                    <?php endforeach; ?>
-                </select>
-            </div>
-        </div>
-
-        <div class="field">
-            <div class="field-meta">
-                <label for="iwac-search-title-<?= $escAttr($uid) ?>"><?= $esc($t('Title (optional)')) ?></label>
-            </div>
-            <div class="inputs">
-                <input id="iwac-search-title-<?= $escAttr($uid) ?>" type="text"
-                       name="<?= $escAttr($namePrefix) ?>[title]"
-                       value="<?= $escAttr($title) ?>">
-            </div>
-        </div>
-
-        <div class="field">
-            <div class="field-meta">
-                <label for="iwac-search-intro-<?= $escAttr($uid) ?>"><?= $esc($t('Intro HTML (optional)')) ?></label>
-                <div class="field-description">
-                    <?= $esc($t('Plain HTML rendered above the search results.')) ?>
-                </div>
-            </div>
-            <div class="inputs">
-                <textarea id="iwac-search-intro-<?= $escAttr($uid) ?>" rows="3"
-                          name="<?= $escAttr($namePrefix) ?>[intro_html]"><?= $esc($introHtml) ?></textarea>
-            </div>
-        </div>
-
-        <?= $this->renderValuePickers($view, $namePrefix, $uid, $filterValues) ?>
-
-        <div class="field">
-            <div class="field-meta">
-                <label for="iwac-search-locked-<?= $escAttr($uid) ?>"><?= $esc($t('Locked filters (Typesense filter_by)')) ?></label>
-                <div class="field-description">
-                    <?= $esc($t('Advanced escape hatch, for conditions the pickers above cannot express (date ranges, exclusions). Custom scope only. Applied to every query from this block (cosmetic scoping — not a privacy boundary). Example: date:>=946684800 && type_s:!=reference')) ?>
-                </div>
-            </div>
-            <div class="inputs">
-                <input id="iwac-search-locked-<?= $escAttr($uid) ?>" type="text"
-                       name="<?= $escAttr($namePrefix) ?>[locked_filters]"
-                       value="<?= $escAttr($lockedFilters) ?>"
-                       placeholder="date:>=946684800">
-            </div>
-        </div>
-
-        <div class="field">
-            <div class="field-meta">
-                <label><?= $esc($t('Prominent facets')) ?></label>
-                <div class="field-description">
-                    <?= $esc($t('Custom scope only — preset scopes use their own facet set. Facets shown above the fold; others move under "More filters".')) ?>
-                </div>
-            </div>
-            <div class="inputs">
-                <?php foreach (FacetCatalog::FACETABLE_FIELDS as $field => $label): ?>
-                    <label class="iwac-facet-pick" style="display:block;">
-                        <input type="checkbox"
-                               name="<?= $escAttr($namePrefix) ?>[prominent_facets][]"
-                               value="<?= $escAttr($field) ?>"
-                               <?= in_array($field, $prominentFacets, true) ? 'checked' : '' ?>>
-                        <?= $esc($t($label)) ?>
-                        <code style="opacity:.6"><?= $esc($field) ?></code>
-                    </label>
-                <?php endforeach; ?>
-            </div>
-        </div>
-
-        <div class="field">
-            <div class="field-meta">
-                <label for="iwac-search-sort-<?= $escAttr($uid) ?>"><?= $esc($t('Default sort')) ?></label>
-                <div class="field-description">
-                    <?= $esc($t('Initial result order. Leave on “Use scope default” to follow the scope (e.g. most-mentioned for the Entity index, newest for a country). The Entity index orders apply only when the scope is the Entity index; an order that does not fit the chosen scope is ignored.')) ?>
-                </div>
-            </div>
-            <div class="inputs">
-                <select id="iwac-search-sort-<?= $escAttr($uid) ?>" name="<?= $escAttr($namePrefix) ?>[default_sort]">
-                    <option value=""<?= $defaultSort === '' ? ' selected' : '' ?>>
-                        <?= $esc($t('Use scope default')) ?>
-                    </option>
-                    <optgroup label="<?= $escAttr($t('Content (articles, references…)')) ?>">
-                        <?php foreach (FacetCatalog::sortOptionsFor('content') as $key => $label): ?>
-                            <option value="<?= $escAttr($key) ?>"<?= $key === $defaultSort ? ' selected' : '' ?>>
-                                <?= $esc($t($label)) ?>
-                            </option>
-                        <?php endforeach; ?>
-                    </optgroup>
-                    <optgroup label="<?= $escAttr($t('Entity index')) ?>">
-                        <?php foreach (FacetCatalog::sortOptionsFor('entity') as $key => $label): ?>
-                            <option value="<?= $escAttr($key) ?>"<?= $key === $defaultSort ? ' selected' : '' ?>>
-                                <?= $esc($t($label)) ?>
-                            </option>
-                        <?php endforeach; ?>
-                    </optgroup>
-                </select>
-            </div>
-        </div>
-
-        <div class="field">
-            <div class="field-meta">
-                <label for="iwac-search-perpage-<?= $escAttr($uid) ?>"><?= $esc($t('Results per page')) ?></label>
-            </div>
-            <div class="inputs">
-                <input id="iwac-search-perpage-<?= $escAttr($uid) ?>" type="number" min="1" max="50" step="1"
-                       name="<?= $escAttr($namePrefix) ?>[results_per_page]"
-                       value="<?= $escAttr((string) $resultsPerPage) ?>">
-            </div>
-        </div>
-        <?php
-        return (string) ob_get_clean();
-    }
-
-    /**
-     * The multi-select value pickers — one checkbox list per
-     * {@see ScopeFilters::FIELDS} entry.
-     *
-     * Options come from the live index where the vocabulary is open data
-     * (newspaper titles, languages, the categorical sentiment labels) and from
-     * the closed enums this codebase already declares otherwise (types,
-     * countries, the 1–5 subjectivity scale). The index is also asked for
-     * document counts on the closed enums, since "Photographie (0)" is what
-     * tells an editor not to bother scoping to it.
-     *
-     * Nothing here is required for the form to work: an unreachable index
-     * costs the open pickers their options and every picker its counts, and
-     * says so — the page-edit screen still renders, and the raw locked_filters
-     * field below is still a complete escape hatch.
-     *
-     * @param array<string, list<string>> $selected Normalised current selection.
-     */
-    private function renderValuePickers(
-        PhpRenderer $view,
-        string $namePrefix,
-        string $uid,
-        array $selected
-    ): string {
-        $esc     = fn(string $s): string => $view->escapeHtml($s);
-        $escAttr = fn(string $s): string => $view->escapeHtmlAttr($s);
-        $t       = fn(string $s): string => (string) $view->translate($s);
-
         // One Typesense round trip per request, memoized inside the lookup —
         // Omeka calls form() once per block on the page plus once for the
-        // "add block" template.
+        // "add block" template. Null (no lookup, or an unreachable index)
+        // degrades the pickers to their static options.
         $counts = $this->facetValues?->counts(ScopeFilters::lookupFields());
 
-        // Only the closed-enum labels are translatable source strings; a
-        // newspaper title is data and goes through verbatim.
-        $valueLabel = static function (string $field, string $value) use ($t): string {
-            $label = ScopeFilters::valueLabel($field, $value);
-            return $label === $value ? $value : $t($label);
-        };
-
-        ob_start();
-        ?>
-        <div class="field">
-            <div class="field-meta">
-                <label><?= $esc($t('Narrow by value')) ?></label>
-                <div class="field-description">
-                    <?= $esc($t('Tick any number of values. Within one picker values are OR-ed ("Bénin or Togo"); separate pickers are AND-ed ("… and only news articles"). Applies to every scope, on top of what that scope already locks — so for a multi-country block choose the "All content" scope and tick the countries here, rather than a single-country scope. Leave a picker empty to not filter on it. Visitors cannot remove these.')) ?>
-                </div>
-            </div>
-        </div>
-        <?php foreach (ScopeFilters::FIELDS as $field): ?>
-            <?php
-            $chosen  = $selected[$field] ?? [];
-            $options = $this->pickerOptions($field, $counts, $chosen);
-            // A checkbox LIST has no single labelable control, so the group
-            // label can't use `for` (it would point at a div). Name the label
-            // instead and let the list reference it as a labelled group.
-            $labelId = 'iwac-search-values-' . $field . '-' . $uid;
-            ?>
-            <div class="field">
-                <div class="field-meta">
-                    <label id="<?= $escAttr($labelId) ?>"><?= $esc($t(ScopeFilters::label($field))) ?></label>
-                    <div class="field-description">
-                        <code style="opacity:.6"><?= $esc($field) ?></code>
-                        <?php if (FacetValueLookup::isTruncated($counts, $field)): ?>
-                            <?php // Translate the pattern, THEN interpolate — the other way
-                                  // round there is no msgid for the translator to match. ?>
-                            <br><?= $esc(sprintf(
-                                $t('Showing the %d most common values — the index holds more.'),
-                                FacetValueLookup::MAX_VALUES
-                            )) ?>
-                        <?php endif; ?>
-                    </div>
-                </div>
-                <div class="inputs">
-                    <?php if ($options === []): ?>
-                        <p style="margin:0;opacity:.7">
-                            <?= $esc($counts === null
-                                ? $t('The search index is unreachable, so this list could not be loaded. Existing selections are preserved; reopen this form once the index is back, or use the Locked filters field below.')
-                                : $t('The index holds no values for this field yet.')) ?>
-                        </p>
-                    <?php else: ?>
-                        <div class="iwac-value-picker" role="group" aria-labelledby="<?= $escAttr($labelId) ?>"
-                             style="max-height:13em;overflow-y:auto;border:1px solid #dfdfdf;border-radius:3px;padding:.4em .6em;">
-                            <?php foreach ($options as $option): ?>
-                                <label class="iwac-value-pick" style="display:block;">
-                                    <input type="checkbox"
-                                           name="<?= $escAttr($namePrefix) ?>[filter_values][<?= $escAttr($field) ?>][]"
-                                           value="<?= $escAttr($option['value']) ?>"
-                                           <?= in_array($option['value'], $chosen, true) ? 'checked' : '' ?>>
-                                    <?= $esc($valueLabel($field, $option['value'])) ?>
-                                    <?php if ($option['count'] !== null): ?>
-                                        <span style="opacity:.55">(<?= $esc(number_format($option['count'])) ?>)</span>
-                                    <?php endif; ?>
-                                    <?php if ($option['stale']): ?>
-                                        <em style="opacity:.7"><?= $esc($t('— saved, but not in the index')) ?></em>
-                                    <?php endif; ?>
-                                </label>
-                            <?php endforeach; ?>
-                        </div>
-                    <?php endif; ?>
-                </div>
-            </div>
-        <?php endforeach; ?>
-        <?php
-        return (string) ob_get_clean();
+        return $view->partial(
+            BlockForm::TEMPLATE,
+            BlockForm::variables($block ? (array) $block->data() : [], $block !== null, $uid, $counts)
+        );
     }
 
     /**
-     * The option list for one picker: the field's own values, plus any
-     * already-saved value the index doesn't (or can't) offer.
-     *
-     * That last part is the whole reason this isn't inline. A saved value
-     * missing from the rendered list posts back as unchecked, so re-saving the
-     * block would silently drop it — losing a curated scope to a newspaper
-     * leaving the corpus, or to Typesense being down at the wrong moment.
-     * Rendering it checked and flagged keeps the save round-trip lossless.
-     *
-     * @param  array<string, list<array{value: string, count: int}>>|null $counts
-     * @param  list<string> $selected
-     * @return list<array{value: string, count: ?int, stale: bool}>
+     * Append the compiled Svelte bundle. Omeka calls this once per block
+     * layout on a page, before rendering its blocks — the same helper the
+     * standalone /search route uses (Module::injectSvelteAssets), and
+     * headScript / headLink dedupe identical URLs, so a page that also has
+     * the controller's listener still emits each tag once.
      */
-    private function pickerOptions(string $field, ?array $counts, array $selected): array
+    public function prepareRender(PhpRenderer $view): void
     {
-        $live = $counts[$field] ?? [];
+        SvelteAssets::injectSearchApp($view);
+    }
 
-        $liveCounts = [];
-        foreach ($live as $entry) {
-            $liveCounts[$entry['value']] = $entry['count'];
-        }
-
-        // Closed enums keep their declared order (which is meaningful — the
-        // subjectivity scale runs 1→5); open vocabularies keep Typesense's
-        // count-descending order.
-        $static = ScopeFilters::staticOptions($field);
-        $values = $static !== [] ? $static : array_column($live, 'value');
-
-        $out  = [];
-        $seen = [];
-        foreach ($values as $value) {
-            $seen[$value] = true;
-            $out[] = [
-                'value' => $value,
-                'count' => $liveCounts[$value] ?? null,
-                'stale' => false,
-            ];
-        }
-        foreach ($selected as $value) {
-            if (!isset($seen[$value])) {
-                $out[] = ['value' => $value, 'count' => null, 'stale' => true];
-            }
-        }
-
-        return $out;
+    /**
+     * The block's title and intro feed Omeka's own site-page search, so a
+     * visitor searching the site for words in them finds the page. Never
+     * renders the block: that would cost a Typesense round trip per save.
+     *
+     * @return string
+     */
+    public function getFulltextText(PhpRenderer $view, SitePageBlockRepresentation $block)
+    {
+        $data = (array) $block->data();
+        return trim(trim((string) ($data['title'] ?? '')) . "\n" . IntroHtml::plainText((string) ($data['intro_html'] ?? '')));
     }
 
     /**
      * Render the block on a public page.
      *
-     * Asset injection happens here (idempotent — Laminas headScript dedupes
-     * by URL). The block emits a wrapper div + an inline JSON state script
-     * that the Svelte client reads on mount. Multiple blocks per page are
-     * supported by suffixing both the wrapper id and the state script id
-     * with $block->id().
+     * The assets come from prepareRender(). The block emits a wrapper div +
+     * an inline JSON state script that the Svelte client reads on mount.
+     * Multiple blocks per page are supported by suffixing both the wrapper id
+     * and the state script id with $block->id().
      *
-     * @param  string $templateViewScript
+     * Templateable: a theme can declare its own markup for the block under
+     * `block_templates` in its config (`common/block-template/<name>`), and
+     * Omeka passes it here; it receives the same variables as the module's
+     * template, so the bootstrap and mount contract stay the same.
+     *
+     * @param  string|null $templateViewScript A theme's block template, or null
+     *                                         for the module's own.
      * @return string Rendered block markup.
      */
     public function render(
         PhpRenderer $view,
         SitePageBlockRepresentation $block,
-        $templateViewScript = 'common/block-layout/iwac-search-block'
+        $templateViewScript = null
     ) {
+        $templateViewScript = is_string($templateViewScript) && $templateViewScript !== ''
+            ? $templateViewScript
+            : self::TEMPLATE;
         $data = $block->data();
-
-        // Append the compiled Svelte bundle once per request. headScript and
-        // headLink dedupe identical URLs, so calling this from N blocks on
-        // the same page still results in one <script>/<link>. Same helper
-        // the standalone /search route uses (Module::injectSvelteAssets).
-        SvelteAssets::injectSearchApp($view);
 
         // Resolve the block's Scope. A preset (whole corpus, one country,
         // references, or the entity index) drives the collection, locked
@@ -628,7 +340,7 @@ class IwacSearchBlock extends AbstractBlockLayout
         }
 
         // The template outputs intro_html raw. Anything saved through
-        // onHydrate() (or migrated by purifyStoredIntros()) is flagged as
+        // onHydrate() (or migrated by IntroMigration) is flagged as
         // already purified; only an unflagged legacy value is purified here,
         // so a block saved before onHydrate() existed is never output raw —
         // even on an install whose upgrade migration has not run.
@@ -641,32 +353,5 @@ class IwacSearchBlock extends AbstractBlockLayout
             'title'      => $data['title']      ?? '',
             'intro_html' => $introHtml,
         ]);
-    }
-
-    /**
-     * Upgrade migration: purify and flag the intro of every stored search
-     * block that predates PURIFIED_FLAG, so render() stops purifying on each
-     * page view. The purifier is resolved only if such a block exists.
-     *
-     * @param  \Closure(): HtmlPurifier $purifier
-     * @return int blocks updated
-     */
-    public static function purifyStoredIntros(Connection $connection, \Closure $purifier): int
-    {
-        $updated = 0;
-        $purify = fn(string $html): string => (string) $purifier()->purify($html);
-        foreach ($connection->executeQuery("SELECT id, data FROM site_page_block WHERE layout = 'iwacSearch'")->fetchAllAssociative() as $row) {
-            $data = json_decode((string) $row['data'], true);
-            $data = is_array($data) ? IntroHtml::migrated($data, $purify) : null;
-            if ($data === null) {
-                continue;
-            }
-            $connection->executeStatement(
-                'UPDATE site_page_block SET data = ? WHERE id = ?',
-                [json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR), (int) $row['id']]
-            );
-            $updated++;
-        }
-        return $updated;
     }
 }

@@ -42,7 +42,10 @@ IwacSearch/
 │   │   ├── DrainJobHistory.php                 #   is a drain queued/running? prune old drain-job rows
 │   │   └── CollectionRetention.php             #   old generations, journal rows, drain-job history
 │   ├── Browse/FacetCatalog.php                 # facetable fields + content/entity sort sets
-│   ├── Site/BlockLayout/IwacSearchBlock.php    # Page block — drop into any Site page
+│   ├── Site/BlockLayout/IwacSearchBlock.php    # Page block — drop into any Site page (templateable)
+│   │   ├── BlockForm.php                       #   admin form's view model (partial: view/common/block-layout/)
+│   │   ├── IntroHtml.php                       #   intro purification rules + plain text for site search
+│   │   └── IntroMigration.php                  #   3.20 upgrade step: purify + flag stored intros
 │   ├── Job/                                    # Omeka background jobs (admin maintenance buttons)
 │   │   └── BulkReindex · SyncStopwords · SyncSynonyms · ProvisionAnalytics
 │   ├── Form/MaintenanceForm.php                # CSRF-bearing POST forms for the maintenance page

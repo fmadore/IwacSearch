@@ -82,4 +82,16 @@ final class IntroHtmlTest extends TestCase
         );
         self::assertSame([], $this->calls);
     }
+
+    public function testThePlainTextKeepsWordsApartAndDecodesEntities(): void
+    {
+        // Feeds Omeka's site-page search: adjacent blocks must not fuse into
+        // one word, and an entity is the character it stands for.
+        self::assertSame(
+            'Bénin and Togo & more',
+            IntroHtml::plainText('<p>Bénin&nbsp;and</p><p>Togo &amp; <em>more</em></p>')
+        );
+        self::assertSame('', IntroHtml::plainText(''));
+        self::assertSame('', IntroHtml::plainText('<p> </p>'));
+    }
 }

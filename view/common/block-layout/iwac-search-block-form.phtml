@@ -1,0 +1,239 @@
+<?php
+/**
+ * Admin form of the IWAC Search page block (IwacSearchBlock::form()).
+ *
+ * Hand-rolled HTML rather than Laminas Form: Omeka's block form contract posts
+ * every field as o:block[__blockIndex__][o:data][…], a name pattern Laminas
+ * Form doesn't support cleanly without a lot of ceremony. Every variable is
+ * worked out by Site\BlockLayout\BlockForm::variables(), which is where the
+ * decisions live (default scope, stale saved values, truncation); this file
+ * only escapes, translates and lays them out.
+ *
+ * @var \Laminas\View\Renderer\PhpRenderer $this
+ * @var string $name_prefix 'o:block[__blockIndex__][o:data]'
+ * @var string $uid Unique id suffix, so each field's <label for> stays
+ *      associated when several IWAC blocks are edited on one page (identical
+ *      ids would collide, break label binding and fail an a11y audit).
+ * @var string $preset
+ * @var list<array{value: string, label: string}> $preset_options
+ * @var string $custom_preset
+ * @var string $mode
+ * @var array<string, string> $render_modes
+ * @var string $title
+ * @var string $intro_html
+ * @var string $locked_filters
+ * @var list<string> $prominent_facets
+ * @var array<string, string> $facetable_fields
+ * @var string $default_sort
+ * @var array<string, string> $content_sorts
+ * @var array<string, string> $entity_sorts
+ * @var int $results_per_page
+ * @var list<array{field: string, label: string, truncated: bool, options: list<array{value: string, label: string, translatable: bool, count: ?int, checked: bool, stale: bool}>}> $pickers
+ * @var bool $index_unreachable
+ * @var int $max_values
+ */
+
+$esc     = fn(string $s): string => $this->escapeHtml($s);
+$escAttr = fn(string $s): string => $this->escapeHtmlAttr($s);
+$t       = fn(string $s): string => (string) $this->translate($s);
+?>
+<div class="field">
+    <div class="field-meta">
+        <label for="iwac-search-preset-<?= $escAttr($uid) ?>"><?= $esc($t('Scope')) ?></label>
+        <div class="field-description">
+            <?= $esc($t('What this block searches. Pick a ready-made scope, or “Custom…” to set your own content filter + facets in the advanced fields below.')) ?>
+        </div>
+    </div>
+    <div class="inputs">
+        <select id="iwac-search-preset-<?= $escAttr($uid) ?>" name="<?= $escAttr($name_prefix) ?>[preset]">
+            <?php foreach ($preset_options as $opt): ?>
+                <option value="<?= $escAttr($opt['value']) ?>"<?= $opt['value'] === $preset ? ' selected' : '' ?>>
+                    <?= $esc($t($opt['label'])) ?>
+                </option>
+            <?php endforeach; ?>
+            <option value="<?= $escAttr($custom_preset) ?>"<?= $preset === $custom_preset ? ' selected' : '' ?>>
+                <?= $esc($t('Custom…')) ?>
+            </option>
+        </select>
+    </div>
+</div>
+
+<div class="field">
+    <div class="field-meta">
+        <label for="iwac-search-mode-<?= $escAttr($uid) ?>"><?= $esc($t('Render mode')) ?></label>
+        <div class="field-description">
+            <?= $esc($t('Full = standalone discovery surface. Compact = header search box. Results only = curated grid (e.g. "latest from Sidwaya").')) ?>
+        </div>
+    </div>
+    <div class="inputs">
+        <select id="iwac-search-mode-<?= $escAttr($uid) ?>" name="<?= $escAttr($name_prefix) ?>[mode]">
+            <?php foreach ($render_modes as $key => $label): ?>
+                <option value="<?= $escAttr($key) ?>"<?= $key === $mode ? ' selected' : '' ?>>
+                    <?= $esc($t($label)) ?>
+                </option>
+            <?php endforeach; ?>
+        </select>
+    </div>
+</div>
+
+<div class="field">
+    <div class="field-meta">
+        <label for="iwac-search-title-<?= $escAttr($uid) ?>"><?= $esc($t('Title (optional)')) ?></label>
+    </div>
+    <div class="inputs">
+        <input id="iwac-search-title-<?= $escAttr($uid) ?>" type="text"
+               name="<?= $escAttr($name_prefix) ?>[title]"
+               value="<?= $escAttr($title) ?>">
+    </div>
+</div>
+
+<div class="field">
+    <div class="field-meta">
+        <label for="iwac-search-intro-<?= $escAttr($uid) ?>"><?= $esc($t('Intro HTML (optional)')) ?></label>
+        <div class="field-description">
+            <?= $esc($t('Plain HTML rendered above the search results.')) ?>
+        </div>
+    </div>
+    <div class="inputs">
+        <textarea id="iwac-search-intro-<?= $escAttr($uid) ?>" rows="3"
+                  name="<?= $escAttr($name_prefix) ?>[intro_html]"><?= $esc($intro_html) ?></textarea>
+    </div>
+</div>
+
+<div class="field">
+    <div class="field-meta">
+        <label><?= $esc($t('Narrow by value')) ?></label>
+        <div class="field-description">
+            <?= $esc($t('Tick any number of values. Within one picker values are OR-ed ("Bénin or Togo"); separate pickers are AND-ed ("… and only news articles"). Applies to every scope, on top of what that scope already locks — so for a multi-country block choose the "All content" scope and tick the countries here, rather than a single-country scope. Leave a picker empty to not filter on it. Visitors cannot remove these.')) ?>
+        </div>
+    </div>
+</div>
+<?php foreach ($pickers as $picker): ?>
+    <?php
+    // A checkbox LIST has no single labelable control, so the group label
+    // can't use `for` (it would point at a div). Name the label instead and
+    // let the list reference it as a labelled group.
+    $labelId = 'iwac-search-values-' . $picker['field'] . '-' . $uid;
+    ?>
+    <div class="field">
+        <div class="field-meta">
+            <label id="<?= $escAttr($labelId) ?>"><?= $esc($t($picker['label'])) ?></label>
+            <div class="field-description">
+                <code style="opacity:.6"><?= $esc($picker['field']) ?></code>
+                <?php if ($picker['truncated']): ?>
+                    <?php // Translate the pattern, THEN interpolate — the other way
+                          // round there is no msgid for the translator to match. ?>
+                    <br><?= $esc(sprintf(
+                        $t('Showing the %d most common values — the index holds more.'),
+                        $max_values
+                    )) ?>
+                <?php endif; ?>
+            </div>
+        </div>
+        <div class="inputs">
+            <?php if ($picker['options'] === []): ?>
+                <p style="margin:0;opacity:.7">
+                    <?= $esc($index_unreachable
+                        ? $t('The search index is unreachable, so this list could not be loaded. Existing selections are preserved; reopen this form once the index is back, or use the Locked filters field below.')
+                        : $t('The index holds no values for this field yet.')) ?>
+                </p>
+            <?php else: ?>
+                <div class="iwac-value-picker" role="group" aria-labelledby="<?= $escAttr($labelId) ?>"
+                     style="max-height:13em;overflow-y:auto;border:1px solid #dfdfdf;border-radius:3px;padding:.4em .6em;">
+                    <?php foreach ($picker['options'] as $option): ?>
+                        <label class="iwac-value-pick" style="display:block;">
+                            <input type="checkbox"
+                                   name="<?= $escAttr($name_prefix) ?>[filter_values][<?= $escAttr($picker['field']) ?>][]"
+                                   value="<?= $escAttr($option['value']) ?>"
+                                   <?= $option['checked'] ? 'checked' : '' ?>>
+                            <?= $esc($option['translatable'] ? $t($option['label']) : $option['label']) ?>
+                            <?php if ($option['count'] !== null): ?>
+                                <span style="opacity:.55">(<?= $esc(number_format($option['count'])) ?>)</span>
+                            <?php endif; ?>
+                            <?php if ($option['stale']): ?>
+                                <em style="opacity:.7"><?= $esc($t('— saved, but not in the index')) ?></em>
+                            <?php endif; ?>
+                        </label>
+                    <?php endforeach; ?>
+                </div>
+            <?php endif; ?>
+        </div>
+    </div>
+<?php endforeach; ?>
+
+<div class="field">
+    <div class="field-meta">
+        <label for="iwac-search-locked-<?= $escAttr($uid) ?>"><?= $esc($t('Locked filters (Typesense filter_by)')) ?></label>
+        <div class="field-description">
+            <?= $esc($t('Advanced escape hatch, for conditions the pickers above cannot express (date ranges, exclusions). Custom scope only. Applied to every query from this block (cosmetic scoping — not a privacy boundary). Example: date:>=946684800 && type_s:!=reference')) ?>
+        </div>
+    </div>
+    <div class="inputs">
+        <input id="iwac-search-locked-<?= $escAttr($uid) ?>" type="text"
+               name="<?= $escAttr($name_prefix) ?>[locked_filters]"
+               value="<?= $escAttr($locked_filters) ?>"
+               placeholder="date:>=946684800">
+    </div>
+</div>
+
+<div class="field">
+    <div class="field-meta">
+        <label><?= $esc($t('Prominent facets')) ?></label>
+        <div class="field-description">
+            <?= $esc($t('Custom scope only — preset scopes use their own facet set. Facets shown above the fold; others move under "More filters".')) ?>
+        </div>
+    </div>
+    <div class="inputs">
+        <?php foreach ($facetable_fields as $field => $label): ?>
+            <label class="iwac-facet-pick" style="display:block;">
+                <input type="checkbox"
+                       name="<?= $escAttr($name_prefix) ?>[prominent_facets][]"
+                       value="<?= $escAttr($field) ?>"
+                       <?= in_array($field, $prominent_facets, true) ? 'checked' : '' ?>>
+                <?= $esc($t($label)) ?>
+                <code style="opacity:.6"><?= $esc($field) ?></code>
+            </label>
+        <?php endforeach; ?>
+    </div>
+</div>
+
+<div class="field">
+    <div class="field-meta">
+        <label for="iwac-search-sort-<?= $escAttr($uid) ?>"><?= $esc($t('Default sort')) ?></label>
+        <div class="field-description">
+            <?= $esc($t('Initial result order. Leave on “Use scope default” to follow the scope (e.g. most-mentioned for the Entity index, newest for a country). The Entity index orders apply only when the scope is the Entity index; an order that does not fit the chosen scope is ignored.')) ?>
+        </div>
+    </div>
+    <div class="inputs">
+        <select id="iwac-search-sort-<?= $escAttr($uid) ?>" name="<?= $escAttr($name_prefix) ?>[default_sort]">
+            <option value=""<?= $default_sort === '' ? ' selected' : '' ?>>
+                <?= $esc($t('Use scope default')) ?>
+            </option>
+            <optgroup label="<?= $escAttr($t('Content (articles, references…)')) ?>">
+                <?php foreach ($content_sorts as $key => $label): ?>
+                    <option value="<?= $escAttr($key) ?>"<?= $key === $default_sort ? ' selected' : '' ?>>
+                        <?= $esc($t($label)) ?>
+                    </option>
+                <?php endforeach; ?>
+            </optgroup>
+            <optgroup label="<?= $escAttr($t('Entity index')) ?>">
+                <?php foreach ($entity_sorts as $key => $label): ?>
+                    <option value="<?= $escAttr($key) ?>"<?= $key === $default_sort ? ' selected' : '' ?>>
+                        <?= $esc($t($label)) ?>
+                    </option>
+                <?php endforeach; ?>
+            </optgroup>
+        </select>
+    </div>
+</div>
+
+<div class="field">
+    <div class="field-meta">
+        <label for="iwac-search-perpage-<?= $escAttr($uid) ?>"><?= $esc($t('Results per page')) ?></label>
+    </div>
+    <div class="inputs">
+        <input id="iwac-search-perpage-<?= $escAttr($uid) ?>" type="number" min="1" max="50" step="1"
+               name="<?= $escAttr($name_prefix) ?>[results_per_page]"
+               value="<?= $escAttr((string) $results_per_page) ?>">
+    </div>
+</div>

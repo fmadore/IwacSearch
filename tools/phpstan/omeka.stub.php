@@ -228,6 +228,25 @@ namespace Omeka\Site\BlockLayout {
         public function onHydrate(\Omeka\Entity\SitePageBlock $block, \Omeka\Stdlib\ErrorStore $errorStore): void
         {
         }
+
+        public function prepareRender(\Laminas\View\Renderer\PhpRenderer $view)
+        {
+        }
+
+        public function getFulltextText(
+            \Laminas\View\Renderer\PhpRenderer $view,
+            \Omeka\Api\Representation\SitePageBlockRepresentation $block
+        ) {
+        }
+    }
+
+    interface TemplateableBlockLayoutInterface extends BlockLayoutInterface
+    {
+        public function render(
+            \Laminas\View\Renderer\PhpRenderer $view,
+            \Omeka\Api\Representation\SitePageBlockRepresentation $block,
+            $templateViewScript = null
+        );
     }
 
     interface BlockLayoutInterface
