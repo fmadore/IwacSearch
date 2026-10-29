@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createFilterState } from '../../src/svelte/lib/filterState.svelte';
+import type { ActiveFilters, YearRange } from '../../src/svelte/lib/types';
 
 /**
  * The filter-selection rules extracted from App.svelte. Small, but each one
@@ -13,7 +14,7 @@ import { createFilterState } from '../../src/svelte/lib/filterState.svelte';
  *     never sees the change and dependent effects don't re-run.
  */
 
-function make(filters = {}, yearRange = null) {
+function make(filters: ActiveFilters = {}, yearRange: YearRange | null = null) {
   const onChange = vi.fn();
   return { state: createFilterState(filters, yearRange, onChange), onChange };
 }

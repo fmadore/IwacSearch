@@ -105,6 +105,7 @@
 
 <!-- A source/country chip rendered as a facet toggle button. -->
 {#snippet filterChip(chip: CardChip)}
+  {@const icon = CHIP_ICONS[chip.field]}
   <li>
     <button
       type="button"
@@ -113,8 +114,7 @@
       aria-pressed={isActive(chip.field, chip.value)}
       aria-label={chipAria(chip)}
       onclick={() => toggle(chip.field, chip.value)}
-      >{#if CHIP_ICONS[chip.field]}<span class="iwac-card__meta-icon" aria-hidden="true"
-          ><Icon name={CHIP_ICONS[chip.field]} /></span
+      >{#if icon}<span class="iwac-card__meta-icon" aria-hidden="true"><Icon name={icon} /></span
         >{/if}{chip.display}</button
     >
   </li>

@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { defined } from './defined';
 import { TypesenseClient } from '../../src/svelte/lib/typesense';
 import type { IwacBootstrap } from '../../src/svelte/lib/types';
 
@@ -41,6 +42,12 @@ const STOPWORD_ERROR = { code: 404, error: 'Could not find a stopword set named 
 /** Bodies POSTed to the search endpoint, in order. */
 type Sent = Record<string, unknown>;
 
+/** Sub-search `index` of the `body`-th POST. */
+function sub(sent: Sent[], body: number, index = 0): Sent {
+  const searches = defined(sent[body], `POST #${body}`).searches as Sent[] | undefined;
+  return defined(searches?.[index], `sub-search ${index} of POST #${body}`);
+}
+
 function mockServer(responses: unknown[]): { sent: Sent[]; urls: string[] } {
   const sent: Sent[] = [];
   const urls: string[] = [];
@@ -78,8 +85,8 @@ describe('stopword recovery', () => {
     expect(sent).toHaveLength(2);
     // First attempt asks for stopwords; the retry drops the field entirely
     // (not just empties it — Typesense 404s on an unknown set name).
-    expect(sent[0].searches[0]).toMatchObject({ stopwords: 'fr_default' });
-    expect(sent[1].searches[0]).not.toHaveProperty('stopwords');
+    expect(sub(sent, 0)).toMatchObject({ stopwords: 'fr_default' });
+    expect(sub(sent, 1)).not.toHaveProperty('stopwords');
   });
 
   it('warns the operator exactly once, pointing at the fix', async () => {
@@ -89,7 +96,7 @@ describe('stopword recovery', () => {
     await new TypesenseClient(bootstrap()).search({ q: 'x' });
 
     expect(warn).toHaveBeenCalledTimes(1);
-    expect(String(warn.mock.calls[0][0])).toMatch(/stopwords-sync|discovery:reindex/);
+    expect(String(warn.mock.calls[0]?.[0])).toMatch(/stopwords-sync|discovery:reindex/);
   });
 
   it('gives up after ONE retry rather than looping', async () => {
@@ -144,8 +151,8 @@ describe('stopword recovery', () => {
     expect(sent).toHaveLength(2);
     // Union mode returns ONE merged object rather than {results: [...]}, and
     // pages via the URL — both must survive the retry.
-    expect(sent[1].union).toBe(true);
-    expect(sent[1].searches).toBeDefined();
+    expect(sent[1]?.union).toBe(true);
+    expect(sent[1]?.searches).toBeDefined();
     expect(urls[1]).toContain('page=1');
   });
 });
@@ -160,7 +167,7 @@ describe('exact-query handling', () => {
       q: '"radicalisation en Côte d\'Ivoire"',
     });
 
-    const search = (sent[0].searches as Sent[])[0];
+    const search = sub(sent, 0);
     expect(search.query_by).toBe('title_txt,ocr_text');
     expect(search).not.toHaveProperty('stopwords');
     expect(search).toMatchObject({ num_typos: 0, drop_tokens_threshold: 0 });
@@ -173,7 +180,7 @@ describe('exact-query handling', () => {
       q: 'ramadan',
     });
 
-    const search = (sent[0].searches as Sent[])[0];
+    const search = sub(sent, 0);
     expect(search.query_by).toBe('title_txt,ocr_text,embedding');
     expect(search.stopwords).toBe('fr_default');
     expect(search).not.toHaveProperty('num_typos');
@@ -184,7 +191,7 @@ describe('exact-query handling', () => {
 
     await new TypesenseClient(bootstrap()).search({ q: '   ' });
 
-    const search = (sent[0].searches as Sent[])[0];
+    const search = sub(sent, 0);
     expect(search.q).toBe('*');
     expect(search).not.toHaveProperty('num_typos');
   });
@@ -204,7 +211,7 @@ describe('exact-query handling', () => {
       yearRange: { from: 1990, to: 1999 },
     });
 
-    const search = (sent[0].searches as Sent[])[0];
+    const search = sub(sent, 0);
     expect(search.query_by).toBe('title_txt,toc_txt');
     expect(search).not.toHaveProperty('stopwords');
     expect(search).toMatchObject({
@@ -227,12 +234,12 @@ describe('exact-query handling', () => {
     await new TypesenseClient(bootstrap()).fetchForExport({ q: 'ramadan' });
 
     expect(sent).toHaveLength(2);
-    expect((sent[0].searches as Sent[])[0]).toMatchObject({
+    expect(sub(sent, 0)).toMatchObject({
       page: 1,
       stopwords: 'fr_default',
     });
-    expect((sent[1].searches as Sent[])[0]).toMatchObject({ page: 1 });
-    expect((sent[1].searches as Sent[])[0]).not.toHaveProperty('stopwords');
+    expect(sub(sent, 1)).toMatchObject({ page: 1 });
+    expect(sub(sent, 1)).not.toHaveProperty('stopwords');
     expect(warn).toHaveBeenCalledTimes(1);
   });
 });
@@ -247,7 +254,7 @@ describe('shared request preamble', () => {
       yearRange: { from: 1990, to: 1999 },
     });
 
-    expect((sent[0].searches as Sent[])[0].filter_by).toBe(
+    expect(sub(sent, 0).filter_by).toBe(
       'type_s:=article && country_ss:=[`Niger`] && pub_year:>=1990 && pub_year:<=1999',
     );
   });
@@ -266,7 +273,8 @@ describe('shared request preamble', () => {
       withYearDistribution: true,
     });
 
-    const [results, histogram] = sent[0].searches as Sent[];
+    const results = sub(sent, 0, 0);
+    const histogram = sub(sent, 0, 1);
     expect(sent).toHaveLength(1); // ONE request carries both
     expect(results.filter_by).toContain('pub_year:>=1990');
     expect(histogram.filter_by).toBe('type_s:=article && country_ss:=[`Niger`]');
@@ -282,8 +290,8 @@ describe('shared request preamble', () => {
 
     await new TypesenseClient(bootstrap()).search({ q: 'x', page: 3 });
 
-    expect(sent[0].searches as Sent[]).toHaveLength(2);
-    expect((sent[0].searches as Sent[])[1]).toMatchObject({ per_page: 0, enable_analytics: false });
+    expect(sent[0]?.searches).toHaveLength(2);
+    expect(sub(sent, 0, 1)).toMatchObject({ per_page: 0, enable_analytics: false });
   });
 
   it('returns the year buckets ascending, dropping empty and non-numeric ones', async () => {

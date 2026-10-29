@@ -63,4 +63,30 @@ export default [
       },
     },
   },
+  {
+    // Type-aware rules for the shipped client and its unit tests. The project
+    // service reads tsconfig.json, which includes the .svelte files and
+    // tests/client. A promise nobody awaits drops its rejection silently, and
+    // an async handler passed where a void callback is expected does the
+    // same; deliberate fire-and-forget calls are marked with `void`.
+    files: [
+      'src/svelte/**/*.ts',
+      'src/svelte/**/*.svelte',
+      'src/svelte-shared/**/*.ts',
+      'src/svelte-shared/**/*.svelte',
+      'tests/client/**/*.ts',
+    ],
+    languageOptions: {
+      parserOptions: {
+        projectService: true,
+        tsconfigRootDir: import.meta.dirname,
+        extraFileExtensions: ['.svelte'],
+      },
+    },
+    rules: {
+      '@typescript-eslint/await-thenable': 'error',
+      '@typescript-eslint/no-floating-promises': 'error',
+      '@typescript-eslint/no-misused-promises': 'error',
+    },
+  },
 ];

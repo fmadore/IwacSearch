@@ -86,15 +86,15 @@ export function focusFirstWithin(root: HTMLElement): void {
 export function handleTrapKeydown(root: HTMLElement, e: KeyboardEvent): boolean {
   if (e.key !== 'Tab') return false;
   const items = focusableWithin(root);
-  if (items.length === 0) {
+  const first = items[0];
+  const last = items[items.length - 1];
+  if (!first || !last) {
     // Nothing to move to — keep focus on the container rather than letting
     // Tab walk out of the dialog.
     e.preventDefault();
     root.focus();
     return true;
   }
-  const first = items[0];
-  const last = items[items.length - 1];
   const active = document.activeElement;
 
   // Focus sitting on the container (or somewhere outside, e.g. after a click

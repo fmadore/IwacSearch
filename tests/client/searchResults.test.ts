@@ -132,7 +132,7 @@ describe('createSearchResults', () => {
   it('passes a null page size through as the surface default', () => {
     const client = fakeClient();
     make(client).results.run(req());
-    expect(client.search.mock.calls[0][0].perPage).toBeUndefined();
+    expect(client.search.mock.calls[0]?.[0].perPage).toBeUndefined();
   });
 
   it('adopts the snapshot: no search on the first run, but the histogram is still fetched', async () => {
@@ -149,7 +149,7 @@ describe('createSearchResults', () => {
     // The next change searches — and the histogram it fetched is reused.
     results.run(req({ page: 2 }));
     expect(client.search).toHaveBeenCalledTimes(1);
-    expect(client.search.mock.calls[0][0].withYearDistribution).toBe(false);
+    expect(client.search.mock.calls[0]?.[0].withYearDistribution).toBe(false);
   });
 
   it('adopts the snapshot on a compact surface without asking for a histogram', () => {
@@ -236,19 +236,19 @@ describe('createSearchResults', () => {
     await flush();
     expect(results.yearSpan).toEqual({ min: 1961, max: 2026 });
     results.run(req({ page: 2 }));
-    expect(client.search.mock.calls[0][0].withYearSpan).toBe(false);
+    expect(client.search.mock.calls[0]?.[0].withYearSpan).toBe(false);
   });
 
   it('never asks for a span on a surface without a slider', () => {
     const client = fakeClient();
     make(client, { withHistogram: false }).results.run(req({ q: 'islam' }));
-    expect(client.search.mock.calls[0][0].withYearSpan).toBe(false);
+    expect(client.search.mock.calls[0]?.[0].withYearSpan).toBe(false);
   });
 
   it('never asks for a histogram on a surface without one', () => {
     const client = fakeClient();
     make(client, { withHistogram: false }).results.run(req({ q: 'islam' }));
-    expect(client.search.mock.calls[0][0].withYearDistribution).toBe(false);
+    expect(client.search.mock.calls[0]?.[0].withYearDistribution).toBe(false);
   });
 
   it('asks again after the histogram sub-search failed, and clears the stale bars', async () => {

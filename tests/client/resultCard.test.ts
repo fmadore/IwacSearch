@@ -150,7 +150,7 @@ describe('pickMatchedIn', () => {
 
   it('reads the first entry of `snippets` when there is no single `snippet`', () => {
     const h = hit([{ field: 'subjects_ss', snippets: ['<mark>Islam</mark>', 'other'] }]);
-    expect(pickMatchedIn(h, 'fr')[0].snippet).toBe('<mark>Islam</mark>');
+    expect(pickMatchedIn(h, 'fr')[0]?.snippet).toBe('<mark>Islam</mark>');
   });
 });
 
@@ -475,7 +475,7 @@ describe('buildSourceChips', () => {
     ]);
     expect(
       buildSourceChips(doc({ country_ss: ['Nigeria'] }), { hideCountry: false, locale: 'fr' })[0]
-        .value,
+        ?.value,
     ).toBe('Nigeria');
 
     // A YouTube video already ends its line with "Voir sur YouTube".

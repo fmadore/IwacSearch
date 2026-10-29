@@ -61,10 +61,10 @@ describe('shared population policy', () => {
     });
     expect(outcome.response.keyword_found).toBe(1);
     expect(sent[0]).toHaveLength(3);
-    expect(sent[0].every((s) => s.stopwords === 'fr_default')).toBe(true);
-    expect(sent[0].every((s) => s.exclude_fields === 'ocr_text,toc_txt,embedding')).toBe(true);
-    expect(sent[0][1].enable_analytics).toBe(false);
-    expect(sent[0][2].query_by).not.toContain('embedding');
+    expect(sent[0]?.every((s) => s.stopwords === 'fr_default')).toBe(true);
+    expect(sent[0]?.every((s) => s.exclude_fields === 'ocr_text,toc_txt,embedding')).toBe(true);
+    expect(sent[0]?.[1]?.enable_analytics).toBe(false);
+    expect(sent[0]?.[2]?.query_by).not.toContain('embedding');
   });
   it('preserves main results when the histogram fails, without claiming empty data', async () => {
     server(() => ({ results: [page, { code: 500, error: 'histogram failed' }, { found: 1 }] }));

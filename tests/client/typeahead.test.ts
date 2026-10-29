@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { defined } from './defined';
 import type SuggestDropdown from '../../src/svelte/components/SuggestDropdown.svelte';
 import { createTypeahead, dismissOnOutsidePointer } from '../../src/svelte/lib/typeahead.svelte';
 
@@ -153,7 +154,9 @@ describe('the panel survives a committed search', () => {
       const closers: string[] = [];
       for (const name of members) {
         const { suggest } = opened();
-        (suggest[name as keyof typeof suggest] as (...a: unknown[]) => void)(...args[name]);
+        (suggest[name as keyof typeof suggest] as (...a: unknown[]) => void)(
+          ...defined(args[name], `arguments for ${name}`),
+        );
         vi.runAllTimers(); // let the blur grace period elapse
         if (!suggest.open) closers.push(name);
       }

@@ -409,9 +409,10 @@ export class HeaderSearch {
       e.preventDefault();
       this.move(-1);
     } else if (e.key === 'Enter') {
-      if (this.isOpen && this.rows.length > 0) {
+      const row = this.isOpen ? (this.rows[this.highlighted] ?? this.rows[0]) : undefined;
+      if (row) {
         e.preventDefault();
-        this.activate(this.rows[this.highlighted] ?? this.rows[0]);
+        this.activate(row);
       }
       // else: dropdown closed → let the native form submit handler run.
     } else if (e.key === 'Escape') {

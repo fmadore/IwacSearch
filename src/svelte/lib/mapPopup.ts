@@ -45,7 +45,8 @@ export function mapPopupHtml(points: readonly MapPointProps[], labels: MapPopupL
       `<span>${escapeHtml(labels.typeLabel(p.entityType))} · ${escapeHtml(labels.mentions(p.frequency))}</span>`
     );
   };
-  if (unique.length === 1) return `<div class="iwac-map__popup">${entry(unique[0])}</div>`;
+  const only = unique.length === 1 ? unique[0] : undefined;
+  if (only) return `<div class="iwac-map__popup">${entry(only)}</div>`;
   const sorted = [...unique].sort((a, b) => b.frequency - a.frequency);
   return (
     `<div class="iwac-map__popup iwac-map__popup--list">` +

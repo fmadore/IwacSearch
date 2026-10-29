@@ -338,7 +338,7 @@ describe('createUrlSync', () => {
     const sync = createUrlSync('', FALLBACK_SORT);
     const live = state({ filters: { country_ss: ['Niger'] } });
     sync.push(live);
-    live.filters.country_ss.push('Mali');
+    live.filters.country_ss?.push('Mali');
     sync.push(live);
     // A filter was added, so it is a navigation — had `prev` aliased `live`,
     // the two would compare equal and the change would be a silent replace.

@@ -36,9 +36,11 @@ export function parseMentionsByYear(raw: string | undefined | null): YearCount[]
  * bare counts when every point shares one year (no span to densify).
  */
 export function densifyByYear(points: YearCount[]): number[] {
-  if (points.length === 0) return [];
-  const min = points[0].year;
-  const max = points[points.length - 1].year;
+  const first = points[0];
+  const last = points[points.length - 1];
+  if (!first || !last) return [];
+  const min = first.year;
+  const max = last.year;
   const span = max - min;
   if (span <= 0) return points.map((p) => p.count);
   const arr = new Array<number>(span + 1).fill(0);

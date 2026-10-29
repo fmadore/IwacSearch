@@ -12,10 +12,8 @@ describe('refocus', () => {
   function setup(): { gone: HTMLButtonElement; a: HTMLButtonElement; b: HTMLButtonElement } {
     document.body.innerHTML =
       '<button id="gone">×</button><button id="a">a</button><button id="b">b</button>';
-    const [gone, a, b] = ['gone', 'a', 'b'].map(
-      (id) => document.getElementById(id) as HTMLButtonElement,
-    );
-    return { gone, a, b };
+    const byId = (id: string) => document.getElementById(id) as HTMLButtonElement;
+    return { gone: byId('gone'), a: byId('a'), b: byId('b') };
   }
 
   it('focuses the first candidate still in the document once focus was lost', async () => {

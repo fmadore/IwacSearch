@@ -97,9 +97,10 @@ export function readUrlState(
     // `constructor`, which a bare lookup resolves through Object.prototype
     // to a function — the alias hop would return the Object constructor, and
     // the merge below would throw trying to spread it.
-    const field = Object.hasOwn(LEGACY_FILTER_FIELDS, rawField)
+    const alias = Object.hasOwn(LEGACY_FILTER_FIELDS, rawField)
       ? LEGACY_FILTER_FIELDS[rawField]
-      : rawField;
+      : undefined;
+    const field = alias ?? rawField;
     // getAll handles repeated keys; values that came in comma-separated
     // (legacy) get split too.
     const raw = params.getAll(key).flatMap((v) => v.split(',').map((s) => s.trim()));

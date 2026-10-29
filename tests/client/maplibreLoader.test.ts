@@ -72,7 +72,7 @@ describe('loadMapLibre', () => {
       [MAPLIBRE_FILES.css, 'stylesheet'],
       [MAPLIBRE_FILES.module, 'modulepreload'],
       [MAPLIBRE_FILES.chunk, 'modulepreload'],
-    ]) {
+    ] as const) {
       expect(byHref[href]?.rel).toBe(rel);
       expect(byHref[href]?.integrity).toBe(MAPLIBRE_INTEGRITY[href]);
       expect(byHref[href]?.crossOrigin).toBe('anonymous');

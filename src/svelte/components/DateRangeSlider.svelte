@@ -260,7 +260,7 @@
     if (maxCount === 0) return empty;
     const bars: Array<{ year: number; count: number; h: number }> = [];
     for (let i = 0; i < span; i++) {
-      const c = counts[i];
+      const c = counts[i] ?? 0;
       bars.push({
         year: min + i,
         count: c,

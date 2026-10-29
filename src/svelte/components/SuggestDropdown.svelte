@@ -241,6 +241,7 @@
     }
     if (e.key === 'Enter') {
       const row = rows[highlightedIndex] ?? rows[0];
+      if (!row) return false;
       // Article rows with a real URL hand off to the browser via
       // location.assign in act(); for those we must preventDefault so the
       // form doesn't also submit. Search/entity rows always preventDefault.

@@ -136,9 +136,12 @@ let loader: Promise<MapLibreGlobal> | null = null;
 
 /** A `<link>` carrying its pinned file's hash (SRI on a cross-origin file needs CORS). */
 function pinnedLink(rel: string, href: string): HTMLLinkElement {
+  const integrity = MAPLIBRE_INTEGRITY[href];
+  // Never a link without its hash: an absent integrity loads unverified.
+  if (!integrity) throw new Error(`MapLibre file is not pinned: ${href}`);
   const link = document.createElement('link');
   link.rel = rel;
-  link.integrity = MAPLIBRE_INTEGRITY[href];
+  link.integrity = integrity;
   link.crossOrigin = 'anonymous';
   link.href = href;
   return link;

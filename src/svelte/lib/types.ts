@@ -420,7 +420,12 @@ export interface IwacFederatedBootstrap {
   locale?: 'fr' | 'en';
   initial_query: string;
   default_tab: 'content' | 'entities';
-  tabs: IwacFederatedTab[];
+  /**
+   * Never empty: SearchController::everything() always emits the content and
+   * entity tabs, and the page falls back to the first when `?tab=` names
+   * neither — so the type says so rather than every reader re-checking it.
+   */
+  tabs: [IwacFederatedTab, ...IwacFederatedTab[]];
   endpoints: {
     token: string;
     search: string;

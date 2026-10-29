@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { defined } from './defined';
 import { TypesenseClient } from '../../src/svelte/lib/typesense';
 import type { IwacBootstrap } from '../../src/svelte/lib/types';
 
@@ -81,9 +82,9 @@ describe('search()', () => {
       withYearSpan: true,
     });
 
-    const searches = bodies[0].searches!;
+    const searches = defined(bodies[0]?.searches, 'the searches sent');
     expect(searches).toHaveLength(4); // main, histogram, keyword count, span
-    const span = searches[3];
+    const span = defined(searches[3], 'the span sub-search');
     expect(span).toMatchObject({ q: '*', facet_by: 'pub_year', max_facet_values: 1, per_page: 0 });
     expect(span.filter_by).toBe('type_s:=reference');
     expect(out.span).toEqual({ min: 1912, max: 2026 });
@@ -125,15 +126,16 @@ describe('unionSearch()', () => {
     });
 
     const unionAt = bodies.findIndex((b) => b.union);
-    const union = bodies[unionAt];
-    const counts = bodies[1 - unionAt];
+    const union = defined(bodies[unionAt], 'the union body');
+    const counts = defined(bodies[1 - unionAt], 'the keyword-count body');
+    const unionUrl = defined(urls[unionAt], 'the union URL');
     expect(bodies).toHaveLength(2);
-    expect(new URL(urls[unionAt], 'http://x').searchParams.get('page')).toBe('3');
-    expect(new URL(urls[unionAt], 'http://x').searchParams.get('per_page')).toBe('20');
+    expect(new URL(unionUrl, 'http://x').searchParams.get('page')).toBe('3');
+    expect(new URL(unionUrl, 'http://x').searchParams.get('per_page')).toBe('20');
     expect(union.searches!.map((s) => s.sort_by)).toEqual(['_text_match:desc', '_text_match:desc']);
-    expect(union.searches![1].filter_by).toBe('entity_type_s:=Lieux');
+    expect(union.searches?.[1]?.filter_by).toBe('entity_type_s:=Lieux');
     // The keyword-only legs drop the embedding.
-    expect(counts.searches![0].query_by).toBe('title_txt');
+    expect(counts.searches?.[0]?.query_by).toBe('title_txt');
     expect(out.keyword_found).toBe(6);
   });
 
@@ -157,7 +159,7 @@ describe('unionSearch()', () => {
       searches: [{ collection: 'iwac_current', queryBy: 'title_txt' }],
     });
     expect(bodies).toHaveLength(1);
-    expect(bodies[0].searches![0]).toMatchObject({ q: '*', sort_by: 'date:desc' });
+    expect(bodies[0]?.searches?.[0]).toMatchObject({ q: '*', sort_by: 'date:desc' });
   });
 });
 
@@ -171,11 +173,11 @@ describe('countAcross()', () => {
       { collection: 'iwac_index_current', queryBy: 'title' },
     ]);
 
-    const searches = bodies[0].searches!;
+    const searches = defined(bodies[0]?.searches, 'the searches sent');
     expect(searches).toHaveLength(4);
     expect(searches.map((s) => s.per_page)).toEqual([0, 0, 0, 0]);
-    expect(searches[0].query_by).toBe('title_txt,embedding');
-    expect(searches[1].query_by).toBe('title_txt');
+    expect(searches[0]?.query_by).toBe('title_txt,embedding');
+    expect(searches[1]?.query_by).toBe('title_txt');
     // 100 hybrid hits over zero keyword hits is the vector leg's top-k, not a count.
     expect(counts).toEqual([0, 30]);
   });

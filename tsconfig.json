@@ -10,6 +10,7 @@
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true,
+    "noUncheckedIndexedAccess": true,
     "isolatedModules": true,
     "verbatimModuleSyntax": true,
     "skipLibCheck": true,
@@ -20,6 +21,8 @@
     "src/svelte/**/*.svelte",
     "src/svelte-shared/**/*.ts",
     "src/svelte-shared/**/*.svelte",
-    "vite.config.ts"
+    "tests/client/**/*.ts",
+    "vite.config.ts",
+    "vitest.config.ts"
   ]
 }

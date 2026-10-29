@@ -85,6 +85,6 @@ describe('multi_search limit', () => {
     await runSuggest(bootstrap, 'ramadan');
 
     expect(sent).toHaveLength(1);
-    expect(sent[0].searches.length).toBeLessThanOrEqual(MULTI_SEARCH_LIMIT);
+    expect(sent[0]?.searches.length).toBeLessThanOrEqual(MULTI_SEARCH_LIMIT);
   });
 });

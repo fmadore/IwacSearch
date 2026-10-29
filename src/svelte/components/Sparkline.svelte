@@ -29,6 +29,7 @@
       return { x, y };
     });
     const last = pts[pts.length - 1];
+    if (!last) return null;
     return {
       line: pts.map((p) => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' '),
       lastX: last.x.toFixed(1),

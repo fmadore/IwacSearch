@@ -85,6 +85,6 @@ describe('the year chip', () => {
       yearBounds: { min: 1912, max: 2026 },
     });
     expect(chips).toHaveLength(1);
-    expect(chips[0].displayValue).toBe('1990 – 2026');
+    expect(chips[0]?.displayValue).toBe('1990 – 2026');
   });
 });

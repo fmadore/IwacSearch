@@ -104,17 +104,17 @@ describe('combobox wiring', () => {
     const rows = options();
     expect(rows).toHaveLength(3); // "Search for…", one article, one entity
     expect(new Set(rows.map((r) => r.id)).size).toBe(3);
-    expect(input.getAttribute('aria-activedescendant')).toBe(rows[0].id);
-    expect(rows[0].getAttribute('aria-selected')).toBe('true');
+    expect(input.getAttribute('aria-activedescendant')).toBe(rows[0]?.id);
+    expect(rows[0]?.getAttribute('aria-selected')).toBe('true');
 
     key(input, 'ArrowDown');
-    expect(input.getAttribute('aria-activedescendant')).toBe(rows[1].id);
-    expect(rows[1].getAttribute('aria-selected')).toBe('true');
-    expect(rows[0].getAttribute('aria-selected')).toBe('false');
+    expect(input.getAttribute('aria-activedescendant')).toBe(rows[1]?.id);
+    expect(rows[1]?.getAttribute('aria-selected')).toBe('true');
+    expect(rows[0]?.getAttribute('aria-selected')).toBe('false');
 
     key(input, 'ArrowUp');
     key(input, 'ArrowUp'); // wraps to the last row
-    expect(input.getAttribute('aria-activedescendant')).toBe(rows[2].id);
+    expect(input.getAttribute('aria-activedescendant')).toBe(rows[2]?.id);
   });
 
   it('clears aria-activedescendant when the panel closes', async () => {

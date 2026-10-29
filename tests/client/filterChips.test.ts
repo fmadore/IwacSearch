@@ -61,7 +61,7 @@ describe('deriveActiveChips', () => {
       t: en.t,
       labels: { newspaper_ss: 'Title' },
     });
-    expect(chip.label).toBe('Title');
+    expect(chip?.label).toBe('Title');
   });
 
   it('is empty when nothing is selected', () => {

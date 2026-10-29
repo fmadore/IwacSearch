@@ -356,9 +356,11 @@
       default:
         return;
     }
+    const next = tabIds[nextIdx];
+    if (!next) return;
     e.preventDefault();
-    focusTab = tabIds[nextIdx];
-    document.getElementById(`iwac-fed-tab-${focusTab}`)?.focus();
+    focusTab = next;
+    document.getElementById(`iwac-fed-tab-${next}`)?.focus();
   }
 
   /** Leaving the tablist hands the tab stop back to the selected tab. */

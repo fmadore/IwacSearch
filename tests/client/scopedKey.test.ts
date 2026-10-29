@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { defined } from './defined';
 
 /**
  * The scoped key survives page navigation within a tab (sessionStorage), so
@@ -17,7 +18,7 @@ function token(key: string, expiresIn = 3600) {
 function mockTokenEndpoint(...keys: string[]) {
   let call = 0;
   const fetch = vi.fn(async () => {
-    const key = keys[Math.min(call, keys.length - 1)];
+    const key = defined(keys[Math.min(call, keys.length - 1)], 'a key to mint');
     call += 1;
     return new Response(JSON.stringify(token(key)), { status: 200 });
   });
