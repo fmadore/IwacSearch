@@ -297,6 +297,11 @@ export function writeUrlState(
  *
  * Reads the LIVE window.location.search each call so a block merges against
  * whatever sibling blocks have already written this tick.
+ *
+ * The entry's `history.state` is carried over, not replaced. It belongs to
+ * the page, not to this surface: the theme, another script or a sibling
+ * surface may keep its own data there, and writing `{}` on every keystroke
+ * erased it (FederatedApp already kept it; this path did not).
  */
 export function syncToUrl(
   next: SearchState,
@@ -317,10 +322,11 @@ export function syncToUrl(
     sameFilters(prev.filters, next.filters) &&
     sameYearRange(prev.yearRange, next.yearRange);
 
+  const entryState: unknown = window.history.state;
   if (prev === null || onlyPaginationChanged) {
-    window.history.replaceState({}, '', newUrl);
+    window.history.replaceState(entryState, '', newUrl);
   } else {
-    window.history.pushState({}, '', newUrl);
+    window.history.pushState(entryState, '', newUrl);
   }
 }
 

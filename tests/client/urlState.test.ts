@@ -344,6 +344,20 @@ describe('createUrlSync', () => {
     // the two would compare equal and the change would be a silent replace.
     expect(push).toHaveBeenCalledTimes(1);
   });
+
+  it("keeps the entry's history.state through a replace and a push", () => {
+    // Someone else's data on the entry: the theme, another script, a sibling.
+    window.history.replaceState({ owner: 'theme', scroll: 420 }, '', '/search');
+    const sync = createUrlSync('', FALLBACK_SORT);
+
+    sync.push(state({ q: 'islam' })); // first write: replace
+    expect(window.location.search).toBe('?q=islam');
+    expect(window.history.state).toEqual({ owner: 'theme', scroll: 420 });
+
+    sync.push(state({ q: 'coran' })); // new query: push
+    expect(window.location.search).toBe('?q=coran');
+    expect(window.history.state).toEqual({ owner: 'theme', scroll: 420 });
+  });
 });
 
 /**
