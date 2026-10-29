@@ -100,13 +100,13 @@ final class FacetCatalog
     /**
      * Retired field name => current one.
      *
-     * Page-block configs are JSON in `site_block.data` and hold field names
-     * verbatim, so a block saved before a rename still names the old field.
-     * Without an entry here normaliseFacets() silently DROPS it — a curated
-     * block comes back from the upgrade missing that facet, with nothing in
-     * the UI to explain why. Mapping on read (rather than migrating
-     * `site_block.data` in Module::upgrade) keeps the module's "owns no
-     * tables, writes no migrations" lifecycle intact; a block rewrites itself
+     * Page-block configs are JSON in `site_page_block.data` and hold field
+     * names verbatim, so a block saved before a rename still names the old
+     * field. Without an entry here normaliseFacets() silently DROPS it — a
+     * curated block comes back from the upgrade missing that facet, with
+     * nothing in the UI to explain why. Mapping on read (rather than
+     * migrating `site_page_block.data` in Module::upgrade) spares an upgrade
+     * from rewriting every stored block for a rename; a block rewrites itself
      * to the new names the next time an admin saves it.
      *
      * EMPTY on purpose since v6. The map's only entries were the v4 sentiment

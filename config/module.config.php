@@ -232,7 +232,8 @@ return [
         ],
     ],
 
-    // Module-level config — read by the controller factory + block render.
+    // Module-level config — read by the service factories (Typesense
+    // connection, SSR cache, scoped-key TTL and scope), never by the block.
     'iwac_search' => [
         'typesense' => [
             'host'             => 'typesense',

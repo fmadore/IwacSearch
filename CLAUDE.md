@@ -56,8 +56,10 @@ provides the Typesense container, nginx `/search-api/` proxy, and backups.
 - Alias names are `IwacInstance::CONTENT_ALIAS` / `INDEX_ALIAS` everywhere
   (web, rebuild, drain, analytics, key scope) — not configuration.
 - `SearchControllerFactory` — injects the scoped-key provider, the SSR
-  renderer and module config into the controller (deliberately NOT the
-  Typesense client itself).
+  renderer, the `/discovery/health` probe and module config into the
+  controller (deliberately NOT the Typesense client itself). A new public
+  action goes in `Module::PUBLIC_ACTIONS` (tested against the controllers),
+  and a new public route in `Site\PublicRoutes` (tested against a snapshot).
 - `iwacItemSetSearch` (view helper, `Search\ItemSetSurface`) — the item-set
   page's Typesense surface, scoped by `item_set_ids:=[N]` under the `bset.`
   URL prefix. IWAC-theme's item-set template calls it guarded on its presence
@@ -169,7 +171,7 @@ The cutover, retention and retry contracts are documented in `docs/operations-3.
   ever grows beyond the SSR renderer) follows the same naming so editors
   who know AdvancedSearch can navigate this codebase.
 - **AbstractBlockLayout pattern** for the page block — standard Omeka S
-  4.x convention. Block data is persisted as JSON in `site_block.data`;
+  4.x convention. Block data is persisted as JSON in `site_page_block.data`;
   multiple block instances per page are supported.
 
 ## Visual design

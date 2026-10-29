@@ -221,7 +221,7 @@ final class ScopeFilters
 
     /**
      * Filter admin-submitted selections down to well-formed state, so
-     * nothing invalid can reach `site_block.data`. Applied on save by
+     * nothing invalid can reach `site_page_block.data`. Applied on save by
      * IwacSearchBlock::onHydrate().
      *
      * Structural only — it does NOT check values against the live index.

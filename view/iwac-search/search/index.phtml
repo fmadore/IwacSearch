@@ -7,8 +7,8 @@
  * the shared common/iwac-search-mount partial, so this template only
  * carries the page-specific chrome (title, noscript fallback).
  *
- * Asset injection is centralised in Module.php (attachListeners on the
- * site layout) — the Svelte bundle loads automatically on this route.
+ * Asset injection is centralised in Module.php (view.layout on
+ * SearchController) — the Svelte bundle loads automatically on this route.
  */
 
 $locale = $this->iwacLocale();

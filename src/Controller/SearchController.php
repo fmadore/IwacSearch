@@ -215,9 +215,9 @@ class SearchController extends AbstractActionController
      * malicious form submission can only get the same public-shaped key
      * any anonymous visitor would receive.
      *
-     * Every caller receives the public-shaped key. An admin-shaped variant
-     * (no exclude_fields, gated on the Omeka session) was sketched for M4
-     * but never built — see docs/engineering-roadmap.md if it's ever needed.
+     * Every caller receives the public-shaped key, whatever their Omeka
+     * session: there is no admin variant, and docs/engineering-roadmap.md
+     * records why there should not be one without a concrete product need.
      */
     public function tokenAction(): JsonModel
     {

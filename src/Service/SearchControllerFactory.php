@@ -15,7 +15,7 @@ use Laminas\ServiceManager\Factory\FactoryInterface;
 use Psr\Container\ContainerInterface;
 
 /**
- * Builds the SearchController with its real dependencies in M1+.
+ * Builds the SearchController with its real dependencies.
  *
  * Wires:
  *   - TypesenseSearchKeyProvider — mints scoped keys on /discovery/token
@@ -26,8 +26,9 @@ use Psr\Container\ContainerInterface;
  *   - module config              — typesense conn + scoped-key constraints
  *
  * The TypesenseClient itself is not injected into the controller — the
- * key provider and the SSR renderer own every server-side Typesense call,
- * and live searches go from the browser through /search-api/.
+ * key provider, the SSR renderer and the health probe own every
+ * server-side Typesense call, and live searches go from the browser
+ * through /search-api/.
  */
 class SearchControllerFactory implements FactoryInterface
 {

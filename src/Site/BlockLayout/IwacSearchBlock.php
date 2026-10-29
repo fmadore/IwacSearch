@@ -27,12 +27,12 @@ use Omeka\Stdlib\HtmlPurifier;
  * Page block that drops the IwacSearch surface into any Omeka Site page.
  *
  * Same Svelte bundle as the standalone /search route — what differs is the
- * bootstrap config blob each instance emits. This is the third-class citizen
- * after /search and /browse/{slug}, but it lets editors compose discovery
+ * bootstrap config blob each instance emits. This is the third surface
+ * after /search and /search/everything, but it lets editors compose discovery
  * surfaces (e.g. "show only Burkina Faso newspapers from the 1990s on the
  * Welcome page") without needing a code change or a dedicated browse config.
  *
- * Block data shape (persisted as JSON in site_block.data):
+ * Block data shape (persisted as JSON in site_page_block.data):
  *   {
  *     "preset":            "all" | "benin" | … | "references" | "index" | "custom",
  *     "mode":              "full" | "compact" | "results-only",
