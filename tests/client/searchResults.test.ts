@@ -8,7 +8,12 @@ import {
 } from '../../src/svelte/lib/searchResults.svelte';
 import { facetUnion } from '../../src/svelte/lib/queryBuilders';
 import type { HistogramOutcome, SearchOutcome } from '../../src/svelte/lib/typesense';
-import type { IwacDoc, IwacSearchResponse, YearBucket } from '../../src/svelte/lib/types';
+import type {
+  IwacDoc,
+  IwacSearchResponse,
+  SuggestResult,
+  YearBucket,
+} from '../../src/svelte/lib/types';
 
 /**
  * The fetch rules that used to live in App.svelte's search `$effect`, where no
@@ -58,7 +63,7 @@ function fakeClient(outcome: () => Promise<SearchOutcome> = async () => ({ respo
       return outcome();
     }),
     yearDistribution: vi.fn(async (): Promise<HistogramOutcome> => ({ years: YEARS })),
-    suggest: vi.fn(async () => ({
+    suggest: vi.fn(async (): Promise<SuggestResult> => ({
       articles: [],
       entities: [1, 2, 3, 4, 5].map((i) => ({ field: 'topics_ss', value: `T${i}`, count: i })),
     })),
@@ -333,6 +338,48 @@ describe('createSearchResults', () => {
     expect(results.didYouMean).toHaveLength(4);
     results.run(req({ q: 'tijaniyya' }));
     expect(results.didYouMean).toEqual([]);
+  });
+
+  it('drops a did-you-mean reply that lands after the next search started', async () => {
+    // The dead query's suggest is slow, and the reader's next query finds
+    // something — so no newer did-you-mean aborts the old one.
+    const client = fakeClient(async () => ({ response: res(0) }));
+    const late = deferred<SuggestResult>();
+    client.suggest.mockReturnValueOnce(late.promise);
+    const { results } = make(client);
+    results.run(req({ q: 'tidjaniya' }));
+    await flush();
+    expect(client.suggest).toHaveBeenCalledTimes(1);
+
+    client.search.mockImplementationOnce(async () => ({ response: res(3) }));
+    results.run(req({ q: 'tidjaniyya' }));
+    await flush();
+    late.resolve({
+      articles: [],
+      entities: [{ field: 'topics_ss', value: 'Tidjaniyya', count: 9 }],
+    });
+    await flush();
+    expect(results.response?.found).toBe(3);
+    expect(results.didYouMean).toEqual([]);
+  });
+
+  it('drops a late did-you-mean failure as well', async () => {
+    const client = fakeClient(async () => ({ response: res(0) }));
+    const late = deferred<SuggestResult>();
+    client.suggest.mockReturnValueOnce(late.promise);
+    const { results } = make(client);
+    results.run(req({ q: 'tidjaniya' }));
+    await flush();
+
+    // The next dead query's own suggestions arrive first…
+    results.run(req({ q: 'tidjanya' }));
+    await flush();
+    await flush();
+    expect(results.didYouMean).toHaveLength(4);
+    // …and the superseded request failing must not wipe them.
+    late.reject(new Error('Suggest HTTP 503'));
+    await flush();
+    expect(results.didYouMean).toHaveLength(4);
   });
 
   it('shows the error — not the previous results — when a search fails', async () => {

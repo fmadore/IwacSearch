@@ -150,14 +150,22 @@ export function createSearchResults(
    * Zero-result recovery: ask the typo-tolerant suggest path for entities
    * near the dead query. Best-effort — failures (including aborts) just mean
    * no banner.
+   *
+   * Settled under the ticket of the search that asked for it. The didYouMean
+   * abort slot only cancels the previous did-you-mean, and a search that
+   * FOUND something never opens a new one — so a slow reply for "tidjaniya"
+   * could land after the reader's next, fruitful search had cleared the row,
+   * and write it back above results it had nothing to do with.
    */
-  function fetchDidYouMean(q: string): void {
+  function fetchDidYouMean(q: string, ticket: number): void {
     client
       .suggest(q, 3, 'didYouMean')
       .then((s) => {
+        if (seq.isStale(ticket)) return;
         didYouMean = s.entities.slice(0, 4);
       })
       .catch(() => {
+        if (seq.isStale(ticket)) return;
         didYouMean = [];
       });
   }
@@ -241,7 +249,7 @@ export function createSearchResults(
             // typo dead-ends don't pollute the dropdown.
             onFruitfulQuery(q);
           } else if (q.trim().length >= 3) {
-            fetchDidYouMean(q);
+            fetchDidYouMean(q, ticket);
           }
         }
         isLoading = false;
