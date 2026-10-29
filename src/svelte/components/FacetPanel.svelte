@@ -23,6 +23,7 @@
   import FilterChip from './FilterChip.svelte';
   import Icon from './Icon.svelte';
   import { refocus } from '../lib/refocus';
+  import { headingLevel } from '../lib/headings';
 
   /**
    * Filters sidebar.
@@ -95,6 +96,10 @@
 
   const { locale, t } = useI18n();
 
+  // "Filters" at the surface's own level, the sentiment group one below it
+  // (lib/headings.ts): under a titled block, h3 and 4 rather than beside it.
+  const level = headingLevel();
+
   // Active-filter chips come from the shared deriveActiveChips() so the sidebar,
   // the result-summary strip and the empty state can never disagree about scope.
   const activeChips = $derived(
@@ -161,7 +166,11 @@
      own nested a second "Filters" landmark inside the first. -->
 <div class="iwac-facets" bind:this={panelEl}>
   <header class="iwac-facets__header">
-    <h2 class="iwac-facets__heading">{t('filters')}</h2>
+    {#if level === 3}
+      <h3 class="iwac-facets__heading">{t('filters')}</h3>
+    {:else}
+      <h2 class="iwac-facets__heading">{t('filters')}</h2>
+    {/if}
     {#if hasActive}
       <button type="button" class="iwac-facets__clear-all" onclick={handleClearAll}
         >{t('clear_all')}</button
@@ -213,7 +222,9 @@
 
       {#if sentimentFacets.length > 0}
         <section class="iwac-facets__group" class:iwac-facets__group--open={sentimentOpen}>
-          <h3 class="iwac-facets__group-h">
+          <!-- role=heading, like FacetGroup's: the button inside resets the
+               font, so no heading element's own styles ever showed here. -->
+          <div class="iwac-facets__group-h" role="heading" aria-level={level + 1}>
             <button
               type="button"
               class="iwac-facets__group-heading"
@@ -229,7 +240,7 @@
                 ><Icon name={sentimentOpen ? 'chevron-down' : 'chevron-right'} /></span
               >
             </button>
-          </h3>
+          </div>
           {#if sentimentOpen}
             <div class="iwac-facets__group-body" id={sentimentBodyId}>
               {#each sentimentFacets as f (f.field_name)}
@@ -240,7 +251,7 @@
                   selected={selected[f.field_name] ?? []}
                   label={labels?.[f.field_name]}
                   sortMode={NUMERIC_FACET_FIELDS.has(f.field_name) ? 'value-asc' : 'count'}
-                  headingLevel={4}
+                  nested
                   onToggle={toggleFacet}
                   {onFacetSearch}
                 />

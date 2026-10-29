@@ -4,6 +4,7 @@
   import { CHIP_ICONS, createResultCard, type CardChip } from '../lib/resultCard.svelte';
   import Icon from './Icon.svelte';
   import Sparkline from './Sparkline.svelte';
+  import { headingLevel } from '../lib/headings';
 
   /**
    * One result, rendered in one of two layouts:
@@ -82,6 +83,10 @@
   }: Props = $props();
 
   const { locale, t } = useI18n();
+
+  // One level below the surface's own headings (lib/headings.ts): h3 under
+  // the page's h1 and the surface's h2s, h4 inside a titled block.
+  const titleLevel = headingLevel(1);
 
   // Every displayed field, derived once from the hit (see the module's
   // docblock). Passed a thunk so the derivations track the props.
@@ -248,6 +253,19 @@
   {/if}
 {/snippet}
 
+<!-- The title, at the level lib/headings.ts gives a card. -->
+{#snippet title(gallery: boolean)}
+  {#if titleLevel === 4}
+    <h4 class="iwac-card__title" class:iwac-card__title--gallery={gallery}>
+      {@render titleLink()}
+    </h4>
+  {:else}
+    <h3 class="iwac-card__title" class:iwac-card__title--gallery={gallery}>
+      {@render titleLink()}
+    </h3>
+  {/if}
+{/snippet}
+
 <article
   class="iwac-card iwac-card--{layout}"
   class:iwac-card--no-thumb={layout === 'list' && !cardData.thumbSrc}
@@ -284,7 +302,7 @@
       <header class="iwac-card__head">
         {@render typeBadge()}{@render eyebrowDate()}{@render eyebrowDuration()}
       </header>
-      <h3 class="iwac-card__title iwac-card__title--gallery">{@render titleLink()}</h3>
+      {@render title(true)}
       {#if cardData.isEntity}
         {#if cardData.mentionsLabel}<p class="iwac-card__gallery-meta">
             {cardData.mentionsLabel}
@@ -323,7 +341,7 @@
              occurrence metric + sparkline + countries. No body text. -->
         <header class="iwac-card__head">{@render typeBadge()}{@render eyebrowDate()}</header>
 
-        <h3 class="iwac-card__title">{@render titleLink()}</h3>
+        {@render title(false)}
 
         {#if cardData.frequency != null || cardData.mentionsSeries.length >= 2}
           <div class="iwac-card__metrics">
@@ -364,7 +382,7 @@
           {@render typeBadge()}{@render eyebrowDate()}{@render eyebrowDuration()}
         </header>
 
-        <h3 class="iwac-card__title">{@render titleLink()}</h3>
+        {@render title(false)}
 
         {#if cardData.byline.chips.length > 0}
           <!-- Authors, or an edited volume's editors followed by "(eds.)". -->

@@ -7,6 +7,7 @@
   import { adoptableSnapshot, initialSearchState } from './lib/initialState';
   import { resultAnnouncement } from './lib/announce';
   import { normalizeCard, normalizeLocale, provideI18n } from './lib/i18n';
+  import { provideHeadingLevel, type HeadingLevel } from './lib/headings';
   import { createSearchResults, createMapResults } from './lib/searchResults.svelte';
   import { createViewMode } from './lib/viewMode.svelte';
   import { createFilterDrawer } from './lib/filterDrawer.svelte';
@@ -78,9 +79,18 @@
      * own query (standalone /search, page blocks).
      */
     sharedQuery?: string;
+    /**
+     * The level of this surface's own headings ("Filters", "Results"): 3
+     * under a heading the page already prints (a titled block, the item-set
+     * page), else 2 — see lib/headings.ts. Read once at init.
+     */
+    headingLevel?: HeadingLevel;
   }
 
-  const { bootstrap, showSearchBox = true, sharedQuery }: Props = $props();
+  const { bootstrap, showSearchBox = true, sharedQuery, headingLevel = 2 }: Props = $props();
+
+  // svelte-ignore state_referenced_locally
+  provideHeadingLevel(headingLevel);
 
   // Provide the locale + translator to the whole component subtree. Read
   // once at init from the server-detected bootstrap locale (defaults to
@@ -708,8 +718,9 @@
       <!--
         A landmark with a name, and tabindex="-1" so the skip link and the
         pager can put focus here. The heading is visually hidden but real:
-        without it the page's only <h2> is "Filters", so every result <h3>
-        nested under the filter sidebar in the document outline.
+        without it the surface's only heading is "Filters", so every result
+        title nested under the filter sidebar in the document outline. Its
+        level is the surface's (lib/headings.ts).
       -->
       <section
         class="iwac-search__results"
@@ -719,7 +730,11 @@
         aria-labelledby={resultsHeadingId}
         aria-busy={results.isLoading}
       >
-        <h2 id={resultsHeadingId} class="iwac-search__sr-only">{t('results_heading')}</h2>
+        {#if headingLevel === 3}
+          <h3 id={resultsHeadingId} class="iwac-search__sr-only">{t('results_heading')}</h3>
+        {:else}
+          <h2 id={resultsHeadingId} class="iwac-search__sr-only">{t('results_heading')}</h2>
+        {/if}
         <!-- Kept through an error: the mobile Filters trigger is the only way to
              the drawer, and the drawer is where the reader undoes the filter
              that broke the search. -->

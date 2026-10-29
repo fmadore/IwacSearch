@@ -27,6 +27,7 @@
   import { MAX_FACET_VALUES } from '../lib/typesense';
   import Icon from './Icon.svelte';
   import { refocus } from '../lib/refocus';
+  import { headingLevel } from '../lib/headings';
 
   /**
    * One facet field rendered as a collapsible checklist with an optional
@@ -94,8 +95,11 @@
      * noise.
      */
     sortMode?: 'count' | 'value-asc';
-    /** Heading level: 3 under the panel's h2, 4 inside the sentiment group's h3. */
-    headingLevel?: 3 | 4;
+    /**
+     * Inside the sentiment group: the heading goes one level below that
+     * group's, i.e. two below the panel's "Filters" (lib/headings.ts).
+     */
+    nested?: boolean;
   }
 
   const {
@@ -109,8 +113,12 @@
     onFacetSearch,
     label,
     sortMode = 'count',
-    headingLevel = 3,
+    nested = false,
   }: Props = $props();
+
+  // One level below the panel's heading, two inside the sentiment group.
+  // svelte-ignore state_referenced_locally
+  const level = headingLevel(nested ? 2 : 1);
 
   const { locale, t, tp, formatNumber } = useI18n();
 
@@ -254,10 +262,11 @@
 <section class="iwac-facet" class:iwac-facet--collapsed={collapsed}>
   <!-- The disclosure button INSIDE a heading, so a screen reader's heading
        list reaches every facet (they were bare buttons, invisible to heading
-       navigation). Level 3 under the panel's h2, 4 inside the sentiment
-       group's h3; role=heading rather than a dynamic h3/h4 element, which
-       cost the bundle twice as much for the same semantics. -->
-  <div class="iwac-facet__h" role="heading" aria-level={headingLevel}>
+       navigation). One level below the panel's heading, two inside the
+       sentiment group (lib/headings.ts); role=heading rather than a dynamic
+       heading element, which cost the bundle twice as much for the same
+       semantics. -->
+  <div class="iwac-facet__h" role="heading" aria-level={level}>
     <button
       type="button"
       class="iwac-facet__heading"

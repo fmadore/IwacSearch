@@ -12,10 +12,12 @@ import { svelte } from '@sveltejs/vite-plugin-svelte';
  * codecs are only meaningful against a real `URL` / `URLSearchParams`.
  *
  * The svelte plugin is loaded so `*.svelte.ts` composables (which compile
- * runes) can be imported by tests. Component rendering is deliberately NOT
- * covered — that needs a DOM-testing stack and would mostly assert markup;
- * the value here is in the codecs, query builders and state rules that
- * silently changed behaviour before (see A1 in docs/module-review-2026-07.md).
+ * runes) can be imported by tests. Component rendering is mostly NOT covered
+ * here — the value is in the codecs, query builders and state rules that
+ * silently changed behaviour before (see A1 in docs/module-review-2026-07.md);
+ * the built bundle is exercised in a real browser by tests/browser. The
+ * exception mounts real components where the contract IS the markup (the
+ * heading levels, tests/client/headings.test.ts).
  */
 /**
  * The suite runs WEST OF GREENWICH, on purpose. Publication dates are stored
@@ -30,6 +32,10 @@ process.env.TZ = 'America/New_York';
 
 export default defineConfig({
   plugins: [svelte()],
+  // Svelte's package exports serve its SERVER runtime to Node unless asked
+  // for the browser build, where `mount()` throws "not available on the
+  // server" — tests/client/headings.test.ts mounts real components.
+  resolve: { conditions: ['browser'] },
   test: {
     environment: 'jsdom',
     env: { TZ: 'America/New_York' },

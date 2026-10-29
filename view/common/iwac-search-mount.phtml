@@ -9,6 +9,11 @@
  * relies on as a contract:
  *
  *   1. A <div data-iwac-search-root data-iwac-block-id="..."> mount target.
+ *      data-iwac-heading-level is 3 when the page prints a heading of its own
+ *      right above the surface (a titled block's h2, the theme's "Items" h2
+ *      on an item set), else 2: the client's "Filters" / "Results" headings,
+ *      and the result titles one level below them, then nest under it
+ *      instead of beside it (src/svelte/lib/headings.ts).
  *   2. A static skeleton inside it so the page doesn't reflow when Svelte
  *      replaces the content.
  *   3. A sibling <script type="application/json" id="iwac-search-state-...">
@@ -26,6 +31,8 @@
  * @var int $skeleton_rows                       How many placeholder rows to show.
  *                                               Tuned per surface (block: 3, full
  *                                               shells: 5).
+ * @var int $heading_level                       Optional: 3 under a heading of the
+ *                                               page's own, else 2 (the default).
  */
 
 // Resolve mount-prefix-sensitive endpoints at view time. The controller
@@ -40,10 +47,13 @@ $bootstrap['locale'] = $this->iwacLocale();
 
 $rows = isset($skeleton_rows) ? max(0, (int) $skeleton_rows) : 3;
 $id   = (string) $block_id;
+// Only 2 or 3 mean anything to the client (lib/headings.ts parseHeadingLevel).
+$headingLevel = isset($heading_level) && (int) $heading_level === 3 ? 3 : 2;
 ?>
 <div
     data-iwac-search-root
     data-iwac-block-id="<?= $this->escapeHtmlAttr($id) ?>"
+    data-iwac-heading-level="<?= $headingLevel ?>"
     class="iwac-search-block__root"
     id="iwac-search-root-<?= $this->escapeHtmlAttr($id) ?>"
 >

@@ -12,6 +12,7 @@
   import { resultAnnouncement } from '../lib/announce';
   import { landOnResults, refocus } from '../lib/refocus';
   import { provideI18n, normalizeLocale, type Locale } from '../lib/i18n';
+  import { provideHeadingLevel, type HeadingLevel } from '../lib/headings';
   import App from '../App.svelte';
   import ResultItem from './ResultItem.svelte';
   import Pagination from './Pagination.svelte';
@@ -43,9 +44,15 @@
 
   interface Props {
     bootstrap: IwacFederatedBootstrap;
+    /** The level of the page's own headings below its h1 (lib/headings.ts). */
+    headingLevel?: HeadingLevel;
   }
 
-  const { bootstrap }: Props = $props();
+  const { bootstrap, headingLevel = 2 }: Props = $props();
+
+  // For the union tab's heading and cards; the per-tab Apps get it as a prop.
+  // svelte-ignore state_referenced_locally
+  provideHeadingLevel(headingLevel);
 
   // svelte-ignore state_referenced_locally
   const locale: Locale = normalizeLocale(bootstrap.locale);
@@ -468,6 +475,14 @@
            (no facets — union responses carry none; the per-collection tabs
            keep the full faceted experience). -->
       <div class="iwac-fed__union" aria-busy={unionLoading} tabindex="-1" bind:this={unionListEl}>
+        <!-- The heading the per-collection tabs get from App: without it the
+             merged list's card titles sat a level below a heading that was
+             never there. -->
+        {#if headingLevel === 3}
+          <h3 class="iwac-fed__sr">{t('results_heading')}</h3>
+        {:else}
+          <h2 class="iwac-fed__sr">{t('results_heading')}</h2>
+        {/if}
         {#if unionError}
           <div class="iwac-fed__union-error" role="alert">
             <strong>{t('search_unavailable')}</strong>
@@ -530,7 +545,7 @@
       </div>
     {:else}
       {#key activeTab}
-        <App bootstrap={activeBootstrap} showSearchBox={false} sharedQuery={query} />
+        <App bootstrap={activeBootstrap} showSearchBox={false} sharedQuery={query} {headingLevel} />
       {/key}
     {/if}
   </div>

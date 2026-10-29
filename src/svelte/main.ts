@@ -17,6 +17,7 @@ import { mount } from 'svelte';
 import App from './App.svelte';
 import FederatedApp from './components/FederatedApp.svelte';
 import { translate, type Locale } from './lib/i18n';
+import { parseHeadingLevel } from './lib/headings';
 import type { IwacBootstrap, IwacFederatedBootstrap } from './lib/types';
 
 function parseState<T>(scriptId: string): T | null {
@@ -64,7 +65,11 @@ function mountSearchRoots(): void {
     if (!bootstrap) {
       return;
     }
-    mountRoot(rootEl, bootstrap.locale, () => mount(App, { target: rootEl, props: { bootstrap } }));
+    // Under a heading the page already prints, the surface's own step down.
+    const headingLevel = parseHeadingLevel(rootEl.dataset.iwacHeadingLevel);
+    mountRoot(rootEl, bootstrap.locale, () =>
+      mount(App, { target: rootEl, props: { bootstrap, headingLevel } }),
+    );
   });
 }
 
@@ -79,8 +84,9 @@ function mountFederatedRoots(): void {
     if (!bootstrap) {
       return;
     }
+    const headingLevel = parseHeadingLevel(rootEl.dataset.iwacHeadingLevel);
     mountRoot(rootEl, bootstrap.locale, () =>
-      mount(FederatedApp, { target: rootEl, props: { bootstrap } }),
+      mount(FederatedApp, { target: rootEl, props: { bootstrap, headingLevel } }),
     );
   });
 }

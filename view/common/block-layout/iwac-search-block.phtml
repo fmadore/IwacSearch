@@ -67,5 +67,7 @@ $hasHeading = $title !== '';
         'bootstrap'      => $bootstrap,
         'block_id'       => $blockId,
         'skeleton_rows'  => 3,
+        // Under the block's own h2, the surface's headings step down to h3.
+        'heading_level'  => $hasHeading ? 3 : 2,
     ]) ?>
 </section>
