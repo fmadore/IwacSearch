@@ -24,6 +24,12 @@ $logger = new class($db, $listener) extends Psr\Log\AbstractLogger {
     }
 };
 $previous = $ops->resolveAliasTarget('iwac_current');
+$previousIndex = $ops->resolveAliasTarget('iwac_index_current');
+// A rebuild killed mid-import leaves its build recorded as `building`.
+$ledger = new IwacSearch\Indexer\DatabaseGenerationLedger($db);
+$orphan = 'iwac_v99_20210101_000000_bbbbbbbbbbbb';
+$ledger->recordBuilding($orphan, 'iwac_current');
+$client->collections->create(['name' => $orphan, 'fields' => [['name' => 'is_public', 'type' => 'bool']]]);
 $stats = (new ReindexOrchestrator($client, $db, dirname(__DIR__, 2), $logger))->run();
 // The two edits land during the content stream, so they are replayed in the
 // unlocked phase; nothing changed after the second watermark.
@@ -33,6 +39,21 @@ check($ops->document('iwac_current', '1')['is_public'] === false && $ops->docume
 check($ops->documentCount($previous) > 0, 'previous collection retained after promotion');
 check($stats['indexed'] === 1 && $stats['verified_counts']['article'] === 1, 'final source and server subset counts reconciled');
 check($ops->documentCount('iwac_index_current') === 1, 'entity generation rebuilt from final source');
+check($stats['generations']['recovered'] === [$orphan] && !in_array($orphan, array_column($client->collections->retrieve(), 'name'), true), 'rebuild start drops the build an interrupted rebuild left');
+$first = ['content' => $stats['collection'], 'index' => $stats['index']['collection']];
+$expectedLedger = [
+    $first['content'] => ['alias' => 'iwac_current', 'status' => 'live'],
+    $first['index'] => ['alias' => 'iwac_index_current', 'status' => 'live'],
+    $previous => ['alias' => 'iwac_current', 'status' => 'previous'],
+    $previousIndex => ['alias' => 'iwac_index_current', 'status' => 'previous'],
+];
+ksort($expectedLedger);
+$recorded = static function () use ($ledger): array {
+    $rows = $ledger->generations();
+    ksort($rows);
+    return $rows;
+};
+check($recorded() === $expectedLedger, 'ledger records both live generations and their rollback targets');
 
 // An import outage specifically during replay must not move either alias.
 $db->executeStatement('UPDATE resource SET is_public=1 WHERE id=1');
@@ -60,18 +81,50 @@ try {
 check($ops->resolveAliasTarget('iwac_current') === $beforeContent && $ops->resolveAliasTarget('iwac_index_current') === $beforeIndex, 'failed replay preserves both aliases');
 $generations = array_column($client->collections->retrieve(), 'name');
 check(count(preg_grep('/^iwac_v[0-9]+_/', $generations)) === 2, 'failed build is dropped; live and previous generations remain');
+check($ledger->generations('building') === [] && $recorded() === $expectedLedger, 'failed build leaves nothing in the ledger');
 check($journal->status()['pending'] > 0, 'failed replay remains durably retryable');
 (new IwacSearch\Indexer\ChangeDrainer($db, $incremental))->run();
 check($journal->status()['pending'] === 0, 'recovery drains failed changes');
 
-$client->collections->create(['name' => 'iwac_v99_20180101_000000_aaaaaaaaaaaa', 'fields' => [['name' => 'is_public', 'type' => 'bool']]]);
+// The next promotion keeps live + one previous per alias and deletes the rest.
+$stats = (new ReindexOrchestrator($client, $db, dirname(__DIR__, 2), new $loggerClass($db, $listener)))->run();
+$removedAtPromotion = $stats['generations']['removed'];
+sort($removedAtPromotion);
+$expectedRemoved = [$previous, $previousIndex];
+sort($expectedRemoved);
+check($removedAtPromotion === $expectedRemoved && !array_intersect($expectedRemoved, array_column($client->collections->retrieve(), 'name')), 'promotion deletes the generations it retires');
+$rollback = $ledger->generations('previous');
+check(count($rollback) === 2 && isset($rollback[$first['content']], $rollback[$first['index']]), 'the replaced generations become the rollback targets');
+
+$create = static fn (string $name) => $client->collections->create(['name' => $name, 'fields' => [['name' => 'is_public', 'type' => 'bool']]]);
+// Collections the ledger never recorded (built before 3.27) keep the old rule.
+$create('iwac_v99_20180101_000000_aaaaaaaaaaaa');
 $client->aliases->upsert('protected_test_alias', ['collection_name' => 'iwac_v99_20180101_000000_aaaaaaaaaaaa']);
-$client->collections->create(['name' => 'iwac_v99_20170101_000000_aaaaaaaaaaaa', 'fields' => [['name' => 'is_public', 'type' => 'bool']]]);
-// Failed builds are dropped at once now, so the newest inactive generation
-// (which retention always keeps) has to be created explicitly.
-$client->collections->create(['name' => 'iwac_v99_20190101_000000_aaaaaaaaaaaa', 'fields' => [['name' => 'is_public', 'type' => 'bool']]]);
+$create('iwac_v99_20170101_000000_aaaaaaaaaaaa');
+$create('iwac_v99_20190101_000000_aaaaaaaaaaaa');
+// Without a recorded rollback target, the newest unrecorded one is kept as it.
+$client->collections[$first['index']]->delete();
+$ledger->forget($first['index']);
+$create('iwac_index_v99_20170101_000000_aaaaaaaaaaaa');
+$create('iwac_index_v99_20190101_000000_aaaaaaaaaaaa');
+// A retired generation a promotion could not delete, and an orphaned build.
+$create('iwac_v99_20160101_000000_cccccccccccc');
+$ledger->recordBuilding('iwac_v99_20160101_000000_cccccccccccc', 'iwac_current');
+$ledger->mark('iwac_v99_20160101_000000_cccccccccccc', 'retired');
+$create('iwac_v99_20260101_000000_dddddddddddd');
+$ledger->recordBuilding('iwac_v99_20260101_000000_dddddddddddd', 'iwac_current');
 $removed = (new IwacSearch\Indexer\CollectionRetention($db, $client))->prune();
-check(in_array('iwac_v99_20170101_000000_aaaaaaaaaaaa', $removed, true), 'retention removes old unreferenced generations');
-check(!in_array('iwac_v99_20190101_000000_aaaaaaaaaaaa', $removed, true), 'retention keeps the newest inactive generation');
+check(in_array('iwac_v99_20160101_000000_cccccccccccc', $removed, true) && in_array('iwac_v99_20260101_000000_dddddddddddd', $removed, true), 'retention removes retired and orphaned ledger generations whatever their age');
+check(in_array('iwac_v99_20170101_000000_aaaaaaaaaaaa', $removed, true) && in_array('iwac_v99_20190101_000000_aaaaaaaaaaaa', $removed, true), 'retention removes old unrecorded generations once a rollback target is recorded');
+check(in_array('iwac_index_v99_20170101_000000_aaaaaaaaaaaa', $removed, true) && !in_array('iwac_index_v99_20190101_000000_aaaaaaaaaaaa', $removed, true), 'retention keeps the newest unrecorded generation while no rollback target is recorded');
 check(!in_array('iwac_v99_20180101_000000_aaaaaaaaaaaa', $removed, true), 'retention protects every alias target');
+check(!array_intersect([$first['content'], $stats['collection'], $stats['index']['collection']], $removed), 'retention keeps the live and previous generations');
+// Uninstall drops the tables and names the collections it leaves behind.
+$uninstallLog = new Laminas\Log\Writer\Mock();
+$services->setService('Omeka\Logger', (new Laminas\Log\Logger())->addWriter($uninstallLog));
+$liveContent = (string) $ops->resolveAliasTarget('iwac_current');
+$module->uninstall($services);
+$tables = $db->fetchFirstColumn("SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME LIKE 'iwac_search_%'");
+$notices = implode("\n", array_column($uninstallLog->events, 'message'));
+check($tables === [] && str_contains($notices, $liveContent) && $ops->documentCount('iwac_current') > 0, 'uninstall drops the module tables, leaves Typesense alone and logs the collections it created');
 echo "Bulk integration passed.\n";

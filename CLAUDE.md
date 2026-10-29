@@ -47,7 +47,20 @@ provides the Typesense container, nginx `/search-api/` proxy, and backups.
 
 ## Module lifecycle
 
-- `Module.php :: install` / `upgrade` — create the durable ID journal `iwac_search_change`. Uninstall drops it and the retired browse table, never Typesense collections.
+- `Module.php :: install` / `upgrade` — create the module's tables through
+  `Indexer\IndexingSchema` (connection only: Omeka runs `upgrade()` while the
+  module is inactive, so no module service resolves there): the durable ID
+  journal `iwac_search_change` and the generation ledger
+  `iwac_search_generation`, into which the upgrade folds the pre-3.27
+  `iwac_search_rollback` record. Uninstall drops them and the retired browse
+  table, never Typesense collections — it logs the ones the ledger recorded.
+- **The generation ledger owns collection cleanup.** Every build is recorded
+  before its collection is created; a rebuild drops the builds an interrupted
+  one left (`building` rows) before starting, and each promotion keeps the
+  live generation plus the one it replaced per alias and deletes the older
+  ones it retires (`Indexer\GenerationCleanup`). Nothing an alias targets is
+  ever deleted. `CollectionRetention` (prune) runs the same ledger passes and
+  the old name-regex rule for collections built before the ledger.
 - `Module.php :: attachListeners` — injects the Svelte assets on the
   search routes + the site-wide header enhancer, and wires the
   `api.execute.pre/post` change-journaling events. Background jobs perform indexing; pre/post hold the mutation gate around writes, tracked per request object in `Indexer\WriteGate` because Omeka skips the post event when a write throws. The indexer listener is

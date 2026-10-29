@@ -38,9 +38,12 @@ use Typesense\Client as TypesenseClient;
  * aggregates are a rebuild-time statistic (incremental work preserves them),
  * so reading them after W2 is within contract.
  *
- * A generation that is never promoted is dropped: it can never be a
- * rollback target (those are recorded in iwac_search_rollback), and every
- * resident generation costs Typesense memory.
+ * Every build is entered in the generation ledger before its collection is
+ * created. A generation that is never promoted is dropped (it can never be a
+ * rollback target, and every resident generation costs Typesense memory);
+ * one a killed rebuild left behind is dropped when the next rebuild starts.
+ * A promotion keeps the live generation and the one it replaced per alias,
+ * and deletes the older ones it retires ({@see GenerationCleanup}).
  */
 final class ReindexOrchestrator
 {
@@ -76,7 +79,12 @@ final class ReindexOrchestrator
         $journal = new ChangeJournal($this->connection);
         $mutation = new DatabaseLock($this->connection, 'mutation');
         $publish = new DatabaseLock($this->connection, 'publish');
-        $ops = new CollectionOps(fn (): TypesenseClient => $this->typesense, $this->logger, shouldStop: $this->shouldStop);
+        $ledger = new DatabaseGenerationLedger($this->connection);
+        $ops = new CollectionOps(fn (): TypesenseClient => $this->typesense, $this->logger, shouldStop: $this->shouldStop, ledger: $ledger);
+        $cleanup = new GenerationCleanup($ops, $ledger, $this->logger);
+        // We hold the rebuild lock, so any build still marked as building
+        // belongs to a rebuild that died; reclaim its memory before adding ours.
+        $recovered = $cleanup->recoverOrphans();
         $contentSchema = new SchemaLoader($this->moduleRoot . '/data/schema.yaml');
         $indexSchema = new SchemaLoader($this->moduleRoot . '/data/schema-index.yaml');
         $oldContent = $ops->resolveAliasTarget(IwacInstance::CONTENT_ALIAS);
@@ -167,10 +175,6 @@ final class ReindexOrchestrator
                     try {
                         $ops->promote(IwacInstance::CONTENT_ALIAS, $content, array_sum($expected), 0);
                         $ops->promote(IwacInstance::INDEX_ALIAS, $index, count($entityIds), 0);
-                        $this->connection->executeStatement(
-                            'INSERT INTO iwac_search_rollback (alias_name, collection_name) VALUES (?, ?), (?, ?) ON DUPLICATE KEY UPDATE collection_name = VALUES(collection_name)',
-                            [IwacInstance::CONTENT_ALIAS, $oldContent, IwacInstance::INDEX_ALIAS, $oldIndex]
-                        );
                     } catch (Throwable $e) {
                         foreach ([IwacInstance::CONTENT_ALIAS => $oldContent, IwacInstance::INDEX_ALIAS => $oldIndex] as $alias => $previous) {
                             try {
@@ -181,6 +185,10 @@ final class ReindexOrchestrator
                         }
                         throw $e;
                     }
+                    $this->recordPromotion($ledger, [
+                        IwacInstance::CONTENT_ALIAS => [$content, $oldContent],
+                        IwacInstance::INDEX_ALIAS => [$index, $oldIndex],
+                    ]);
                 } finally {
                     $publish->release();
                 }
@@ -199,10 +207,46 @@ final class ReindexOrchestrator
             throw $e;
         }
 
+        $stats['generations'] = ['recovered' => $recovered, 'removed' => $this->retire($cleanup)];
         $journal->prune();
         $stats['analytics'] = (new AnalyticsSync($this->typesense, $this->logger))->sync();
         $stats['duration_seconds'] = round(microtime(true) - $started, 2);
         return $stats;
+    }
+
+    /**
+     * Ledger bookkeeping for promotions that already happened. The verified
+     * aliases are live, so a failure here is logged, never fatal: a build
+     * left marked as building is aliased, and the next rebuild records it as
+     * live; nothing is retired, so nothing is deleted on the strength of it.
+     *
+     * @param array<string, array{0: string, 1: ?string}> $promotions alias → [new target, previous target]
+     */
+    private function recordPromotion(GenerationLedger $ledger, array $promotions): void
+    {
+        foreach ($promotions as $alias => [$live, $previous]) {
+            try {
+                $ledger->recordPromotion($alias, $live, $previous);
+            } catch (Throwable $e) {
+                $this->logger->error('Alias promoted, but the generation ledger could not record it', ['alias' => $alias, 'collection' => $live, 'error' => $e->getMessage()]);
+            }
+        }
+    }
+
+    /**
+     * Retention after a promotion, best effort: a generation that cannot be
+     * deleted now stays retired and is retried by the next rebuild or prune.
+     *
+     * @return list<string>
+     */
+    private function retire(GenerationCleanup $cleanup): array
+    {
+        try {
+            return $cleanup->removeRetired();
+        } catch (Throwable $e) {
+            $this->logger->warning('Retired generations could not be removed; the next rebuild or prune retries', ['error' => $e->getMessage()]);
+            return [];
+        }
     }
 
     /**

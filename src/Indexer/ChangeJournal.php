@@ -9,27 +9,25 @@ use Doctrine\DBAL\Connection;
 /** Durable ID-only journal. Acknowledged rows remain available to in-flight rebuilds. */
 final class ChangeJournal
 {
+    public const TABLE = 'iwac_search_change';
+
     public function __construct(private readonly Connection $connection)
     {
     }
 
+    /**
+     * Create the journal and the module's other tables (see IndexingSchema),
+     * which the dashboard probe below requires together.
+     */
     public static function install(Connection $connection): void
     {
-        $connection->executeStatement('CREATE TABLE IF NOT EXISTS iwac_search_change ('
-            . 'id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,'
-            . 'item_id INT NOT NULL, processed TINYINT NOT NULL DEFAULT 0,'
-            . 'created DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,'
-            . 'KEY pending (processed, id), KEY resource (item_id)'
-            . ') ENGINE=InnoDB');
-        $connection->executeStatement('CREATE TABLE IF NOT EXISTS iwac_search_rollback ('
-            . 'alias_name VARCHAR(190) NOT NULL PRIMARY KEY, collection_name VARCHAR(190) NULL) ENGINE=InnoDB');
+        IndexingSchema::install($connection);
     }
 
     /** Read-only readiness probe; never create tables during a page or catalog write. */
     public function assertInstalled(): void
     {
-        $this->connection->executeQuery('SELECT id FROM iwac_search_change LIMIT 0');
-        $this->connection->executeQuery('SELECT alias_name FROM iwac_search_rollback LIMIT 0');
+        IndexingSchema::assertInstalled($this->connection);
     }
 
     /** @param list<int> $ids */
@@ -60,7 +58,7 @@ final class ChangeJournal
         $row = $this->connection->executeQuery(
             'SELECT (SELECT COALESCE(MAX(id), 0) FROM iwac_search_change) AS recorded,'
             . ' (SELECT COALESCE(MAX(id), 0) FROM iwac_search_change WHERE processed = 1) AS applied,'
-            . " (SELECT GROUP_CONCAT(COALESCE(collection_name, '') ORDER BY alias_name SEPARATOR ',') FROM iwac_search_rollback) AS generations"
+            . " (SELECT GROUP_CONCAT(collection_name ORDER BY collection_name SEPARATOR ',') FROM iwac_search_generation WHERE status = 'live') AS generations"
         )->fetchAllAssociative()[0];
         return hash('sha256', json_encode($row, JSON_THROW_ON_ERROR));
     }

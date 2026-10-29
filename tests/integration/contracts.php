@@ -37,8 +37,15 @@ $dashboard = new class(journal: new ChangeJournal($db)) extends \IwacSearch\Cont
 };
 $missing = $dashboard->indexAction();
 check($missing->getVariable('queue') === null && str_contains($missing->getVariable('queueError'), 'upgrade IWAC Search'), 'dashboard survives missing journal with upgrade guidance');
+// 3.19–3.26 recorded the outgoing alias targets in iwac_search_rollback; the
+// upgrade folds them into the generation ledger as rollback targets.
+$db->executeStatement('CREATE TABLE iwac_search_rollback (alias_name VARCHAR(190) NOT NULL PRIMARY KEY, collection_name VARCHAR(190) NULL) ENGINE=InnoDB');
+$db->executeStatement("INSERT INTO iwac_search_rollback VALUES ('iwac_current', 'iwac_v8_20260101_000000_aaaaaaaaaaaa'), ('iwac_index_current', NULL)");
 ChangeJournal::install($db);
-$db->executeStatement('DROP TABLE iwac_search_rollback');
+check((new IwacSearch\Indexer\DatabaseGenerationLedger($db))->generations() === ['iwac_v8_20260101_000000_aaaaaaaaaaaa' => ['alias' => 'iwac_current', 'status' => 'previous']]
+    && $db->fetchOne("SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'iwac_search_rollback'") == 0, 'upgrade carries the rollback record into the generation ledger');
+$db->executeStatement('DELETE FROM iwac_search_generation');
+$db->executeStatement('DROP TABLE iwac_search_generation');
 check($dashboard->indexAction()->getVariable('queueError') !== null, 'dashboard detects partial schema installation');
 ChangeJournal::install($db);
 $db->insert('iwac_search_change', ['item_id' => 999999]);

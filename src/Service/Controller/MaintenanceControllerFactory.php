@@ -45,8 +45,11 @@ final class MaintenanceControllerFactory implements FactoryInterface
         $schema = (new SchemaLoader($moduleRoot . '/data/schema.yaml'))->load();
         $baseName = is_string($schema['name'] ?? null) ? $schema['name'] : 'iwac_v1';
 
+        $connection = $container->get('Omeka\Connection');
+
         return new MaintenanceController(
-            journal: new \IwacSearch\Indexer\ChangeJournal($container->get('Omeka\Connection')),
+            journal: new \IwacSearch\Indexer\ChangeJournal($connection),
+            ledger: new \IwacSearch\Indexer\DatabaseGenerationLedger($connection),
             collectionBaseName: $baseName,
             clientFactory:      TypesenseClientLazy::fromContainer($container),
             contentAlias:       IwacInstance::CONTENT_ALIAS,

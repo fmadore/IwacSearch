@@ -74,6 +74,8 @@ class MaintenanceController extends AbstractActionController
         private readonly string $contentAlias = IwacInstance::CONTENT_ALIAS,
         private readonly string $indexAlias = IwacInstance::INDEX_ALIAS,
         private readonly ?\IwacSearch\Indexer\ChangeJournal $journal = null,
+        // Read for the generation list's status column; null hides it.
+        private readonly ?\IwacSearch\Indexer\GenerationLedger $ledger = null,
     ) {
     }
 
@@ -243,9 +245,13 @@ class MaintenanceController extends AbstractActionController
      * collection in RAM, so this is the number to check before a rebuild and
      * the reason to run the retention cleanup.
      *
+     * `ledger` is the generation ledger's status (live / previous / retired /
+     * building), null for a collection it never recorded (built before 3.27)
+     * or when the ledger cannot be read.
+     *
      * @return array{
      *   available: bool,
-     *   generations: list<array{name: string, documents: int, created: ?int, serves: list<string>}>,
+     *   generations: list<array{name: string, documents: int, created: ?int, serves: list<string>, ledger: ?string}>,
      *   memory: ?array{active: ?int, used: ?int, total: ?int}
      * }
      */
@@ -257,6 +263,12 @@ class MaintenanceController extends AbstractActionController
             return $out;
         }
         try {
+            $recorded = [];
+            try {
+                $recorded = $this->ledger?->generations() ?? [];
+            } catch (Throwable) {
+                // The ledger is informational here; the server's list stands alone.
+            }
             $serves = [];
             foreach ($client->aliases->retrieve()['aliases'] ?? [] as $alias) {
                 $serves[(string) ($alias['collection_name'] ?? '')][] = (string) ($alias['name'] ?? '');
@@ -271,6 +283,7 @@ class MaintenanceController extends AbstractActionController
                     'documents' => (int) ($collection['num_documents'] ?? 0),
                     'created'   => isset($collection['created_at']) ? (int) $collection['created_at'] : null,
                     'serves'    => $serves[$name] ?? [],
+                    'ledger'    => $recorded[$name]['status'] ?? null,
                 ];
             }
             usort($out['generations'], static fn (array $a, array $b): int => strcmp($b['name'], $a['name']));
@@ -355,11 +368,13 @@ class MaintenanceController extends AbstractActionController
 
     /**
      * POST: dispatch a PruneCollections job — removes old, inactive index
-     * generations under the rebuild lock (see CollectionRetention).
+     * generations under the rebuild lock (see CollectionRetention). A
+     * rebuild already removes the generations it retires; this catches what
+     * an interrupted rebuild left and builds from before the ledger.
      */
     public function pruneCollectionsAction(): Response
     {
-        return $this->dispatchJob(\IwacSearch\Job\PruneCollections::class, 'Old index generations queued for cleanup; live aliases and one previous generation are retained.');
+        return $this->dispatchJob(\IwacSearch\Job\PruneCollections::class, 'Old index generations queued for cleanup; every alias target and each alias\'s previous generation are retained.');
     }
 
     /**

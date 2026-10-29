@@ -16,7 +16,7 @@ try {
         );
         (new \IwacSearch\Indexer\ChangeDrainer($connection, $indexer))->run();
     } elseif ($action === 'prune') {
-        $removed = (new \IwacSearch\Indexer\CollectionRetention($connection, $typesense))->prune();
+        $removed = (new \IwacSearch\Indexer\CollectionRetention($connection, $typesense, $logger))->prune();
         $logger->info('Removed old generations', ['collections' => $removed]);
     } elseif ($action !== 'status') {
         throw new \InvalidArgumentException('Usage: php cli/maintenance.php [status|drain|prune]');

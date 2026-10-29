@@ -47,7 +47,11 @@ final class CollectionOps
         private readonly LoggerInterface $logger = new NullLogger(),
         private readonly string $logLabel = 'content',
         /** @var ?Closure(): bool */
-        private readonly ?Closure $shouldStop = null
+        private readonly ?Closure $shouldStop = null,
+        // The rebuild's record of what it creates: a build is entered before
+        // its collection exists and forgotten once it is dropped. Null for
+        // the incremental path, which never creates or drops collections.
+        private readonly ?GenerationLedger $ledger = null,
     ) {
     }
 
@@ -65,11 +69,17 @@ final class CollectionOps
      * Create the timestamped collection from a SchemaLoader::loadForReindex()
      * payload (strips the loader's private `_alias_target` / `_base_name` keys).
      *
+     * The ledger row is written first: from then on the name is owned, so a
+     * create whose response is lost after Typesense accepted it, or a process
+     * killed mid-import, still leaves a record the next rebuild cleans up.
+     *
      * @param array<string,mixed> $versionedSchema
      */
     public function createVersioned(array $versionedSchema): void
     {
+        $alias = (string) ($versionedSchema['_alias_target'] ?? '');
         unset($versionedSchema['_alias_target'], $versionedSchema['_base_name']);
+        $this->ledger?->recordBuilding((string) $versionedSchema['name'], $alias);
         $this->client()->collections->create($versionedSchema);
     }
 
@@ -311,16 +321,54 @@ final class CollectionOps
         }
     }
 
-    /** Drop a collection, logging (never throwing) on failure. */
-    public function safelyDropCollection(string $name): void
+    /**
+     * Every collection an alias currently targets — the set no cleanup may
+     * ever delete, whatever the ledger says. Transport failures propagate.
+     *
+     * @return list<string>
+     */
+    public function aliasTargets(): array
+    {
+        $aliases = $this->client()->aliases->retrieve()['aliases'] ?? null;
+        if (!is_array($aliases)) {
+            throw new RuntimeException('Cannot read the alias table; refusing to treat any collection as unaliased.');
+        }
+        $targets = [];
+        foreach ($aliases as $alias) {
+            if (is_array($alias) && is_string($alias['collection_name'] ?? null)) {
+                $targets[] = $alias['collection_name'];
+            }
+        }
+        return array_values(array_unique($targets));
+    }
+
+    /**
+     * Drop a collection, logging (never throwing) on failure. True once it is
+     * gone — deleted now, or already absent — and then its ledger row is
+     * forgotten too; on failure the row stays, so a later cleanup retries.
+     */
+    public function safelyDropCollection(string $name): bool
     {
         try {
             $this->client()->collections[$name]->delete();
+        } catch (\Typesense\Exceptions\ObjectNotFound) {
+            // Already gone: what the caller wanted.
         } catch (Throwable $e) {
             $this->logger->warning("Failed to drop collection ({$this->logLabel})", [
                 'name'  => $name,
                 'error' => $e->getMessage(),
             ]);
+            return false;
         }
+        try {
+            $this->ledger?->forget($name);
+        } catch (Throwable $e) {
+            // A stale row only means a later cleanup finds the name absent.
+            $this->logger->warning("Dropped collection, but could not update the generation ledger ({$this->logLabel})", [
+                'name'  => $name,
+                'error' => $e->getMessage(),
+            ]);
+        }
+        return true;
     }
 }

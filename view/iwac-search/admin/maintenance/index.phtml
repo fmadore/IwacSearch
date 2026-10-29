@@ -17,8 +17,9 @@
  *   prose tracks schema bumps automatically.
  * @var list<array{alias: string, label: string, reachable: bool, documents: ?int, error: ?string}> $statuses
  *   Live Typesense status, one row per collection.
- * @var array{available: bool, generations: list<array{name: string, documents: int, created: ?int, serves: list<string>}>, memory: ?array{active: ?int, used: ?int, total: ?int}} $generations
- *   Every IWAC generation on the server and Typesense memory.
+ * @var array{available: bool, generations: list<array{name: string, documents: int, created: ?int, serves: list<string>, ledger: ?string}>, memory: ?array{active: ?int, used: ?int, total: ?int}} $generations
+ *   Every IWAC generation on the server, its generation-ledger status, and
+ *   Typesense memory.
  * @var array{available: bool, reason: ?string, popular: list<array{q: string, count: int}>, nohits: list<array{q: string, count: int}>} $analytics
  *   Aggregated search analytics (top queries / no-hit queries), or a
  *   not-yet-provisioned marker.
@@ -101,6 +102,12 @@ $analytics = $analytics ?? ['available' => false, 'reason' => null, 'popular' =>
 <?php
 $generations = $generations ?? ['available' => false, 'generations' => [], 'memory' => null];
 $mib = static fn (?int $bytes): string => $bytes === null ? '—' : number_format($bytes / 1048576) . ' MiB';
+$ledgerLabels = [
+    'live'     => 'live',
+    'previous' => 'previous (rollback target)',
+    'retired'  => 'retired (removed by the next cleanup)',
+    'building' => 'building, or left by an interrupted rebuild',
+];
 ?>
 <section class="iwac-maintenance-generations" style="margin-top:1.5rem;border:1px solid #ddd;border-radius:6px;padding:1rem 1.5rem;background:#fff;">
     <h3 style="margin-top:0;"><?php echo $translate('Index generations'); ?></h3>
@@ -112,6 +119,7 @@ $mib = static fn (?int $bytes): string => $bytes === null ? '—' : number_forma
                 <tr style="text-align:left;border-bottom:2px solid #eee;">
                     <th style="padding:0.4rem 0.5rem;"><?php echo $translate('Collection'); ?></th>
                     <th style="padding:0.4rem 0.5rem;"><?php echo $translate('Serves'); ?></th>
+                    <th style="padding:0.4rem 0.5rem;"><?php echo $translate('Ledger'); ?></th>
                     <th style="padding:0.4rem 0.5rem;"><?php echo $translate('Created'); ?></th>
                     <th style="padding:0.4rem 0.5rem;text-align:right;"><?php echo $translate('Documents'); ?></th>
                 </tr>
@@ -124,6 +132,9 @@ $mib = static fn (?int $bytes): string => $bytes === null ? '—' : number_forma
                             <?php echo $generation['serves'] === []
                                 ? $escape($translate('retained (not live)'))
                                 : $escape(implode(', ', $generation['serves'])); ?>
+                        </td>
+                        <td style="padding:0.4rem 0.5rem;">
+                            <?php echo $escape($translate($ledgerLabels[$generation['ledger'] ?? ''] ?? 'not recorded (built before 3.27)')); ?>
                         </td>
                         <td style="padding:0.4rem 0.5rem;">
                             <?php echo $generation['created'] === null ? '—' : $escape(gmdate('Y-m-d H:i', $generation['created']) . ' UTC'); ?>
@@ -146,7 +157,7 @@ $mib = static fn (?int $bytes): string => $bytes === null ? '—' : number_forma
             </p>
         <?php endif; ?>
         <p class="description" style="margin-top:0.75rem;margin-bottom:0;">
-            <?php echo $translate('Every generation stays in Typesense memory until the cleanup below removes it. The container memory cap is set in IWAC-docker; host figures ignore it.'); ?>
+            <?php echo $translate('Every generation stays in Typesense memory until it is removed. A rebuild keeps the live generation and the one it replaced for each alias and removes the older ones it recorded; the cleanup below also removes what an interrupted rebuild left and generations built before 3.27. The container memory cap is set in IWAC-docker; host figures ignore it.'); ?>
         </p>
     <?php endif; ?>
 </section>

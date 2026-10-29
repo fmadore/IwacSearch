@@ -11,8 +11,8 @@ try {
     require_once $omekaVendor;
     require_once $moduleRoot . '/vendor/autoload.php';
     $connection = require __DIR__ . '/database.php';
-    \IwacSearch\Indexer\ChangeJournal::install($connection);
-    (new \IwacSearch\Indexer\ChangeJournal($connection))->assertInstalled();
+    \IwacSearch\Indexer\IndexingSchema::install($connection);
+    \IwacSearch\Indexer\IndexingSchema::assertInstalled($connection);
     fwrite(STDOUT, "IWAC Search tables are ready. Existing rows were preserved. Complete any pending Omeka module upgrade, then run a full reindex.\n");
 } catch (Throwable $e) {
     fwrite(STDERR, $e->getMessage() . "\n");

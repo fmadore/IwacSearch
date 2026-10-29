@@ -46,11 +46,28 @@ final class FakeTypesense
     public ?Closure $importDecision = null;
     public ?string $importResponse = null;
 
-    /** When set, listing collections throws — exercises the orphan-sweep guard. */
+    /** When set, listing collections throws. */
     public ?RuntimeException $listFailure = null;
+
+    /** When set, listing aliases throws — cleanup must then delete nothing. */
+    public ?RuntimeException $aliasListFailure = null;
 
     /** When set, dropping a collection throws. */
     public ?RuntimeException $dropFailure = null;
+
+    /** When set, creating a collection throws (after the fake has NOT created it). */
+    public ?RuntimeException $createFailure = null;
+
+    /**
+     * What successive /health calls answer: an array is returned, a
+     * throwable thrown; the last entry repeats. Empty = always ready.
+     *
+     * @var list<array<string, mixed>|RuntimeException>
+     */
+    public array $health = [];
+
+    /** Number of /health calls received. */
+    public int $healthCalls = 0;
 
     /** When set, searching throws — exercises the degrade-to-null paths. */
     public ?RuntimeException $searchFailure = null;
@@ -136,7 +153,28 @@ final class FakeClient
         $client = (new \ReflectionClass(TypesenseClient::class))->newInstanceWithoutConstructor();
         $client->collections = new FakeCollections($server);
         $client->aliases = new FakeAliases($server);
+        $client->health = new FakeHealth($server);
         return $client;
+    }
+}
+
+/** @internal */
+final class FakeHealth extends \Typesense\Health
+{
+    public function __construct(private readonly FakeTypesense $server)
+    {
+    }
+
+    /** @return array<string, mixed> */
+    public function retrieve(): array
+    {
+        $answers = $this->server->health;
+        $answer = $answers === [] ? ['ok' => true] : $answers[min($this->server->healthCalls, count($answers) - 1)];
+        $this->server->healthCalls++;
+        if ($answer instanceof RuntimeException) {
+            throw $answer;
+        }
+        return $answer;
     }
 }
 
@@ -157,6 +195,9 @@ final class FakeCollections extends Collections
         $name = (string) ($schema['name'] ?? '');
         if ($name === '') {
             throw new RuntimeException('create() called without a name');
+        }
+        if ($this->server->createFailure !== null) {
+            throw $this->server->createFailure;
         }
         $this->server->collections[$name] = [];
         return $schema;
@@ -416,6 +457,19 @@ final class FakeAliases extends Aliases
     {
         $this->server->aliases[$name] = (string) $mapping['collection_name'];
         return $mapping;
+    }
+
+    /** @return array{aliases: list<array{name: string, collection_name: string}>} */
+    public function retrieve(): array
+    {
+        if ($this->server->aliasListFailure !== null) {
+            throw $this->server->aliasListFailure;
+        }
+        $aliases = [];
+        foreach ($this->server->aliases as $name => $collection) {
+            $aliases[] = ['name' => $name, 'collection_name' => $collection];
+        }
+        return ['aliases' => $aliases];
     }
 
     public function offsetGet($offset): \Typesense\Alias

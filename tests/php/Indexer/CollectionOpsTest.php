@@ -5,6 +5,7 @@ namespace IwacSearch\Tests\Indexer;
 
 use IwacSearch\Indexer\CollectionOps;
 use IwacSearch\Tests\Support\FakeTypesense;
+use IwacSearch\Tests\Support\MemoryGenerationLedger;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use RuntimeException;
@@ -30,10 +31,10 @@ final class CollectionOpsTest extends TestCase
         $this->server = new FakeTypesense();
     }
 
-    private function ops(): CollectionOps
+    private function ops(?MemoryGenerationLedger $ledger = null): CollectionOps
     {
         $client = $this->server->client();
-        return new CollectionOps(static fn(): TypesenseClient => $client);
+        return new CollectionOps(static fn(): TypesenseClient => $client, ledger: $ledger);
     }
 
     // ── The health guard ─────────────────────────────────────────────────
@@ -114,61 +115,85 @@ final class CollectionOpsTest extends TestCase
         self::assertArrayHasKey('iwac_v1_new', $this->server->collections);
     }
 
-    // ── The orphan sweep ─────────────────────────────────────────────────
+    // ── The generation ledger ────────────────────────────────────────────
+    //
+    // Promotion never deletes anything (GenerationCleanup does, from the
+    // ledger); what CollectionOps owes the ledger is to record a build before
+    // creating it and to forget a collection only once it is really gone.
 
-    public function testPromotionRetainsOldGenerationsForExplicitCleanup(): void
+    public function testABuildIsRecordedBeforeItsCollectionIsCreated(): void
     {
-        // Typesense is RAM-resident, so a leaked collection is a permanent
-        // memory cost until someone drops it by hand.
-        $this->server->seedCollection('iwac_v1_20260101_000000');
-        $this->server->seedCollection('iwac_v1_20260201_000000');
-        $this->server->seedCollection('iwac_v1_new');
-        $this->server->aliases['iwac_current'] = 'iwac_v1_20260101_000000';
+        // A create whose response is lost after Typesense accepted it must
+        // still leave a record, or the collection leaks with nobody owning it.
+        $ledger = new MemoryGenerationLedger();
+        $this->server->createFailure = new RuntimeException('read timed out');
 
-        $this->ops()->promote('iwac_current', 'iwac_v1_new', 10, 0);
+        try {
+            $this->ops($ledger)->createVersioned([
+                'name' => 'iwac_v1_20260101_000000_aaaaaaaaaaaa',
+                'fields' => [],
+                '_alias_target' => 'iwac_current',
+            ]);
+            self::fail('the create failure must propagate');
+        } catch (RuntimeException) {
+        }
 
-        self::assertSame(
-            [],
-            $this->server->dropped
-        );
-        self::assertArrayHasKey('iwac_v1_new', $this->server->collections);
+        self::assertSame(['alias' => 'iwac_current', 'status' => 'building'], $ledger->rows['iwac_v1_20260101_000000_aaaaaaaaaaaa']);
     }
 
-    public function testTheSweepLeavesOtherSchemaVersionsAndUnrelatedCollectionsAlone(): void
+    public function testADroppedBuildIsForgotten(): void
     {
-        // iwac_index_* belongs to the entity pass; the analytics collections
-        // accumulate history across reindexes and must never be swept.
-        $this->server->seedCollection('iwac_index_v3_20260101_000000');
-        $this->server->seedCollection('iwac_popular_queries');
-        $this->server->seedCollection('iwac_v2_20260101_000000');
-        $this->server->seedCollection('iwac_v1_new');
+        $ledger = new MemoryGenerationLedger();
+        $ops = $this->ops($ledger);
+        $ops->createVersioned(['name' => 'iwac_v1_new', 'fields' => [], '_alias_target' => 'iwac_current']);
 
-        $this->ops()->promote('iwac_current', 'iwac_v1_new', 10, 0);
-
-        self::assertSame([], $this->server->dropped);
+        self::assertTrue($ops->safelyDropCollection('iwac_v1_new'));
+        self::assertSame([], $ledger->rows);
+        self::assertSame(['iwac_v1_new'], $this->server->dropped);
     }
 
-    public function testTheSweepMatchesOnTheSeparatorSoASiblingPrefixSurvives(): void
+    public function testAnAlreadyAbsentCollectionCountsAsDropped(): void
     {
-        // `iwac_v10_…` must not be swept by a build of `iwac_v1`.
-        $this->server->seedCollection('iwac_v10_20260101_000000');
-        $this->server->seedCollection('iwac_v1_20260101_000000');
-        $this->server->seedCollection('iwac_v1_new');
+        $ledger = new MemoryGenerationLedger();
+        $ledger->recordBuilding('iwac_v1_gone', 'iwac_current');
 
-        $this->ops()->promote('iwac_current', 'iwac_v1_new', 10, 0);
-
-        self::assertSame([], $this->server->dropped);
+        self::assertTrue($this->ops($ledger)->safelyDropCollection('iwac_v1_gone'));
+        self::assertSame([], $ledger->rows);
     }
 
-    public function testTheSweepIsSkippedRatherThanFatalWhenListingFails(): void
+    public function testAFailedDropKeepsTheLedgerRowForTheNextCleanup(): void
     {
-        $this->server->listFailure = new RuntimeException('connection refused');
-        $this->server->seedCollection('iwac_v1_new');
+        $ledger = new MemoryGenerationLedger();
+        $this->server->seedCollection('iwac_v1_stuck');
+        $ledger->recordBuilding('iwac_v1_stuck', 'iwac_current');
+        $this->server->dropFailure = new RuntimeException('connection refused');
 
-        $this->ops()->promote('iwac_current', 'iwac_v1_new', 10, 0);
+        self::assertFalse($this->ops($ledger)->safelyDropCollection('iwac_v1_stuck'));
+        self::assertSame('building', $ledger->rows['iwac_v1_stuck']['status']);
+    }
 
-        // The swap is what matters; a failed cleanup must not undo it.
-        self::assertSame('iwac_v1_new', $this->server->aliases['iwac_current']);
+    public function testARefusedPromotionDropsAndForgetsTheBuild(): void
+    {
+        $ledger = new MemoryGenerationLedger();
+        $ops = $this->ops($ledger);
+        $this->server->aliases['iwac_current'] = 'iwac_v1_old';
+        $ops->createVersioned(['name' => 'iwac_v1_new', 'fields' => [], '_alias_target' => 'iwac_current']);
+
+        try {
+            $ops->promote('iwac_current', 'iwac_v1_new', 0, 0);
+            self::fail('an empty build must be refused');
+        } catch (RuntimeException) {
+        }
+
+        self::assertSame([], $ledger->rows);
+        self::assertSame('iwac_v1_old', $this->server->aliases['iwac_current']);
+    }
+
+    public function testAliasTargetsListsEveryAliasedCollection(): void
+    {
+        $this->server->aliases = ['iwac_current' => 'iwac_v1_a', 'iwac_index_current' => 'iwac_index_v1_a', 'other' => 'iwac_v1_a'];
+
+        self::assertSame(['iwac_v1_a', 'iwac_index_v1_a'], $this->ops()->aliasTargets());
     }
 
     public function testSafelyDropCollectionSwallowsFailures(): void

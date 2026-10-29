@@ -9,8 +9,11 @@ declare(strict_types=1);
  * Omeka.
  *
  * Lifecycle:
- *  - install/upgrade: create the durable ID-only change journal
+ *  - install/upgrade: create the durable ID-only change journal and the
+ *    generation ledger (Indexer\IndexingSchema)
  *  - upgrade: drop the retired iwac_browse_config table if present
+ *  - uninstall: drop the module's tables, logging the Typesense collections
+ *    the ledger recorded (they are left in place)
  *  - bootstrap (attachListeners): inject Svelte assets on the search routes,
  *    plus wire api.execute.pre/post listeners that journal changed IDs; a
  *    background job (DrainChanges) applies them to Typesense
@@ -310,14 +313,19 @@ class Module extends AbstractModule
         );
     }
 
-    /** Install the durable change journal. */
+    /** Install the durable change journal and the generation ledger. */
     public function install(ServiceLocatorInterface $services): void
     {
-        Indexer\ChangeJournal::install($services->get('Omeka\Connection'));
+        Indexer\IndexingSchema::install($services->get('Omeka\Connection'));
     }
 
     /**
-     * Upgrade hook. The curated-browse system was retired, so drop its orphan
+     * Upgrade hook. Creates any missing module table (IndexingSchema, which
+     * also folds the pre-3.27 rollback record into the generation ledger).
+     * Omeka runs this while the module is still inactive, so it uses the
+     * connection alone — none of the module's own services resolve here.
+     *
+     * The curated-browse system was retired, so drop its orphan
      * table on any install that still has it. iwac_browse_config held only
      * seeded + admin-authored scope rows, now superseded by PresetCatalog
      * scopes picked per page block — dropping it loses no search data. Old
@@ -336,7 +344,7 @@ class Module extends AbstractModule
     public function upgrade($oldVersion, $newVersion, ServiceLocatorInterface $services): void
     {
         $connection = $services->get('Omeka\Connection');
-        Indexer\ChangeJournal::install($connection);
+        Indexer\IndexingSchema::install($connection);
         if (version_compare((string) $oldVersion, self::BROWSE_CONFIG_RETIRED_IN, '<')) {
             $connection->executeStatement('DROP TABLE IF EXISTS iwac_browse_config');
         }
@@ -351,10 +359,10 @@ class Module extends AbstractModule
     public function uninstall(ServiceLocatorInterface $services): void
     {
         $connection = $services->get('Omeka\Connection');
-        $connection->executeStatement('DROP TABLE IF EXISTS iwac_search_change');
-        $connection->executeStatement('DROP TABLE IF EXISTS iwac_search_rollback');
-        // Drop the retired curated-browse table if an earlier version created
-        // it. Never touches Typesense data (may be shared with another install).
+        // Never touches Typesense data (it may be shared with another
+        // install); the collections the ledger recorded are logged instead.
+        Indexer\IndexingSchema::uninstall($connection, Log\LoggerResolver::fromContainer($services));
+        // Drop the retired curated-browse table if an earlier version created it.
         $connection->executeStatement('DROP TABLE IF EXISTS iwac_browse_config');
 
         // Clean up the cached search-only parent keys so a fresh install
