@@ -1,0 +1,61 @@
+# CodeQL: GitHub's static security analysis, on every PR + push to main and
+# once a week (new queries arrive with CodeQL releases, so an unchanged tree
+# can still gain a finding). Results land in the repository's Security tab
+# under Code scanning.
+#
+# Two languages, with the security-extended suite (the default queries plus
+# lower-precision ones worth reading on a public archive's search):
+#
+#   javascript-typescript  the Svelte client, the Node scripts and the tests:
+#                          DOM XSS (the snippet {@html} sanitiser, URL state
+#                          read back into the page), prototype pollution,
+#                          unsafe regexes.
+#   actions                these workflows: untrusted input in run:, missing
+#                          permissions, unpinned or over-privileged steps.
+#
+# CodeQL has no PHP extractor; PHPStan covers the PHP side in ci.yml. Neither
+# language needs a build, so this checks out and analyses the source as is.
+# Modelled on DRESearch's codeql.yml.
+
+name: CodeQL
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: '17 5 * * 1'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: codeql-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  analyze:
+    name: Analyse (${{ matrix.language }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      security-events: write
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [javascript-typescript, actions]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: github/codeql-action/init@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+        with:
+          languages: ${{ matrix.language }}
+          queries: security-extended
+
+      - uses: github/codeql-action/analyze@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+        with:
+          category: /language:${{ matrix.language }}

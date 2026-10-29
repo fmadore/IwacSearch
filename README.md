@@ -160,8 +160,8 @@ never a laptop. Locally, set `CHROME_PATH` to a Chrome 156 build to match CI.
 ## Quality stack
 
 - **PHP** 8.4+, strict types throughout, PSR-4 (`IwacSearch\` → `src/`). CI
-  runs `composer validate --strict`, `php -l`, PHPUnit and PHPStan on 8.4 /
-  8.5.
+  runs `composer validate --strict`, `composer audit --locked`, `php -l`,
+  PHPUnit and PHPStan on 8.4 / 8.5.
 - **JS/TS** Vite 8, Svelte 5, TypeScript 6, ESLint 10 (flat config),
   Prettier 3, Vitest.
 - **Drift gates** `npm run lint` fails if `FacetCatalog::FACETABLE_FIELDS`,
@@ -172,7 +172,13 @@ never a laptop. Locally, set `CHROME_PATH` to a Chrome 156 build to match CI.
   Typesense round trips on load, and the accessibility, best-practices and
   performance scores (see _Building the Svelte clients_).
 - **Security** snippet rendering uses `{@html}` only after sanitisation that
-  permits literal `<mark>` and nothing else.
+  permits literal `<mark>` and nothing else. CodeQL (security-extended) scans
+  the client, the scripts and the workflows on every push and weekly;
+  `npm run check:audit` and `composer audit` gate known advisories; Dependabot
+  proposes a release only once it is five days old.
+- **Releases** are built and published only from a tree that passed the
+  whole CI suite, with notes from [CHANGELOG.md](CHANGELOG.md), a `.sha256`
+  and a build provenance attestation (see _Install_).
 
 ## Roadmap
 

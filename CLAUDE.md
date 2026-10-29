@@ -128,7 +128,10 @@ The cutover, retention and retry contracts are documented in `docs/operations-3.
 - **`npm run check:audit`** fails on any high/critical advisory not written down,
   with its reason, in `scripts/lib/audit-exceptions.js` — and on an exception that
   is no longer needed. Ported from the theme; don't weaken it with `--omit=dev`
-  (every dependency here is a dev dependency, so that turns it off).
+  (every dependency here is a dev dependency, so that turns it off). The PHP side
+  is `composer audit --locked` in `ci.yml`, dev tools included; an advisory to
+  live with goes under `config.audit.ignore` in `composer.json`, with its reason.
+  CodeQL (`codeql.yml`) scans the client, scripts and workflows.
 - **A release only publishes what CI passed.** `release.yml` calls `ci.yml`
   (`workflow_call`) as its `gates` job and `publish` needs it, so the tagged tree
   runs the whole suite — svelte-check, PHPUnit and PHPStan included. The tag must

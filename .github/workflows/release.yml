@@ -53,6 +53,8 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # No timeout-minutes here: a job that calls a reusable workflow may not set
+  # one. Every job in ci.yml carries its own.
   gates:
     name: CI suite on the tagged tree
     uses: ./.github/workflows/ci.yml
@@ -62,6 +64,7 @@ jobs:
   build:
     name: Build + verify module zip
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     outputs:
       version: ${{ steps.version.outputs.version }}
       zip: ${{ steps.version.outputs.zip }}

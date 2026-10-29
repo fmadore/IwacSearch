@@ -10,6 +10,13 @@
 # per ecosystem to cut PR noise. Major updates always get their own PR
 # so we can review breaking changes individually.
 #
+# Cooldown: a release is proposed only once it is five days old, as in
+# DRESearch, DRE-theme and DRE Visualizations. A compromised or broken
+# publish is usually yanked within days, and a week-old lockfile costs
+# nothing. Security updates ignore the cooldown, so an advisory's fix
+# still arrives at once. It applies to the actions too: their pins are
+# commit SHAs, but Dependabot is what moves a pin onto a new release.
+#
 # To pause version bumps temporarily, set open-pull-requests-limit: 0.
 
 version: 2
@@ -22,6 +29,8 @@ updates:
       day: 'monday'
       time: '06:00'
       timezone: 'Europe/Berlin'
+    cooldown:
+      default-days: 5
     open-pull-requests-limit: 5
     commit-message:
       prefix: 'npm'
@@ -75,6 +84,8 @@ updates:
       day: 'monday'
       time: '06:00'
       timezone: 'Europe/Berlin'
+    cooldown:
+      default-days: 5
     open-pull-requests-limit: 5
     commit-message:
       prefix: 'composer'
@@ -103,6 +114,8 @@ updates:
       day: 'monday'
       time: '06:00'
       timezone: 'Europe/Berlin'
+    cooldown:
+      default-days: 5
     open-pull-requests-limit: 5
     commit-message:
       prefix: 'ci'
