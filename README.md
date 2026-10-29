@@ -45,7 +45,11 @@ Download `IwacSearch-vX.Y.Z.zip` from the
 [latest release](https://github.com/fmadore/IwacSearch/releases/latest) and
 unzip it into Omeka's `modules/` directory, then activate **IwacSearch** in
 _Admin → Modules_. The zip already contains `vendor/` and the compiled
-client bundles, so no Composer or Node step is needed on the server.
+client bundles, so no Composer or Node step is needed on the server. Each
+release also carries `IwacSearch-vX.Y.Z.zip.sha256` and a build provenance
+attestation: `sha256sum -c IwacSearch-vX.Y.Z.zip.sha256` checks the
+download, and `gh attestation verify IwacSearch-vX.Y.Z.zip --repo
+fmadore/IwacSearch` that this repository's release workflow built it.
 
 Then run a bulk reindex — the module ships no data and search stays empty
 until the first collection is built.

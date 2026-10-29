@@ -116,6 +116,15 @@ The cutover, retention and retry contracts are documented in `docs/operations-3.
   rest and stamps `date-released`), and `npm run check:versions` is its guard, run
   on every push by `ci.yml` and against the tag by `release.yml`. A sixth site is
   one entry in that file. Never hand-edit the version.
+- **`CHANGELOG.md` is the record, and the release notes.** Write each change under
+  `## [Unreleased]` (Keep a Changelog: Added / Changed / Fixed / Removed /
+  Security, upgrade steps in a bold lead line). The bump moves those entries under
+  `## [X.Y.Z] - <date>`, dated like `CITATION.cff`, and leaves Unreleased empty;
+  `check:versions` fails while the current version's section is missing, empty or
+  dated differently. `release.yml` publishes that section, its relative links
+  pointed at the tag, as the GitHub release notes, never `--generate-notes`,
+  which for this direct-to-main history said only "Full Changelog". Preview
+  them with `node scripts/release-notes.js X.Y.Z`.
 - **`npm run check:audit`** fails on any high/critical advisory not written down,
   with its reason, in `scripts/lib/audit-exceptions.js` — and on an exception that
   is no longer needed. Ported from the theme; don't weaken it with `--omit=dev`
@@ -124,7 +133,10 @@ The cutover, retention and retry contracts are documented in `docs/operations-3.
   (`workflow_call`) as its `gates` job and `publish` needs it, so the tagged tree
   runs the whole suite — svelte-check, PHPUnit and PHPStan included. The tag must
   also be an ancestor of `main`. Pushing to `main` deploys nothing; the live site
-  installs the release zip.
+  installs the release zip, published with a `.sha256` beside it and a build
+  provenance attestation (`gh attestation verify <zip> --repo fmadore/IwacSearch`).
+  Only the `attest` job holds `id-token`/`attestations: write`, and only `publish`
+  holds `contents: write`; neither runs the build's npm or Composer code.
 
 ## Adding a new field
 

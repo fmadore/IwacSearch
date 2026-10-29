@@ -14,6 +14,13 @@
  * (scripts/lib/versions.js). So the increment keywords work without this
  * script parsing semver at all.
  *
+ * CHANGELOG.md follows: what sits under `## [Unreleased]` moves under a new
+ * `## [X.Y.Z] - <date>` heading, and Unreleased starts again empty — so write
+ * the release's entries there first. Re-running the bump on a version that
+ * already has a section only re-stamps that heading's date, with CITATION.cff's.
+ * The release notes are built from that section (scripts/release-notes.js), and
+ * `npm run check:versions` fails while it is missing or empty.
+ *
  * A bump is not a release: the live site installs the zip release.yml builds
  * on a pushed `vX.Y.Z` tag.
  */
@@ -22,7 +29,15 @@ import { readFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { join } from 'node:path';
 
-import { ROOT, readAll, writeOwned, writeReleaseDate } from './lib/versions.js';
+import {
+  CHANGELOG,
+  ROOT,
+  readAll,
+  readChangelog,
+  writeChangelogSection,
+  writeOwned,
+  writeReleaseDate,
+} from './lib/versions.js';
 
 /**
  * Today, local time, as YYYY-MM-DD. Assembled from the parts rather than
@@ -52,6 +67,13 @@ if (!/^\d{4}-\d{2}-\d{2}$/.test(date ?? '')) {
   process.exit(1);
 }
 
+// Refuse before anything is written: a changelog with nowhere to start the new
+// section would otherwise fail after npm had already moved package.json.
+if (!/^## \[Unreleased\]/m.test(readChangelog())) {
+  console.error(`${CHANGELOG} has no "## [Unreleased]" heading to start the new version from`);
+  process.exit(1);
+}
+
 /**
  * Run npm from this process's own npm when there is one (an `npm run bump`
  * parent sets npm_execpath), so the bump can't silently use a different npm
@@ -76,12 +98,19 @@ npm(['version', spec, '--no-git-tag-version', '--allow-same-version']);
 const version = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8')).version;
 const written = writeOwned(version);
 writeReleaseDate(date);
+const section = writeChangelogSection(version, date);
 
 console.log(`\n✓ bumped to ${version}, released ${date}`);
 for (const { label, version: value } of readAll()) {
   console.log(`  ${value === version ? '✓' : '✗'} ${label.padEnd(32)} ${value}`);
 }
 console.log(
-  `\n  written here: ${written.join(', ')}; package.json and package-lock.json by npm version.`,
+  `\n  written here: ${written.join(', ')}, ${CHANGELOG}; package.json and package-lock.json by npm version.`,
 );
-console.log(`  Next: npm run build && git commit && git tag v${version}`);
+if (!section?.body) {
+  console.log(
+    `\n  ! ${CHANGELOG}'s [${version}] section is empty. Write it before committing:` +
+      ' the release notes are built from it, and npm run check:versions fails without it.',
+  );
+}
+console.log(`  Next: npm run check:versions && git commit && git tag v${version}`);

@@ -15,6 +15,13 @@
  * site means one entry in DECLARATIONS, and both pick it up. Ported from
  * IWAC-theme's scripts/lib/versions.js, which retired the same inline-list
  * pattern after two drift incidents of its own.
+ *
+ * CHANGELOG.md restates the version too, as the heading of the section the
+ * release notes are built from (scripts/release-notes.js). It is not a
+ * DECLARATION — it holds every version, not one — so it has its own reader
+ * and writer at the end of this file, shared the same way: the bump moves
+ * `## [Unreleased]` under the new heading, and the guard fails when the
+ * current version has no section, or an empty one.
  */
 
 import { readFileSync, writeFileSync } from 'node:fs';
@@ -125,4 +132,86 @@ export function writeReleaseDate(date) {
 
 export function readReleaseDate() {
   return read('CITATION.cff').match(CFF_DATE)?.[1] ?? null;
+}
+
+// ── CHANGELOG.md ────────────────────────────────────────────────────────────
+
+export const CHANGELOG = 'CHANGELOG.md';
+
+/** `## [Unreleased]`, alone on its line. */
+const UNRELEASED = /^## \[Unreleased\][^\S\n]*$/m;
+
+function escapeRegExp(text) {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * A version's heading line: `## [3.27.0]`, or `## [3.27.0] - 2026-10-29` as
+ * the bump writes it. Groups: the bracketed part, the date when there is one,
+ * and whatever follows on the line (a `[YANKED]` marker, say). The closing
+ * bracket is part of the match, so 3.2.0 can never claim 3.2.0.1's section.
+ */
+function headingPattern(version) {
+  return new RegExp(
+    `^(## \\[${escapeRegExp(version)}\\])(?: - (\\d{4}-\\d{2}-\\d{2}))?([^\\n]*)$`,
+    'm',
+  );
+}
+
+/**
+ * One version's section: its heading's date (null without one) and its body,
+ * everything up to the next level-2 heading, trimmed, so a heading with
+ * nothing under it reads as ''. Null when the version has no heading.
+ *
+ * The body ends at ANY `## ` line, not only a bracketed one, so prose placed
+ * between two releases can never leak into the notes of the one above it.
+ */
+export function changelogSection(text, version) {
+  const heading = headingPattern(version).exec(text);
+  if (!heading) return null;
+  const rest = text.slice(heading.index + heading[0].length);
+  const next = /^## /m.exec(rest);
+  return {
+    date: heading[2] ?? null,
+    body: (next ? rest.slice(0, next.index) : rest).trim(),
+  };
+}
+
+/**
+ * What `npm run bump` does to the changelog, as a pure function of its text.
+ *
+ * A version with no section yet gets a `## [version] - date` heading directly
+ * under `## [Unreleased]`: everything that was unreleased now sits under the
+ * new version, and Unreleased starts again empty. A version that already has
+ * one (a re-stamp, `npm run bump -- 3.27.0 --date …` on a version already
+ * bumped, as 3.22.0 and 3.23.0 were) only has its heading's date moved, as
+ * CITATION.cff's is, so the two never disagree.
+ */
+export function promoteUnreleased(text, version, date) {
+  const existing = headingPattern(version).exec(text);
+  if (existing) {
+    const [line, bracketed, , tail] = existing;
+    return (
+      text.slice(0, existing.index) +
+      `${bracketed} - ${date}${tail}` +
+      text.slice(existing.index + line.length)
+    );
+  }
+  const unreleased = UNRELEASED.exec(text);
+  if (!unreleased) {
+    throw new Error(`${CHANGELOG}: no "## [Unreleased]" heading to start ${version} from`);
+  }
+  const at = unreleased.index + unreleased[0].length;
+  return `${text.slice(0, at)}\n\n## [${version}] - ${date}${text.slice(at)}`;
+}
+
+export function readChangelog() {
+  return read(CHANGELOG);
+}
+
+/** Apply promoteUnreleased() to CHANGELOG.md; returns the version's section. */
+export function writeChangelogSection(version, date) {
+  const after = promoteUnreleased(readChangelog(), version, date);
+  writeFileSync(join(ROOT, CHANGELOG), after);
+  return changelogSection(after, version);
 }

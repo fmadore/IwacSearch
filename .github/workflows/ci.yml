@@ -46,10 +46,12 @@ jobs:
       - name: Install
         run: npm ci --no-audit --no-fund
 
-      # Every version declaration agrees (scripts/lib/versions.js is the list).
-      # On every push, so drift is caught on the commit that introduces it —
-      # not at the next tag, which is the only place it used to be checked.
-      - name: Version declarations agree
+      # Every version declaration agrees (scripts/lib/versions.js is the list),
+      # and CHANGELOG.md has a dated, non-empty section for that version — the
+      # one release.yml publishes as the release notes. On every push, so drift
+      # is caught on the commit that introduces it — not at the next tag, which
+      # is the only place it used to be checked.
+      - name: Version declarations and changelog agree
         run: npm run check:versions
 
       # npm audit at high+, minus the exceptions written down (with reasons)

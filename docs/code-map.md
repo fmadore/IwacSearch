@@ -111,6 +111,7 @@ IwacSearch/
 │   ├── check-bundle-size.js                    # build gate: gzipped budgets; no app strings in the header bundle
 │   ├── check-theme-tokens.js                   # CI gate: runs the theme's token guard over src/ + asset/css/
 │   ├── check-versions.js · bump-version.js     # version guard + its only writer (sites: lib/versions.js)
+│   ├── release-notes.js                        # a version's CHANGELOG.md section → its GitHub release notes
 │   ├── check-audit.js                          # CI gate: npm audit high+, minus lib/audit-exceptions.js
 │   ├── build-mo.js                             # fr.po → fr.mo; --check (in lint) asserts they agree
 │   ├── check-maplibre-pins.js                  # scheduled: MapLibre pins == IwacVisualizations main's
