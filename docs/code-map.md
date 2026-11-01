@@ -32,15 +32,22 @@ IwacSearch/
 │   │   │   ├── IndexEntityMapper.php           #   entity (index) collection docs
 │   │   │   └── MapperRegistry.php              #   MapperRegistry::default() = ONE registration point
 │   │   ├── CollectionOps.php                   #   shared create/import/guarded-promote lifecycle
+│   │   ├── GenerationLedger.php · DatabaseGenerationLedger.php # every built collection, recorded before creation
+│   │   ├── GenerationCleanup.php               #   ledger-driven orphan recovery + retention (never an alias target)
+│   │   ├── ShrinkGuard.php · TypesenseReadiness.php #  promotion's per-type shrink check; /health wait before a rebuild
+│   │   ├── Exception/                          #   ReindexCancelledException (notice) · VerificationException
 │   │   ├── Reindexer.php                       #   content collection bulk pass
 │   │   ├── IndexReindexer.php                  #   entity (iwac_index) collection bulk pass
 │   │   ├── ReindexOrchestrator.php             #   wires the full bulk run (CLI + job share it); phased cutover
 │   │   ├── IncrementalIndexer.php              #   applies journaled changes; create() = the one incremental wiring
 │   │   ├── ItemEventListener.php               #   api.execute.pre/post bodies: journal IDs, schedule a drain
 │   │   ├── WriteGate.php · AdvisoryLock.php    #   mutation gate held per write request (survives failed writes)
+│   │   ├── MutationLock.php · AnyStripe.php · AllStripes.php # the gate as 8 named locks: a save takes one, drain/cutover all
 │   │   ├── DatabaseLock.php                    #   MySQL GET_LOCK implementation of AdvisoryLock
-│   │   ├── ChangeJournal.php · ChangeDrainer.php #  durable ID journal + bounded consumer
-│   │   ├── DrainJobHistory.php                 #   is a drain queued/running? prune old drain-job rows
+│   │   ├── ChangeJournal.php · ChangeDrainer.php #  durable ID journal + bounded consumer / lease-coordinated worker
+│   │   ├── WorkerLease.php                     #   one drain worker: request/claim/begin/finish handshake
+│   │   ├── IndexingSchema.php                  #   the module's tables: install/upgrade/repair/uninstall
+│   │   ├── DrainJobHistory.php                 #   prune old drain-job rows
 │   │   └── CollectionRetention.php             #   old generations, journal rows, drain-job history
 │   ├── Browse/FacetCatalog.php                 # facetable fields + content/entity sort sets
 │   ├── Site/BlockLayout/IwacSearchBlock.php    # Page block — drop into any Site page (templateable)

@@ -90,7 +90,7 @@ provides the Typesense container, nginx `/search-api/` proxy, and backups.
   items), any exception. Its core count uses `limit`, never `page`/`per_page`,
   which would reconfigure the ledger's shared `Omeka\Paginator`.
 
-The cutover, retention and retry contracts are documented in `docs/operations-3.19.md` and, for what 3.20 changed (phased cutover, write gate, batched drain, retention), `docs/operations-3.20.md`. Run the real integration suite when editing these boundaries.
+The cutover, retention and retry contracts are documented in `docs/operations-3.19.md` and, for what 3.20 changed (phased cutover, write gate, batched drain, retention), `docs/operations-3.20.md`; `docs/operations-3.27.md` covers the generation ledger, the rebuild guards, the striped gate, the drain lease and the hidden pending changes. Run the real integration suite when editing these boundaries.
 
 ## Conventions
 
