@@ -160,9 +160,14 @@
    */
   let typedQuery = $state(initial.q);
 
+  /** The search box, so a programmatic query can cancel its pending commit. */
+  let searchInput: ReturnType<typeof SearchInput> | null = $state(null);
+
   function setQuery(next: string): void {
     query = next;
     typedQuery = next;
+    // Untracked: setQuery runs inside effects, which must not depend on it.
+    untrack(() => searchInput)?.reset(next);
   }
 
   // Adopt the parent's query whenever it changes. Guarded by the last value
@@ -628,6 +633,7 @@
       }}
     >
       <SearchInput
+        bind:this={searchInput}
         value={query}
         placeholder={t('search_placeholder')}
         onChange={handleQueryChange}

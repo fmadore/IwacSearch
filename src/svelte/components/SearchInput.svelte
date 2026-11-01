@@ -78,6 +78,24 @@
     }, 250);
   }
 
+  /**
+   * The parent set the query itself (a picked suggestion, Back): show `next`
+   * and drop the commit still pending for the text it replaced.
+   *
+   * A new `value` already resets what the box says, but not when it equals
+   * the old one — and a suggestion picked within the 250 ms of the last
+   * keystroke clears a query that had not been committed yet, so `value`
+   * stayed ''. The pending timer then committed the typed prefix on top of
+   * the picked filter, and the box kept showing it.
+   */
+  export function reset(next: string): void {
+    if (timer !== null) {
+      clearTimeout(timer);
+      timer = null;
+    }
+    local = next;
+  }
+
   function handleClear(): void {
     local = '';
     if (timer !== null) {
