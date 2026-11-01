@@ -16,6 +16,8 @@ use RuntimeException;
 /**
  * Strict indexing core. Jobs acknowledge only successful writes; the live
  * drain alone tolerates documents Typesense rejects (see applySnapshot()).
+ *
+ * @phpstan-import-type AuthorityEntity from EntityAuthority
  */
 final class IncrementalIndexer
 {
@@ -84,7 +86,7 @@ final class IncrementalIndexer
      * SQL and mapping only: the consumer holds the mutation gate during this
      * short phase, then releases it before any embedding/HTTP work.
      * @param list<int> $ids
-     * @return list<array{id:int, content:?array<string,mixed>, entity:?array<string,mixed>}>
+     * @return list<array{id:int, content:?array<string,mixed>, entity:AuthorityEntity|null}>
      */
     public function snapshot(array $ids): array
     {
@@ -106,11 +108,15 @@ final class IncrementalIndexer
         $snapshot = [];
         foreach ($ids as $id) {
             $row = $rows[$id] ?? null;
-            $mapper = $row === null ? null : $this->mappers->forClass($row['item']['class']);
-            if ($mapper !== null && $mapper->itemSetIds() !== null && array_intersect($mapper->itemSetIds(), $row['item']['item_sets']) === []) {
-                $mapper = null;
+            $content = null;
+            if ($row !== null) {
+                $mapper = $this->mappers->forClass($row['item']['class']);
+                if ($mapper !== null && $mapper->itemSetIds() !== null && array_intersect($mapper->itemSetIds(), $row['item']['item_sets']) === []) {
+                    $mapper = null;
+                }
+                $content = $mapper?->map($row['item'], $row['values'], $row['thumbnail']);
             }
-            $snapshot[] = ['id' => $id, 'content' => $mapper?->map($row['item'], $row['values'], $row['thumbnail']), 'entity' => $entities[$id] ?? null];
+            $snapshot[] = ['id' => $id, 'content' => $content, 'entity' => $entities[$id] ?? null];
         }
         return $snapshot;
     }
@@ -132,7 +138,7 @@ final class IncrementalIndexer
      * step) and still throws, so an outage never empties the index. The
      * rebuild cutover stays strict.
      *
-     * @param  list<array{id:int, content:?array<string,mixed>, entity:?array<string,mixed>}> $snapshot
+     * @param  list<array{id:int, content:?array<string,mixed>, entity:AuthorityEntity|null}> $snapshot
      * @return array{content: array<int, ?string>, entity: array<int, bool>, rejected: list<int>}
      *   Per ID: the content type now indexed (null = no content document),
      *   and whether an entity document now exists (only when an entity

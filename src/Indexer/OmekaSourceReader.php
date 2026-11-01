@@ -104,7 +104,7 @@ final class OmekaSourceReader
                 break;
             }
 
-            $ids = array_map(static fn(array $r): int => (int) $r['id'], $rows);
+            $ids = array_values(array_map(static fn(array $r): int => (int) $r['id'], $rows));
             $lastId = (int) end($ids);
 
             $valuesByItem = $this->loadValues($ids, array_values(array_unique([...$terms, 'dcterms:title'])));
@@ -146,7 +146,7 @@ final class OmekaSourceReader
             return [];
         }
 
-        $found = array_map(static fn(array $r): int => (int) $r['id'], $rows);
+        $found = array_values(array_map(static fn(array $r): int => (int) $r['id'], $rows));
         $valuesByItem = $this->loadValues($found, array_values(array_unique([...$terms, 'dcterms:title'])));
         $sets = $this->loadItemSets($found);
         $thumbs = $this->mediaThumbnails($found);

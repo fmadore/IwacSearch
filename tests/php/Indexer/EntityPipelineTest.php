@@ -188,8 +188,16 @@ final class EntityPipelineTest extends TestCase
     // ── IndexEntityMapper ────────────────────────────────────────────────
 
     /**
-     * @param array<string, mixed> $overrides
-     * @return array<string, mixed>
+     * @param array{
+     *   id?:int, type?:string, title?:string, aliases?:list<string>, description?:string,
+     *   coordinates?:string, identifier?:string, wikidata_id?:string,
+     *   is_part_of?:list<string>, thumbnail?:?string, is_public?:bool
+     * } $overrides
+     * @return array{
+     *   id:int, type:string, title:string, aliases:list<string>, description:string,
+     *   coordinates:string, identifier:string, wikidata_id:string,
+     *   is_part_of:list<string>, thumbnail:?string, is_public:bool
+     * }
      */
     private static function entity(array $overrides = []): array
     {
@@ -209,8 +217,14 @@ final class EntityPipelineTest extends TestCase
     }
 
     /**
-     * @param array<string, mixed> $overrides
-     * @return array<string, mixed>
+     * @param array{
+     *   frequency?:int, authored_count?:int, countries?:list<string>,
+     *   first_year?:?int, last_year?:?int, mentions_by_year?:array<int,int>
+     * } $overrides
+     * @return array{
+     *   frequency:int, authored_count?:int, countries:list<string>,
+     *   first_year:?int, last_year:?int, mentions_by_year:array<int,int>
+     * }
      */
     private static function aggregate(array $overrides = []): array
     {
@@ -223,6 +237,28 @@ final class EntityPipelineTest extends TestCase
         ];
     }
 
+    /**
+     * The document for an entity the mapper does not skip; the test fails
+     * where it does.
+     *
+     * @param array{
+     *   id:int, type:string, title:string, aliases:list<string>, description:string,
+     *   coordinates:string, identifier:string, wikidata_id?:string,
+     *   is_part_of:list<string>, thumbnail:?string, is_public:bool
+     * } $entity
+     * @param array{
+     *   frequency:int, authored_count?:int, countries:list<string>,
+     *   first_year:?int, last_year:?int, mentions_by_year?:array<int,int>
+     * } $aggregate
+     * @return array<string, mixed>
+     */
+    private static function mapEntity(array $entity, array $aggregate): array
+    {
+        $mapped = (new IndexEntityMapper())->map($entity, $aggregate);
+        self::assertNotNull($mapped, 'the mapper skipped the entity');
+        return $mapped;
+    }
+
     public function testAnEntityWithoutATitleOrTypeIsSkipped(): void
     {
         $mapper = new IndexEntityMapper();
@@ -233,7 +269,7 @@ final class EntityPipelineTest extends TestCase
 
     public function testTheBaseDocumentCarriesIdentityAndFrequency(): void
     {
-        $doc = (new IndexEntityMapper())->map(
+        $doc = self::mapEntity(
             self::entity(['identifier' => 'Q1234']),
             self::aggregate(['frequency' => 17])
         );
@@ -274,7 +310,7 @@ final class EntityPipelineTest extends TestCase
         // Typesense expects [lat, lng] — the OPPOSITE of GeoJSON/MapLibre.
         // Malformed values keep the raw string visible for cleanup rather
         // than failing the import.
-        $doc = (new IndexEntityMapper())->map(
+        $doc = self::mapEntity(
             self::entity(['coordinates' => $raw]),
             self::aggregate()
         );
@@ -292,7 +328,7 @@ final class EntityPipelineTest extends TestCase
 
     public function testTheRawCoordinateStringSurvivesEvenWhenUnparseable(): void
     {
-        $doc = (new IndexEntityMapper())->map(
+        $doc = self::mapEntity(
             self::entity(['coordinates' => 'somewhere near Cotonou']),
             self::aggregate()
         );
@@ -302,7 +338,7 @@ final class EntityPipelineTest extends TestCase
 
     public function testTheLastMentionYearDrivesBothPubYearAndTheSortableDate(): void
     {
-        $doc = (new IndexEntityMapper())->map(
+        $doc = self::mapEntity(
             self::entity(),
             self::aggregate(['first_year' => 1980, 'last_year' => 1999])
         );
@@ -315,7 +351,7 @@ final class EntityPipelineTest extends TestCase
 
     public function testTheMentionHistogramIsSerialisedForTheSparkline(): void
     {
-        $doc = (new IndexEntityMapper())->map(
+        $doc = self::mapEntity(
             self::entity(),
             self::aggregate(['mentions_by_year' => [1980 => 1, 1994 => 2]])
         );
@@ -325,7 +361,7 @@ final class EntityPipelineTest extends TestCase
 
     public function testAnEntityWithNoDatedMentionsGetsNoSparklineField(): void
     {
-        $doc = (new IndexEntityMapper())->map(self::entity(), self::aggregate());
+        $doc = self::mapEntity(self::entity(), self::aggregate());
 
         self::assertArrayNotHasKey('mentions_by_year_s', $doc);
         self::assertArrayNotHasKey('pub_year', $doc);
@@ -333,19 +369,19 @@ final class EntityPipelineTest extends TestCase
 
     public function testTheWikidataEntityIsCarriedToTheCard(): void
     {
-        $doc = (new IndexEntityMapper())->map(self::entity(['wikidata_id' => 'Q216920']), self::aggregate());
+        $doc = self::mapEntity(self::entity(['wikidata_id' => 'Q216920']), self::aggregate());
         self::assertSame('Q216920', $doc['wikidata_id']);
 
         // A record built before the field existed maps as it did.
         $legacy = self::entity();
         unset($legacy['wikidata_id']);
-        self::assertArrayNotHasKey('wikidata_id', (new IndexEntityMapper())->map($legacy, self::aggregate()));
+        self::assertArrayNotHasKey('wikidata_id', self::mapEntity($legacy, self::aggregate()));
     }
 
     public function testOptionalFieldsAreOmittedRatherThanEmptied(): void
     {
         // Typesense optional fields are ABSENT, not empty strings.
-        $doc = (new IndexEntityMapper())->map(self::entity(), self::aggregate());
+        $doc = self::mapEntity(self::entity(), self::aggregate());
 
         foreach (['identifier', 'wikidata_id', 'description', 'coordinates', 'thumbnail_url', 'country_ss', 'is_part_of_ss', 'entity_aliases_txt'] as $field) {
             self::assertArrayNotHasKey($field, $doc, $field);
@@ -354,7 +390,7 @@ final class EntityPipelineTest extends TestCase
 
     public function testAliasesAndCategoriesAreCarriedThrough(): void
     {
-        $doc = (new IndexEntityMapper())->map(
+        $doc = self::mapEntity(
             self::entity([
                 'aliases' => ['RCI', 'Radio Côte d\'Ivoire'],
                 'is_part_of' => ['Organisation islamique'],

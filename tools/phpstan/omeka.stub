@@ -20,17 +20,18 @@ namespace Laminas\View\Renderer;
 /**
  * View helpers resolve through PhpRenderer::__call, which PHPStan does not
  * follow. Declared here, a typo in a helper name is still an error and each
- * helper returns its real type. Omeka core's first (assetUrl is null for a
- * module that is not active; currentSite is null outside a site, whatever
- * its own docblock says; status() and api() have no __invoke, so the call
- * returns the helper itself), then Laminas', then the module's own
- * (config/module.config.php, view_helpers).
+ * helper returns what its __invoke() returns. Omeka core's first (assetUrl
+ * is null for a module that is not active; currentSite is null outside a
+ * site, whatever its own docblock says; status() and api() have no
+ * __invoke, so the call returns the helper itself), then Laminas' (basePath
+ * returns a string or throws, though laminas-view's list says string|null),
+ * then the module's own (config/module.config.php, view_helpers).
  *
  * @method string|null assetUrl(string $file, string|null $module = null, bool $override = false, bool $versioned = true, bool $absolute = false)
  * @method \Omeka\Api\Representation\SiteRepresentation|null currentSite()
  * @method \Omeka\View\Helper\Status status()
  * @method \Omeka\View\Helper\Api api()
- * @method string|null basePath(string|null $file = null)
+ * @method string basePath(string|null $file = null)
  * @method string url(string|null $name = null, array<string, mixed> $params = [], array<string, mixed>|bool $options = [], bool $reuseMatchedParams = false)
  * @method string partial(string $name, array<string, mixed>|null $values = null)
  * @method \Laminas\View\Helper\HeadScript headScript()
@@ -83,6 +84,23 @@ class Messenger
     }
 }
 
+namespace Omeka\Job;
+
+class Dispatcher
+{
+    /**
+     * Core documents null|Job, but the method returns the Job it has just
+     * persisted, or throws: there is no path that returns null.
+     *
+     * @param string $class
+     * @param mixed $args
+     * @return \Omeka\Entity\Job
+     */
+    public function dispatch($class, $args = null, ?\Omeka\Job\DispatchStrategy\StrategyInterface $strategy = null)
+    {
+    }
+}
+
 // A stub file is validated on its own, without the Omeka tree, so the types
 // it names are declared here too. Empty and without a docblock, they change
 // nothing: PHPStan reads only a stub's docblocks, and these have none.
@@ -101,9 +119,15 @@ class Status
 {
 }
 
-namespace Omeka\Job;
+namespace Omeka\Entity;
 
-class Dispatcher
+class Job
+{
+}
+
+namespace Omeka\Job\DispatchStrategy;
+
+interface StrategyInterface
 {
 }
 

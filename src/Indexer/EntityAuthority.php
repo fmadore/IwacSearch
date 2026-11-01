@@ -37,6 +37,13 @@ use IwacSearch\IwacInstance;
  * "Notices d'autorité" entities are browsable in the entity collection but are
  * NOT resolved into content facets (bucket = null), matching the old HF
  * behaviour where only Sujets fed topics_ss.
+ *
+ * @phpstan-type ContentBucket 'persons_ss'|'organisations_ss'|'places_ss'|'events_ss'|'topics_ss'
+ * @phpstan-type AuthorityEntity array{
+ *   id:int, type:string, title:string, aliases:list<string>, description:string,
+ *   coordinates:string, identifier:string, wikidata_id:string,
+ *   is_part_of:list<string>, thumbnail:?string, is_public:bool
+ * }
  */
 final class EntityAuthority
 {
@@ -58,7 +65,7 @@ final class EntityAuthority
     private const SET_NOTICES = IwacInstance::SET_NOTICES_AUTORITE;
 
     /** @var array<int, array{
-     *   class:int, type:string, bucket:?string, title:string, aliases:list<string>,
+     *   class:int, type:string, bucket:ContentBucket|null, title:string, aliases:list<string>,
      *   description:string, coordinates:string, identifier:string, wikidata_id:string,
      *   is_part_of:list<string>, thumbnail:?string, is_public:bool
      * }> */
@@ -252,11 +259,7 @@ final class EntityAuthority
     /**
      * Yield every authority record for the entity collection build.
      *
-     * @return iterable<int, array{
-     *   id:int, type:string, title:string, aliases:list<string>, description:string,
-     *   coordinates:string, identifier:string, wikidata_id:string,
-     *   is_part_of:list<string>, thumbnail:?string, is_public:bool
-     * }>
+     * @return iterable<int, AuthorityEntity>
      */
     public function entities(): iterable
     {
@@ -282,7 +285,7 @@ final class EntityAuthority
         return count($this->byId);
     }
 
-    /** @return array{0:string,1:?string} [type label, content bucket] for a class. */
+    /** @return array{0:string,1:ContentBucket|null} [type label, content bucket] for a class. */
     private function classDefault(int $class): array
     {
         return match ($class) {

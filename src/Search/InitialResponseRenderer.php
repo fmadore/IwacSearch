@@ -151,10 +151,11 @@ final class InitialResponseRenderer
             ]);
         }
         if (count($safe) < count($bootstraps)) {
-            $out = array_fill(0, count($bootstraps), null);
             $rendered = $this->renderMany(array_values($safe));
-            foreach (array_keys($safe) as $n => $i) {
-                $out[$i] = $rendered[$n];
+            $out = [];
+            $n = 0;
+            foreach (array_keys($bootstraps) as $i) {
+                $out[] = array_key_exists($i, $safe) ? $rendered[$n++] : null;
             }
             return $out;
         }

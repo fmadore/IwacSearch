@@ -26,10 +26,8 @@ final class FakeDocument extends Document
         $docs = $this->server->collections[$this->collection] ?? [];
         foreach ($docs as $i => $doc) {
             if ((string) ($doc['id'] ?? '') === $this->id) {
-                unset($this->server->collections[$this->collection][$i]);
-                $this->server->collections[$this->collection] = array_values(
-                    $this->server->collections[$this->collection]
-                );
+                unset($docs[$i]);
+                $this->server->collections[$this->collection] = array_values($docs);
                 return ['id' => $this->id];
             }
         }

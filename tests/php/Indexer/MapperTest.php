@@ -7,6 +7,7 @@ namespace IwacSearch\Tests\Indexer;
 use IwacSearch\Indexer\CountryResolver;
 use IwacSearch\Indexer\EntityAuthority;
 use IwacSearch\Indexer\Mapper\AbstractMapper;
+use IwacSearch\Indexer\Mapper\MapperInterface;
 use IwacSearch\Indexer\Mapper\MapperRegistry;
 use IwacSearch\Indexer\PropertyValues;
 use IwacSearch\IwacInstance;
@@ -70,6 +71,20 @@ final class MapperTest extends TestCase
         ];
     }
 
+    /**
+     * The document a mapper builds for an item it does not skip; the test
+     * fails where it does.
+     *
+     * @param array{id:int,title:string,is_public:bool,class:int,template:?int,item_sets:list<int>} $item
+     * @return array<string, mixed>
+     */
+    private static function doc(MapperInterface $mapper, array $item, PropertyValues $values, ?string $thumbnailUrl): array
+    {
+        $doc = $mapper->map($item, $values, $thumbnailUrl);
+        self::assertNotNull($doc, 'the mapper skipped the item');
+        return $doc;
+    }
+
     // ── Registry ─────────────────────────────────────────────────────────
 
     public function testPrivateMetadataIsExcludedButRestrictedOcrKeepsItsExplicitPolicy(): void
@@ -81,11 +96,11 @@ final class MapperTest extends TestCase
         ]);
         foreach ($this->registry->subsets() as $subset) {
             $mapper = $this->registry->get($subset);
-            $doc = $mapper->map(self::item(['class' => $mapper->classIds()[0]]), $values, null);
-            self::assertStringNotContainsString('Private abstract', json_encode($doc));
-            self::assertStringNotContainsString('Private creator', json_encode($doc));
+            $doc = self::doc($mapper, self::item(['class' => $mapper->classIds()[0]]), $values, null);
+            self::assertStringNotContainsString('Private abstract', json_encode($doc, JSON_THROW_ON_ERROR));
+            self::assertStringNotContainsString('Private creator', json_encode($doc, JSON_THROW_ON_ERROR));
         }
-        $doc = $this->registry->get('articles')->map(self::item(), $values, null);
+        $doc = self::doc($this->registry->get('articles'), self::item(), $values, null);
         self::assertSame('Restricted OCR', $doc['ocr_text']);
         self::assertFalse($doc['has_fulltext']);
     }
@@ -193,7 +208,7 @@ final class MapperTest extends TestCase
 
     public function testBaseFieldsAreDerivedFromTheItem(): void
     {
-        $doc = $this->registry->get('articles')->map(self::item(), self::values([]), null);
+        $doc = self::doc($this->registry->get('articles'), self::item(), self::values([]), null);
 
         self::assertSame('123', $doc['id']);
         self::assertSame('article', $doc['type_s']);
@@ -204,7 +219,8 @@ final class MapperTest extends TestCase
 
     public function testAnUntitledItemGetsAnIdentifiableDisplayTitle(): void
     {
-        $doc = $this->registry->get('articles')->map(
+        $doc = self::doc(
+            $this->registry->get('articles'),
             self::item(['title' => '   ']),
             self::values([]),
             null
@@ -219,12 +235,11 @@ final class MapperTest extends TestCase
     {
         // A thumbnailed media is the proxy for "has primary media", which is
         // the precondition for a manifest existing at all.
-        $withMedia = $this->registry->get('articles')
-            ->map(self::item(), self::values([]), '/files/medium/abc.jpg');
+        $withMedia = self::doc($this->registry->get('articles'), self::item(), self::values([]), '/files/medium/abc.jpg');
         self::assertSame('/files/medium/abc.jpg', $withMedia['thumbnail_url']);
         self::assertSame('https://islam.zmo.de/iiif/3/123/manifest', $withMedia['iiif_manifest']);
 
-        $without = $this->registry->get('articles')->map(self::item(), self::values([]), null);
+        $without = self::doc($this->registry->get('articles'), self::item(), self::values([]), null);
         self::assertArrayNotHasKey('thumbnail_url', $without);
         self::assertArrayNotHasKey('iiif_manifest', $without);
     }
@@ -233,7 +248,8 @@ final class MapperTest extends TestCase
     {
         // As catalogued live (item 125674): the Wikidata URI, labelled with
         // its QID, on dcterms:identifier — alone, or beside the IWAC key.
-        $doc = $this->registry->get('references')->map(
+        $doc = self::doc(
+            $this->registry->get('references'),
             self::item(['class' => IwacInstance::CLASS_CHAPTER]),
             self::values(['dcterms:identifier' => [
                 ['uri' => 'https://www.wikidata.org/wiki/Q141697087', 'value' => 'Q141697087'],
@@ -244,7 +260,8 @@ final class MapperTest extends TestCase
         self::assertSame('Q141697087', $doc['wikidata_id']);
 
         // Any other URI on the property is not a reconciliation.
-        $other = $this->registry->get('articles')->map(
+        $other = self::doc(
+            $this->registry->get('articles'),
             self::item(),
             self::values(['dcterms:identifier' => [['uri' => 'https://example.org/Q1', 'value' => 'Q1']]]),
             null
@@ -252,31 +269,40 @@ final class MapperTest extends TestCase
         self::assertArrayNotHasKey('wikidata_id', $other);
     }
 
-    public function testTheDoiIsStoredBareWhicheverWayItWasCatalogued(): void
+    /**
+     * A chapter's document, catalogued with these bibo:doi values.
+     *
+     * @param list<array<string, mixed>> $doi
+     * @return array<string, mixed>
+     */
+    private function chapterWithDoi(array $doi): array
     {
-        $map = fn (array $doi): array => $this->registry->get('references')->map(
+        return self::doc(
+            $this->registry->get('references'),
             self::item(['class' => IwacInstance::CLASS_CHAPTER]),
             self::values(['bibo:doi' => $doi]),
             null
         );
+    }
 
+    public function testTheDoiIsStoredBareWhicheverWayItWasCatalogued(): void
+    {
         // A URI value: its address wins, whatever its label says.
-        self::assertSame('10.48734/akofena.n018.vol.1.13.2025', $map([
+        self::assertSame('10.48734/akofena.n018.vol.1.13.2025', $this->chapterWithDoi([
             ['uri' => 'https://doi.org/10.48734/akofena.n018.vol.1.13.2025', 'value' => 'DOI'],
         ])['doi']);
         // A typed DOI, bare or prefixed.
-        self::assertSame('10.1017/S0001972000000000', $map([['value' => 'doi:10.1017/S0001972000000000']])['doi']);
+        self::assertSame('10.1017/S0001972000000000', $this->chapterWithDoi([['value' => 'doi:10.1017/S0001972000000000']])['doi']);
         // Not a DOI at all: nothing, rather than a broken link on the card.
-        self::assertArrayNotHasKey('doi', $map([['value' => 'en cours']]));
+        self::assertArrayNotHasKey('doi', $this->chapterWithDoi([['value' => 'en cours']]));
     }
 
     public function testItemSetIdsAreOmittedWhenTheItemBelongsToNoSet(): void
     {
-        $doc = $this->registry->get('articles')->map(self::item(), self::values([]), null);
+        $doc = self::doc($this->registry->get('articles'), self::item(), self::values([]), null);
         self::assertArrayNotHasKey('item_set_ids', $doc);
 
-        $doc = $this->registry->get('articles')
-            ->map(self::item(['item_sets' => [2193, 7]]), self::values([]), null);
+        $doc = self::doc($this->registry->get('articles'), self::item(['item_sets' => [2193, 7]]), self::values([]), null);
         self::assertSame([2193, 7], $doc['item_set_ids']);
     }
 
@@ -304,7 +330,8 @@ final class MapperTest extends TestCase
         ?int $year,
         ?string $decade
     ): void {
-        $doc = $this->registry->get('articles')->map(
+        $doc = self::doc(
+            $this->registry->get('articles'),
             self::item(),
             self::values(['dcterms:date' => [['value' => $iso]]]),
             null
@@ -321,7 +348,8 @@ final class MapperTest extends TestCase
 
     public function testTheEpochIsTheUtcStartOfThePeriod(): void
     {
-        $doc = $this->registry->get('articles')->map(
+        $doc = self::doc(
+            $this->registry->get('articles'),
             self::item(),
             self::values(['dcterms:date' => [['value' => '1994-03']]]),
             null
@@ -334,7 +362,8 @@ final class MapperTest extends TestCase
 
     public function testPublicOcrSetsHasFulltextAndCountsWordsUnicodeAware(): void
     {
-        $doc = $this->registry->get('articles')->map(
+        $doc = self::doc(
+            $this->registry->get('articles'),
             self::item(),
             self::values(['bibo:content' => [['value' => "Café des élus à Cotonou", 'vpub' => true]]]),
             null
@@ -351,7 +380,8 @@ final class MapperTest extends TestCase
         // Licensing-restricted OCR keeps snippet highlighting working while
         // the "Full text available" filter tells the truth about what a
         // visitor can actually open.
-        $doc = $this->registry->get('articles')->map(
+        $doc = self::doc(
+            $this->registry->get('articles'),
             self::item(),
             self::values(['bibo:content' => [['value' => 'restricted text', 'vpub' => false]]]),
             null
@@ -363,7 +393,8 @@ final class MapperTest extends TestCase
 
     public function testOnePublicValueAmongRestrictedOnesIsEnough(): void
     {
-        $doc = $this->registry->get('articles')->map(
+        $doc = self::doc(
+            $this->registry->get('articles'),
             self::item(),
             self::values(['bibo:content' => [
                 ['value' => 'restricted', 'vpub' => false],
@@ -385,7 +416,8 @@ final class MapperTest extends TestCase
         // their own words, and transcription is an ongoing pass.
         self::assertContains('bibo:content', $this->registry->get('audiovisual')->readTerms());
 
-        $doc = $this->registry->get('audiovisual')->map(
+        $doc = self::doc(
+            $this->registry->get('audiovisual'),
             self::item(['class' => IwacInstance::CLASS_AUDIOVISUAL]),
             self::values(['bibo:content' => [['value' => 'Sermon transcrit en haoussa', 'vpub' => true]]]),
             null
@@ -402,7 +434,8 @@ final class MapperTest extends TestCase
         // primary-source subsets.
         foreach (['audiovisual', 'photographs'] as $subset) {
             $mapper = $this->registry->get($subset);
-            $doc = $mapper->map(
+            $doc = self::doc(
+                $mapper,
                 self::item(['class' => $mapper->classIds()[0]]),
                 self::values([]),
                 null
@@ -416,7 +449,8 @@ final class MapperTest extends TestCase
     {
         // References have no OCR concept, so the facet stays hidden for them
         // instead of showing a meaningless "no".
-        $doc = $this->registry->get('references')->map(
+        $doc = self::doc(
+            $this->registry->get('references'),
             self::item(['class' => IwacInstance::CLASS_CHAPTER]),
             self::values([]),
             null
@@ -427,7 +461,8 @@ final class MapperTest extends TestCase
 
     public function testPublicationTableOfContentsIsIndexedAsOneBlobAndDisplayed(): void
     {
-        $doc = $this->registry->get('publications')->map(
+        $doc = self::doc(
+            $this->registry->get('publications'),
             self::item(['class' => IwacInstance::CLASS_PUBLICATION]),
             self::values(['dcterms:tableOfContents' => [
                 ['value' => 'private editorial note', 'vpub' => false],
@@ -448,7 +483,8 @@ final class MapperTest extends TestCase
     public function testPublicationCardExcerptIsBoundedWithoutBreakingUnicode(): void
     {
         $toc = str_repeat('é', 650);
-        $doc = $this->registry->get('publications')->map(
+        $doc = self::doc(
+            $this->registry->get('publications'),
             self::item(['class' => IwacInstance::CLASS_PUBLICATION]),
             self::values(['dcterms:tableOfContents' => [['value' => $toc]]]),
             null
@@ -463,7 +499,8 @@ final class MapperTest extends TestCase
     {
         foreach (['audiovisual', 'photographs'] as $subset) {
             $mapper = $this->registry->get($subset);
-            $doc = $mapper->map(
+            $doc = self::doc(
+                $mapper,
                 self::item(['class' => $mapper->classIds()[0]]),
                 self::values(['dcterms:description' => [['value' => 'Curated description']]]),
                 null
@@ -476,7 +513,8 @@ final class MapperTest extends TestCase
 
     public function testAiSummaryStillWinsOverTheDescriptionFallback(): void
     {
-        $doc = $this->registry->get('audiovisual')->map(
+        $doc = self::doc(
+            $this->registry->get('audiovisual'),
             self::item(['class' => IwacInstance::CLASS_AUDIOVISUAL]),
             self::values([
                 'bibo:shortDescription' => [['value' => 'AI summary']],
@@ -499,14 +537,16 @@ final class MapperTest extends TestCase
         $values = self::values(['dcterms:tableOfContents' => [['value' => 'p. 2 : Entretien']]]);
         $publications = $this->registry->get('publications');
 
-        $ai = $publications->map(
+        $ai = self::doc(
+            $publications,
             self::item(['class' => IwacInstance::CLASS_PUBLICATION, 'template' => 21]),
             $values,
             null
         );
         self::assertTrue($ai['abstract_ai']);
 
-        $other = $publications->map(
+        $other = self::doc(
+            $publications,
             self::item(['class' => IwacInstance::CLASS_PUBLICATION, 'template' => null]),
             $values,
             null
@@ -518,7 +558,8 @@ final class MapperTest extends TestCase
 
     public function testCountryIsDerivedFromTheNewspaperName(): void
     {
-        $doc = $this->registry->get('articles')->map(
+        $doc = self::doc(
+            $this->registry->get('articles'),
             self::item(),
             self::values(['dcterms:publisher' => [['value' => 'La Nation']]]),
             null
@@ -530,7 +571,8 @@ final class MapperTest extends TestCase
 
     public function testAnUnknownNewspaperYieldsNoCountryRatherThanABogusOne(): void
     {
-        $doc = $this->registry->get('articles')->map(
+        $doc = self::doc(
+            $this->registry->get('articles'),
             self::item(),
             self::values(['dcterms:publisher' => [['value' => 'Some Unknown Paper']]]),
             null
@@ -543,7 +585,8 @@ final class MapperTest extends TestCase
     {
         // Documents rarely carry a publisher; membership of the per-country
         // "Documents divers" set is the fallback.
-        $doc = $this->registry->get('documents')->map(
+        $doc = self::doc(
+            $this->registry->get('documents'),
             self::item(['class' => IwacInstance::CLASS_DOCUMENT, 'item_sets' => [23453]]),
             self::values([]),
             null
@@ -560,7 +603,8 @@ final class MapperTest extends TestCase
         // Nigerian recording indexed with no country_ss and /browse/nigeria
         // came back empty (country presets exclude references, which were
         // the only other Nigerian material).
-        $doc = $this->registry->get('audiovisual')->map(
+        $doc = self::doc(
+            $this->registry->get('audiovisual'),
             self::item(['class' => IwacInstance::CLASS_AUDIOVISUAL]),
             self::values([
                 'dcterms:publisher' => [['value' => 'Daarul Hadeethis Salafiyyah']],
@@ -574,7 +618,8 @@ final class MapperTest extends TestCase
 
     public function testAudiovisualWithNoCountryPlaceStaysUncountried(): void
     {
-        $doc = $this->registry->get('audiovisual')->map(
+        $doc = self::doc(
+            $this->registry->get('audiovisual'),
             self::item(['class' => IwacInstance::CLASS_AUDIOVISUAL]),
             self::values(['dcterms:spatial' => [['title' => 'Zaria']]]),
             null
@@ -588,7 +633,8 @@ final class MapperTest extends TestCase
         // An article merely MENTIONING a neighbouring country must not
         // acquire its flag — the press subsets keep the newspaper as their
         // single country signal.
-        $doc = $this->registry->get('articles')->map(
+        $doc = self::doc(
+            $this->registry->get('articles'),
             self::item(),
             self::values(['dcterms:spatial' => [['title' => 'Nigéria']]]),
             null
@@ -601,7 +647,8 @@ final class MapperTest extends TestCase
     {
         // Radio Oméga is Burkinabè; if a recording's producer IS in the map,
         // that beats a place heading naming somewhere else.
-        $doc = $this->registry->get('audiovisual')->map(
+        $doc = self::doc(
+            $this->registry->get('audiovisual'),
             self::item(['class' => IwacInstance::CLASS_AUDIOVISUAL]),
             self::values([
                 'dcterms:publisher' => [['value' => 'La Nation']], // Bénin
@@ -615,7 +662,8 @@ final class MapperTest extends TestCase
 
     public function testTheNewspaperDerivationWinsOverTheItemSetFallback(): void
     {
-        $doc = $this->registry->get('documents')->map(
+        $doc = self::doc(
+            $this->registry->get('documents'),
             self::item([
                 'class' => IwacInstance::CLASS_DOCUMENT,
                 'item_sets' => [23453], // Burkina Faso set
@@ -679,7 +727,8 @@ final class MapperTest extends TestCase
 
     public function testAYoutubeVideoIsIndexedWithItsChannelDateDurationAndWatchUrl(): void
     {
-        $doc = $this->registry->get('audiovisual')->map(
+        $doc = self::doc(
+            $this->registry->get('audiovisual'),
             self::item(['class' => IwacInstance::CLASS_AUDIOVISUAL, 'item_sets' => [108260]]),
             self::values(self::youtubeVideo()),
             '/files/medium/feb505.jpg'
@@ -712,7 +761,8 @@ final class MapperTest extends TestCase
         // Omeka's youtube ingester stores thumbnail derivatives and NO file,
         // so the item's IIIF manifest resolves 200 with zero canvases. The
         // thumbnail is real; the manifest is a link to nothing.
-        $doc = $this->registry->get('audiovisual')->map(
+        $doc = self::doc(
+            $this->registry->get('audiovisual'),
             self::item(['class' => IwacInstance::CLASS_AUDIOVISUAL]),
             self::values(self::youtubeVideo()),
             '/files/medium/feb505.jpg'
@@ -726,7 +776,8 @@ final class MapperTest extends TestCase
     {
         // The regression guard for the legacy population: the YouTube work
         // must not cost the 47 deposited recordings anything they had.
-        $doc = $this->registry->get('audiovisual')->map(
+        $doc = self::doc(
+            $this->registry->get('audiovisual'),
             self::item(['class' => IwacInstance::CLASS_AUDIOVISUAL]),
             self::values(self::depositedRecording()),
             '/files/medium/dvd.jpg'
@@ -765,7 +816,8 @@ final class MapperTest extends TestCase
     #[\PHPUnit\Framework\Attributes\DataProvider('durationCases')]
     public function testIsoDurationsBecomeSeconds(string $extent, ?int $seconds): void
     {
-        $doc = $this->registry->get('audiovisual')->map(
+        $doc = self::doc(
+            $this->registry->get('audiovisual'),
             self::item(['class' => IwacInstance::CLASS_AUDIOVISUAL]),
             self::values(['dcterms:extent' => [['value' => $extent]]]),
             null
@@ -782,7 +834,8 @@ final class MapperTest extends TestCase
     {
         // Same rule the sentiment labels follow: a new carrier shows up as a
         // gap in the facet counts, never as a made-up value.
-        $doc = $this->registry->get('audiovisual')->map(
+        $doc = self::doc(
+            $this->registry->get('audiovisual'),
             self::item(['class' => IwacInstance::CLASS_AUDIOVISUAL]),
             self::values([
                 'dcterms:type'   => [['vrid' => 1, 'title' => 'Bande magnétique']],
@@ -797,7 +850,8 @@ final class MapperTest extends TestCase
 
     public function testAWebVideoOnAnUnknownHostIsNotClaimedForYoutube(): void
     {
-        $doc = $this->registry->get('audiovisual')->map(
+        $doc = self::doc(
+            $this->registry->get('audiovisual'),
             self::item(['class' => IwacInstance::CLASS_AUDIOVISUAL]),
             self::values([
                 'dcterms:medium' => [['vrid' => 108261, 'title' => 'Vidéo sur le web']],
@@ -815,7 +869,8 @@ final class MapperTest extends TestCase
     {
         // A URL that merely MENTIONS youtube.com (a tracker, a search page on
         // another host) must not claim the platform.
-        $doc = $this->registry->get('audiovisual')->map(
+        $doc = self::doc(
+            $this->registry->get('audiovisual'),
             self::item(['class' => IwacInstance::CLASS_AUDIOVISUAL]),
             self::values(['fabio:hasURL' => [['uri' => 'https://example.org/out?to=youtube.com/watch']]]),
             null
@@ -824,7 +879,8 @@ final class MapperTest extends TestCase
         self::assertArrayNotHasKey('media_platform_s', $doc);
 
         foreach (['https://youtu.be/vtrJSbeZNsg', 'https://m.youtube.com/watch?v=x'] as $url) {
-            $doc = $this->registry->get('audiovisual')->map(
+            $doc = self::doc(
+                $this->registry->get('audiovisual'),
                 self::item(['class' => IwacInstance::CLASS_AUDIOVISUAL]),
                 self::values(['fabio:hasURL' => [['uri' => $url]]]),
                 null
@@ -840,7 +896,8 @@ final class MapperTest extends TestCase
         // the same mislabelling in the other direction.
         foreach (['articles', 'publications', 'documents', 'photographs'] as $subset) {
             $mapper = $this->registry->get($subset);
-            $doc = $mapper->map(
+            $doc = self::doc(
+                $mapper,
                 self::item(['class' => $mapper->classIds()[0]]),
                 self::values(['dcterms:publisher' => [['value' => 'Sidwaya']]]),
                 null
@@ -875,7 +932,8 @@ final class MapperTest extends TestCase
     ): void {
         // "Sort by author" has to read like a bibliography and collate A–Z
         // regardless of the diacritics French bylines are full of.
-        $doc = $this->registry->get('articles')->map(
+        $doc = self::doc(
+            $this->registry->get('articles'),
             self::item(),
             self::values(['dcterms:creator' => [['value' => $author]]]),
             null
@@ -890,7 +948,8 @@ final class MapperTest extends TestCase
 
     public function testTheSortKeyComesFromTheFirstAuthorOnly(): void
     {
-        $doc = $this->registry->get('articles')->map(
+        $doc = self::doc(
+            $this->registry->get('articles'),
             self::item(),
             self::values(['dcterms:creator' => [
                 ['value' => 'Awa Traoré'],
@@ -915,7 +974,8 @@ final class MapperTest extends TestCase
             'Très subjectif' => 5.0,
         ];
         foreach ($labels as $label => $score) {
-            $doc = $this->registry->get('articles')->map(
+            $doc = self::doc(
+                $this->registry->get('articles'),
                 self::item(),
                 // Catalogued as a LINKED category, so the title carries it.
                 self::values(['iwac:gpt56LunaSubjectiviteScore' => [['vrid' => 5, 'title' => $label]]]),
@@ -927,7 +987,8 @@ final class MapperTest extends TestCase
 
     public function testANumericSubjectivityValueIsAcceptedDirectly(): void
     {
-        $doc = $this->registry->get('articles')->map(
+        $doc = self::doc(
+            $this->registry->get('articles'),
             self::item(),
             self::values(['iwac:mistralSmall2603SubjectiviteScore' => [['value' => '4']]]),
             null
@@ -938,7 +999,8 @@ final class MapperTest extends TestCase
 
     public function testAnUnrecognisedSubjectivityLabelIsDroppedRatherThanGuessed(): void
     {
-        $doc = $this->registry->get('articles')->map(
+        $doc = self::doc(
+            $this->registry->get('articles'),
             self::item(),
             self::values(['iwac:gpt56LunaSubjectiviteScore' => [['value' => 'Assez objectif']]]),
             null
@@ -978,7 +1040,7 @@ final class MapperTest extends TestCase
             $i++;
         }
 
-        $doc = $this->registry->get('articles')->map(self::item(), self::values($terms), null);
+        $doc = self::doc($this->registry->get('articles'), self::item(), self::values($terms), null);
 
         $i = 0;
         foreach (self::SENTIMENT_MODELS as $prefix) {
@@ -1017,7 +1079,8 @@ final class MapperTest extends TestCase
      */
     public function testAModelThatAnsweredOnlySomeReadingsKeepsThoseItHas(): void
     {
-        $doc = $this->registry->get('articles')->map(
+        $doc = self::doc(
+            $this->registry->get('articles'),
             self::item(),
             self::values(['iwac:qwen3827bCentralite' => [['vrid' => 4, 'title' => 'Marginal']]]),
             null
@@ -1035,7 +1098,8 @@ final class MapperTest extends TestCase
      */
     public function testOtherQwenRunsAreNotIndexedAsQwen38(): void
     {
-        $doc = $this->registry->get('articles')->map(
+        $doc = self::doc(
+            $this->registry->get('articles'),
             self::item(),
             self::values([
                 'iwac:qwen35A3bPolarite' => [['value' => 'Négative']],
@@ -1056,7 +1120,8 @@ final class MapperTest extends TestCase
      */
     public function testTheRetiredDeepSeekPreviewIsNotIndexedAsTheCurrentRun(): void
     {
-        $doc = $this->registry->get('articles')->map(
+        $doc = self::doc(
+            $this->registry->get('articles'),
             self::item(),
             self::values([
                 'iwac:deepseekV4FlashPolarite' => [['value' => 'Négative']],
@@ -1071,7 +1136,8 @@ final class MapperTest extends TestCase
     public function testPublicationsCarryNoSentimentFields(): void
     {
         // Sentiment is computed per article upstream, not per issue.
-        $doc = $this->registry->get('publications')->map(
+        $doc = self::doc(
+            $this->registry->get('publications'),
             self::item(['class' => IwacInstance::CLASS_PUBLICATION]),
             self::values(['iwac:gpt56LunaPolarite' => [['value' => 'Neutre']]]),
             null
@@ -1084,7 +1150,8 @@ final class MapperTest extends TestCase
 
     public function testReferencesReadAuthorsFromBiboAuthorListNotDctermsCreator(): void
     {
-        $doc = $this->registry->get('references')->map(
+        $doc = self::doc(
+            $this->registry->get('references'),
             self::item(['class' => IwacInstance::CLASS_CHAPTER]),
             self::values([
                 'bibo:authorList' => [['value' => 'Awa Traoré']],
@@ -1099,7 +1166,8 @@ final class MapperTest extends TestCase
     public function testTheReferenceTypeComesFromTheResourceClass(): void
     {
         foreach (IwacInstance::REFERENCE_CLASS_LABELS as $classId => $label) {
-            $doc = $this->registry->get('references')->map(
+            $doc = self::doc(
+                $this->registry->get('references'),
                 self::item(['class' => $classId]),
                 self::values([]),
                 null
@@ -1113,7 +1181,8 @@ final class MapperTest extends TestCase
     {
         // IWAC's convention (verified live); isPartOf is the fallback for
         // records catalogued the other way.
-        $doc = $this->registry->get('references')->map(
+        $doc = self::doc(
+            $this->registry->get('references'),
             self::item(['class' => IwacInstance::CLASS_CHAPTER]),
             self::values([
                 'dcterms:alternative' => [['value' => 'Le grand livre']],
@@ -1127,7 +1196,8 @@ final class MapperTest extends TestCase
 
     public function testAChapterFallsBackToIsPartOfWhenAlternativeIsAbsent(): void
     {
-        $doc = $this->registry->get('references')->map(
+        $doc = self::doc(
+            $this->registry->get('references'),
             self::item(['class' => IwacInstance::CLASS_CHAPTER]),
             self::values(['dcterms:isPartOf' => [['value' => 'Le grand livre']]]),
             null
@@ -1138,7 +1208,8 @@ final class MapperTest extends TestCase
 
     public function testNonChapterReferencesUseIsPartOfForTheContainerTitle(): void
     {
-        $doc = $this->registry->get('references')->map(
+        $doc = self::doc(
+            $this->registry->get('references'),
             self::item(['class' => 40]), // Livre
             self::values([
                 'dcterms:alternative' => [['value' => 'A variant title, not a container']],
@@ -1170,7 +1241,8 @@ final class MapperTest extends TestCase
         string $end,
         string $expected
     ): void {
-        $doc = $this->registry->get('references')->map(
+        $doc = self::doc(
+            $this->registry->get('references'),
             self::item(['class' => IwacInstance::CLASS_CHAPTER]),
             self::values([
                 'bibo:pageStart' => [['value' => $start]],
@@ -1188,7 +1260,8 @@ final class MapperTest extends TestCase
 
     public function testReferencesTakeTheirCountryFromTheReferencesItemSet(): void
     {
-        $doc = $this->registry->get('references')->map(
+        $doc = self::doc(
+            $this->registry->get('references'),
             self::item(['class' => IwacInstance::CLASS_CHAPTER, 'item_sets' => [2217]]),
             self::values([]),
             null
@@ -1199,7 +1272,8 @@ final class MapperTest extends TestCase
 
     public function testReferencesUseTheRealAbstractNotAnAiSummary(): void
     {
-        $doc = $this->registry->get('references')->map(
+        $doc = self::doc(
+            $this->registry->get('references'),
             self::item(['class' => IwacInstance::CLASS_CHAPTER]),
             self::values([
                 'dcterms:abstract' => [['value' => 'A human-written abstract']],

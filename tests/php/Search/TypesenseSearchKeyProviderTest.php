@@ -170,7 +170,9 @@ final class TypesenseSearchKeyProviderTest extends TestCase
     public function testAPendingChangeKeyOutlivesTheClientsRenewalMargin(): void
     {
         $client = (string) file_get_contents(dirname(__DIR__, 3) . '/src/svelte/lib/scopedKey.ts');
-        self::assertSame(1, preg_match('/const RENEW_MARGIN_SECONDS = (\d+);/', $client, $m), 'the client constant moved; update this test');
+        if (preg_match('/const RENEW_MARGIN_SECONDS = (\d+);/', $client, $m) !== 1) {
+            self::fail('the client constant moved; update this test');
+        }
 
         self::assertGreaterThanOrEqual(2 * (int) $m[1], TypesenseSearchKeyProvider::PENDING_KEY_SECONDS);
     }

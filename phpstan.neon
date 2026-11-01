@@ -19,7 +19,11 @@
 # docblocks that state the wrong type); its header says why each is there.
 
 parameters:
-    level: 6
+    # Level 8: nullability and array shapes included, with no blanket ignore
+    # (no missingType.* either). The ignores below are scoped to a path and
+    # each says why; a framework docblock that is wrong is corrected in the
+    # stub, with its reason, rather than ignored at the call site.
+    level: 8
 
     paths:
         - src

@@ -279,8 +279,14 @@ final class CollectionOps
             ['action' => 'upsert']
         );
 
-        $lines = trim((string) $response) === '' ? [] : preg_split("/\r?\n/", trim((string) $response));
-        if (count($lines) !== count($batch)) {
+        // A JSONL string in, a JSONL string back: typesense-php answers an
+        // array only when it was given one to encode.
+        if (!is_string($response)) {
+            throw new RuntimeException('Typesense answered a JSONL import with something other than JSONL.');
+        }
+        $body = trim($response);
+        $lines = $body === '' ? [] : preg_split("/\r?\n/", $body);
+        if ($lines === false || count($lines) !== count($batch)) {
             throw new RuntimeException('Import response count does not match submitted documents.');
         }
         $ok = $err = 0;

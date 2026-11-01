@@ -92,6 +92,18 @@ final class InitialResponseRendererTest extends TestCase
         ];
     }
 
+    /**
+     * The `found` count of a rendered surface; the test fails where it fell
+     * back to the client-side fetch (null) instead.
+     *
+     * @param array<string, mixed>|null $response
+     */
+    private static function found(?array $response): mixed
+    {
+        self::assertNotNull($response, 'the surface was not rendered');
+        return $response['found'] ?? null;
+    }
+
     /** @return array<string, mixed> */
     private static function page(int $found = 3): array
     {
@@ -292,7 +304,7 @@ final class InitialResponseRendererTest extends TestCase
 
         self::assertCount(1, $this->sent->entries, 'both surfaces must share one round trip');
         self::assertCount(2, $this->sent->entries[0]['searches']);
-        self::assertSame([1, 2], [$out[0]['found'], $out[1]['found']]);
+        self::assertSame([1, 2], [self::found($out[0]), self::found($out[1])]);
     }
 
     public function testResultsComeBackInInputOrder(): void
@@ -306,7 +318,7 @@ final class InitialResponseRendererTest extends TestCase
 
         self::assertSame('a', $this->sent->entries[0]['searches'][0]['collection']);
         self::assertSame('b', $this->sent->entries[0]['searches'][1]['collection']);
-        self::assertSame(2, $out[1]['found']);
+        self::assertSame(2, self::found($out[1]));
     }
 
     public function testOneFailingSurfaceDoesNotCostTheOtherItsSnapshot(): void
@@ -319,7 +331,7 @@ final class InitialResponseRendererTest extends TestCase
 
         $out = $renderer->renderMany([self::bootstrap(), self::bootstrap()]);
 
-        self::assertSame(1, $out[0]['found']);
+        self::assertSame(1, self::found($out[0]));
         self::assertNull($out[1]);
     }
 
@@ -379,7 +391,7 @@ final class InitialResponseRendererTest extends TestCase
         foreach ($this->sent->entries[1]['searches'] as $search) {
             self::assertArrayNotHasKey('stopwords', $search);
         }
-        self::assertSame([1, 2], [$out[0]['found'], $out[1]['found']]);
+        self::assertSame([1, 2], [self::found($out[0]), self::found($out[1])]);
     }
 
     // ── Snapshot cache ──────────────────────────────────────────────────
@@ -393,8 +405,8 @@ final class InitialResponseRendererTest extends TestCase
         $first = $renderer->render(self::bootstrap());
         $second = $renderer->render(self::bootstrap());
 
-        self::assertSame(7, $first['found']);
-        self::assertSame(7, $second['found']);
+        self::assertSame(7, self::found($first));
+        self::assertSame(7, self::found($second));
         self::assertCount(1, $this->sent->entries, 'the second render must not hit Typesense');
     }
 
@@ -406,7 +418,7 @@ final class InitialResponseRendererTest extends TestCase
         $a = $renderer->render(self::bootstrap(['locked_filters' => 'country_ss:=`Niger`']));
         $b = $renderer->render(self::bootstrap(['locked_filters' => 'country_ss:=`Bénin`']));
 
-        self::assertSame([1, 2], [$a['found'], $b['found']]);
+        self::assertSame([1, 2], [self::found($a), self::found($b)]);
         self::assertCount(2, $this->sent->entries);
     }
 
@@ -473,7 +485,7 @@ final class InitialResponseRendererTest extends TestCase
         $epoch = 'b'; // a save was journaled
         $after = $renderer->render(self::bootstrap());
 
-        self::assertSame(2, $after['found']);
+        self::assertSame(2, self::found($after));
         self::assertCount(2, $this->sent->entries);
     }
 

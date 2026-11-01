@@ -25,6 +25,8 @@ use Typesense\Client as TypesenseClient;
  * absent from a collection, a GET for each entity). These tests pin the
  * batched contract — a constant number of requests per collection — and the
  * outcome report the rebuild cutover reconciles its counts from.
+ *
+ * @phpstan-import-type AuthorityEntity from EntityAuthority
  */
 #[CoversClass(IncrementalIndexer::class)]
 #[CoversClass(CollectionOps::class)]
@@ -56,7 +58,7 @@ final class IncrementalApplyTest extends TestCase
         return new IncrementalIndexer($this->ops(), $reader, $registry, $authority, 'content', indexAlias: $index);
     }
 
-    /** @return array<string, mixed> */
+    /** @return AuthorityEntity */
     private static function entity(int $id, string $title = 'Tidjaniya'): array
     {
         return [
@@ -140,7 +142,7 @@ final class IncrementalApplyTest extends TestCase
 
     // ── Rejected documents in the live drain ─────────────────────────────
 
-    /** @return list<array{id:int, content:?array<string,mixed>, entity:?array<string,mixed>}> */
+    /** @return list<array{id:int, content:?array<string,mixed>, entity:AuthorityEntity|null}> */
     private static function badAndGoodArticles(): array
     {
         return [

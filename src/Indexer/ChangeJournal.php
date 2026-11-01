@@ -73,10 +73,10 @@ final class ChangeJournal
     /** @return list<int> */
     public function changedSince(int $watermark): array
     {
-        return array_map('intval', $this->connection->fetchFirstColumn(
+        return array_values(array_map('intval', $this->connection->fetchFirstColumn(
             'SELECT DISTINCT item_id FROM iwac_search_change WHERE id > ? ORDER BY item_id',
             [$watermark]
-        ));
+        )));
     }
 
     /** @return list<array{id:int, item_id:int}> */
@@ -85,7 +85,7 @@ final class ChangeJournal
         $rows = $this->connection->executeQuery(
             'SELECT id, item_id FROM iwac_search_change WHERE processed = 0 ORDER BY id LIMIT ' . max(1, min(200, $limit))
         )->fetchAllAssociative();
-        return array_map(static fn (array $row): array => ['id' => (int) $row['id'], 'item_id' => (int) $row['item_id']], $rows);
+        return array_values(array_map(static fn (array $row): array => ['id' => (int) $row['id'], 'item_id' => (int) $row['item_id']], $rows));
     }
 
     /**

@@ -62,7 +62,8 @@ final class SnapshotCache implements SnapshotCacheInterface
         $ok = false;
         /** @var mixed $hit */
         $hit = apcu_fetch($key, $ok);
-        return $ok && is_array($hit) ? $hit : null;
+        // set() stores a list; anything else under the key is not ours.
+        return $ok && is_array($hit) && array_is_list($hit) ? $hit : null;
     }
 
     /**
