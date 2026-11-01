@@ -50,9 +50,10 @@ provides the Typesense container, nginx `/search-api/` proxy, and backups.
 - `Module.php :: install` / `upgrade` — create the module's tables through
   `Indexer\IndexingSchema` (connection only: Omeka runs `upgrade()` while the
   module is inactive, so no module service resolves there): the durable ID
-  journal `iwac_search_change` and the generation ledger
-  `iwac_search_generation`, into which the upgrade folds the pre-3.27
-  `iwac_search_rollback` record. Uninstall drops them and the retired browse
+  journal `iwac_search_change`, the generation ledger
+  `iwac_search_generation` (into which the upgrade folds the pre-3.27
+  `iwac_search_rollback` record) and the drain worker's lease row
+  `iwac_search_worker`. Uninstall drops them and the retired browse
   table, never Typesense collections — it logs the ones the ledger recorded.
 - **The generation ledger owns collection cleanup.** Every build is recorded
   before its collection is created; a rebuild drops the builds an interrupted
@@ -63,7 +64,7 @@ provides the Typesense container, nginx `/search-api/` proxy, and backups.
   the old name-regex rule for collections built before the ledger.
 - `Module.php :: attachListeners` — injects the Svelte assets on the
   search routes + the site-wide header enhancer, and wires the
-  `api.execute.pre/post` change-journaling events. Background jobs perform indexing; pre/post hold the mutation gate around writes, tracked per request object in `Indexer\WriteGate` because Omeka skips the post event when a write throws. The indexer listener is
+  `api.execute.pre/post` change-journaling events. Background jobs perform indexing; pre/post hold the mutation gate around writes, tracked per request object in `Indexer\WriteGate` because Omeka skips the post event when a write throws. A save starts a `DrainChanges` worker only when it wins the lease row `iwac_search_worker` (`Indexer\WorkerLease`); the worker loops until no save asked for work during its pass, so a row journaled mid-pass is never stranded, and `cli/maintenance.php drain` (every minute) works only when it can claim the lease. The indexer listener is
   resolved lazily at event fire time — do not resolve it eagerly, or
   every anonymous GET pays for the full indexer graph.
 - Alias names are `IwacInstance::CONTENT_ALIAS` / `INDEX_ALIAS` everywhere

@@ -45,7 +45,9 @@ use Typesense\Client as TypesenseClient;
  *     popular/no-hit analytics rules once the server flags are enabled.
  *
  *   retryChangesAction   POST  …/maintenance/retry-changes
- *     Dispatches IwacSearch\Job\DrainChanges for pending journal rows.
+ *     Dispatches IwacSearch\Job\DrainChanges for pending journal rows,
+ *     even while the worker lease is held (after a failure the lease backs
+ *     off for two minutes; this is the operator's "retry now").
  *
  *   pruneCollectionsAction POST …/maintenance/prune-collections
  *     Dispatches IwacSearch\Job\PruneCollections (retention cleanup).
@@ -76,6 +78,8 @@ class MaintenanceController extends AbstractActionController
         private readonly ?\IwacSearch\Indexer\ChangeJournal $journal = null,
         // Read for the generation list's status column; null hides it.
         private readonly ?\IwacSearch\Indexer\GenerationLedger $ledger = null,
+        // Read for the drain worker's status line; null hides it.
+        private readonly ?\IwacSearch\Indexer\WorkerLease $lease = null,
     ) {
     }
 
@@ -105,9 +109,11 @@ class MaintenanceController extends AbstractActionController
     {
         $queue = null;
         $queueError = null;
+        $worker = null;
         try {
             $this->journal?->assertInstalled();
             $queue = $this->journal?->status();
+            $worker = $this->lease?->status();
         } catch (TableNotFoundException) {
             $queueError = 'IWAC Search database setup is incomplete. Open Modules and upgrade IWAC Search. If no upgrade is offered, ask your administrator to run php cli/repair-schema.php from the IwacSearch module directory, then reload this page. Run a full reindex after recovery.'; // @translate
         } catch (Throwable) {
@@ -116,6 +122,7 @@ class MaintenanceController extends AbstractActionController
         return new ViewModel([
             'queue' => $queue,
             'queueError' => $queueError,
+            'worker' => $worker,
             'retryForm' => $this->getForm(MaintenanceForm::class),
             'pruneForm' => $this->getForm(MaintenanceForm::class),
             'reindexForm'         => $this->getForm(MaintenanceForm::class),

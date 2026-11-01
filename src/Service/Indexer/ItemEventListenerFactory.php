@@ -3,8 +3,8 @@ declare(strict_types=1);
 
 namespace IwacSearch\Service\Indexer;
 
-use IwacSearch\Indexer\DrainJobHistory;
 use IwacSearch\Indexer\ItemEventListener;
+use IwacSearch\Indexer\WorkerLease;
 use IwacSearch\Job\DrainChanges;
 use IwacSearch\Log\LoggerResolver;
 use Laminas\ServiceManager\Factory\FactoryInterface;
@@ -12,7 +12,9 @@ use Psr\Container\ContainerInterface;
 
 /**
  * Builds an ID-journaling adapter and a deferred Omeka-job dispatch callback
- * that skips the dispatch while a drain is already queued or running.
+ * that records the request for work and starts a drain worker only when it
+ * wins the worker lease (see Indexer\WorkerLease): a live worker picks the
+ * request up before it exits.
  */
 final class ItemEventListenerFactory implements FactoryInterface
 {
@@ -29,9 +31,9 @@ final class ItemEventListenerFactory implements FactoryInterface
         return new ItemEventListener(
             connection: $connection,
             dispatch: static function () use ($container, $connection): void {
-                if (!DrainJobHistory::isActive($connection)) {
-                    $container->get('Omeka\Job\Dispatcher')->dispatch(DrainChanges::class);
-                }
+                (new WorkerLease($connection))->wake(
+                    static fn (): mixed => $container->get('Omeka\Job\Dispatcher')->dispatch(DrainChanges::class)
+                );
             },
             logger: LoggerResolver::fromContainer($container)
         );

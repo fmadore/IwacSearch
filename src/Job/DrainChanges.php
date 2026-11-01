@@ -5,14 +5,16 @@ declare(strict_types=1);
 namespace IwacSearch\Job;
 
 use IwacSearch\Indexer\ChangeDrainer;
-use IwacSearch\Indexer\ChangeJournal;
 use IwacSearch\Indexer\IncrementalIndexer;
+use IwacSearch\Indexer\WorkerLease;
 use Omeka\Job\AbstractJob;
 
 /**
- * Applies pending journal rows to Typesense for up to two minutes, then
- * chains another run while a backlog it made progress on remains. Saves
- * dispatch it only when no drain is already active (see DrainJobHistory).
+ * The coalesced drain worker: applies journal rows to Typesense, looping
+ * while saves keep asking for work, and hands a long backlog over to a
+ * successor after ChangeDrainer::WORK_SECONDS. Saves dispatch it only when
+ * they win the worker lease (see Indexer\WorkerLease); the maintenance
+ * page's retry dispatches it directly.
  */
 final class DrainChanges extends AbstractJob
 {
@@ -20,9 +22,10 @@ final class DrainChanges extends AbstractJob
     {
         $services = $this->getServiceLocator();
         $connection = $services->get('Omeka\Connection');
-        $processed = (new ChangeDrainer($connection, $services->get(IncrementalIndexer::class)))->run(fn (): bool => $this->shouldStop());
-        if ($processed > 0 && !$this->shouldStop() && (new ChangeJournal($connection))->status()['pending'] > 0) {
-            $services->get('Omeka\Job\Dispatcher')->dispatch(self::class);
-        }
+        (new ChangeDrainer($connection, $services->get(IncrementalIndexer::class)))->work(
+            new WorkerLease($connection),
+            fn (): bool => $this->shouldStop(),
+            static fn (): mixed => $services->get('Omeka\Job\Dispatcher')->dispatch(self::class),
+        );
     }
 }

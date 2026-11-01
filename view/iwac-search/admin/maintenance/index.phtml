@@ -20,6 +20,8 @@
  * @var array{available: bool, generations: list<array{name: string, documents: int, created: ?int, serves: list<string>, ledger: ?string}>, memory: ?array{active: ?int, used: ?int, total: ?int}} $generations
  *   Every IWAC generation on the server, its generation-ledger status, and
  *   Typesense memory.
+ * @var array{requested: bool, heartbeat: ?string, alive: bool}|null $worker
+ *   The drain worker lease (Indexer\WorkerLease), or null when unavailable.
  * @var array{available: bool, reason: ?string, popular: list<array{q: string, count: int}>, nohits: list<array{q: string, count: int}>} $analytics
  *   Aggregated search analytics (top queries / no-hit queries), or a
  *   not-yet-provisioned marker.
@@ -321,6 +323,15 @@ $ledgerLabels = [
     <h2><?php echo $translate('Pending index changes'); ?></h2>
     <?php if ($queue !== null): ?>
         <p><?php echo $escape(sprintf($translate('%d queued changes. Oldest: %s'), $queue['pending'], $queue['oldest'] ?? '—')); ?></p>
+        <?php if (!empty($worker)): ?>
+            <p>
+                <?php if ($worker['alive']): ?>
+                    <?php echo $escape(sprintf($translate('Drain worker: active (last heartbeat %s). After a failure it waits two minutes before retrying; the retry button starts one at once.'), $worker['heartbeat'] ?? '—')); ?>
+                <?php else: ?>
+                    <?php echo $escape($translate('Drain worker: idle. The next save, or the scheduled drain, starts one.')); ?>
+                <?php endif; ?>
+            </p>
+        <?php endif; ?>
     <?php else: ?>
         <p><?php echo $translate('Queue status unavailable.'); ?></p>
     <?php endif; ?>

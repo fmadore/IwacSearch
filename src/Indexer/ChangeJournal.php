@@ -96,6 +96,12 @@ final class ChangeJournal
         }
     }
 
+    /** Whether any row awaits the drain — one index probe, for the worker's exit check. */
+    public function hasPending(): bool
+    {
+        return $this->connection->executeQuery('SELECT 1 FROM ' . self::TABLE . ' WHERE processed = 0 LIMIT 1')->fetchOne() !== false;
+    }
+
     /** @return array{pending:int, oldest:?string} */
     public function status(): array
     {

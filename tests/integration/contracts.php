@@ -158,6 +158,39 @@ $freeMutation = new DatabaseLock($publicationConnection, 'mutation');
 check($freeMutation->tryAcquire(), 'busy worker releases its mutation gate');
 $freeMutation->release(); $publication->release();
 
+// The worker lease: one worker at a time, no lost wake-up, stale takeover.
+$lease = new IwacSearch\Indexer\WorkerLease($db);
+$lease->release();
+$dispatched = 0;
+$dispatch = static function () use (&$dispatched): void { $dispatched++; };
+check($lease->wake($dispatch) && !$lease->wake($dispatch) && $dispatched === 1 && $lease->status()['alive'], 'only the save that wins the worker lease dispatches a drain');
+$lease->begin(); // the dispatched worker starts a pass…
+$journal->append([1]); // …a save journals during it and asks again
+check(!$lease->wake($dispatch) && $dispatched === 1 && !$lease->finish(), 'a request during a pass keeps the live worker from exiting');
+$drainer = new ChangeDrainer($db, $incremental);
+check($drainer->work($lease) >= 1 && $journal->status()['pending'] === 0 && !$lease->status()['alive'], 'the worker drains every request, then gives the lease back');
+$lease->claim();
+$lease->backoff();
+check(!$lease->claim(), 'a failed worker holds the lease for one stale window');
+$db->executeStatement("UPDATE iwac_search_worker SET heartbeat = NOW() - INTERVAL 1 HOUR");
+check($lease->claim(), 'a dead worker\'s stale lease is taken over');
+$lease->release();
+try {
+    $lease->wake(static function (): void { throw new RuntimeException('dispatcher down'); });
+    throw new LogicException('A failed dispatch went unnoticed');
+} catch (RuntimeException $e) {
+    check($e->getMessage() === 'dispatcher down' && !$lease->status()['alive'] && $lease->status()['requested'], 'a failed dispatch gives the lease back and keeps the request');
+}
+$journal->append([1]);
+$publication->acquire(); // another drainer is busy: this worker can only wait
+$successors = 0;
+$lease->claim();
+$applied = $drainer->work($lease, null, static function () use (&$successors): void { $successors++; }, 1);
+check($applied === 0 && $successors === 1 && $lease->status()['alive'] && $lease->status()['requested'], 'a worker out of time hands the lease to its successor');
+$publication->release();
+$drainer->work($lease);
+check($journal->status()['pending'] === 0 && !$lease->status()['alive'], 'the successor drains what was left');
+
 $ops->flushBatch('iwac_current', [['id' => '30', 'title_txt' => 'needle', 'is_public' => true, 'country_ss' => ['Bénin']], ['id' => '31', 'title_txt' => 'needle', 'is_public' => true, 'country_ss' => ['Togo']], ['id' => '32', 'title_txt' => 'needle', 'is_public' => false, 'country_ss' => ['Togo']]]);
 $result = $client->collections['iwac_current']->documents->search(['q' => '*', 'filter_by' => ScopeFilters::combine('is_public:=true', 'country_ss:=Bénin || country_ss:=Togo')]);
 check($result['found'] === 2, 'OR scope cannot bypass public guard on real Typesense');

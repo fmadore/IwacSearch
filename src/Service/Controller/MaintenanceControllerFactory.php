@@ -50,6 +50,7 @@ final class MaintenanceControllerFactory implements FactoryInterface
         return new MaintenanceController(
             journal: new \IwacSearch\Indexer\ChangeJournal($connection),
             ledger: new \IwacSearch\Indexer\DatabaseGenerationLedger($connection),
+            lease: new \IwacSearch\Indexer\WorkerLease($connection),
             collectionBaseName: $baseName,
             clientFactory:      TypesenseClientLazy::fromContainer($container),
             contentAlias:       IwacInstance::CONTENT_ALIAS,

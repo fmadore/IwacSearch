@@ -14,6 +14,7 @@ use Throwable;
  *
  *   - `iwac_search_change`     the durable ID journal ({@see ChangeJournal})
  *   - `iwac_search_generation` the generation ledger ({@see DatabaseGenerationLedger})
+ *   - `iwac_search_worker`     the drain worker's lease row ({@see WorkerLease})
  *
  * Plain DBAL on the connection it is given, nothing else: Omeka runs
  * Module::upgrade() while the module is still inactive, so none of the
@@ -40,6 +41,15 @@ final class IndexingSchema
             . 'promoted DATETIME NULL, retired DATETIME NULL,'
             . 'KEY alias_status (alias_name, status)'
             . ') ENGINE=InnoDB');
+        $connection->executeStatement('CREATE TABLE IF NOT EXISTS ' . WorkerLease::TABLE . ' ('
+            . 'name VARCHAR(32) NOT NULL PRIMARY KEY,'
+            . 'requested TINYINT NOT NULL DEFAULT 0, heartbeat DATETIME NULL,'
+            . 'updated DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP'
+            . ') ENGINE=InnoDB');
+        $connection->executeStatement(
+            'INSERT IGNORE INTO ' . WorkerLease::TABLE . ' (name, requested) VALUES (?, 0)',
+            [WorkerLease::NAME]
+        );
         self::migrateRollbackRecord($connection);
     }
 
@@ -48,6 +58,7 @@ final class IndexingSchema
     {
         $connection->executeQuery('SELECT id FROM ' . ChangeJournal::TABLE . ' LIMIT 0');
         $connection->executeQuery('SELECT collection_name FROM ' . DatabaseGenerationLedger::TABLE . ' LIMIT 0');
+        $connection->executeQuery('SELECT name FROM ' . WorkerLease::TABLE . ' LIMIT 0');
     }
 
     /**
@@ -67,6 +78,7 @@ final class IndexingSchema
         }
         $connection->executeStatement('DROP TABLE IF EXISTS ' . ChangeJournal::TABLE);
         $connection->executeStatement('DROP TABLE IF EXISTS ' . DatabaseGenerationLedger::TABLE);
+        $connection->executeStatement('DROP TABLE IF EXISTS ' . WorkerLease::TABLE);
         $connection->executeStatement('DROP TABLE IF EXISTS ' . self::LEGACY_ROLLBACK_TABLE);
     }
 
