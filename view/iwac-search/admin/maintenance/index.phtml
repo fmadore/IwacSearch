@@ -236,8 +236,16 @@ $ledgerLabels = [
             <strong><?php echo $translate('Duration:'); ?></strong>
             <?php echo $translate('5–15 minutes for the full ~14K-doc corpus. Live search keeps serving the previous collection until the swap completes, so there is no downtime.'); ?>
         </p>
+        <p>
+            <strong><?php echo $translate('Safety check:'); ?></strong>
+            <?php echo $translate('The swap is refused when any content type or the entity index would fall below half of what is live — the sign of a mapper or item set that suddenly matches nothing. Tick the box only when such a drop is intended.'); ?>
+        </p>
         <?php echo $this->form()->openTag($reindexForm); ?>
             <?php echo $this->formCollection($reindexForm); ?>
+            <label style="display:block;margin-top:0.5rem;">
+                <input type="checkbox" name="allow_shrink" value="1">
+                <?php echo $translate('Allow a smaller corpus'); ?>
+            </label>
             <button type="submit" class="button" style="margin-top:0.5rem;">
                 <?php echo $translate('Run reindex'); ?>
             </button>

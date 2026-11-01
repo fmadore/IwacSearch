@@ -307,16 +307,20 @@ class MaintenanceController extends AbstractActionController
 
     /**
      * POST: dispatch a BulkReindex job, flash a link to the job log,
-     * redirect back to the maintenance page.
+     * redirect back to the maintenance page. The form's `allow_shrink`
+     * checkbox becomes the job argument that lifts the shrink guard.
      */
     public function reindexAction(): Response
     {
+        $request = $this->getRequest();
+        $allowShrink = $request->isPost() && (string) $request->getPost('allow_shrink', '') === '1';
         return $this->dispatchJob(
             BulkReindex::class,
             sprintf(
                 'Bulk reindex queued — reads fresh data from the Omeka database, builds a fresh %s_<timestamp> collection alongside the live one, and atomic-swaps the iwac_current alias once verification passes.',
                 $this->collectionBaseName
-            )
+            ) . ($allowShrink ? ' The smaller-corpus check is off for this run.' : ''),
+            $allowShrink ? ['allow_shrink' => true] : []
         );
     }
 
@@ -383,8 +387,9 @@ class MaintenanceController extends AbstractActionController
      * back to the maintenance page.
      *
      * @param class-string $jobClass
+     * @param array<string, mixed> $args job arguments
      */
-    private function dispatchJob(string $jobClass, string $description): Response
+    private function dispatchJob(string $jobClass, string $description, array $args = []): Response
     {
         $request = $this->getRequest();
         if (!$request->isPost()) {
@@ -406,7 +411,7 @@ class MaintenanceController extends AbstractActionController
             return $this->redirect()->toRoute('admin/iwac-search/maintenance');
         }
 
-        $job = $this->jobDispatcher()->dispatch($jobClass);
+        $job = $this->jobDispatcher()->dispatch($jobClass, $args);
 
         $jobUrl = $this->url()->fromRoute(
             'admin/id',

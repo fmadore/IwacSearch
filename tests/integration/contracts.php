@@ -90,7 +90,7 @@ $client = new Client(['api_key' => 'iwac-disposable-test-key', 'nodes' => [['hos
 $ops = new CollectionOps(fn() => $client);
 foreach ($client->collections->retrieve() as $c) $client->collections[$c['name']]->delete();
 foreach (['iwac_v99_20200101_000000_aaaaaaaaaaaa', 'iwac_index_v99_20200101_000000_aaaaaaaaaaaa'] as $name) {
-    $client->collections->create(['name' => $name, 'fields' => [['name' => '.*', 'type' => 'auto', 'optional' => true], ['name' => 'is_public', 'type' => 'bool'], ['name' => 'country_ss', 'type' => 'string[]', 'facet' => true, 'optional' => true]]]);
+    $client->collections->create(['name' => $name, 'fields' => [['name' => '.*', 'type' => 'auto', 'optional' => true], ['name' => 'is_public', 'type' => 'bool'], ['name' => 'country_ss', 'type' => 'string[]', 'facet' => true, 'optional' => true], ['name' => 'type_s', 'type' => 'string', 'facet' => true, 'optional' => true]]]);
 }
 $client->aliases->upsert('iwac_current', ['collection_name' => 'iwac_v99_20200101_000000_aaaaaaaaaaaa']);
 $client->aliases->upsert('iwac_index_current', ['collection_name' => 'iwac_index_v99_20200101_000000_aaaaaaaaaaaa']);

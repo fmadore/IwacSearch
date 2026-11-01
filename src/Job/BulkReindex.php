@@ -20,11 +20,14 @@ use Typesense\Client as TypesenseClient;
  * wiring lives in ReindexOrchestrator, shared with cli/reindex.php so the two
  * entry points can't drift.
  *
+ * Argument `allow_shrink` (bool, the maintenance page's "Allow a smaller
+ * corpus") lifts the shrink guard for an intended large drop.
+ *
  * On any throw, AbstractTypesenseJob logs and rethrows so Omeka marks the job
- * ERROR. Promotion happens only after every check passes (and a failed alias
- * swap restores both aliases), so the live aliases still point at the
- * previous good generations. A build that fails after its import stays on
- * the server until retention cleanup removes it.
+ * ERROR; a stop request is logged as a notice and the job ends as stopped.
+ * Promotion happens only after every check passes (and a failed alias swap
+ * restores both aliases), so the live aliases still point at the previous
+ * good generations; the failed build is dropped.
  */
 class BulkReindex extends AbstractTypesenseJob
 {
@@ -41,6 +44,13 @@ class BulkReindex extends AbstractTypesenseJob
         /** @var Connection $connection */
         $connection = $this->getServiceLocator()->get('Omeka\Connection');
 
-        return (new ReindexOrchestrator($typesense, $connection, $moduleRoot, $logger, fn(): bool => $this->shouldStop()))->run();
+        return (new ReindexOrchestrator(
+            $typesense,
+            $connection,
+            $moduleRoot,
+            $logger,
+            fn(): bool => $this->shouldStop(),
+            allowShrink: (bool) $this->getArg('allow_shrink', false),
+        ))->run();
     }
 }

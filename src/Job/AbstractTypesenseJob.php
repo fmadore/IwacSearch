@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace IwacSearch\Job;
 
+use IwacSearch\Indexer\Exception\ReindexCancelledException;
 use IwacSearch\Log\LoggerResolver;
 use Omeka\Job\AbstractJob;
 use Psr\Log\LoggerInterface;
@@ -24,6 +25,10 @@ use Typesense\Client as TypesenseClient;
  * must reach Omeka as a failure. (Individual operations may still choose to
  * be non-fatal internally — AnalyticsSync reports `enabled: false` rather
  * than throwing — and their job decides whether that counts as an error.)
+ *
+ * The one exception is a cancellation: an operator pressing Stop is not a
+ * failure, so it is logged as a notice and the job returns, which Omeka
+ * records as stopped.
  */
 abstract class AbstractTypesenseJob extends AbstractJob
 {
@@ -67,6 +72,9 @@ abstract class AbstractTypesenseJob extends AbstractJob
 
         try {
             $stats = $this->operate($typesense, $moduleRoot, $logger);
+        } catch (ReindexCancelledException $e) {
+            $logger->notice("IwacSearch: {$label} stopped", ['message' => $e->getMessage()]);
+            return;
         } catch (Throwable $e) {
             $logger->error("IwacSearch: {$label} failed", [
                 'class'   => $e::class,

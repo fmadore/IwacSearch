@@ -3,6 +3,8 @@ declare(strict_types=1);
 
 namespace IwacSearch\Indexer;
 
+use IwacSearch\Indexer\Exception\ReindexCancelledException;
+use IwacSearch\Indexer\Exception\VerificationException;
 use IwacSearch\Indexer\Mapper\IndexEntityMapper;
 use IwacSearch\IwacInstance;
 use Psr\Log\LoggerInterface;
@@ -63,7 +65,7 @@ final class IndexReindexer
         try {
             [$indexed, $errors] = $this->ops->importAll($newName, $this->mapEntities(), self::BATCH_SIZE);
         } catch (Throwable $e) {
-            $this->logger->error('Index reindex failed; dropping half-built collection', [
+            $this->logger->log($e instanceof ReindexCancelledException ? 'notice' : 'error', 'Index reindex did not finish; dropping half-built collection', [
                 'collection' => $newName,
                 'error'      => $e->getMessage(),
             ]);
@@ -75,7 +77,7 @@ final class IndexReindexer
         // the orchestrator can defer the swap.
         if ($errors > 0) {
             $this->ops->safelyDropCollection($newName);
-            throw new \RuntimeException('Reindex import rejected documents; refusing promotion.');
+            throw new VerificationException('Reindex import rejected documents; refusing promotion.');
         }
         if ($promote) {
             $this->ops->promote($alias, $newName, $indexed, $errors);

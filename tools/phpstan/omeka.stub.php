@@ -206,6 +206,15 @@ namespace Omeka\Job {
         public function shouldStop(): bool
         {
         }
+
+        /**
+         * @param string $name
+         * @param mixed $default
+         * @return mixed
+         */
+        public function getArg($name, $default = null)
+        {
+        }
     }
 }
 

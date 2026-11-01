@@ -4,6 +4,8 @@ declare(strict_types=1);
 namespace IwacSearch\Indexer;
 
 use Closure;
+use IwacSearch\Indexer\Exception\ReindexCancelledException;
+use IwacSearch\Indexer\Exception\VerificationException;
 use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
 use RuntimeException;
@@ -55,9 +57,12 @@ final class CollectionOps
     ) {
     }
 
-    private function checkCancellation(): void
+    /** @throws ReindexCancelledException when the job was asked to stop */
+    public function checkCancellation(): void
     {
-        if ($this->shouldStop !== null && ($this->shouldStop)()) throw new RuntimeException('Reindex cancelled.');
+        if ($this->shouldStop !== null && ($this->shouldStop)()) {
+            throw new ReindexCancelledException('Reindex cancelled before promotion; the live generations are unchanged.');
+        }
     }
 
     private function client(): TypesenseClient
@@ -127,7 +132,7 @@ final class CollectionOps
                 'errors'     => $errors,
             ]);
             $this->safelyDropCollection($newName);
-            throw new RuntimeException(sprintf(
+            throw new VerificationException(sprintf(
                 'Reindex aborted before alias swap: %d indexed, %d errors — the previous collection stays live.',
                 $indexed,
                 $errors

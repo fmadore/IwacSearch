@@ -6,7 +6,11 @@ declare(strict_types=1);
  * both Typesense collections (content + entity index).
  *
  * Usage from inside the Omeka php container:
- *   docker compose exec php php /var/www/html/modules/IwacSearch/cli/reindex.php
+ *   docker compose exec php php /var/www/html/modules/IwacSearch/cli/reindex.php [--allow-shrink]
+ *
+ * --allow-shrink  promote even when a content type or the entity total falls
+ *                 below half of the live generation (an intended large drop;
+ *                 see Indexer\ShrinkGuard)
  *
  * Or via omeka-s-cli:
  *   docker compose -f services/omeka-cli/docker-compose.yml run --rm \
@@ -37,7 +41,8 @@ try {
         'typesense_host' => $tsConfig['host'],
         'db'             => $connection->getDatabase(),
     ]);
-    $stats = (new ReindexOrchestrator($typesense, $connection, $moduleRoot, $logger))->run();
+    $allowShrink = in_array('--allow-shrink', array_slice($argv, 1), true);
+    $stats = (new ReindexOrchestrator($typesense, $connection, $moduleRoot, $logger, allowShrink: $allowShrink))->run();
     $logger->info('Reindex complete', $stats);
 
     fwrite(STDOUT, json_encode($stats, JSON_PRETTY_PRINT) . "\n");

@@ -119,6 +119,61 @@ check(in_array('iwac_v99_20170101_000000_aaaaaaaaaaaa', $removed, true) && in_ar
 check(in_array('iwac_index_v99_20170101_000000_aaaaaaaaaaaa', $removed, true) && !in_array('iwac_index_v99_20190101_000000_aaaaaaaaaaaa', $removed, true), 'retention keeps the newest unrecorded generation while no rollback target is recorded');
 check(!in_array('iwac_v99_20180101_000000_aaaaaaaaaaaa', $removed, true), 'retention protects every alias target');
 check(!array_intersect([$first['content'], $stats['collection'], $stats['index']['collection']], $removed), 'retention keeps the live and previous generations');
+// The admin job: a stop request is a notice, not an error, and drops the build.
+$jobLog = new Laminas\Log\Writer\Mock();
+$jobServices = new Laminas\ServiceManager\ServiceManager(['services' => [
+    Typesense\Client::class => $client,
+    'Omeka\Connection' => $db,
+    'Omeka\Logger' => (new Laminas\Log\Logger())->addWriter($jobLog),
+]]);
+$runJob = static function (array $args, Closure $stop) use ($jobServices): void {
+    $entity = new Omeka\Entity\Job();
+    (new ReflectionProperty(Omeka\Entity\Job::class, 'id'))->setValue($entity, 7);
+    $entity->setArgs($args);
+    $job = new class($entity, $jobServices, $stop) extends IwacSearch\Job\BulkReindex {
+        public function __construct(Omeka\Entity\Job $job, Laminas\ServiceManager\ServiceLocatorInterface $services, private Closure $stop)
+        {
+            parent::__construct($job, $services);
+        }
+        public function shouldStop(): bool
+        {
+            return ($this->stop)();
+        }
+    };
+    $job->perform();
+};
+$beforeContent = $ops->resolveAliasTarget('iwac_current');
+$beforeIndex = $ops->resolveAliasTarget('iwac_index_current');
+$collectionNames = static function () use ($client): array {
+    $names = array_column($client->collections->retrieve(), 'name');
+    sort($names);
+    return $names;
+};
+$beforeCollections = $collectionNames();
+$calls = 0;
+// The first check passes; the next one, in the content import, asks to stop.
+$runJob([], static function () use (&$calls): bool {
+    return ++$calls >= 2;
+});
+$priorities = array_column($jobLog->events, 'priorityName', 'message');
+check(isset($priorities['IwacSearch: bulk reindex stopped']) && $priorities['IwacSearch: bulk reindex stopped'] === 'NOTICE' && !in_array('ERR', $priorities, true), 'a stopped rebuild job logs a notice, not an error');
+check($ops->resolveAliasTarget('iwac_current') === $beforeContent && $ops->resolveAliasTarget('iwac_index_current') === $beforeIndex
+    && $collectionNames() === $beforeCollections && $ledger->generations('building') === [], 'a stopped rebuild drops its build and leaves the live generations');
+
+// A healthy build far smaller than the live one is refused unless allowed.
+$article = $ops->document('iwac_current', '1');
+unset($article['embedding']);
+$ops->flushBatch('iwac_current', array_map(static fn (int $id): array => ['id' => (string) $id] + $article, [901, 902, 903]));
+try {
+    (new ReindexOrchestrator($client, $db, dirname(__DIR__, 2), new $loggerClass($db, $listener)))->run();
+    throw new LogicException('A shrunk build was promoted');
+} catch (IwacSearch\Indexer\Exception\VerificationException $e) {
+    check(str_contains($e->getMessage(), 'article: 4 → 1') && str_contains($e->getMessage(), '--allow-shrink'), 'a build below half of a live content type is refused');
+}
+check($ops->resolveAliasTarget('iwac_current') === $beforeContent && $ledger->generations('building') === [], 'the refused build is dropped and the live generation stays');
+$runJob(['allow_shrink' => true], static fn (): bool => false);
+check($ops->resolveAliasTarget('iwac_current') !== $beforeContent && $ops->documentCount('iwac_current') === 1, 'the job argument allows an intended shrink');
+
 // Uninstall drops the tables and names the collections it leaves behind.
 $uninstallLog = new Laminas\Log\Writer\Mock();
 $services->setService('Omeka\Logger', (new Laminas\Log\Logger())->addWriter($uninstallLog));

@@ -5,12 +5,12 @@ declare(strict_types=1);
 namespace IwacSearch\Indexer;
 
 use Doctrine\DBAL\Connection;
+use IwacSearch\Indexer\Exception\VerificationException;
 use IwacSearch\Indexer\Mapper\IndexEntityMapper;
 use IwacSearch\Indexer\Mapper\MapperRegistry;
 use IwacSearch\IwacInstance;
 use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
-use RuntimeException;
 use Throwable;
 use Typesense\Client as TypesenseClient;
 
@@ -44,6 +44,14 @@ use Typesense\Client as TypesenseClient;
  * one a killed rebuild left behind is dropped when the next rebuild starts.
  * A promotion keeps the live generation and the one it replaced per alias,
  * and deletes the older ones it retires ({@see GenerationCleanup}).
+ *
+ * Before any of it, the rebuild waits (boundedly) for a Typesense that is
+ * still loading ({@see TypesenseReadiness}); before promotion, the build must
+ * hold at least half of every content type and of the entity total the live
+ * generations hold ({@see ShrinkGuard}) unless the operator allowed a
+ * smaller corpus. A stop request ends the rebuild with
+ * {@see Exception\ReindexCancelledException}; every check that refuses
+ * promotion throws {@see VerificationException}.
  */
 final class ReindexOrchestrator
 {
@@ -57,12 +65,18 @@ final class ReindexOrchestrator
         private readonly LoggerInterface $logger = new NullLogger(),
         /** @var ?\Closure(): bool */
         private readonly ?\Closure $shouldStop = null,
+        // Operator override for an intended large drop (`--allow-shrink`,
+        // the job's `allow_shrink` argument, the maintenance checkbox).
+        private readonly bool $allowShrink = false,
+        private readonly float $minRetainedRatio = ShrinkGuard::MIN_RETAINED_RATIO,
+        private readonly int $readyWaitSeconds = TypesenseReadiness::WAIT_SECONDS,
     ) {
     }
 
     /** @return array<string,mixed> */
     public function run(): array
     {
+        (new TypesenseReadiness($this->typesense, $this->logger, $this->readyWaitSeconds))->await($this->shouldStop);
         $rebuild = new DatabaseLock($this->connection, 'rebuild');
         $rebuild->acquire();
         try {
@@ -85,6 +99,7 @@ final class ReindexOrchestrator
         // We hold the rebuild lock, so any build still marked as building
         // belongs to a rebuild that died; reclaim its memory before adding ours.
         $recovered = $cleanup->recoverOrphans();
+        $ops->checkCancellation();
         $contentSchema = new SchemaLoader($this->moduleRoot . '/data/schema.yaml');
         $indexSchema = new SchemaLoader($this->moduleRoot . '/data/schema-index.yaml');
         $oldContent = $ops->resolveAliasTarget(IwacInstance::CONTENT_ALIAS);
@@ -138,6 +153,12 @@ final class ReindexOrchestrator
             $index = $indexStats['collection'];
             $entityIds = array_fill_keys($indexer->indexedIds(), true);
 
+            // Read before taking the gate: nothing but this rebuild moves the
+            // aliases (it holds the rebuild lock), and a drain changes the
+            // live counts by a handful, far inside the ratio.
+            $live = $this->allowShrink ? null : $this->liveCounts($ops, $oldContent, $oldIndex);
+            $ops->checkCancellation();
+
             // ── Gate held: only what changed while the above ran ──────────
             $mutation->acquire(self::LOCK_WAIT_SECONDS);
             $gateStart = microtime(true);
@@ -167,7 +188,10 @@ final class ReindexOrchestrator
                     ksort($expected);
                     $this->verifyContent($ops, $content, $expected);
                     if ($ops->documentCount($index) !== count($entityIds)) {
-                        throw new RuntimeException('Entity index count mismatch.');
+                        throw new VerificationException('Entity index count mismatch.');
+                    }
+                    if ($live !== null) {
+                        $this->guardAgainstShrink($live, $expected, count($entityIds));
                     }
 
                     // The aliases are individual atomic operations, not a distributed
@@ -207,6 +231,7 @@ final class ReindexOrchestrator
             throw $e;
         }
 
+        $stats['allow_shrink'] = $this->allowShrink;
         $stats['generations'] = ['recovered' => $recovered, 'removed' => $this->retire($cleanup)];
         $journal->prune();
         $stats['analytics'] = (new AnalyticsSync($this->typesense, $this->logger))->sync();
@@ -272,13 +297,60 @@ final class ReindexOrchestrator
     private function verifyContent(CollectionOps $ops, string $collection, array $expected): void
     {
         if ($ops->documentCount($collection) !== array_sum($expected)) {
-            throw new RuntimeException('Final source and content index document counts disagree.');
+            throw new VerificationException('Final source and content index document counts disagree.');
         }
         $actual = $ops->facetCounts($collection, 'type_s');
         ksort($actual);
         if ($actual !== $expected) {
             $types = array_keys(array_diff_assoc($expected, $actual) + array_diff_assoc($actual, $expected));
-            throw new RuntimeException('Source/index count mismatch for ' . implode(', ', $types));
+            throw new VerificationException('Source/index count mismatch for ' . implode(', ', array_map(
+                static fn (string $type): string => sprintf('%s (catalog %d, index %d)', $type, $expected[$type] ?? 0, $actual[$type] ?? 0),
+                array_map('strval', $types)
+            )));
+        }
+    }
+
+    /**
+     * What the live generations hold — per content type, and the entity
+     * total — with nothing to compare where an alias does not exist yet.
+     * A live generation that cannot be faceted by `type_s` (a schema that
+     * predates the field's facet) is compared by its total instead; when
+     * Typesense cannot answer at all, the rebuild fails here, before the gate.
+     *
+     * @return array{types: ?array<string, int>, total: int, entities: ?int}
+     */
+    private function liveCounts(CollectionOps $ops, ?string $content, ?string $index): array
+    {
+        $types = [];
+        $total = 0;
+        if ($content !== null) {
+            $total = $ops->documentCount($content);
+            try {
+                $types = $ops->facetCounts($content, 'type_s');
+            } catch (\Typesense\Exceptions\ObjectNotFound | \Typesense\Exceptions\RequestMalformed) {
+                $types = null;
+            }
+        }
+        return ['types' => $types, 'total' => $total, 'entities' => $index === null ? null : $ops->documentCount($index)];
+    }
+
+    /**
+     * @param array{types: ?array<string, int>, total: int, entities: ?int} $live
+     * @param array<string, int> $expected type_s → documents in the new build
+     * @throws VerificationException
+     */
+    private function guardAgainstShrink(array $live, array $expected, int $entities): void
+    {
+        [$liveTypes, $newTypes] = $live['types'] === null
+            ? [['documents' => $live['total']], ['documents' => array_sum($expected)]]
+            : [$live['types'], $expected];
+        $problems = ShrinkGuard::problems($liveTypes, $newTypes, $live['entities'], $entities, $this->minRetainedRatio);
+        if ($problems !== []) {
+            throw new VerificationException(sprintf(
+                'Refusing to promote a build below %d%% of the live generation (%s). Check the source data and the mappers; if the drop is intended, rebuild with --allow-shrink (CLI) or "Allow a smaller corpus" (maintenance page).',
+                (int) round($this->minRetainedRatio * 100),
+                implode('; ', $problems)
+            ));
         }
     }
 
