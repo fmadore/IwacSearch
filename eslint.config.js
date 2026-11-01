@@ -12,7 +12,15 @@ export default [
   {
     // scripts/theme-token-guard.cjs is synced verbatim from IWAC-theme by its
     // `npm run sync:tokens`, and linted there.
-    ignores: ['asset/dist/**', 'node_modules/**', 'vendor/**', 'scripts/theme-token-guard.cjs'],
+    // test-results/ holds Playwright's traces and Lighthouse's reports.
+    ignores: [
+      'asset/dist/**',
+      'node_modules/**',
+      'vendor/**',
+      'scripts/theme-token-guard.cjs',
+      'test-results/**',
+      'playwright-report/**',
+    ],
   },
   js.configs.recommended,
   ...tseslint.configs.recommended,
@@ -41,7 +49,15 @@ export default [
     // The two CI-gating Node scripts get linted too (they used to escape
     // their own quality gates entirely). Node globals + console allowed —
     // their console output IS their interface.
-    files: ['scripts/**/*.js', 'vite.config.ts', 'eslint.config.js'],
+    // The Playwright config and suite are Node too (their page.evaluate
+    // callbacks keep the browser globals from above).
+    files: [
+      'scripts/**/*.js',
+      'vite.config.ts',
+      'eslint.config.js',
+      'playwright.config.ts',
+      'tests/browser/**/*.ts',
+    ],
     languageOptions: {
       globals: { ...globals.node },
     },
@@ -64,17 +80,21 @@ export default [
     },
   },
   {
-    // Type-aware rules for the shipped client and its unit tests. The project
-    // service reads tsconfig.json, which includes the .svelte files and
-    // tests/client. A promise nobody awaits drops its rejection silently, and
-    // an async handler passed where a void callback is expected does the
-    // same; deliberate fire-and-forget calls are marked with `void`.
+    // Type-aware rules for the shipped client and both test suites. The
+    // project service reads tsconfig.json, which includes the .svelte files,
+    // tests/client and tests/browser. A promise nobody awaits drops its
+    // rejection silently — in a Playwright test, an un-awaited expect is one
+    // that never fails — and an async handler passed where a void callback is
+    // expected does the same; deliberate fire-and-forget calls are marked
+    // with `void`.
     files: [
       'src/svelte/**/*.ts',
       'src/svelte/**/*.svelte',
       'src/svelte-shared/**/*.ts',
       'src/svelte-shared/**/*.svelte',
       'tests/client/**/*.ts',
+      'tests/browser/**/*.ts',
+      'playwright.config.ts',
     ],
     languageOptions: {
       parserOptions: {

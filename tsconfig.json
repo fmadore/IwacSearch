@@ -23,6 +23,8 @@
     "src/svelte-shared/**/*.svelte",
     "tests/client/**/*.ts",
     "tests/client/**/*.svelte",
+    "tests/browser/**/*.ts",
+    "playwright.config.ts",
     "vite.config.ts",
     "vitest.config.ts"
   ]

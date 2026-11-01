@@ -23,17 +23,20 @@
     "bump": "node scripts/bump-version.js",
     "test": "vitest run --config vitest.config.ts",
     "test:watch": "vitest --config vitest.config.ts",
+    "test:browser": "npm run build:public && playwright test",
     "lint:theme": "node scripts/check-theme-tokens.js",
     "lint:drift": "node scripts/check-schema-drift.js",
     "lint:i18n": "node scripts/check-i18n.js",
     "lint:docblocks": "node scripts/check-docblocks.js",
     "lint:mo": "node scripts/build-mo.js --check",
-    "lint": "npm run lint:theme && npm run lint:drift && npm run lint:i18n && npm run lint:docblocks && npm run lint:mo && eslint src/svelte src/svelte-shared scripts tests && prettier --check \"src/svelte/**/*.{ts,svelte}\" \"src/svelte-shared/**/*.{ts,svelte}\" \"scripts/**/*.js\" \"tests/client/**/*.ts\" \"*.{ts,json,md}\"",
-    "lint:fix": "eslint src/svelte src/svelte-shared scripts tests --fix && prettier --write \"src/svelte/**/*.{ts,svelte}\" \"src/svelte-shared/**/*.{ts,svelte}\" \"scripts/**/*.js\" \"tests/client/**/*.ts\" \"*.{ts,json,md}\"",
-    "format": "prettier --write \"src/svelte/**/*.{ts,svelte}\" \"src/svelte-shared/**/*.{ts,svelte}\" \"scripts/**/*.js\" \"tests/client/**/*.ts\" \"*.{ts,json,md}\""
+    "lint": "npm run lint:theme && npm run lint:drift && npm run lint:i18n && npm run lint:docblocks && npm run lint:mo && eslint src/svelte src/svelte-shared scripts tests playwright.config.ts && prettier --check \"src/svelte/**/*.{ts,svelte}\" \"src/svelte-shared/**/*.{ts,svelte}\" \"scripts/**/*.js\" \"tests/client/**/*.{ts,svelte}\" \"tests/browser/**/*.ts\" \"*.{ts,json,md}\"",
+    "lint:fix": "eslint src/svelte src/svelte-shared scripts tests playwright.config.ts --fix && prettier --write \"src/svelte/**/*.{ts,svelte}\" \"src/svelte-shared/**/*.{ts,svelte}\" \"scripts/**/*.js\" \"tests/client/**/*.{ts,svelte}\" \"tests/browser/**/*.ts\" \"*.{ts,json,md}\"",
+    "format": "prettier --write \"src/svelte/**/*.{ts,svelte}\" \"src/svelte-shared/**/*.{ts,svelte}\" \"scripts/**/*.js\" \"tests/client/**/*.{ts,svelte}\" \"tests/browser/**/*.ts\" \"*.{ts,json,md}\""
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.14.0",
     "@eslint/js": "^10.0.0",
+    "@playwright/test": "^1.64.1",
     "@sveltejs/vite-plugin-svelte": "^7.3.1",
     "@tsconfig/svelte": "^5.0.8",
     "@types/node": "^26.6.5",
