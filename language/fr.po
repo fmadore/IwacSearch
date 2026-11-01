@@ -376,8 +376,27 @@ msgstr "conservée (non active)"
 msgid "Typesense memory in use: %1$s. Host memory used: %2$s of %3$s."
 msgstr "Mémoire utilisée par Typesense : %1$s. Mémoire de l'hôte utilisée : %2$s sur %3$s."
 
-msgid "Every generation stays in Typesense memory until the cleanup below removes it. The container memory cap is set in IWAC-docker; host figures ignore it."
-msgstr "Chaque génération reste en mémoire dans Typesense jusqu'à ce que le nettoyage ci-dessous la supprime. La limite de mémoire du conteneur est fixée dans IWAC-docker ; les chiffres de l'hôte n'en tiennent pas compte."
+msgid "Every generation stays in Typesense memory until it is removed. A rebuild keeps the live generation and the one it replaced for each alias and removes the older ones it recorded; the cleanup below also removes what an interrupted rebuild left and generations built before 3.27. The container memory cap is set in IWAC-docker; host figures ignore it."
+msgstr "Chaque génération reste en mémoire dans Typesense jusqu'à sa suppression. Une réindexation conserve, pour chaque alias, la génération active et celle qu'elle a remplacée, et supprime les plus anciennes qu'elle a enregistrées ; le nettoyage ci-dessous supprime aussi ce qu'une réindexation interrompue a laissé et les générations construites avant la version 3.27. La limite de mémoire du conteneur est fixée dans IWAC-docker ; les chiffres de l'hôte n'en tiennent pas compte."
+
+msgid "Ledger"
+msgstr "Registre"
+
+msgid "Safety check:"
+msgstr "Garde-fou :"
+
+msgid "The swap is refused when any content type or the entity index would fall below half of what is live — the sign of a mapper or item set that suddenly matches nothing. Tick the box only when such a drop is intended."
+msgstr "La bascule est refusée lorsqu'un type de contenu ou l'index des entités tomberait sous la moitié de ce qui est en ligne — signe qu'un mapper ou une collection Omeka ne correspond soudain plus à rien. Ne cochez la case que si une telle baisse est voulue."
+
+msgid "Allow a smaller corpus"
+msgstr "Autoriser un corpus plus petit"
+
+#, php-format
+msgid "Drain worker: active (last heartbeat %s). After a failure it waits two minutes before retrying; the retry button starts one at once."
+msgstr "Traitement de la file : actif (dernier signe de vie %s). Après un échec, il attend deux minutes avant de réessayer ; le bouton de relance en démarre un immédiatement."
+
+msgid "Drain worker: idle. The next save, or the scheduled drain, starts one."
+msgstr "Traitement de la file : inactif. Le prochain enregistrement, ou le traitement planifié, en démarre un."
 
 msgid "Search analytics"
 msgstr "Statistiques de recherche"

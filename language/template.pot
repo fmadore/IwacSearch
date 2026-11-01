@@ -451,6 +451,10 @@ msgid "Serves"
 msgstr ""
 
 #: view/iwac-search/admin/maintenance/index.phtml
+msgid "Ledger"
+msgstr ""
+
+#: view/iwac-search/admin/maintenance/index.phtml
 msgid "Created"
 msgstr ""
 
@@ -464,7 +468,7 @@ msgid "Typesense memory in use: %1$s. Host memory used: %2$s of %3$s."
 msgstr ""
 
 #: view/iwac-search/admin/maintenance/index.phtml
-msgid "Every generation stays in Typesense memory until the cleanup below removes it. The container memory cap is set in IWAC-docker; host figures ignore it."
+msgid "Every generation stays in Typesense memory until it is removed. A rebuild keeps the live generation and the one it replaced for each alias and removes the older ones it recorded; the cleanup below also removes what an interrupted rebuild left and generations built before 3.27. The container memory cap is set in IWAC-docker; host figures ignore it."
 msgstr ""
 
 #: view/iwac-search/admin/maintenance/index.phtml
@@ -515,6 +519,18 @@ msgstr ""
 
 #: view/iwac-search/admin/maintenance/index.phtml
 msgid "5–15 minutes for the full ~14K-doc corpus. Live search keeps serving the previous collection until the swap completes, so there is no downtime."
+msgstr ""
+
+#: view/iwac-search/admin/maintenance/index.phtml
+msgid "Safety check:"
+msgstr ""
+
+#: view/iwac-search/admin/maintenance/index.phtml
+msgid "The swap is refused when any content type or the entity index would fall below half of what is live — the sign of a mapper or item set that suddenly matches nothing. Tick the box only when such a drop is intended."
+msgstr ""
+
+#: view/iwac-search/admin/maintenance/index.phtml
+msgid "Allow a smaller corpus"
 msgstr ""
 
 #: view/iwac-search/admin/maintenance/index.phtml
@@ -587,6 +603,15 @@ msgstr ""
 #: view/iwac-search/admin/maintenance/index.phtml
 #, php-format
 msgid "%d queued changes. Oldest: %s"
+msgstr ""
+
+#: view/iwac-search/admin/maintenance/index.phtml
+#, php-format
+msgid "Drain worker: active (last heartbeat %s). After a failure it waits two minutes before retrying; the retry button starts one at once."
+msgstr ""
+
+#: view/iwac-search/admin/maintenance/index.phtml
+msgid "Drain worker: idle. The next save, or the scheduled drain, starts one."
 msgstr ""
 
 #: view/iwac-search/admin/maintenance/index.phtml
