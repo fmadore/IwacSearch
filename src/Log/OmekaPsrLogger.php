@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace IwacSearch\Log;
 
-use Laminas\Log\LoggerInterface as LaminasLogger;
+use Laminas\Log\Logger as LaminasLogger;
 use Psr\Log\AbstractLogger;
 use Psr\Log\LogLevel;
 use Stringable;
@@ -14,6 +14,11 @@ use Stringable;
  * Laminas\Log\PsrLoggerAdapter, whose log() signature is pinned to
  * psr/log 1.x/2.x and fatals under psr/log 3.x (required by
  * typesense-php / Guzzle 7, which IwacSearch pulls in).
+ *
+ * Typed on the Logger class, not Laminas\Log\LoggerInterface: log() with a
+ * priority is the class's own, and the interface declares only the
+ * per-level methods (emerg … debug). Omeka's `Omeka\Logger` service is that
+ * class.
  */
 final class OmekaPsrLogger extends AbstractLogger
 {

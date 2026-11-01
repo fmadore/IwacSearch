@@ -1,0 +1,141 @@
+<?php
+
+/**
+ * Only what the real Omeka S 4.2.1 tree cannot tell PHPStan.
+ *
+ * The analysis runs against the released Omeka runtime (see bootstrap.php),
+ * so every class signature comes from the code production executes. What
+ * is left here is what that code does not declare: the plugins and helpers
+ * Laminas resolves through __call, and core docblocks that state the wrong
+ * type. A stub's class docblock replaces the real one, so each list names
+ * every member this module uses, not only the missing ones.
+ *
+ * Rules for editing: copy a signature from the 4.2.1 source, never invent
+ * one; add only what the module calls. A wrong stub is worse than none: it
+ * makes PHPStan approve code that fails at runtime.
+ */
+
+namespace Laminas\View\Renderer;
+
+/**
+ * View helpers resolve through PhpRenderer::__call, which PHPStan does not
+ * follow. Declared here, a typo in a helper name is still an error and each
+ * helper returns its real type. Omeka core's first (assetUrl is null for a
+ * module that is not active; currentSite is null outside a site, whatever
+ * its own docblock says; status() and api() have no __invoke, so the call
+ * returns the helper itself), then Laminas', then the module's own
+ * (config/module.config.php, view_helpers).
+ *
+ * @method string|null assetUrl(string $file, string|null $module = null, bool $override = false, bool $versioned = true, bool $absolute = false)
+ * @method \Omeka\Api\Representation\SiteRepresentation|null currentSite()
+ * @method \Omeka\View\Helper\Status status()
+ * @method \Omeka\View\Helper\Api api()
+ * @method string|null basePath(string|null $file = null)
+ * @method string url(string|null $name = null, array<string, mixed> $params = [], array<string, mixed>|bool $options = [], bool $reuseMatchedParams = false)
+ * @method string partial(string $name, array<string, mixed>|null $values = null)
+ * @method \Laminas\View\Helper\HeadScript headScript()
+ * @method \Laminas\View\Helper\HeadLink headLink()
+ * @method string iwacBootstrapJson(array<string, mixed> $bootstrap)
+ * @method string iwacLocale()
+ * @method string iwacSearchUrl()
+ * @method string iwacItemSetSearch(object $itemSet)
+ *
+ * @final as laminas-view marks it (restated: this docblock replaces that one).
+ */
+class PhpRenderer
+{
+}
+
+namespace Laminas\Mvc\Controller;
+
+/**
+ * Controller plugins resolve through AbstractController::__call. Laminas
+ * declares its own (params, redirect, url) in the docblock this one
+ * replaces, so they are restated; then the Omeka ones this module uses
+ * (core's controller_plugins). messenger() has no __invoke, so the call
+ * returns the plugin itself.
+ *
+ * @method \Laminas\Mvc\Controller\Plugin\Params|mixed params(string|null $param = null, mixed $default = null)
+ * @method \Laminas\Mvc\Controller\Plugin\Redirect redirect()
+ * @method \Laminas\Mvc\Controller\Plugin\Url url()
+ * @method \Laminas\Form\Form getForm(string $class, array<string, mixed>|null $options = null)
+ * @method \Omeka\Mvc\Controller\Plugin\Messenger messenger()
+ * @method \Omeka\Job\Dispatcher jobDispatcher()
+ */
+abstract class AbstractController
+{
+}
+
+namespace Omeka\Mvc\Controller\Plugin;
+
+class Messenger
+{
+    /**
+     * Core documents a string, but takes the Omeka\Stdlib\Message its own
+     * controllers pass, the one way to flash a message that carries markup
+     * (setEscapeHtml(false)) and is translated with its arguments.
+     *
+     * @param string|\Omeka\Stdlib\Message $message
+     * @return void
+     */
+    public function addSuccess($message)
+    {
+    }
+}
+
+// A stub file is validated on its own, without the Omeka tree, so the types
+// it names are declared here too. Empty and without a docblock, they change
+// nothing: PHPStan reads only a stub's docblocks, and these have none.
+namespace Omeka\Api\Representation;
+
+class SiteRepresentation
+{
+}
+
+namespace Omeka\View\Helper;
+
+class Api
+{
+}
+class Status
+{
+}
+
+namespace Omeka\Job;
+
+class Dispatcher
+{
+}
+
+namespace Omeka\Stdlib;
+
+class Message
+{
+}
+
+namespace Laminas\View\Helper;
+
+class HeadLink
+{
+}
+class HeadScript
+{
+}
+
+namespace Laminas\Form;
+
+class Form
+{
+}
+
+namespace Laminas\Mvc\Controller\Plugin;
+
+class Params
+{
+}
+class Redirect
+{
+}
+class Url
+{
+}

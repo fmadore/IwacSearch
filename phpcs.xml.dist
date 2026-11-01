@@ -18,12 +18,11 @@
     <arg name="extensions" value="php"/>
     <arg value="s"/>
 
-    <!-- Declare several namespaces in one file on purpose, so PSR-1's one
+    <!-- Declares several namespaces in one file on purpose, so PSR-1's one
          class per file cannot hold: the PHPUnit runtime stubs declare the
          few Omeka/Laminas types a test double needs, each guarded on its
-         absence. -->
+         absence. (PHPStan's tools/phpstan/omeka.stub is not a .php file.) -->
     <exclude-pattern>tests/php/runtime-stubs.php</exclude-pattern>
-    <exclude-pattern>tools/phpstan/*.stub.php</exclude-pattern>
 
     <rule ref="PSR12"/>
 

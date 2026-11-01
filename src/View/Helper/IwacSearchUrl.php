@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace IwacSearch\View\Helper;
 
 use Laminas\View\Helper\AbstractHelper;
+use Laminas\View\Renderer\PhpRenderer;
 use Throwable;
 
 /**
@@ -31,9 +32,12 @@ final class IwacSearchUrl extends AbstractHelper
     public function __invoke(): string
     {
         $view = $this->getView();
+        if (!$view instanceof PhpRenderer) {
+            // Called outside a view: no base path to resolve against.
+            return '/search/everything';
+        }
 
         try {
-            /** @var object|null $site */
             $site = $view->currentSite();
         } catch (Throwable) {
             $site = null;

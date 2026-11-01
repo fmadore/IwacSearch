@@ -154,10 +154,25 @@ jobs:
       - name: Coding standard (phpcs, PSR-12)
         run: composer lint
 
+      # Standalone on purpose: no Omeka, only the module's vendor/ and
+      # tests/php/runtime-stubs.php, so it runs anywhere in seconds.
       - name: Unit tests (phpunit)
         run: vendor/bin/phpunit
 
-      - name: Static analysis (phpstan)
+      # PHPStan analyses against the vendor tree production runs, which only
+      # the released zip carries (Omeka is not a Packagist library); see
+      # phpstan.neon. Pinned by checksum, the same one DRE Search's CI checks.
+      - name: Load the released Omeka 4.2.1 runtime
+        run: |
+          curl --fail --location --retry 3 https://github.com/omeka/omeka-s/releases/download/v4.2.1/omeka-s-4.2.1.zip -o /tmp/omeka-s.zip
+          echo "cc27d1c7aca0209523d19aa285f4a08e29e34950dcc446951a7c1311de348e82  /tmp/omeka-s.zip" | sha256sum -c -
+          unzip -q /tmp/omeka-s.zip -d /tmp
+          test -f /tmp/omeka-s/bootstrap.php
+          test -f /tmp/omeka-s/vendor/autoload.php
+
+      - name: Static analysis (phpstan, against Omeka 4.2.1)
+        env:
+          OMEKA_VENDOR: /tmp/omeka-s/vendor/autoload.php
         run: vendor/bin/phpstan analyse --no-progress
 
   integration:

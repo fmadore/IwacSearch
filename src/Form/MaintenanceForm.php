@@ -18,6 +18,8 @@ use Laminas\Form\Form;
  * Both buttons on the page reuse the same form instance via the view
  * helper; the rendered <form> tags wrap each submit button so the CSRF
  * token gets a fresh nonce per render.
+ *
+ * @extends Form<array<string, mixed>>
  */
 class MaintenanceForm extends Form
 {

@@ -52,6 +52,10 @@ final class ItemEventListener
         $this->gate->settle();
     }
 
+    /**
+     * @param Event<object, array<string, mixed>> $event api.execute.pre: the
+     *   adapter is its target, the API request its `request` param
+     */
     public function onBeforeWrite(Event $event, string $resource): void
     {
         $request = $event->getParam('request');
@@ -97,6 +101,10 @@ final class ItemEventListener
         }
     }
 
+    /**
+     * @param Event<object, array<string, mixed>> $event api.execute.post: as
+     *   the pre event, plus the API response as its `response` param
+     */
     public function onAfterWrite(Event $event, string $resource): void
     {
         $request = $event->getParam('request');

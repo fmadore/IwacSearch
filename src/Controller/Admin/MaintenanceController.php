@@ -6,6 +6,7 @@ namespace IwacSearch\Controller\Admin;
 
 use Closure;
 use Doctrine\DBAL\Exception\TableNotFoundException;
+use IwacSearch\Controller\HttpMessages;
 use IwacSearch\Form\MaintenanceForm;
 use IwacSearch\Indexer\AnalyticsSync;
 use IwacSearch\IwacInstance;
@@ -59,6 +60,8 @@ use Typesense\Client as TypesenseClient;
  */
 class MaintenanceController extends AbstractActionController
 {
+    use HttpMessages;
+
     /**
      * @param string $collectionBaseName Base collection name from
      *   data/schema.yaml (e.g. "iwac_v1"). Each reindex builds a
@@ -320,7 +323,7 @@ class MaintenanceController extends AbstractActionController
      */
     public function reindexAction(): Response
     {
-        $request = $this->getRequest();
+        $request = $this->httpRequest();
         $allowShrink = $request->isPost() && (string) $request->getPost('allow_shrink', '') === '1';
         return $this->dispatchJob(
             BulkReindex::class,
@@ -399,7 +402,7 @@ class MaintenanceController extends AbstractActionController
      */
     private function dispatchJob(string $jobClass, string $description, array $args = []): Response
     {
-        $request = $this->getRequest();
+        $request = $this->httpRequest();
         if (!$request->isPost()) {
             // GETting the dispatch URL directly = land on the form page.
             return $this->redirect()->toRoute('admin/iwac-search/maintenance');

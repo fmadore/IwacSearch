@@ -218,6 +218,9 @@ class Module extends AbstractModule
      * SearchController renders. headScript/headLink dedupe by URL, so
      * having the page block call appendFile() in its prepareRender() too is
      * harmless — the asset still loads exactly once per page.
+     *
+     * @param Event<object, array<string, mixed>> $event view.layout, whose
+     *   target is the layout's renderer
      */
     public function injectSvelteAssets(Event $event): void
     {
@@ -252,6 +255,9 @@ class Module extends AbstractModule
      * site locale; the bundle reads it as window.IWAC_HEADER_SEARCH and the
      * landing URL from the form's own action (set by the iwacSearchUrl
      * helper in the theme).
+     *
+     * @param Event<object, array<string, mixed>> $event view.layout, whose
+     *   target is the layout's renderer
      */
     public function injectHeaderSearchAssets(Event $event): void
     {

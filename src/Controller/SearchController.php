@@ -44,6 +44,8 @@ use Throwable;
  */
 class SearchController extends AbstractActionController
 {
+    use HttpMessages;
+
     public function __construct(
         private readonly TypesenseSearchKeyProvider $keyProvider,
         private readonly InitialResponseRenderer $initialRenderer,
@@ -269,9 +271,9 @@ class SearchController extends AbstractActionController
     public function healthAction(): JsonModel
     {
         $requestId = ErrorEnvelope::requestId();
-        $method = strtoupper((string) $this->getRequest()->getMethod());
+        $method = strtoupper($this->httpRequest()->getMethod());
         if ($method !== 'GET' && $method !== 'HEAD') {
-            $this->getResponse()->getHeaders()->addHeaderLine('Allow', 'GET, HEAD');
+            $this->httpResponse()->getHeaders()->addHeaderLine('Allow', 'GET, HEAD');
             return $this->jsonError(Response::STATUS_CODE_405, 'method_not_allowed', 'Use GET.', $requestId);
         }
 
@@ -351,7 +353,7 @@ class SearchController extends AbstractActionController
      */
     private function jsonError(int $status, string $code, string $message, string $requestId, array $extra = []): JsonModel
     {
-        $this->getResponse()->setStatusCode($status);
+        $this->httpResponse()->setStatusCode($status);
         $this->jsonHeaders($requestId);
         return new JsonModel(ErrorEnvelope::body($code, $message, $requestId, $extra));
     }
@@ -359,7 +361,7 @@ class SearchController extends AbstractActionController
     /** Never cacheable, and traceable to the log lines of this request. */
     private function jsonHeaders(string $requestId): void
     {
-        $this->getResponse()->getHeaders()
+        $this->httpResponse()->getHeaders()
             ->addHeaderLine('Cache-Control', 'no-store, max-age=0')
             ->addHeaderLine('Pragma', 'no-cache')
             ->addHeaderLine('X-Request-ID', $requestId);

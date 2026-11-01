@@ -8,9 +8,11 @@ use IwacSearch\Search\InitialResponseRenderer;
 use IwacSearch\Tests\Support\CallLog;
 use IwacSearch\View\Helper\IwacItemSetSearch;
 use Laminas\View\Renderer\PhpRenderer;
+use LogicException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use RuntimeException;
+use stdClass;
 use Typesense\Client as TypesenseClient;
 use Typesense\MultiSearch;
 
@@ -231,6 +233,30 @@ final class IwacItemSetSearchTest extends TestCase
         self::assertSame('', $this->search(new RuntimeException('connection refused'), 25), 'Typesense down');
         self::assertSame('', $this->search(['results' => [['error' => 'Not found', 'code' => 404]]], 25), 'a search error');
         self::assertSame('', $this->search(self::found(25), new RuntimeException('database gone')), 'core failing');
+        self::assertSame([], $this->partials, 'nothing was mounted');
+    }
+
+    public function testWithoutARendererOrAnItemSetIdNothingIsAsked(): void
+    {
+        $asked = false;
+        $helper = new IwacItemSetSearch(new InitialResponseRenderer(
+            clientFactory: static function () use (&$asked): TypesenseClient {
+                $asked = true;
+                throw new LogicException('Typesense must not be asked');
+            },
+        ));
+        $itemSet = new class {
+            public function id(): int
+            {
+                return 2200;
+            }
+        };
+        self::assertSame('', $helper($itemSet), 'called outside a view');
+
+        $helper->setView($this->view(25, self::site()));
+        self::assertSame('', $helper(new stdClass()), 'not a resource representation');
+        self::assertFalse($asked, 'Typesense was not asked');
+        self::assertSame([], $this->apiCalls, 'core was not counted');
         self::assertSame([], $this->partials, 'nothing was mounted');
     }
 }

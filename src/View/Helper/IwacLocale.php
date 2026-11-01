@@ -6,6 +6,7 @@ namespace IwacSearch\View\Helper;
 
 use IwacSearch\IwacInstance;
 use Laminas\View\Helper\AbstractHelper;
+use Laminas\View\Renderer\PhpRenderer;
 use Throwable;
 
 /**
@@ -52,14 +53,17 @@ final class IwacLocale extends AbstractHelper
     /**
      * The current site representation, or null off-site (global routes).
      * currentSite() is an Omeka view helper; guard in case it's absent.
+     *
+     * @return \Omeka\Api\Representation\SiteRepresentation|null
      */
     private function currentSite(): ?object
     {
+        $view = $this->getView();
+        if (!$view instanceof PhpRenderer) {
+            return null;
+        }
         try {
-            $view = $this->getView();
-            /** @var object|null $site */
-            $site = $view->currentSite();
-            return $site;
+            return $view->currentSite();
         } catch (Throwable) {
             return null;
         }

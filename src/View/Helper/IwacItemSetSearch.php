@@ -10,6 +10,7 @@ use IwacSearch\Search\InitialResponseRenderer;
 use IwacSearch\Search\ItemSetSurface;
 use IwacSearch\Search\SearchStateQuery;
 use Laminas\View\Helper\AbstractHelper;
+use Laminas\View\Renderer\PhpRenderer;
 use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
 use Throwable;
@@ -48,6 +49,9 @@ final class IwacItemSetSearch extends AbstractHelper
     public function __invoke(object $itemSet): string
     {
         $view = $this->getView();
+        if (!$view instanceof PhpRenderer || !method_exists($itemSet, 'id')) {
+            return '';
+        }
         try {
             $itemSetId = (int) $itemSet->id();
             if ($itemSetId <= 0) {
