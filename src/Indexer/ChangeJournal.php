@@ -11,6 +11,13 @@ final class ChangeJournal
 {
     public const TABLE = 'iwac_search_change';
 
+    /**
+     * Most pending IDs hidden from public search at query time (see
+     * pendingIds()): about 2 KB of filter, which keeps a scoped key well
+     * inside a request header and a snapshot's filter_by short.
+     */
+    public const HIDDEN_LIMIT = 250;
+
     public function __construct(private readonly Connection $connection)
     {
     }
@@ -94,6 +101,31 @@ final class ChangeJournal
                 [Connection::PARAM_INT_ARRAY]
             );
         }
+    }
+
+    /**
+     * The resources whose journaled change has not reached Typesense yet,
+     * newest change first, at most $limit of them; `complete` says whether
+     * that is all of them.
+     *
+     * Public search hides these until the drain applies them — the SSR and
+     * freshly minted scoped keys both exclude them — so a withdrawal or
+     * privatisation is not served from a stale document in the meantime, and
+     * an edit briefly drops the item from results rather than showing what
+     * it no longer says. The drain normally empties the journal within
+     * seconds; a backlog beyond $limit (a large batch edit, a Typesense
+     * outage) is where the bound applies.
+     *
+     * @return array{ids: list<int>, complete: bool}
+     */
+    public function pendingIds(int $limit = self::HIDDEN_LIMIT): array
+    {
+        $limit = max(1, $limit);
+        $ids = array_map('intval', $this->connection->fetchFirstColumn(
+            'SELECT item_id FROM ' . self::TABLE . ' WHERE processed = 0'
+            . ' GROUP BY item_id ORDER BY MAX(id) DESC LIMIT ' . ($limit + 1)
+        ));
+        return ['ids' => array_slice($ids, 0, $limit), 'complete' => count($ids) <= $limit];
     }
 
     /** Whether any row awaits the drain — one index probe, for the worker's exit check. */

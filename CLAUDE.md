@@ -30,7 +30,15 @@ provides the Typesense container, nginx `/search-api/` proxy, and backups.
   `filter_by: is_public:=true`, hardcoded in
   `PublicSearchPolicy` and `TypesenseSearchKeyProvider::mintPublicScopedKey()` (the shared sources
   of truth — deliberately NOT config-driven). Both are belt-and-suspenders
-  security controls. Loosening either requires sign-off. The key also embeds
+  security controls. Loosening either requires sign-off. While the change
+  journal lists resources the drain has not applied yet, a freshly minted key
+  also carries `&& id:!=[…]` over them (the newest
+  `ChangeJournal::HIDDEN_LIMIT`) and lives only
+  `TypesenseSearchKeyProvider::PENDING_KEY_SECONDS` (120 s, twice the client's
+  renewal margin, so it is not renewed per search); the SSR excludes the same
+  IDs and is skipped beyond that bound or when the journal cannot be read.
+  With an empty journal the key is exactly `is_public:=true` for an hour.
+  Keys minted before a change keep serving it until the drain applies it. The key also embeds
   `limit_multi_searches` (`MAX_MULTI_SEARCHES`); the client mirrors it in
   `transport.ts` and the drift check keeps the two equal — raise both if a
   request needs more. A page block's

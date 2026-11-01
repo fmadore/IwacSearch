@@ -39,6 +39,15 @@ use Typesense\Client as TypesenseClient;
  *     will still show a search-unavailable error if Typesense is truly
  *     down, but the page itself renders.
  *
+ *  2b. **Pending changes are hidden.** A change journaled but not yet
+ *     drained may be a withdrawal or a privatisation the content collection
+ *     does not know about; with the admin key, the stale document would be
+ *     served — and cached for every visitor. The resources the journal still
+ *     lists are excluded (`id:!=[…]`, see ChangeJournal::pendingIds()), the
+ *     same exclusion a freshly minted scoped key carries; with more pending
+ *     than that bound, or a journal that cannot be read, the SSR is skipped
+ *     and the client fetches with its key.
+ *
  *  3. **Pass-through of the Typesense response shape.** The browser
  *     client already handles that exact shape (see src/svelte/lib/types.ts
  *     → IwacSearchResponse). No conversion, no middleware — we hand
@@ -68,6 +77,11 @@ final class InitialResponseRenderer
         private readonly ?SnapshotCacheInterface $cache = null,
         /** @var ?Closure(): string */
         private readonly ?Closure $cacheVersion = null,
+        // Resources with a journaled change not yet in Typesense, to exclude;
+        // null from the closure = too many to list (skip the SSR). Null here
+        // (tests, no database) hides nothing.
+        /** @var ?Closure(): ?list<int> */
+        private readonly ?Closure $hiddenIds = null,
     ) {
     }
 
@@ -144,7 +158,12 @@ final class InitialResponseRenderer
             return $out;
         }
 
-        $searches = array_map(fn(array $b): array => $this->buildSearch($b), $bootstraps);
+        $hidden = $this->hiddenIds();
+        if ($hidden === null) {
+            return array_fill(0, count($bootstraps), null);
+        }
+
+        $searches = array_map(fn(array $b): array => $this->buildSearch($b, $hidden), $bootstraps);
         $collections = array_map(
             fn(array $b): string => (string) ($b['collection_alias'] ?? $this->defaultCollection),
             $bootstraps
@@ -183,12 +202,39 @@ final class InitialResponseRenderer
     }
 
     /**
+     * The pending IDs to exclude, or null when the SSR must not run: more
+     * pending than can be listed, or a journal that cannot be read (fail
+     * closed — the client's own key carries the exclusion).
+     *
+     * @return list<int>|null
+     */
+    private function hiddenIds(): ?array
+    {
+        if ($this->hiddenIds === null) {
+            return [];
+        }
+        try {
+            $hidden = ($this->hiddenIds)();
+        } catch (Throwable $e) {
+            $this->logger->warning('IwacSearch SSR: pending changes could not be read, falling back to client-side fetch', [
+                'error' => $e->getMessage(),
+            ]);
+            return null;
+        }
+        if ($hidden === null) {
+            $this->logger->info('IwacSearch SSR: too many pending index changes to exclude, falling back to client-side fetch');
+        }
+        return $hidden;
+    }
+
+    /**
      * One surface's multi_search sub-search body.
      *
      * @param  array<string, mixed> $bootstrap
+     * @param  list<int> $hidden resource IDs to exclude (pending changes)
      * @return array<string, mixed>
      */
-    private function buildSearch(array $bootstrap): array
+    private function buildSearch(array $bootstrap, array $hidden = []): array
     {
         $collection    = (string) ($bootstrap['collection_alias'] ?? $this->defaultCollection);
         $lockedFilters = (string) ($bootstrap['locked_filters'] ?? '');
@@ -221,7 +267,7 @@ final class InitialResponseRenderer
             $sort = str_replace('creator_sort:', 'creator_sort(missing_values:last):', $sort);
         }
 
-        $filterBy = $this->applyPublicConstraints($lockedFilters);
+        $filterBy = $this->applyPublicConstraints($lockedFilters, $hidden);
 
         $search = [
                 'collection'            => $collection,
@@ -429,15 +475,22 @@ final class InitialResponseRenderer
      *
      *   - `is_public:=true` is ALWAYS prepended (the admin key would
      *     otherwise return non-public docs)
+     *   - then `id:!=[…]` while the journal lists pending changes (the
+     *     IDs are integers from the journal, so they need no quoting)
      *   - The surface's `locked_filters` come next (a PresetCatalog scope
      *     or a custom page-block filter)
      *
-     * The two are joined with `&&`. If locked_filters is empty we still
+     * They are joined with `&&`. If locked_filters is empty we still
      * emit the public guard alone.
+     *
+     * @param list<int> $hidden
      */
-    private function applyPublicConstraints(string $lockedFilters): string
+    private function applyPublicConstraints(string $lockedFilters, array $hidden = []): string
     {
         $parts = ['is_public:=true'];
+        if ($hidden !== []) {
+            $parts[] = 'id:!=[' . implode(',', array_map('intval', $hidden)) . ']';
+        }
         $trimmed = trim($lockedFilters);
         if ($trimmed !== '') {
             $parts[] = $trimmed;

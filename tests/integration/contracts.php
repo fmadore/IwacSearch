@@ -235,4 +235,39 @@ check(strlen(json_encode($result['hits'][0]['highlights'] ?? [])) < 1000, 'scope
 try { $public->collections['iwac_v99_20200101_000000_aaaaaaaaaaaa']->documents->search(['q' => '*']); throw new LogicException('Old generation accessible'); }
 catch (Typesense\Exceptions\RequestUnauthorized) { check(true, 'public key cannot search retained generation directly'); }
 $client->keys[(string) $parent['id']]->delete();
+
+// A change the drain has not applied yet is hidden from a freshly minted key
+// (and the key is short-lived); once drained, a fresh key shows it again.
+$settingsStore = new class implements Omeka\Settings\SettingsInterface {
+    private array $values = [];
+    public function set($id, $value) { $this->values[$id] = $value; }
+    public function get($id, $default = null) { return $this->values[$id] ?? $default; }
+    public function delete($id) { unset($this->values[$id]); }
+};
+$provider = new TypesenseSearchKeyProvider(
+    clientFactory: static fn () => $client,
+    settings: $settingsStore,
+    searchKeyFile: '/nonexistent',
+    pendingIds: static fn (): array => (new ChangeJournal($db))->pendingIds(ChangeJournal::HIDDEN_LIMIT),
+);
+$found = static function (array $minted): array {
+    $public = new Client(['api_key' => $minted['key'], 'nodes' => [['host' => '127.0.0.1', 'port' => '18108', 'protocol' => 'http']], 'num_retries' => 0]);
+    $hits = $public->collections['iwac_current']->documents->search(['q' => 'needle', 'query_by' => 'title_txt'])['hits'];
+    $ids = array_map(static fn (array $hit): string => (string) $hit['document']['id'], $hits);
+    sort($ids);
+    return $ids;
+};
+$plain = $provider->mintPublicScopedKey();
+check($found($plain) === ['30', '31'] && $plain['expires_in'] === 3600, 'with nothing pending the key is the plain one');
+$journal->append([31]);
+$hiding = $provider->mintPublicScopedKey();
+check($found($hiding) === ['30'] && $hiding['expires_in'] === TypesenseSearchKeyProvider::PENDING_KEY_SECONDS, 'a pending change is hidden from a fresh short-lived key');
+check($found($plain) === ['30', '31'], 'keys minted before the change are not affected (the drain applies it within seconds)');
+$db->executeStatement('UPDATE iwac_search_change SET processed = 1');
+check($found($provider->mintPublicScopedKey()) === ['30', '31'], 'once drained, a fresh key shows it again');
+$journal->append(range(5001, 5300));
+$bounded = $journal->pendingIds(ChangeJournal::HIDDEN_LIMIT);
+check(!$bounded['complete'] && count($bounded['ids']) === ChangeJournal::HIDDEN_LIMIT && $bounded['ids'][0] === 5300, 'the hidden list is bounded to the newest changes');
+check(count($found($provider->mintPublicScopedKey())) === 2, 'a key hiding the bound still authorises searches');
+$db->executeStatement('UPDATE iwac_search_change SET processed = 1');
 echo "Integration contracts passed.\n";

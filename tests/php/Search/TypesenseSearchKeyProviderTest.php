@@ -50,6 +50,7 @@ final class TypesenseSearchKeyProviderTest extends TestCase
         ?ValidatedKeyMemo $memo = null,
         ?\Closure $mintLock = null,
         ?\Closure $freshSetting = null,
+        ?\Closure $pendingIds = null,
     ): TypesenseSearchKeyProvider {
         $client = (new \ReflectionClass(TypesenseClient::class))->newInstanceWithoutConstructor();
         $client->keys = new class ($this->created, $this->signed, $this->listed) extends Keys {
@@ -94,6 +95,7 @@ final class TypesenseSearchKeyProviderTest extends TestCase
             validated:       $memo ?? new ValidatedKeyMemo(0),
             mintLock:        $mintLock,
             freshSetting:    $freshSetting,
+            pendingIds:      $pendingIds,
         );
     }
 
@@ -106,6 +108,70 @@ final class TypesenseSearchKeyProviderTest extends TestCase
         $params = $this->signed->entries[0]['params'];
         self::assertSame('is_public:=true', $params['filter_by']);
         self::assertSame('ocr_text,toc_txt,embedding', $params['exclude_fields']);
+    }
+
+    /**
+     * A change the drain has not applied yet may be a withdrawal: the
+     * resource's indexed copy is hidden from a fresh key until it is, and the
+     * key is short-lived so the browser stops hiding it soon after.
+     */
+    public function testAPendingChangeIsHiddenFromAFreshShortLivedKey(): void
+    {
+        $minted = $this->provider(
+            new FakeSettings(),
+            pendingIds: static fn (): array => ['ids' => [41, 7], 'complete' => true],
+        )->mintPublicScopedKey(expiresInSeconds: 3600);
+
+        $params = $this->signed->entries[0]['params'];
+        self::assertSame('is_public:=true && id:!=[41,7]', $params['filter_by']);
+        self::assertSame('ocr_text,toc_txt,embedding', $params['exclude_fields'], 'the other constraints are untouched');
+        self::assertSame(TypesenseSearchKeyProvider::PENDING_KEY_SECONDS, $minted['expires_in']);
+        self::assertSame($minted['expires_at'], $params['expires_at']);
+    }
+
+    public function testAnEmptyJournalLeavesTheKeyExactlyAsItWas(): void
+    {
+        $minted = $this->provider(
+            new FakeSettings(),
+            pendingIds: static fn (): array => ['ids' => [], 'complete' => true],
+        )->mintPublicScopedKey(expiresInSeconds: 3600);
+
+        self::assertSame('is_public:=true', $this->signed->entries[0]['params']['filter_by']);
+        self::assertSame(3600, $minted['expires_in']);
+    }
+
+    public function testBeyondTheBoundTheNewestPendingChangesAreHidden(): void
+    {
+        $ids = range(1000, 751, -1);
+        $this->provider(
+            new FakeSettings(),
+            pendingIds: static fn (): array => ['ids' => $ids, 'complete' => false],
+        )->mintPublicScopedKey();
+
+        self::assertSame('is_public:=true && id:!=[' . implode(',', $ids) . ']', $this->signed->entries[0]['params']['filter_by']);
+    }
+
+    public function testAnUnreadableJournalKeepsThePublicGuardAndShortensTheKey(): void
+    {
+        $minted = $this->provider(new FakeSettings(), pendingIds: static function (): array {
+            throw new RuntimeException('Table iwac_search_change does not exist');
+        })->mintPublicScopedKey(expiresInSeconds: 3600);
+
+        self::assertSame('is_public:=true', $this->signed->entries[0]['params']['filter_by']);
+        self::assertSame(TypesenseSearchKeyProvider::PENDING_KEY_SECONDS, $minted['expires_in']);
+    }
+
+    /**
+     * The client renews a key RENEW_MARGIN_SECONDS before it expires. A
+     * pending-change key shorter than twice that margin would be renewed on
+     * every search — one Omeka bootstrap per keystroke.
+     */
+    public function testAPendingChangeKeyOutlivesTheClientsRenewalMargin(): void
+    {
+        $client = (string) file_get_contents(dirname(__DIR__, 3) . '/src/svelte/lib/scopedKey.ts');
+        self::assertSame(1, preg_match('/const RENEW_MARGIN_SECONDS = (\d+);/', $client, $m), 'the client constant moved; update this test');
+
+        self::assertGreaterThanOrEqual(2 * (int) $m[1], TypesenseSearchKeyProvider::PENDING_KEY_SECONDS);
     }
 
     public function testScopedKeyCapsSearchesPerRequest(): void

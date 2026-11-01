@@ -37,11 +37,13 @@ final class InitialResponseRendererTest extends TestCase
      * @param  list<mixed>|\Throwable $responses One perform() result per call,
      *   or a throwable to raise on every call.
      * @param ?\Closure(): string $cacheVersion
+     * @param ?\Closure(): ?list<int> $hiddenIds
      */
     private function renderer(
         array|\Throwable $responses,
         ?SnapshotCacheInterface $cache = null,
         ?\Closure $cacheVersion = null,
+        ?\Closure $hiddenIds = null,
     ): InitialResponseRenderer {
         $client = (new \ReflectionClass(TypesenseClient::class))->newInstanceWithoutConstructor();
         $client->multiSearch = new class ($responses, $this->sent) extends MultiSearch {
@@ -71,6 +73,7 @@ final class InitialResponseRendererTest extends TestCase
             clientFactory: static fn(): TypesenseClient => $client,
             cache: $cache,
             cacheVersion: $cacheVersion,
+            hiddenIds: $hiddenIds,
         );
     }
 
@@ -156,6 +159,62 @@ final class InitialResponseRendererTest extends TestCase
         self::assertSame(2, $out[1]['found'] ?? null);
         self::assertCount(1, $this->sent->entries[0]['searches']);
         self::assertSame('iwac_index_current', $this->sent->entries[0]['searches'][0]['collection']);
+    }
+
+    // ── Pending changes: what the drain has not applied yet ─────────────
+
+    public function testResourcesWithAPendingChangeAreLeftOutOfTheSnapshot(): void
+    {
+        // Their indexed copy may predate a withdrawal: with the admin key it
+        // would be served, and cached for every visitor.
+        $this->renderer([['results' => [self::page()]]], hiddenIds: static fn (): array => [41, 7])
+            ->render(self::bootstrap(['locked_filters' => 'country_ss:=Bénin || country_ss:=Togo']));
+
+        self::assertSame(
+            'is_public:=true && id:!=[41,7] && (country_ss:=Bénin || country_ss:=Togo)',
+            $this->sent->entries[0]['searches'][0]['filter_by']
+        );
+    }
+
+    public function testAnEmptyJournalLeavesTheFilterUnchanged(): void
+    {
+        $this->renderer([['results' => [self::page()]]], hiddenIds: static fn (): array => [])->render(self::bootstrap());
+
+        self::assertSame('is_public:=true', $this->sent->entries[0]['searches'][0]['filter_by']);
+    }
+
+    public function testMorePendingChangesThanCanBeListedSkipTheSsr(): void
+    {
+        $out = $this->renderer([['results' => [self::page()]]], hiddenIds: static fn (): ?array => null)
+            ->renderMany([self::bootstrap(), self::bootstrap(['collection_alias' => 'iwac_index_current'])]);
+
+        self::assertSame([null, null], $out, 'every surface falls back to the client, whose key hides them');
+        self::assertSame([], $this->sent->entries);
+    }
+
+    public function testAJournalThatCannotBeReadSkipsTheSsr(): void
+    {
+        $out = $this->renderer([['results' => [self::page()]]], hiddenIds: static function (): array {
+            throw new RuntimeException('Table iwac_search_change does not exist');
+        })->render(self::bootstrap());
+
+        self::assertNull($out);
+        self::assertSame([], $this->sent->entries, 'fail closed: nothing runs with the admin key');
+    }
+
+    public function testADrainedChangeMissesTheCachedSnapshot(): void
+    {
+        $pending = [7];
+        $renderer = $this->renderer([['results' => [self::page()]]], new MemorySnapshotCache(), hiddenIds: static function () use (&$pending): array {
+            return $pending;
+        });
+        $renderer->render(self::bootstrap());
+        $renderer->render(self::bootstrap());
+        $pending = [];
+        $renderer->render(self::bootstrap());
+
+        self::assertCount(2, $this->sent->entries);
+        self::assertSame('is_public:=true', $this->sent->entries[1]['searches'][0]['filter_by']);
     }
 
     public function testAppliedChangesInvalidateAnOtherwiseIdenticalSsrSnapshot(): void

@@ -76,6 +76,10 @@ class SearchControllerFactory implements FactoryInterface
                     ->fetchOne();
                 return is_string($raw) ? json_decode($raw, true) : null;
             },
+            // Resources whose change has not reached Typesense yet are hidden
+            // from a freshly minted key (one indexed query per token request).
+            pendingIds:      static fn(): array => (new ChangeJournal($container->get('Omeka\Connection')))
+                ->pendingIds(ChangeJournal::HIDDEN_LIMIT),
         );
 
         // Both closures run only when /discovery/health is requested, so no

@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace IwacSearch\Service\Search;
 
+use IwacSearch\Indexer\ChangeJournal;
 use IwacSearch\IwacInstance;
 use IwacSearch\Log\LoggerResolver;
 use IwacSearch\Search\InitialResponseRenderer;
@@ -37,7 +38,13 @@ final class InitialResponseRendererFactory implements FactoryInterface
             logger:            LoggerResolver::fromContainer($container),
             defaultCollection: IwacInstance::CONTENT_ALIAS,
             cache:             new SnapshotCache($ttl),
-            cacheVersion:      static fn(): string => (new \IwacSearch\Indexer\ChangeJournal($container->get('Omeka\Connection')))->cacheVersion(),
+            cacheVersion:      static fn(): string => (new ChangeJournal($container->get('Omeka\Connection')))->cacheVersion(),
+            // Pending changes are excluded from the snapshot; more than the
+            // bound skips it (the client's scoped key carries the same list).
+            hiddenIds:         static function () use ($container): ?array {
+                $pending = (new ChangeJournal($container->get('Omeka\Connection')))->pendingIds(ChangeJournal::HIDDEN_LIMIT);
+                return $pending['complete'] ? $pending['ids'] : null;
+            },
         );
     }
 }

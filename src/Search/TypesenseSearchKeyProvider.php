@@ -58,6 +58,16 @@ final class TypesenseSearchKeyProvider
      */
     public const MAX_MULTI_SEARCHES = 10;
 
+    /**
+     * Lifetime of a key minted while the change journal lists pending
+     * resources (see mintPublicScopedKey()). Short, so the browser soon
+     * renews it and stops hiding what has been drained meanwhile; longer than
+     * twice the client's renewal margin (`RENEW_MARGIN_SECONDS`, 60 s, in
+     * src/svelte/lib/scopedKey.ts), so a key is reused for a minute rather
+     * than renewed on every search.
+     */
+    public const PENDING_KEY_SECONDS = 120;
+
     /** Alias-only authorization prevents reading retained generations directly. @var list<string> */
     public const DEFAULT_COLLECTION_SCOPE = ['^' . IwacInstance::CONTENT_ALIAS . '$', '^' . IwacInstance::INDEX_ALIAS . '$'];
 
@@ -93,6 +103,11 @@ final class TypesenseSearchKeyProvider
         private readonly ?Closure $mintLock = null,
         /** @var (Closure(string): mixed)|null */
         private readonly ?Closure $freshSetting = null,
+        // The change journal's pending resources (ChangeJournal::pendingIds()),
+        // excluded from the key while there are any. Null in tests and
+        // wherever no database is at hand: the key is then always the plain one.
+        /** @var (Closure(): array{ids: list<int>, complete: bool})|null */
+        private readonly ?Closure $pendingIds = null,
     ) {
     }
 
@@ -101,6 +116,14 @@ final class TypesenseSearchKeyProvider
      *
      * Public constraints (belt-and-suspenders, see CLAUDE.md "OCR privacy"):
      *   - filter_by: is_public:=true   — only public docs ever returned
+     *   - … && id:!=[…]                 — while the change journal lists
+     *     resources not yet drained, those are hidden too (their indexed copy
+     *     may predate a withdrawal or a privatisation), and the key lives
+     *     only PENDING_KEY_SECONDS, so the browser renews it soon. With an
+     *     empty journal the key is exactly the plain one. Beyond
+     *     ChangeJournal::HIDDEN_LIMIT pending resources the newest changes
+     *     are hidden; a journal that cannot be read hides nothing but still
+     *     shortens the key, so the lapse lasts one renewal
      *   - PublicSearchPolicy::parameters() — exclude_fields
      *     ocr_text,toc_txt,embedding plus fixed highlight/snippet bounds, so
      *     full bodies and vectors never ship, only bounded excerpts
@@ -121,10 +144,18 @@ final class TypesenseSearchKeyProvider
     ): array {
         $parent    = $this->resolveSearchOnlyKey();
         $expiresIn = max(60, $expiresInSeconds);
+        $filterBy  = 'is_public:=true';
+        $pending   = $this->pendingIds();
+        if ($pending === null || $pending !== []) {
+            $expiresIn = min($expiresIn, self::PENDING_KEY_SECONDS);
+        }
+        if ($pending !== null && $pending !== []) {
+            $filterBy .= ' && id:!=[' . implode(',', array_map('intval', $pending)) . ']';
+        }
         $expiresAt = time() + $expiresIn;
 
         $scoped = ($this->clientFactory)()->keys->generateScopedSearchKey($parent, [
-            'filter_by'      => 'is_public:=true',
+            'filter_by'      => $filterBy,
             ...PublicSearchPolicy::parameters(),
             // Per-request, not per-search, so it lives here rather than in
             // PublicSearchPolicy (whose parameters the SSR spreads into each
@@ -140,6 +171,33 @@ final class TypesenseSearchKeyProvider
             'host'       => $browserHost,
             'collection' => $collectionAlias,
         ];
+    }
+
+    /**
+     * The pending resources to hide: a list (empty = nothing pending), or
+     * null when the journal could not be read.
+     *
+     * @return list<int>|null
+     */
+    private function pendingIds(): ?array
+    {
+        if ($this->pendingIds === null) {
+            return [];
+        }
+        try {
+            $pending = ($this->pendingIds)();
+        } catch (Throwable $e) {
+            $this->logger->warning('IwacSearch: pending changes could not be read; minting a short-lived key without hiding them', [
+                'error' => ExceptionMessage::chain($e),
+            ]);
+            return null;
+        }
+        if (!$pending['complete']) {
+            $this->logger->info('IwacSearch: more pending changes than a key can hide; hiding the newest', [
+                'hidden' => count($pending['ids']),
+            ]);
+        }
+        return $pending['ids'];
     }
 
     /**
