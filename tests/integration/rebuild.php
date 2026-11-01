@@ -1,24 +1,34 @@
 <?php
+
 declare(strict_types=1);
+
 require __DIR__ . '/contracts.php';
 
 use IwacSearch\Indexer\ReindexOrchestrator;
 
 // Mutate the source after the article stream has finished. The real journal must
 // replay both changes before either new alias becomes visible.
-$logger = new class($db, $listener) extends Psr\Log\AbstractLogger {
+$logger = new class ($db, $listener) extends Psr\Log\AbstractLogger {
     private bool $mutated = false;
-    public function __construct(private $db, private $listener) {}
-    public function log($level, $message, array $context = []): void {
+    public function __construct(private $db, private $listener)
+    {
+    }
+    public function log($level, $message, array $context = []): void
+    {
         echo "$level $message\n";
-        if ($message !== 'Subset indexed' || ($context['subset'] ?? '') !== 'articles' || $this->mutated) return;
+        if ($message !== 'Subset indexed' || ($context['subset'] ?? '') !== 'articles' || $this->mutated) {
+            return;
+        }
         $this->mutated = true;
         foreach ([1 => 'update', 2 => 'delete'] as $id => $operation) {
             $request = (new Omeka\Api\Request($operation, 'items'))->setId($id);
             $event = new Laminas\EventManager\Event('api.execute.pre', null, ['request' => $request]);
             $this->listener->onBeforeWrite($event, 'items');
-            if ($operation === 'update') $this->db->executeStatement('UPDATE resource SET is_public=0 WHERE id=?', [$id]);
-            else $this->db->executeStatement('DELETE FROM resource WHERE id=?', [$id]);
+            if ($operation === 'update') {
+                $this->db->executeStatement('UPDATE resource SET is_public=0 WHERE id=?', [$id]);
+            } else {
+                $this->db->executeStatement('DELETE FROM resource WHERE id=?', [$id]);
+            }
             $this->listener->onAfterWrite($event, 'items');
         }
     }
@@ -58,11 +68,14 @@ check($recorded() === $expectedLedger, 'ledger records both live generations and
 // An import outage specifically during replay must not move either alias.
 $db->executeStatement('UPDATE resource SET is_public=1 WHERE id=1');
 $transport = new class implements Psr\Http\Client\ClientInterface {
-    public function sendRequest(Psr\Http\Message\RequestInterface $request): Psr\Http\Message\ResponseInterface {
+    public function sendRequest(Psr\Http\Message\RequestInterface $request): Psr\Http\Message\ResponseInterface
+    {
         if (str_contains($request->getUri()->getPath(), '/import')) {
             foreach (explode("\n", trim((string) $request->getBody())) as $line) {
                 $doc = json_decode($line, true);
-                if (($doc['id'] ?? '') === '1' && ($doc['is_public'] ?? true) === false) throw new RuntimeException('Injected replay outage');
+                if (($doc['id'] ?? '') === '1' && ($doc['is_public'] ?? true) === false) {
+                    throw new RuntimeException('Injected replay outage');
+                }
             }
         }
         return (new GuzzleHttp\Client(['timeout' => 120]))->sendRequest($request);
@@ -130,7 +143,7 @@ $runJob = static function (array $args, Closure $stop) use ($jobServices): void 
     $entity = new Omeka\Entity\Job();
     (new ReflectionProperty(Omeka\Entity\Job::class, 'id'))->setValue($entity, 7);
     $entity->setArgs($args);
-    $job = new class($entity, $jobServices, $stop) extends IwacSearch\Job\BulkReindex {
+    $job = new class ($entity, $jobServices, $stop) extends IwacSearch\Job\BulkReindex {
         public function __construct(Omeka\Entity\Job $job, Laminas\ServiceManager\ServiceLocatorInterface $services, private Closure $stop)
         {
             parent::__construct($job, $services);

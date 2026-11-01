@@ -1,4 +1,5 @@
 <?php
+
 declare(strict_types=1);
 
 namespace IwacSearch\Indexer;
@@ -135,7 +136,8 @@ final class EntityAuthority
         // set (267) is browsable as its own type but is NEVER a content facet;
         // everything else on 244 is a subject heading (classDefault already
         // mapped it to Sujets/topics_ss).
-        if ($item['class'] === self::AUTHORITY_FILE_CLASS
+        if (
+            $item['class'] === self::AUTHORITY_FILE_CLASS
             && in_array(self::SET_NOTICES, $item['item_sets'], true)
         ) {
             $type = "Notices d'autorité";
@@ -294,5 +296,4 @@ final class EntityAuthority
             default => ['', null],
         };
     }
-
 }

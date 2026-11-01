@@ -1,4 +1,5 @@
 <?php
+
 declare(strict_types=1);
 
 /**
@@ -176,11 +177,13 @@ class Module extends AbstractModule
             [$this, 'injectHeaderSearchAssets']
         );
 
-        foreach ([
+        foreach (
+            [
             \Omeka\Api\Adapter\ItemAdapter::class => 'items',
             \Omeka\Api\Adapter\MediaAdapter::class => 'media',
             \Omeka\Api\Adapter\ItemSetAdapter::class => 'item_sets',
-        ] as $adapter => $resource) {
+            ] as $adapter => $resource
+        ) {
             $sharedEventManager->attach($adapter, 'api.execute.pre', function (Event $event) use ($resource): void {
                 if (Indexer\ItemEventListener::isWriteOperation($event->getParam('request')->getOperation())) {
                     $this->resolveItemEventListener()->onBeforeWrite($event, $resource);

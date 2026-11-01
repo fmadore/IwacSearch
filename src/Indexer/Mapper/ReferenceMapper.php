@@ -1,4 +1,5 @@
 <?php
+
 declare(strict_types=1);
 
 namespace IwacSearch\Indexer\Mapper;
@@ -75,7 +76,7 @@ final class ReferenceMapper extends AbstractMapper
         }
 
         // ── Bibliographic detail (citation line + journal/publisher facet) ──
-        $this->maybeAdd($doc, 'publisher_s',  $values->firstDisplay('dcterms:publisher'));
+        $this->maybeAdd($doc, 'publisher_s', $values->firstDisplay('dcterms:publisher'));
         // IWAC catalogues a chapter's containing-book title in
         // dcterms:ALTERNATIVE (verified live; dcterms:isPartOf is empty on
         // chapters — same convention the IWAC-SEO CitationMeta relies on).
@@ -89,17 +90,17 @@ final class ReferenceMapper extends AbstractMapper
         } else {
             $this->maybeAdd($doc, 'book_title_s', $values->firstDisplay('dcterms:isPartOf'));
         }
-        $this->maybeAdd($doc, 'edition_s',    $values->firstLiteral('bibo:edition'));
+        $this->maybeAdd($doc, 'edition_s', $values->firstLiteral('bibo:edition'));
         $this->maybeAddList($doc, 'editor_ss', $values->displays('bibo:editorList'));
         $this->maybeAdd($doc, 'volume_s', $values->firstLiteral('bibo:volume'));
-        $this->maybeAdd($doc, 'issue_s',  $values->firstLiteral('bibo:issue'));
+        $this->maybeAdd($doc, 'issue_s', $values->firstLiteral('bibo:issue'));
         $this->maybeAdd($doc, 'pages_s', $this->pageRange(
             $values->firstLiteral('bibo:pageStart'),
             $values->firstLiteral('bibo:pageEnd'),
         ));
 
         // ── Body = the real abstract; outbound links ────────────────────────
-        $this->maybeAdd($doc, 'abstract',   $values->firstLiteral('dcterms:abstract'));
+        $this->maybeAdd($doc, 'abstract', $values->firstLiteral('dcterms:abstract'));
         $this->maybeAdd($doc, 'source_url', $values->firstScalar('fabio:hasURL'));
         // The bare DOI, whichever way it was catalogued: the doi.org address
         // of a URI value first (its label can be anything), else a typed one.

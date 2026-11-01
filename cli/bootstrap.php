@@ -1,4 +1,5 @@
 <?php
+
 declare(strict_types=1);
 
 /**
@@ -70,7 +71,7 @@ $tsConfig = [
 ];
 
 // Typesense client — the factory wants a minimal Config-providing container.
-$container = new class(['iwac_search' => ['typesense' => $tsConfig]]) implements \Psr\Container\ContainerInterface {
+$container = new class (['iwac_search' => ['typesense' => $tsConfig]]) implements \Psr\Container\ContainerInterface {
     public function __construct(private readonly array $config)
     {
     }

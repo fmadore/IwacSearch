@@ -1,0 +1,45 @@
+<?xml version="1.0"?>
+<!--
+  PSR-12 for the module's PHP: `composer lint` in CI (the PHP job, both legs).
+  Modelled on DRESearch's phpcs.xml.dist. Run `vendor/bin/phpcbf` to apply
+  the mechanical fixes; what it cannot fix is reported by `composer lint`.
+-->
+<ruleset name="IwacSearch">
+    <description>PSR-12 for module PHP, with long SQL, translation strings and array-shape annotations permitted.</description>
+
+    <file>Module.php</file>
+    <file>config</file>
+    <file>cli</file>
+    <file>src</file>
+    <file>tests/php</file>
+    <file>tests/integration</file>
+    <file>tools</file>
+
+    <arg name="extensions" value="php"/>
+    <arg value="s"/>
+
+    <!-- Declare several namespaces in one file on purpose, so PSR-1's one
+         class per file cannot hold: the PHPUnit runtime stubs declare the
+         few Omeka/Laminas types a test double needs, each guarded on its
+         absence. -->
+    <exclude-pattern>tests/php/runtime-stubs.php</exclude-pattern>
+    <exclude-pattern>tools/phpstan/*.stub.php</exclude-pattern>
+
+    <rule ref="PSR12"/>
+
+    <!-- PSR-12's 120-column recommendation is advisory, not a required limit:
+         SQL, gettext msgids and array-shape annotations read better whole. -->
+    <rule ref="Generic.Files.LineLength">
+        <severity>0</severity>
+    </rule>
+
+    <rule ref="PSR1.Files.SideEffects">
+        <!-- Omeka loads the module class before Composer during first
+             installation, so Module.php requires the module's autoloader at
+             file scope. -->
+        <exclude-pattern>*/Module.php</exclude-pattern>
+        <!-- The integration lane is a pair of scripts run with `php`: their
+             helper functions sit beside the code that calls them. -->
+        <exclude-pattern>tests/integration/*</exclude-pattern>
+    </rule>
+</ruleset>

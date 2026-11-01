@@ -1,4 +1,5 @@
 <?php
+
 declare(strict_types=1);
 
 namespace IwacSearch\Search;
@@ -497,5 +498,4 @@ final class InitialResponseRenderer
         }
         return ScopeFilters::combine(...$parts);
     }
-
 }

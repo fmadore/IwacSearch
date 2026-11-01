@@ -1,4 +1,5 @@
 <?php
+
 declare(strict_types=1);
 
 namespace IwacSearch\Tests\Search;
@@ -220,7 +221,9 @@ final class InitialResponseRendererTest extends TestCase
     public function testAppliedChangesInvalidateAnOtherwiseIdenticalSsrSnapshot(): void
     {
         $version = 'before';
-        $renderer = $this->renderer([['results' => [self::page()]]], new MemorySnapshotCache(), static function () use (&$version): string { return $version; });
+        $renderer = $this->renderer([['results' => [self::page()]]], new MemorySnapshotCache(), static function () use (&$version): string {
+            return $version;
+        });
         $renderer->render(self::bootstrap());
         $renderer->render(self::bootstrap());
         self::assertCount(1, $this->sent->entries);

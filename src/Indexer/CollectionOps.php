@@ -1,4 +1,5 @@
 <?php
+
 declare(strict_types=1);
 
 namespace IwacSearch\Indexer;
@@ -288,8 +289,11 @@ final class CollectionOps
             if ($line === '') {
                 continue;
             }
-            try { $row = json_decode($line, true, 512, JSON_THROW_ON_ERROR); }
-            catch (\JsonException) { throw new RuntimeException('Malformed import outcome JSON.'); }
+            try {
+                $row = json_decode($line, true, 512, JSON_THROW_ON_ERROR);
+            } catch (\JsonException) {
+                throw new RuntimeException('Malformed import outcome JSON.');
+            }
             if (!is_array($row) || !is_bool($row['success'] ?? null)) {
                 throw new RuntimeException('Malformed import outcome.');
             }

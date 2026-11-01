@@ -1,4 +1,5 @@
 <?php
+
 declare(strict_types=1);
 
 // This harness intentionally accepts no production host, database, or credential.
@@ -9,7 +10,9 @@ require dirname(__DIR__, 2) . '/vendor/autoload.php';
 spl_autoload_register(static function (string $class) use ($omeka): void {
     if (str_starts_with($class, 'Omeka\\')) {
         $file = $omeka . '/application/src/' . str_replace('\\', '/', substr($class, 6)) . '.php';
-        if (is_file($file)) require_once $file;
+        if (is_file($file)) {
+            require_once $file;
+        }
     }
 });
 
@@ -19,21 +22,31 @@ use IwacSearch\Indexer\Mapper\MapperRegistry;
 use IwacSearch\Search\{PublicSearchPolicy, ScopeFilters, TypesenseSearchKeyProvider};
 use Typesense\Client;
 
-function check(bool $value, string $message): void {
-    if (!$value) throw new RuntimeException($message);
+function check(bool $value, string $message): void
+{
+    if (!$value) {
+        throw new RuntimeException($message);
+    }
     echo "PASS $message\n";
 }
 $params = ['driver' => 'pdo_mysql', 'user' => 'root', 'dbname' => 'iwac_search_test', 'unix_socket' => '/run/mysqld/mysqld.sock', 'charset' => 'utf8mb4'];
 $db = DriverManager::getConnection($params);
 check($db->executeQuery('SELECT DATABASE()')->fetchOne() === 'iwac_search_test', 'isolated database');
 $db->executeStatement('SET FOREIGN_KEY_CHECKS=0');
-foreach ($db->fetchFirstColumn('SHOW TABLES') as $table) $db->executeStatement('DROP TABLE `' . str_replace('`', '``', $table) . '`');
+foreach ($db->fetchFirstColumn('SHOW TABLES') as $table) {
+    $db->executeStatement('DROP TABLE `' . str_replace('`', '``', $table) . '`');
+}
 foreach (explode(';', file_get_contents($omeka . '/application/data/install/schema.sql')) as $sql) {
-    if (trim($sql) !== '') $db->executeStatement($sql);
+    if (trim($sql) !== '') {
+        $db->executeStatement($sql);
+    }
 }
 $db->executeStatement('SET FOREIGN_KEY_CHECKS=0'); // Sparse fixtures retain the official column/index contracts.
-$dashboard = new class(journal: new ChangeJournal($db)) extends \IwacSearch\Controller\Admin\MaintenanceController {
-    public function getForm($name, $options = []) { return new \Laminas\Form\Form(); }
+$dashboard = new class (journal: new ChangeJournal($db)) extends \IwacSearch\Controller\Admin\MaintenanceController {
+    public function getForm($name, $options = [])
+    {
+        return new \Laminas\Form\Form();
+    }
 };
 $missing = $dashboard->indexAction();
 check($missing->getVariable('queue') === null && str_contains($missing->getVariable('queueError'), 'upgrade IWAC Search'), 'dashboard survives missing journal with upgrade guidance');
@@ -58,19 +71,24 @@ $db->insert('vocabulary', ['id' => 2, 'namespace_uri' => 'http://purl.org/ontolo
 foreach ([1 => [1, 'title'], 2 => [1, 'subject'], 3 => [1, 'abstract'], 4 => [2, 'content'], 5 => [1, 'alternative']] as $id => [$vocab, $name]) {
     $db->insert('property', ['id' => $id, 'vocabulary_id' => $vocab, 'local_name' => $name, 'label' => $name]);
 }
-function item(int $id, int $class, string $title, bool $public = true): void {
+function item(int $id, int $class, string $title, bool $public = true): void
+{
     global $db;
     $db->insert('resource', ['id' => $id, 'resource_type' => Omeka\Entity\Item::class, 'resource_class_id' => $class, 'title' => $title, 'is_public' => (int) $public, 'created' => '2026-01-01 00:00:00']);
     $db->insert('item', ['id' => $id]);
     value($id, 1, $title);
 }
-function value(int $id, int $property, ?string $text, bool $public = true, ?int $target = null): void {
+function value(int $id, int $property, ?string $text, bool $public = true, ?int $target = null): void
+{
     global $db;
     $db->insert('`value`', ['resource_id' => $id, 'property_id' => $property, '`value`' => $text, 'value_resource_id' => $target, 'is_public' => (int) $public, 'type' => $target ? 'resource:item' : 'literal']);
 }
-item(1, 36, 'Public article'); item(2, 36, 'Private article', false);
-item(10, 94, 'Authority'); item(11, 94, 'Hidden authority', false);
-value(1, 2, null, true, 10); value(1, 2, null, true, 11);
+item(1, 36, 'Public article');
+item(2, 36, 'Private article', false);
+item(10, 94, 'Authority');
+item(11, 94, 'Hidden authority', false);
+value(1, 2, null, true, 10);
+value(1, 2, null, true, 11);
 value(1, 3, 'CONFIDENTIAL ABSTRACT', false);
 value(10, 5, 'CONFIDENTIAL ALIAS', false);
 value(1, 4, str_repeat('context ', 80) . 'needle ' . str_repeat('context ', 80), false);
@@ -88,7 +106,9 @@ $db->executeStatement('UPDATE `value` SET is_public=1 WHERE resource_id=10 AND p
 
 $client = new Client(['api_key' => 'iwac-disposable-test-key', 'nodes' => [['host' => '127.0.0.1', 'port' => '18108', 'protocol' => 'http']], 'num_retries' => 0]);
 $ops = new CollectionOps(fn() => $client);
-foreach ($client->collections->retrieve() as $c) $client->collections[$c['name']]->delete();
+foreach ($client->collections->retrieve() as $c) {
+    $client->collections[$c['name']]->delete();
+}
 foreach (['iwac_v99_20200101_000000_aaaaaaaaaaaa', 'iwac_index_v99_20200101_000000_aaaaaaaaaaaa'] as $name) {
     $client->collections->create(['name' => $name, 'fields' => [['name' => '.*', 'type' => 'auto', 'optional' => true], ['name' => 'is_public', 'type' => 'bool'], ['name' => 'country_ss', 'type' => 'string[]', 'facet' => true, 'optional' => true], ['name' => 'type_s', 'type' => 'string', 'facet' => true, 'optional' => true]]]);
 }
@@ -101,7 +121,8 @@ $ops->flushBatch('iwac_current', [$doc]);
 check($ops->document('iwac_index_current', '10')['title'] === 'Authority', 'entity metadata indexed incrementally');
 
 $journal = new ChangeJournal($db);
-$listener = new ItemEventListener($db, static function (): void {});
+$listener = new ItemEventListener($db, static function (): void {
+});
 require_once dirname(__DIR__, 2) . '/Module.php';
 $services = new Laminas\ServiceManager\ServiceManager(['services' => ['Omeka\Connection' => $db, ItemEventListener::class => $listener]]);
 $module = new IwacSearch\Module();
@@ -127,9 +148,11 @@ $entity = new Omeka\Entity\Item();
 $idProperty = new ReflectionProperty(Omeka\Entity\Resource::class, 'id');
 $idProperty->setValue($entity, 10);
 $create = new Omeka\Api\Request('create', 'items');
-$response = new Omeka\Api\Response(); $response->setContent($entity);
+$response = new Omeka\Api\Response();
+$response->setContent($entity);
 $createEvent = new Laminas\EventManager\Event('api.execute.post', null, ['request' => $create, 'response' => $response]);
-$listener->onBeforeWrite($createEvent, 'items'); $listener->onAfterWrite($createEvent, 'items');
+$listener->onBeforeWrite($createEvent, 'items');
+$listener->onAfterWrite($createEvent, 'items');
 check(in_array(10, array_column($journal->pending(), 'item_id'), true), 'raw create response journals generated ID');
 
 $delete = (new Omeka\Api\Request('delete', 'items'))->setId(10);
@@ -143,12 +166,20 @@ check($ops->document('iwac_index_current', '10') === null, 'deleted authority re
 check(!str_contains(json_encode($ops->document('iwac_current', '1')), 'Renamed authority'), 'delete tombstone refreshes former referrers');
 check($journal->status()['pending'] === 0, 'successful journal rows acknowledged');
 $journal->append([1]);
-$rows = $journal->pending(); $journal->append([1]); $journal->acknowledge(array_column($rows, 'id'));
+$rows = $journal->pending();
+$journal->append([1]);
+$journal->acknowledge(array_column($rows, 'id'));
 check($journal->status()['pending'] === 1, 'acknowledgment cannot swallow a concurrent update');
 
-$lock = new DatabaseLock($db, 'rebuild'); $lock->acquire();
+$lock = new DatabaseLock($db, 'rebuild');
+$lock->acquire();
 $other = new DatabaseLock(DriverManager::getConnection($params), 'rebuild');
-try { $other->acquire(); throw new LogicException('Second rebuild acquired lock'); } catch (RuntimeException $e) { check(str_contains($e->getMessage(), 'already running'), 'concurrent rebuild excluded'); }
+try {
+    $other->acquire();
+    throw new LogicException('Second rebuild acquired lock');
+} catch (RuntimeException $e) {
+    check(str_contains($e->getMessage(), 'already running'), 'concurrent rebuild excluded');
+}
 $lock->release();
 $publicationConnection = DriverManager::getConnection($params);
 $publication = new DatabaseLock($publicationConnection, 'publish');
@@ -156,15 +187,18 @@ $publication->acquire();
 check((new ChangeDrainer($db, $incremental))->run() === 0, 'duplicate worker yields without holding catalog saves');
 $freeMutation = IwacSearch\Indexer\MutationLock::exclusive($publicationConnection);
 check($freeMutation->tryAcquire(), 'busy worker releases its mutation gate');
-$freeMutation->release(); $publication->release();
+$freeMutation->release();
+$publication->release();
 
 // The striped gate on the real server: saves do not wait for one another;
 // the drain snapshot and the cutover still exclude every save.
 $editorA = DriverManager::getConnection($params);
 $editorB = DriverManager::getConnection($params);
 $cutover = DriverManager::getConnection($params);
-$listenerA = new ItemEventListener($editorA, static function (): void {}, gate: new IwacSearch\Indexer\WriteGate(IwacSearch\Indexer\MutationLock::writer($editorA), 1));
-$listenerB = new ItemEventListener($editorB, static function (): void {}, gate: new IwacSearch\Indexer\WriteGate(IwacSearch\Indexer\MutationLock::writer($editorB), 1));
+$listenerA = new ItemEventListener($editorA, static function (): void {
+}, gate: new IwacSearch\Indexer\WriteGate(IwacSearch\Indexer\MutationLock::writer($editorA), 1));
+$listenerB = new ItemEventListener($editorB, static function (): void {
+}, gate: new IwacSearch\Indexer\WriteGate(IwacSearch\Indexer\MutationLock::writer($editorB), 1));
 $saveA = new Laminas\EventManager\Event('api.execute.pre', null, ['request' => (new Omeka\Api\Request('update', 'items'))->setId(1)]);
 $saveB = new Laminas\EventManager\Event('api.execute.pre', null, ['request' => (new Omeka\Api\Request('update', 'items'))->setId(10)]);
 $listenerA->onBeforeWrite($saveA, 'items');
@@ -191,7 +225,9 @@ check($journal->status()['pending'] === 0, 'the saves made side by side are drai
 $lease = new IwacSearch\Indexer\WorkerLease($db);
 $lease->release();
 $dispatched = 0;
-$dispatch = static function () use (&$dispatched): void { $dispatched++; };
+$dispatch = static function () use (&$dispatched): void {
+    $dispatched++;
+};
 check($lease->wake($dispatch) && !$lease->wake($dispatch) && $dispatched === 1 && $lease->status()['alive'], 'only the save that wins the worker lease dispatches a drain');
 $lease->begin(); // the dispatched worker starts a pass…
 $journal->append([1]); // …a save journals during it and asks again
@@ -205,7 +241,9 @@ $db->executeStatement("UPDATE iwac_search_worker SET heartbeat = NOW() - INTERVA
 check($lease->claim(), 'a dead worker\'s stale lease is taken over');
 $lease->release();
 try {
-    $lease->wake(static function (): void { throw new RuntimeException('dispatcher down'); });
+    $lease->wake(static function (): void {
+        throw new RuntimeException('dispatcher down');
+    });
     throw new LogicException('A failed dispatch went unnoticed');
 } catch (RuntimeException $e) {
     check($e->getMessage() === 'dispatcher down' && !$lease->status()['alive'] && $lease->status()['requested'], 'a failed dispatch gives the lease back and keeps the request');
@@ -214,7 +252,9 @@ $journal->append([1]);
 $publication->acquire(); // another drainer is busy: this worker can only wait
 $successors = 0;
 $lease->claim();
-$applied = $drainer->work($lease, null, static function () use (&$successors): void { $successors++; }, 1);
+$applied = $drainer->work($lease, null, static function () use (&$successors): void {
+    $successors++;
+}, 1);
 check($applied === 0 && $successors === 1 && $lease->status()['alive'] && $lease->status()['requested'], 'a worker out of time hands the lease to its successor');
 $publication->release();
 $drainer->work($lease);
@@ -232,17 +272,30 @@ check(!isset($result['hits'][0]['document']['ocr_text']), 'scoped exclusions can
 check(!isset($result['hits'][0]['document']['embedding']), 'public response omits embedding vectors');
 check(str_contains(json_encode($result['hits'][0]['highlights'] ?? []), 'needle'), 'restricted OCR snippets still render');
 check(strlen(json_encode($result['hits'][0]['highlights'] ?? [])) < 1000, 'scoped highlight limits resist full-field and oversized-snippet overrides');
-try { $public->collections['iwac_v99_20200101_000000_aaaaaaaaaaaa']->documents->search(['q' => '*']); throw new LogicException('Old generation accessible'); }
-catch (Typesense\Exceptions\RequestUnauthorized) { check(true, 'public key cannot search retained generation directly'); }
+try {
+    $public->collections['iwac_v99_20200101_000000_aaaaaaaaaaaa']->documents->search(['q' => '*']);
+    throw new LogicException('Old generation accessible');
+} catch (Typesense\Exceptions\RequestUnauthorized) {
+    check(true, 'public key cannot search retained generation directly');
+}
 $client->keys[(string) $parent['id']]->delete();
 
 // A change the drain has not applied yet is hidden from a freshly minted key
 // (and the key is short-lived); once drained, a fresh key shows it again.
 $settingsStore = new class implements Omeka\Settings\SettingsInterface {
     private array $values = [];
-    public function set($id, $value) { $this->values[$id] = $value; }
-    public function get($id, $default = null) { return $this->values[$id] ?? $default; }
-    public function delete($id) { unset($this->values[$id]); }
+    public function set($id, $value)
+    {
+        $this->values[$id] = $value;
+    }
+    public function get($id, $default = null)
+    {
+        return $this->values[$id] ?? $default;
+    }
+    public function delete($id)
+    {
+        unset($this->values[$id]);
+    }
 };
 $provider = new TypesenseSearchKeyProvider(
     clientFactory: static fn () => $client,

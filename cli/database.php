@@ -1,6 +1,7 @@
 <?php
 
 declare(strict_types=1);
+
 // Receives $omekaVendor from cli/bootstrap.php.
 $omekaRoot = dirname($omekaVendor, 2); // …/vendor/autoload.php → …
 $dbIni = getenv('IWAC_OMEKA_DB_INI') ?: $omekaRoot . '/config/database.ini';

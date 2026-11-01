@@ -1,4 +1,5 @@
 <?php
+
 declare(strict_types=1);
 
 namespace IwacSearch\Indexer;
@@ -189,5 +190,4 @@ final class Reindexer
             yield $doc;
         }
     }
-
 }

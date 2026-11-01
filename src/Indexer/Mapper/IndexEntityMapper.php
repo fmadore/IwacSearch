@@ -1,4 +1,5 @@
 <?php
+
 declare(strict_types=1);
 
 namespace IwacSearch\Indexer\Mapper;
@@ -53,11 +54,11 @@ final class IndexEntityMapper
             'omeka_url'     => SiteUrls::itemUrl($oid),
         ];
 
-        $this->maybeAdd($doc, 'identifier',    $entity['identifier']);
-        $this->maybeAdd($doc, 'wikidata_id',   $entity['wikidata_id'] ?? '');
+        $this->maybeAdd($doc, 'identifier', $entity['identifier']);
+        $this->maybeAdd($doc, 'wikidata_id', $entity['wikidata_id'] ?? '');
         $this->maybeAdd($doc, 'thumbnail_url', $entity['thumbnail'] ?? '');
-        $this->maybeAdd($doc, 'description',   $entity['description']);
-        $this->maybeAdd($doc, 'coordinates',   $entity['coordinates']);
+        $this->maybeAdd($doc, 'description', $entity['description']);
+        $this->maybeAdd($doc, 'coordinates', $entity['coordinates']);
 
         // Geopoint from the curated "lat, lng" literal. has_coords is the
         // filterable presence flag (Typesense can't filter on an optional

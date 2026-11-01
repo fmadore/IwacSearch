@@ -29,8 +29,10 @@ final class MemoryGenerationLedger implements GenerationLedger
     {
         $this->fail();
         foreach ($this->rows as $name => $row) {
-            if ($row['alias'] === $alias && in_array($row['status'], [self::LIVE, self::PREVIOUS], true)
-                && $name !== $live && $name !== $previous) {
+            if (
+                $row['alias'] === $alias && in_array($row['status'], [self::LIVE, self::PREVIOUS], true)
+                && $name !== $live && $name !== $previous
+            ) {
                 $this->rows[$name]['status'] = self::RETIRED;
             }
         }

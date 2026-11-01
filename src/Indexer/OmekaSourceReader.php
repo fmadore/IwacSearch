@@ -1,4 +1,5 @@
 <?php
+
 declare(strict_types=1);
 
 namespace IwacSearch\Indexer;
@@ -219,7 +220,9 @@ final class OmekaSourceReader
             }
         }
         $propertyIds = array_keys(array_intersect($this->propertyTerms, $terms));
-        if ($propertyIds === []) return [];
+        if ($propertyIds === []) {
+            return [];
+        }
         $titleId = array_search('dcterms:title', $this->propertyTerms, true);
         $sql = 'SELECT v.resource_id AS rid, v.property_id AS pid,'
             . ' v.value_resource_id AS vrid, v.value AS val, v.uri AS turi,'

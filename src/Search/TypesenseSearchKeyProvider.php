@@ -1,4 +1,5 @@
 <?php
+
 declare(strict_types=1);
 
 namespace IwacSearch\Search;
@@ -299,11 +300,14 @@ final class TypesenseSearchKeyProvider
         }
         $keys = ($this->clientFactory)()->keys->retrieve()['keys'] ?? [];
         $matches = array_values(array_filter($keys, static fn(array $key): bool => ($key['value_prefix'] ?? '') === substr($value, 0, 4)));
-        if (count($matches) !== 1) throw new RuntimeException('Cannot identify search-key secret uniquely; rotate it and retry.');
+        if (count($matches) !== 1) {
+            throw new RuntimeException('Cannot identify search-key secret uniquely; rotate it and retry.');
+        }
         $key = $matches[0];
         $actual = $key['collections'] ?? [];
         $expected = $this->collectionScope;
-        sort($actual); sort($expected);
+        sort($actual);
+        sort($expected);
         if ($actual !== $expected || ($key['actions'] ?? []) !== ['documents:search']) {
             throw new RuntimeException('Search-key secret scope differs from public_search_key.collections; rotate the mounted parent key.');
         }
