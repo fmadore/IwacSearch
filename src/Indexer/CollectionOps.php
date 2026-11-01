@@ -24,14 +24,6 @@ use Typesense\Client as TypesenseClient;
  */
 final class CollectionOps
 {
-    /**
-     * promote() refuses to swap the alias when more than this share of
-     * documents failed to import — zero, so any rejection refuses. A
-     * systemic failure (schema/field-type mismatch) rejects every doc;
-     * without the guard the alias would swap to an empty collection.
-     */
-    private const MAX_ERROR_RATIO = 0.0;
-
     /** IDs per filtered delete/export request (keeps the query string short). */
     private const ID_FILTER_CHUNK = 250;
 
@@ -72,7 +64,7 @@ final class CollectionOps
 
     /**
      * Create the timestamped collection from a SchemaLoader::loadForReindex()
-     * payload (strips the loader's private `_alias_target` / `_base_name` keys).
+     * payload (strips the loader's private `_alias_target` key).
      *
      * The ledger row is written first: from then on the name is owned, so a
      * create whose response is lost after Typesense accepted it, or a process
@@ -83,7 +75,7 @@ final class CollectionOps
     public function createVersioned(array $versionedSchema): void
     {
         $alias = (string) ($versionedSchema['_alias_target'] ?? '');
-        unset($versionedSchema['_alias_target'], $versionedSchema['_base_name']);
+        unset($versionedSchema['_alias_target']);
         $this->ledger?->recordBuilding((string) $versionedSchema['name'], $alias);
         $this->client()->collections->create($versionedSchema);
     }
@@ -118,14 +110,18 @@ final class CollectionOps
     }
 
     /**
-     * Promote only a complete, nonempty generation. Previous generations are
-     * retained; CollectionRetention is the only cross-generation cleanup path.
+     * Promote only a complete, nonempty generation: any rejected document, or
+     * nothing indexed at all, refuses the swap and drops the build. A
+     * systemic failure (schema/field-type mismatch) rejects every document;
+     * without the guard the alias would swap to an empty collection.
+     *
+     * Previous generations are never deleted here; the generation ledger and
+     * GenerationCleanup decide what goes.
      */
     public function promote(string $alias, string $newName, int $indexed, int $errors): void
     {
         $this->checkCancellation();
-        $total = $indexed + $errors;
-        if ($indexed === 0 || ($total > 0 && $errors / $total > self::MAX_ERROR_RATIO)) {
+        if ($indexed === 0 || $errors > 0) {
             $this->logger->error("Refusing alias swap — import health check failed ({$this->logLabel})", [
                 'collection' => $newName,
                 'indexed'    => $indexed,
@@ -141,8 +137,6 @@ final class CollectionOps
 
         $this->logger->info("Swapping alias ({$this->logLabel})", ['alias' => $alias, 'to' => $newName]);
         $this->client()->aliases->upsert($alias, ['collection_name' => $newName]);
-
-        // Retain previous generations for rollback. Cleanup is an explicit locked operation.
     }
 
     public function documentCount(string $collection): int

@@ -37,6 +37,9 @@ final class FakeTypesense
     /** @var list<string> collections dropped, in order */
     public array $dropped = [];
 
+    /** @var list<array<string, mixed>> schemas passed to collections->create(), in order */
+    public array $created = [];
+
     /**
      * Per-document import outcome. Return true to accept, false to reject
      * with an error line — how a schema mismatch shows up in real life.
@@ -199,6 +202,7 @@ final class FakeCollections extends Collections
         if ($this->server->createFailure !== null) {
             throw $this->server->createFailure;
         }
+        $this->server->created[] = $schema;
         $this->server->collections[$name] = [];
         return $schema;
     }

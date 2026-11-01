@@ -84,12 +84,12 @@ final class SchemaLoaderTest extends TestCase
         $schema = (new SchemaLoader(self::CONTENT))->loadForReindex();
         $base = (new SchemaLoader(self::CONTENT))->load()['name'];
 
+        // Retention's rule for collections built before the ledger matches
+        // on `<base>_<stamp>`, so the separator matters.
         self::assertMatchesRegularExpression(
             '/^' . preg_quote($base, '/') . '_\d{8}_\d{6}_[a-f0-9]{12}$/',
             $schema['name']
         );
-        // The orphan sweep matches on `<base>_`, so the separator matters.
-        self::assertSame($base, $schema['_base_name']);
     }
 
     public function testTheAliasTargetDefaultsToTheContentAliasAndIsOverridable(): void

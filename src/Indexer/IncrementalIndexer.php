@@ -65,11 +65,6 @@ final class IncrementalIndexer
         );
     }
 
-    public function reindexItem(int $itemId): void
-    {
-        $this->reindexItems([$itemId]);
-    }
-
     /**
      * @param  list<int> $itemIds
      * @return array{content: array<int, ?string>, entity: array<int, bool>} see applySnapshot()
@@ -241,15 +236,5 @@ final class IncrementalIndexer
             throw new RuntimeException(sprintf('Incomplete import into %s: %d accepted, %d failed.', $collection, $ok, $failed));
         }
         return [$ok, $rejectedIds];
-    }
-
-    public function deleteItem(int $itemId): void
-    {
-        if ($itemId > 0) {
-            $this->ops->deleteDocuments($this->collectionAlias, [(string) $itemId]);
-            if ($this->indexAlias !== null) {
-                $this->ops->deleteDocuments($this->indexAlias, [(string) $itemId]);
-            }
-        }
     }
 }

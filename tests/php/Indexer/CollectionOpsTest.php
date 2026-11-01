@@ -4,6 +4,8 @@ declare(strict_types=1);
 namespace IwacSearch\Tests\Indexer;
 
 use IwacSearch\Indexer\CollectionOps;
+use IwacSearch\Indexer\Exception\ReindexCancelledException;
+use IwacSearch\Indexer\Exception\VerificationException;
 use IwacSearch\Tests\Support\FakeTypesense;
 use IwacSearch\Tests\Support\MemoryGenerationLedger;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -57,7 +59,7 @@ final class CollectionOpsTest extends TestCase
         $this->server->seedCollection('iwac_v1_old');
         $this->server->seedCollection('iwac_v1_new');
 
-        $this->expectException(RuntimeException::class);
+        $this->expectException(VerificationException::class);
         $this->expectExceptionMessage('the previous collection stays live');
 
         try {
@@ -71,27 +73,37 @@ final class CollectionOpsTest extends TestCase
         }
     }
 
-    public function testPromoteRefusesWhenTooManyDocumentsFailed(): void
-    {
-        // 11 % > the 10 % ceiling.
-        $this->server->aliases['iwac_current'] = 'iwac_v1_old';
-        $this->server->seedCollection('iwac_v1_new');
-
-        $this->expectException(RuntimeException::class);
-        $this->ops()->promote('iwac_current', 'iwac_v1_new', 890, 110);
-    }
-
     public function testPromoteRefusesEvenOneRejectedDocument(): void
     {
-        // Exactly 10 % — the guard rejects ABOVE the ratio, not at it, so a
-        // corpus with a known bad tail still ships.
+        // A rejected document is missing from search, so the build is not
+        // the catalog: there is no tolerated "bad tail".
         $this->server->aliases['iwac_current'] = 'iwac_v1_old';
+        $this->server->seedCollection('iwac_v1_old');
         $this->server->seedCollection('iwac_v1_new');
 
-        $this->expectException(RuntimeException::class);
-        $this->ops()->promote('iwac_current', 'iwac_v1_new', 999, 1);
+        try {
+            $this->ops()->promote('iwac_current', 'iwac_v1_new', 999, 1);
+            self::fail('one rejected document must refuse the swap');
+        } catch (VerificationException $e) {
+            self::assertStringContainsString('999 indexed, 1 errors', $e->getMessage());
+        }
 
-        self::assertSame('iwac_v1_new', $this->server->aliases['iwac_current']);
+        self::assertSame('iwac_v1_old', $this->server->aliases['iwac_current']);
+        self::assertSame(['iwac_v1_new'], $this->server->dropped);
+    }
+
+    public function testACancelledPromotionNeverSwaps(): void
+    {
+        $client = $this->server->client();
+        $ops = new CollectionOps(static fn (): TypesenseClient => $client, shouldStop: static fn (): bool => true);
+        $this->server->aliases['iwac_current'] = 'iwac_v1_old';
+
+        $this->expectException(ReindexCancelledException::class);
+        try {
+            $ops->promote('iwac_current', 'iwac_v1_new', 10, 0);
+        } finally {
+            self::assertSame('iwac_v1_old', $this->server->aliases['iwac_current']);
+        }
     }
 
     public function testPromoteHandlesAFirstEverBuildWithNoPreviousCollection(): void
@@ -267,18 +279,18 @@ final class CollectionOpsTest extends TestCase
         self::assertSame('iwac_v1_x', $this->ops()->resolveAliasTarget('iwac_current'));
     }
 
-    public function testCreateVersionedStripsTheLoaderPrivateKeys(): void
+    public function testCreateVersionedStripsTheLoaderPrivateKey(): void
     {
         $this->ops()->createVersioned([
             'name' => 'iwac_v1_20260101_000000',
             'fields' => [['name' => 'id', 'type' => 'string']],
             '_alias_target' => 'iwac_current',
-            '_base_name' => 'iwac_v1',
         ]);
 
         // Typesense rejects unknown top-level schema keys, so the loader's
         // bookkeeping must not reach it.
         self::assertArrayHasKey('iwac_v1_20260101_000000', $this->server->collections);
+        self::assertSame(['name', 'fields'], array_keys($this->server->created[0]));
     }
 
     public function testDeleteDocumentsCountsOnlyWhatExisted(): void

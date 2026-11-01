@@ -52,7 +52,8 @@ final class SchemaLoader
      * Example: iwac_v1 → iwac_v1_20260420_143015
      *
      * @return array<string, mixed> The schema plus the private `_alias_target`
-     *   and `_base_name` keys CollectionOps strips before creating.
+     *   key CollectionOps strips before creating (and records in the
+     *   generation ledger).
      */
     public function loadForReindex(string $aliasTarget = IwacInstance::CONTENT_ALIAS): array
     {
@@ -61,7 +62,6 @@ final class SchemaLoader
         $stamp  = gmdate('Ymd_His') . '_' . bin2hex(random_bytes(6));
         $schema['name'] = "{$base}_{$stamp}";
         $schema['_alias_target'] = $aliasTarget;
-        $schema['_base_name']    = $base;
         return $schema;
     }
 }
