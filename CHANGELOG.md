@@ -6,6 +6,8 @@ Versions that were never published (tagged and released) are folded into the nex
 
 ## [Unreleased]
 
+## [3.27.0] - 2026-11-01
+
 **Upgrade:** run **Modules → IWAC Search → Upgrade** (it creates `iwac_search_generation` and `iwac_search_worker`, moves `iwac_search_rollback` into the first and drops it). No reindex: the schemas stay `iwac_v11` and `iwac_index_v5`. Do not start a rebuild across the code swap — the write gate's MySQL lock names changed. A checkout deployed by hand now needs `npm ci && npm run build`; the release zip still carries the bundle. Details: [docs/operations-3.27.md](docs/operations-3.27.md).
 
 ### Security
