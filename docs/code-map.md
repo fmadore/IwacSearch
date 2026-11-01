@@ -13,6 +13,7 @@ IwacSearch/
 │   ├── Controller/
 │   │   ├── SearchController.php                # /search, /search/everything, /discovery/token + /health, /browse redirect
 │   │   ├── ErrorEnvelope.php                   #   JSON error body: stable code + request_id (also X-Request-ID)
+│   │   ├── HttpMessages.php                    #   trait: getRequest()/getResponse() as the HTTP messages Omeka dispatches
 │   │   └── Admin/MaintenanceController.php     # /admin/iwac-search/maintenance (reindex, syncs, status)
 │   ├── Asset/SvelteAssets.php                  # ONE place that knows the compiled bundle's file set
 │   ├── Indexer/                                # Bulk + incremental indexing (reads Omeka MySQL)
@@ -145,14 +146,27 @@ IwacSearch/
 ├── .github/
 │   ├── dependabot.yml                          # weekly grouped updates: npm + composer + actions
 │   └── workflows/
-│       ├── ci.yml                              # versions + audit + lint + svelte-check + vitest + build + dist diff;
-│       │                                       #   PHP lint/PHPUnit/PHPStan 8.4/8.5; integration (also workflow_call)
+│       ├── ci.yml                              # versions + audit + lint + svelte-check + vitest + build;
+│       │                                       #   PHP 8.4/8.5: php -l, phpcs, PHPUnit, PHPStan (Omeka 4.2.1 zip);
+│       │                                       #   integration (also workflow_call)
 │       ├── release.yml                         # gates (= ci.yml) → build zip → publish
 │       ├── theme-contract.yml                  # weekly: tokens.json + guard engine vs IWAC-theme master
 │       └── maplibre-pins.yml                   # weekly: MapLibre pins vs IwacVisualizations main
 ├── docs/
 │   ├── data-sources.md                         # Why the indexer reads Omeka MySQL directly
 │   └── engineering-roadmap.md                  # Refactoring / hardening roadmap + deferred items
+├── tools/phpstan/
+│   ├── bootstrap.php                           # loads the released Omeka 4.2.1 tree (OMEKA_VENDOR), module loader in front
+│   └── omeka.stub                              # only what that tree cannot declare: __call helpers/plugins, wrong core docblocks
+├── tests/
+│   ├── php/                                    # PHPUnit, standalone: module vendor/ + runtime-stubs.php, no Omeka
+│   ├── integration/                            # real Omeka + MariaDB + Typesense lane (rebuild.php, contracts.php)
+│   ├── client/ · browser/                      # Vitest · Playwright + axe on the built bundle (services stubbed)
+│   └── lighthouse/                             # npm run check:lighthouse baseline + fixtures
+├── composer.json                               # `composer lint` (phpcs) · `composer test` (phpunit)
+├── phpcs.xml.dist                              # PSR-12; line length advisory; Module.php side effects allowed
+├── phpstan.neon                                # level 8 against the real Omeka tree, no blanket ignores
+├── phpunit.xml
 ├── tokens.json                                 # Generated snapshot of IWAC-theme's design tokens
 ├── package.json                                # Vite 8 + Svelte 5 + TypeScript 6 toolchain
 ├── vite.config.ts

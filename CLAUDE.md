@@ -95,7 +95,26 @@ The cutover, retention and retry contracts are documented in `docs/operations-3.
 ## Conventions
 
 - PHP 8.4+, strict types on every file.
-- PSR-4 autoloading under `IwacSearch\` namespace, `src/` root.
+- PSR-4 autoloading under `IwacSearch\` namespace, `src/` root: one class per
+  file, test fakes included (`tests/php/Support/`).
+- **PSR-12, enforced by `composer lint`** (PHP_CodeSniffer, `phpcs.xml.dist`,
+  which lists the files it covers and its few exemptions). `vendor/bin/phpcbf`
+  fixes the mechanical findings; run `composer lint` before committing PHP.
+- **PHPStan runs at level 8 against the released Omeka S 4.2.1 tree**, not
+  stubs: `tools/phpstan/bootstrap.php` loads Omeka's `bootstrap.php` from
+  `OMEKA_VENDOR`, then puts the module's autoloader in front, as production
+  does (core ships psr/log 1.x, the module 3.x). Locally:
+  `OMEKA_VENDOR=/path/to/omeka-s/vendor/autoload.php vendor/bin/phpstan analyse`,
+  and `vendor/bin/phpstan clear-result-cache` after pointing it elsewhere. CI
+  downloads `omeka-s-4.2.1.zip` and checks its sha256. `tools/phpstan/omeka.stub`
+  holds only what that tree cannot declare (view helpers and controller plugins
+  resolved through `__call`, core docblocks that state the wrong type, each
+  with its reason): a new helper or plugin the module calls goes there. No
+  blanket ignores; fix a finding, or correct a wrong framework docblock in the
+  stub, rather than casting or `@var`-overriding it away.
+- **PHPUnit runs standalone, without Omeka**: `tests/php/runtime-stubs.php`
+  declares the few Omeka/Laminas types a test double needs, with 4.2.1's
+  signatures. PHPStan excludes that file (the real classes are loaded there).
 - Composer deps live in `composer.json`; install with
   `composer install --no-dev` inside the php container after copying the
   module to the `omeka_files` volume.

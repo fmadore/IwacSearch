@@ -162,9 +162,13 @@ never a laptop. Locally, set `CHROME_PATH` to a Chrome 156 build to match CI.
 
 ## Quality stack
 
-- **PHP** 8.4+, strict types throughout, PSR-4 (`IwacSearch\` → `src/`). CI
-  runs `composer validate --strict`, `composer audit --locked`, `php -l`,
-  PHPUnit and PHPStan on 8.4 / 8.5.
+- **PHP** 8.4+, strict types throughout, PSR-4 (`IwacSearch\` → `src/`), PSR-12
+  (`composer lint`, PHP_CodeSniffer). CI runs `composer validate --strict`,
+  `composer audit --locked`, `php -l`, phpcs, PHPUnit and PHPStan on 8.4 / 8.5.
+  PHPUnit runs standalone, without Omeka. PHPStan runs at level 8 against the
+  released Omeka S 4.2.1 tree (the zip CI downloads and checks by sha256), not
+  hand-written stubs; locally, point `OMEKA_VENDOR` at an Omeka 4.2.1
+  `vendor/autoload.php` before `vendor/bin/phpstan analyse`.
 - **JS/TS** Vite 8, Svelte 5, TypeScript 6, ESLint 10 (flat config),
   Prettier 3, Vitest.
 - **Drift gates** `npm run lint` fails if `FacetCatalog::FACETABLE_FIELDS`,
