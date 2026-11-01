@@ -33,7 +33,7 @@ Versions that were never published (tagged and released) are folded into the nex
 - The facet "Editor" is labelled "Book editor" ("Directeur d'ouvrage"), since Omeka's own French for "Editor" reads as publisher.
 - `asset/dist` is no longer committed; CI and the release build it. Release notes come from this changelog, and each release carries a `.sha256` and a build provenance attestation (`gh attestation verify <zip> --repo fmadore/IwacSearch`).
 - The theme contract is synced from IWAC-theme 2.31.0.
-- Development: browser tests with Playwright and axe; the client tests are type-checked, with `noUncheckedIndexedAccess` and type-aware ESLint; PHPUnit fails on deprecations and notices; CodeQL, `composer audit` and job timeouts in CI; Dependabot waits five days; Lighthouse budgets hold `/search` and `/search/everything`; PHPUnit 13.4.5.
+- Development: browser tests with Playwright and axe; the client tests are type-checked, with `noUncheckedIndexedAccess` and type-aware ESLint; PHPUnit fails on deprecations and notices; CodeQL, `composer audit` and job timeouts in CI; Dependabot waits five days; Lighthouse budgets hold `/search` and `/search/everything`; the PHP follows PSR-12 (`composer lint` in CI); PHPStan runs at level 8 against the released Omeka S 4.2.1 tree instead of hand-written stubs; PHPUnit 13.4.5.
 
 ### Fixed
 
@@ -43,6 +43,7 @@ Versions that were never published (tagged and released) are folded into the nex
 - A slow "did you mean" reply could reappear above the next search's results.
 - Syncing the URL wiped the browser history entry's existing state.
 - The "Prominent facets" help mentioned a "More filters" control the client no longer has.
+- The `iwacSearchUrl()` view helper failed when called without a view; it returns the federated search URL. A Typesense import answer that is not JSON lines now fails with a clear message.
 
 ## [3.26.2] - 2026-10-27
 
