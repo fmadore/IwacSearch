@@ -1,8 +1,8 @@
 <?php
 
-declare(strict_types=1);
-
 /** Explicit, idempotent recovery for a deployment that missed the module upgrade. */
+
+declare(strict_types=1);
 
 $moduleRoot = dirname(__DIR__);
 $omekaVendor = getenv('IWAC_OMEKA_VENDOR') ?: '/var/www/html/vendor/autoload.php';

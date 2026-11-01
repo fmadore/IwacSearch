@@ -1,7 +1,5 @@
 <?php
 
-declare(strict_types=1);
-
 /**
  * Synonyms-only sync CLI.
  *
@@ -26,6 +24,8 @@ declare(strict_types=1);
  *   2  setup error (missing composer deps, unreadable admin-key secret)
  *      — enforced by bootstrap.php
  */
+
+declare(strict_types=1);
 
 use IwacSearch\Indexer\SynonymsSync;
 

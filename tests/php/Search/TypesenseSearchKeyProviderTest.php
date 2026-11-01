@@ -8,7 +8,7 @@ use IwacSearch\Search\TypesenseSearchKeyProvider;
 use IwacSearch\Search\ValidatedKeyMemo;
 use IwacSearch\Tests\Support\CallLog;
 use IwacSearch\Tests\Support\CountingLock;
-use Omeka\Settings\SettingsInterface;
+use IwacSearch\Tests\Support\FakeSettings;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use RuntimeException;
@@ -544,52 +544,5 @@ final class TypesenseSearchKeyProviderTest extends TestCase
             self::assertStringContainsString('did not return a key value', $e->getMessage());
         }
         self::assertSame([], $settings->all());
-    }
-}
-
-/** In-memory Omeka settings. */
-final class FakeSettings implements SettingsInterface
-{
-    /** @param array<string, mixed> $values */
-    public function __construct(private array $values = [])
-    {
-    }
-
-    /**
-     * Signatures mirror Omeka's untyped SettingsInterface — a parameter type
-     * cannot be narrowed in an implementation, so the types live in PHPDoc.
-     *
-     * @param  mixed $id
-     * @param  mixed $value
-     * @return void
-     */
-    public function set($id, $value)
-    {
-        $this->values[(string) $id] = $value;
-    }
-
-    /**
-     * @param  mixed $id
-     * @param  mixed $default
-     * @return mixed
-     */
-    public function get($id, $default = null)
-    {
-        return $this->values[(string) $id] ?? $default;
-    }
-
-    /**
-     * @param  mixed $id
-     * @return void
-     */
-    public function delete($id)
-    {
-        unset($this->values[(string) $id]);
-    }
-
-    /** @return array<string, mixed> */
-    public function all(): array
-    {
-        return $this->values;
     }
 }

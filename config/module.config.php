@@ -1,13 +1,13 @@
 <?php
 
-declare(strict_types=1);
-
 /**
  * IwacSearch module configuration.
  *
  * Wires routes, controllers, block layouts, services, and view templates
  * for the public discovery surface.
  */
+
+declare(strict_types=1);
 
 namespace IwacSearch;
 

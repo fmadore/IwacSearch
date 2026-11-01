@@ -148,6 +148,12 @@ jobs:
             | xargs -0 -n1 php -l > /tmp/php-lint.log 2>&1 \
             || (cat /tmp/php-lint.log && exit 1)
 
+      # PSR-12 over the module's PHP; the files it covers and the few
+      # exemptions are in phpcs.xml.dist. `vendor/bin/phpcbf` applies the
+      # mechanical fixes.
+      - name: Coding standard (phpcs, PSR-12)
+        run: composer lint
+
       - name: Unit tests (phpunit)
         run: vendor/bin/phpunit
 

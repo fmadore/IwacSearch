@@ -1,7 +1,5 @@
 <?php
 
-declare(strict_types=1);
-
 /**
  * IwacSearch — Omeka S module.
  *
@@ -22,6 +20,8 @@ declare(strict_types=1);
  * @see docs/code-map.md
  * @see docs/operations-3.19.md
  */
+
+declare(strict_types=1);
 
 namespace IwacSearch;
 

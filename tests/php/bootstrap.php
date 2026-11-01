@@ -1,7 +1,5 @@
 <?php
 
-declare(strict_types=1);
-
 /**
  * PHPUnit bootstrap.
  *
@@ -10,6 +8,8 @@ declare(strict_types=1);
  * here needs an Omeka bootstrap, which is exactly why these are the seams
  * worth testing first.
  */
+
+declare(strict_types=1);
 
 require_once dirname(__DIR__, 2) . '/vendor/autoload.php';
 

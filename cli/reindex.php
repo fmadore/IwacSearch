@@ -1,7 +1,5 @@
 <?php
 
-declare(strict_types=1);
-
 /**
  * Bulk reindex CLI — reads the Omeka S MySQL database directly and rebuilds
  * both Typesense collections (content + entity index).
@@ -27,6 +25,8 @@ declare(strict_types=1);
  *   2  setup error (missing composer deps, unreadable admin-key secret,
  *      missing database.ini) — bootstrap.php enforces the first two
  */
+
+declare(strict_types=1);
 
 use IwacSearch\Indexer\ReindexOrchestrator;
 

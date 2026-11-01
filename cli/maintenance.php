@@ -1,13 +1,13 @@
 <?php
 
-declare(strict_types=1);
-
 /**
  * Run with status (default), drain, or prune. Schedule drain every minute:
  * it is the backstop for a drain worker that died or backed off after a
  * failure. It works only when it can claim the worker lease, so it never
  * runs beside a live worker.
  */
+
+declare(strict_types=1);
 
 ['logger' => $logger, 'typesense' => $typesense, 'moduleRoot' => $moduleRoot, 'omekaVendor' => $omekaVendor] = require __DIR__ . '/bootstrap.php';
 try {

@@ -253,14 +253,14 @@ jobs:
           # normal part of a vendor tree — not this repo's tooling leaking.
           # What matters about vendor/ is that --no-dev worked, checked below.
           LEAKED="$(unzip -Z1 "$ZIP_FILE" | grep -v '^IwacSearch/vendor/' \
-            | grep -E '(^|/)(tests|node_modules|\.github|scripts|tools|src/svelte)/|(package\.json|package-lock\.json|phpunit\.xml|phpstan\.neon|tsconfig\.json|vite\.config\.ts|vitest\.config\.ts|eslint\.config\.js|CLAUDE\.md|\.nvmrc)$' || true)"
+            | grep -E '(^|/)(tests|node_modules|\.github|scripts|tools|src/svelte)/|(package\.json|package-lock\.json|phpunit\.xml|phpstan\.neon|phpcs\.xml\.dist|tsconfig\.json|vite\.config\.ts|vitest\.config\.ts|eslint\.config\.js|CLAUDE\.md|\.nvmrc)$' || true)"
           if [ -n "$LEAKED" ]; then
             echo "::error::dev tooling leaked into the zip:"
             echo "$LEAKED"
             exit 1
           fi
 
-          for dev in phpunit phpstan; do
+          for dev in phpunit phpstan squizlabs; do
             if unzip -Z1 "$ZIP_FILE" | grep -q "^IwacSearch/vendor/$dev/"; then
               echo "::error::vendor/$dev is present — the install was not --no-dev"
               exit 1

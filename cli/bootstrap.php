@@ -1,7 +1,5 @@
 <?php
 
-declare(strict_types=1);
-
 /**
  * Shared bootstrap for the cli/ scripts (reindex, stopwords-sync,
  * synonyms-sync). Was copy-pasted ~50 lines per script; now each script
@@ -29,6 +27,8 @@ declare(strict_types=1);
  *
  * @return array{logger: \Psr\Log\LoggerInterface, typesense: \Typesense\Client, moduleRoot: string, tsConfig: array<string,mixed>, omekaVendor: string}
  */
+
+declare(strict_types=1);
 
 $moduleRoot = dirname(__DIR__);
 $autoload   = $moduleRoot . '/vendor/autoload.php';
