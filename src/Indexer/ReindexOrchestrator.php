@@ -91,7 +91,9 @@ final class ReindexOrchestrator
     {
         $started = microtime(true);
         $journal = new ChangeJournal($this->connection);
-        $mutation = new DatabaseLock($this->connection, 'mutation');
+        // Every stripe: no save may be between its pre and post events while
+        // a watermark is read or the cutover runs (see MutationLock).
+        $mutation = MutationLock::exclusive($this->connection);
         $publish = new DatabaseLock($this->connection, 'publish');
         $ledger = new DatabaseGenerationLedger($this->connection);
         $ops = new CollectionOps(fn (): TypesenseClient => $this->typesense, $this->logger, shouldStop: $this->shouldStop, ledger: $ledger);
@@ -278,7 +280,7 @@ final class ReindexOrchestrator
      * The journal watermark at a moment when no API write is between its pre
      * and post events: every change at or below it is committed.
      */
-    private function quiescentWatermark(ChangeJournal $journal, DatabaseLock $mutation): int
+    private function quiescentWatermark(ChangeJournal $journal, AdvisoryLock $mutation): int
     {
         $mutation->acquire(self::LOCK_WAIT_SECONDS);
         try {

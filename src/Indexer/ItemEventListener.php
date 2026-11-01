@@ -31,7 +31,9 @@ final class ItemEventListener
         private readonly LoggerInterface $logger = new NullLogger(),
         ?WriteGate $gate = null,
     ) {
-        $this->gate = $gate ?? new WriteGate(new DatabaseLock($connection, 'mutation'));
+        // One stripe of the mutation gate: concurrent saves do not wait for
+        // each other, only for the drain snapshot or the rebuild cutover.
+        $this->gate = $gate ?? new WriteGate(MutationLock::writer($connection));
         $this->journal = new ChangeJournal($connection);
     }
 

@@ -154,9 +154,38 @@ $publicationConnection = DriverManager::getConnection($params);
 $publication = new DatabaseLock($publicationConnection, 'publish');
 $publication->acquire();
 check((new ChangeDrainer($db, $incremental))->run() === 0, 'duplicate worker yields without holding catalog saves');
-$freeMutation = new DatabaseLock($publicationConnection, 'mutation');
+$freeMutation = IwacSearch\Indexer\MutationLock::exclusive($publicationConnection);
 check($freeMutation->tryAcquire(), 'busy worker releases its mutation gate');
 $freeMutation->release(); $publication->release();
+
+// The striped gate on the real server: saves do not wait for one another;
+// the drain snapshot and the cutover still exclude every save.
+$editorA = DriverManager::getConnection($params);
+$editorB = DriverManager::getConnection($params);
+$cutover = DriverManager::getConnection($params);
+$listenerA = new ItemEventListener($editorA, static function (): void {}, gate: new IwacSearch\Indexer\WriteGate(IwacSearch\Indexer\MutationLock::writer($editorA), 1));
+$listenerB = new ItemEventListener($editorB, static function (): void {}, gate: new IwacSearch\Indexer\WriteGate(IwacSearch\Indexer\MutationLock::writer($editorB), 1));
+$saveA = new Laminas\EventManager\Event('api.execute.pre', null, ['request' => (new Omeka\Api\Request('update', 'items'))->setId(1)]);
+$saveB = new Laminas\EventManager\Event('api.execute.pre', null, ['request' => (new Omeka\Api\Request('update', 'items'))->setId(10)]);
+$listenerA->onBeforeWrite($saveA, 'items');
+$listenerB->onBeforeWrite($saveB, 'items'); // the single global gate made this wait out A's save
+check(true, 'two editors\' saves are in flight side by side');
+check(!IwacSearch\Indexer\MutationLock::exclusive($cutover)->tryAcquire(), 'a save in flight excludes the drain snapshot and the cutover');
+check((new ChangeDrainer($db, $incremental))->run() === 0 && $journal->status()['pending'] > 0, 'the drain yields while a save is in flight');
+$listenerA->onAfterWrite($saveA, 'items');
+check(!IwacSearch\Indexer\MutationLock::exclusive($cutover)->tryAcquire(), 'every save in flight must finish first');
+$listenerB->onAfterWrite($saveB, 'items');
+$exclusive = IwacSearch\Indexer\MutationLock::exclusive($cutover);
+check($exclusive->tryAcquire(), 'the gate is free once the saves are done');
+try {
+    $listenerA->onBeforeWrite($saveA, 'items');
+    throw new LogicException('A save slipped past the cutover');
+} catch (RuntimeException $e) {
+    check(str_contains($e->getMessage(), 'write gate busy'), 'the cutover holds every save, which fails loudly once its wait runs out');
+}
+$exclusive->release();
+(new ChangeDrainer($db, $incremental))->run();
+check($journal->status()['pending'] === 0, 'the saves made side by side are drained');
 
 // The worker lease: one worker at a time, no lost wake-up, stale takeover.
 $lease = new IwacSearch\Indexer\WorkerLease($db);

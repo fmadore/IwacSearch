@@ -13,10 +13,21 @@ final class DatabaseLock implements AdvisoryLock
     private int $depth = 0;
     private readonly string $name;
 
-    public function __construct(private readonly Connection $connection, string $purpose)
+    /**
+     * The lock name is namespaced by database, so two installs sharing a
+     * MySQL server never contend. Pass $database when building several locks
+     * at once (the mutation stripes) to read it only once.
+     */
+    public function __construct(private readonly Connection $connection, string $purpose, ?string $database = null)
     {
-        $database = (string) $connection->executeQuery('SELECT DATABASE()')->fetchOne();
+        $database ??= self::database($connection);
         $this->name = 'iwac_search:' . substr(hash('sha256', $database), 0, 16) . ':' . $purpose;
+    }
+
+    /** The current database's name, the namespace of every lock. */
+    public static function database(Connection $connection): string
+    {
+        return (string) $connection->executeQuery('SELECT DATABASE()')->fetchOne();
     }
 
     public function acquire(int $seconds = 0): void

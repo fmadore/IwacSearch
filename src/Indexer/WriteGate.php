@@ -31,6 +31,10 @@ use WeakMap;
  *
  * Nested writes nest naturally: the lock is re-entrant and every open request
  * keeps exactly one level of it.
+ *
+ * In production the lock is one stripe of the mutation gate
+ * ({@see MutationLock::writer()}): saves in different processes do not wait
+ * for each other, only for the drain snapshot and the rebuild cutover.
  */
 final class WriteGate
 {

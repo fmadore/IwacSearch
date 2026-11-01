@@ -49,15 +49,18 @@ final class ChangeDrainer
     {
         $journal = new ChangeJournal($this->connection);
         $lock = new DatabaseLock($this->connection, 'publish');
-        $mutation = new DatabaseLock($this->connection, 'mutation');
+        $mutation = MutationLock::exclusive($this->connection);
         $deadline = microtime(true) + $seconds;
         $count = 0;
         do {
             if ($stop !== null && $stop()) {
                 break;
             }
-            // Never hold the mutation gate while waiting for another worker's
-            // HTTP import. Its worker (or the scheduled drain) will consume us.
+            // The snapshot needs every stripe of the mutation gate (no save
+            // between its pre and post events), taken without waiting: a save
+            // in flight makes this pass yield. Never hold the gate while
+            // waiting for another worker's HTTP import either; that worker
+            // (or the scheduled drain) consumes these rows.
             if (!$mutation->tryAcquire()) {
                 return $count;
             }
