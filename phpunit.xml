@@ -18,18 +18,30 @@
          cacheDirectory=".phpunit.cache"
          executionOrder="random"
          failOnRisky="true"
+         failOnDeprecation="true"
+         failOnPhpunitDeprecation="true"
          failOnWarning="true"
+         failOnNotice="true"
          beStrictAboutOutputDuringTests="true"
+         displayDetailsOnTestsThatTriggerDeprecations="true"
          displayDetailsOnTestsThatTriggerWarnings="true"
+         displayDetailsOnTestsThatTriggerNotices="true"
          displayDetailsOnTestsThatTriggerErrors="true">
     <testsuites>
         <testsuite name="IwacSearch">
             <directory>tests/php</directory>
         </testsuite>
     </testsuites>
-    <source>
+    <!-- Fail on the deprecations, notices and warnings this module's own code
+         triggers: production runs PHP 8.5, where a deprecation today is a
+         removal tomorrow. The restrict*/ignoreIndirect* attributes scope that
+         to the source below, so a deprecation raised inside a vendor package
+         (Guzzle, symfony/yaml, typesense-php) is reported by that package,
+         not failed here. Same settings as DRESearch's phpunit.xml.dist. -->
+    <source ignoreIndirectDeprecations="true" restrictNotices="true" restrictWarnings="true">
         <include>
             <directory>src</directory>
+            <file>Module.php</file>
         </include>
     </source>
 </phpunit>
