@@ -1,9 +1,12 @@
 # Engineering follow-ups
 
-## In progress: the cross-module review with DRESearch (2026-10-28)
+## Done in 3.27.0: the cross-module review with DRESearch (2026-10-28)
 
-The two modules were compared file by file; what DRESearch does better is being
-brought here, and the reverse there.
+The two modules were compared file by file; what DRESearch did better was
+brought here, and the reverse there (DRESearch 1.33.0). Everything below
+shipped in 3.27.0 (see the [changelog](../CHANGELOG.md) and
+[operations-3.27.md](operations-3.27.md)), plus PHP_CodeSniffer (PSR-12) and
+PHPStan level 8 against the released Omeka S 4.2.1 tree.
 
 - **Done:** locked filters are checked before they reach the admin-key SSR; the
   drain removes a rejected document instead of stopping on it; uninstall
@@ -44,7 +47,7 @@ Updated for 3.19.0. The July and September implementation work is complete. The 
 - Measure source SQL with EXPLAIN and realistic catalog sizes before adding core database indexes or making further reader changes.
 - Complete the [deployment checklist](deploy-checklist.md), including live UI acceptance, key rotation and queue monitoring. These checks have not been claimed complete by local tests.
 - Choose a withdrawal-latency target and monitor oldest pending changes. Indexing is eventually consistent; direct SQL/event-disabled writes and the new-resource commit/post-event crash gap require reconciliation by rebuilding.
-- If production JavaScript diagnostics require source maps, design private artifact storage and retention together with the committed-bundle reproducibility check.
+- If production JavaScript diagnostics require source maps, design private artifact storage and retention alongside the release build (the bundle is built by CI and the release since 3.27, not committed).
 
 ## Deliberate design decisions
 
