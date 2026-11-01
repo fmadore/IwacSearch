@@ -40,10 +40,10 @@ final class FilterExpression
             return sprintf('The locked filter is longer than %d characters.', self::MAX_LENGTH);
         }
         if (!mb_check_encoding($filter, 'UTF-8')) {
-            return 'The locked filter is not valid UTF-8.';
+            return 'The locked filter is not valid UTF-8.'; // @translate
         }
         if (str_contains($filter, '\\')) {
-            return 'The locked filter may not contain a backslash.';
+            return 'The locked filter may not contain a backslash.'; // @translate
         }
 
         $depth = 0;
@@ -65,18 +65,18 @@ final class FilterExpression
             } elseif ($char === ')') {
                 $depth--;
                 if ($depth < 0) {
-                    return 'The locked filter closes a parenthesis it never opened.';
+                    return 'The locked filter closes a parenthesis it never opened.'; // @translate
                 }
             }
         }
         if ($quoted) {
-            return 'The locked filter has an unterminated backtick-quoted value.';
+            return 'The locked filter has an unterminated backtick-quoted value.'; // @translate
         }
         if ($depth !== 0) {
-            return 'The locked filter has unbalanced parentheses.';
+            return 'The locked filter has unbalanced parentheses.'; // @translate
         }
         if (preg_match('/\bis_public\b/', $outside) === 1) {
-            return 'The locked filter may not refer to is_public; visibility is enforced by the module.';
+            return 'The locked filter may not refer to is_public; visibility is enforced by the module.'; // @translate
         }
         return null;
     }

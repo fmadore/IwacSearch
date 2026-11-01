@@ -1,9 +1,16 @@
 # IwacSearch — French translation of the PHP-side strings.
 #
 # The Svelte client carries its own FR/EN tables (src/svelte/lib/i18n.ts);
-# this catalogue covers what PHP renders through Omeka's translator. Compile
-# with `npm run build:mo` and commit both files; `npm run lint` fails when
-# fr.mo no longer matches.
+# this catalogue covers what PHP renders through Omeka's translator. The
+# msgids are extracted into template.pot by `npm run build:pot`; compile this
+# file with `npm run build:mo` and commit both. `npm run lint` fails when the
+# template is stale, when a msgid has no translation here, or when fr.mo no
+# longer matches.
+#
+# Omeka merges every module's catalogue into one text domain, later files
+# winning, so a msgid core already translates ("Status", "Newest first"…)
+# takes core's French here word for word: anything else would rename that
+# label across the whole admin.
 msgid ""
 msgstr ""
 "Project-Id-Version: IwacSearch\n"
@@ -12,6 +19,299 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=(n > 1);\n"
+
+# Block picker and admin navigation (src/Site/BlockLayout/IwacSearchBlock.php,
+# config/module.config.php)
+msgid "IWAC Search"
+msgstr "Recherche IWAC"
+
+# Facet labels (src/Browse/FacetCatalog.php)
+msgid "Type"
+msgstr "Type"
+
+msgid "Entity type"
+msgstr "Type d'entité"
+
+msgid "Reference type"
+msgstr "Type de référence"
+
+msgid "Full text available"
+msgstr "Texte intégral disponible"
+
+msgid "Journal / Publisher"
+msgstr "Revue / Éditeur"
+
+msgid "Subject headings (combined)"
+msgstr "Vedettes-matière (fusionnées)"
+
+msgid "Part of (entity category)"
+msgstr "Fait partie de (catégorie d'entité)"
+
+msgid "Author"
+msgstr "Auteur"
+
+msgid "Book editor"
+msgstr "Directeur d'ouvrage"
+
+msgid "Country"
+msgstr "Pays"
+
+msgid "Newspaper"
+msgstr "Journal"
+
+msgid "Channel / Producer"
+msgstr "Chaîne / Producteur"
+
+msgid "Media kind"
+msgstr "Nature du média"
+
+msgid "Format / Platform"
+msgstr "Format / Plateforme"
+
+msgid "Rights"
+msgstr "Droits"
+
+msgid "Language"
+msgstr "Langue"
+
+msgid "Subjects"
+msgstr "Sujets"
+
+msgid "People"
+msgstr "Personnes"
+
+msgid "Places"
+msgstr "Lieux"
+
+msgid "Organisations"
+msgstr "Organisations"
+
+msgid "Events"
+msgstr "Événements"
+
+msgid "Decade"
+msgstr "Décennie"
+
+msgid "Polarity (GPT-5.6 Luna)"
+msgstr "Polarité (GPT-5.6 Luna)"
+
+msgid "Centrality (GPT-5.6 Luna)"
+msgstr "Centralité (GPT-5.6 Luna)"
+
+msgid "Subjectivity (GPT-5.6 Luna)"
+msgstr "Subjectivité (GPT-5.6 Luna)"
+
+# Sort orders and render modes (src/Browse/FacetCatalog.php)
+msgid "Relevance"
+msgstr "Pertinence"
+
+msgid "Newest first"
+msgstr "À partir du plus récent"
+
+msgid "Oldest first"
+msgstr "À partir du plus ancien"
+
+msgid "Author (A–Z)"
+msgstr "Auteur (A–Z)"
+
+msgid "Most mentioned"
+msgstr "Plus mentionné"
+
+msgid "Least mentioned"
+msgstr "Moins mentionné"
+
+msgid "Most authored"
+msgstr "Plus signé"
+
+msgid "Title (A–Z)"
+msgstr "Titre (A–Z)"
+
+msgid "Full (search box + facets + results)"
+msgstr "Complet (champ de recherche + facettes + résultats)"
+
+msgid "Compact (search box only — links to /search)"
+msgstr "Compact (champ de recherche seul — renvoie vers /search)"
+
+msgid "Results only (curated grid, no search box)"
+msgstr "Résultats seuls (grille éditorialisée, sans champ de recherche)"
+
+# Maintenance page messages (src/Controller/Admin/MaintenanceController.php)
+msgid "IWAC Search database setup is incomplete. Open Modules and upgrade IWAC Search. If no upgrade is offered, ask your administrator to run php cli/repair-schema.php from the IwacSearch module directory, then reload this page. Run a full reindex after recovery."
+msgstr "La configuration de la base de données de Recherche IWAC est incomplète. Ouvrez Modules et mettez à jour IwacSearch. Si aucune mise à jour n'est proposée, demandez à votre administrateur d'exécuter php cli/repair-schema.php depuis le répertoire du module IwacSearch, puis rechargez cette page. Lancez ensuite une réindexation complète."
+
+msgid "IWAC Search could not read its indexing queue. Check the Omeka database connection and permissions before running maintenance."
+msgstr "Recherche IWAC n'a pas pu lire sa file d'indexation. Vérifiez la connexion à la base de données Omeka et ses droits d'accès avant toute opération de maintenance."
+
+msgid "Content (articles, documents, publications, references)"
+msgstr "Contenus (articles, documents, publications, références)"
+
+msgid "Entity index (people, places, organisations, topics…)"
+msgstr "Index des entités (personnes, lieux, organisations, sujets…)"
+
+msgid "Invalid form submission. Please reload the page and try again."
+msgstr "Envoi du formulaire non valide. Veuillez recharger la page et réessayer."
+
+msgid "IWAC Search database setup is unavailable. Open the maintenance page for recovery instructions before retrying."
+msgstr "La configuration de la base de données de Recherche IWAC est indisponible. Ouvrez la page de maintenance pour connaître la marche à suivre avant de réessayer."
+
+# Locked filter refused on save (src/Search/FilterExpression.php)
+msgid "The locked filter is not valid UTF-8."
+msgstr "Le filtre verrouillé n'est pas en UTF-8 valide."
+
+msgid "The locked filter may not contain a backslash."
+msgstr "Le filtre verrouillé ne doit pas contenir de barre oblique inversée."
+
+msgid "The locked filter closes a parenthesis it never opened."
+msgstr "Le filtre verrouillé ferme une parenthèse qu'il n'a jamais ouverte."
+
+msgid "The locked filter has an unterminated backtick-quoted value."
+msgstr "Le filtre verrouillé contient une valeur entre accents graves qui n'est pas refermée."
+
+msgid "The locked filter has unbalanced parentheses."
+msgstr "Les parenthèses du filtre verrouillé ne sont pas équilibrées."
+
+msgid "The locked filter may not refer to is_public; visibility is enforced by the module."
+msgstr "Le filtre verrouillé ne doit pas porter sur is_public : la visibilité est imposée par le module."
+
+# Block scopes (src/Search/PresetCatalog.php). The six country scopes are
+# labelled with their country_ss value, already French, and not translated.
+msgid "All content"
+msgstr "Tous les contenus"
+
+msgid "Audiovisual (radio, TV, YouTube)"
+msgstr "Audiovisuel (radio, télévision, YouTube)"
+
+msgid "References (bibliography)"
+msgstr "Références (bibliographie)"
+
+msgid "Entity index (people, places, topics…)"
+msgstr "Index des entités (personnes, lieux, sujets…)"
+
+# Value pickers (src/Search/ScopeFilters.php) — the client's own labels for
+# the same values (src/svelte/lib/i18n.ts)
+msgid "News article"
+msgstr "Article de presse"
+
+msgid "Islamic publication"
+msgstr "Publication islamique"
+
+msgid "Document"
+msgstr "Document"
+
+msgid "Audiovisual"
+msgstr "Audiovisuel"
+
+msgid "Photograph"
+msgstr "Photographie"
+
+msgid "Reference"
+msgstr "Référence"
+
+msgid "Very objective"
+msgstr "Très objectif"
+
+msgid "Rather objective"
+msgstr "Plutôt objectif"
+
+msgid "Mixed"
+msgstr "Mixte"
+
+msgid "Rather subjective"
+msgstr "Plutôt subjectif"
+
+msgid "Very subjective"
+msgstr "Très subjectif"
+
+msgid "Video"
+msgstr "Vidéo"
+
+msgid "Audio"
+msgstr "Audio"
+
+msgid "YouTube"
+msgstr "YouTube"
+
+msgid "Web video"
+msgstr "Vidéo en ligne"
+
+msgid "DVD"
+msgstr "DVD"
+
+msgid "CD"
+msgstr "CD"
+
+# Page block form (view/common/block-layout/iwac-search-block-form.phtml)
+msgid "Scope"
+msgstr "Périmètre"
+
+msgid "What this block searches. Pick a ready-made scope, or “Custom…” to set your own content filter + facets in the advanced fields below."
+msgstr "Ce que ce bloc interroge. Choisissez un périmètre prédéfini, ou « Personnalisé… » pour définir vous-même le filtre de contenu et les facettes dans les champs avancés ci-dessous."
+
+msgid "Custom…"
+msgstr "Personnalisé…"
+
+msgid "Render mode"
+msgstr "Mode d'affichage"
+
+msgid "Full = standalone discovery surface. Compact = header search box. Results only = curated grid (e.g. \"latest from Sidwaya\")."
+msgstr "Complet = interface de recherche autonome. Compact = champ de recherche de l'en-tête. Résultats seuls = grille éditorialisée (par ex. « les derniers articles de Sidwaya »)."
+
+msgid "Title (optional)"
+msgstr "Titre (facultatif)"
+
+msgid "Intro HTML (optional)"
+msgstr "Introduction en HTML (facultative)"
+
+msgid "Plain HTML rendered above the search results."
+msgstr "HTML simple affiché au-dessus des résultats de recherche."
+
+msgid "Narrow by value"
+msgstr "Restreindre par valeur"
+
+msgid "Tick any number of values. Within one picker values are OR-ed (\"Bénin or Togo\"); separate pickers are AND-ed (\"… and only news articles\"). Applies to every scope, on top of what that scope already locks — so for a multi-country block choose the \"All content\" scope and tick the countries here, rather than a single-country scope. Leave a picker empty to not filter on it. Visitors cannot remove these."
+msgstr "Cochez autant de valeurs que nécessaire. Dans une même liste, les valeurs sont combinées par OU (« Bénin ou Togo ») ; des listes différentes sont combinées par ET (« … et seulement les articles de presse »). S'applique à tous les périmètres, en plus de ce que le périmètre verrouille déjà : pour un bloc couvrant plusieurs pays, choisissez le périmètre « Tous les contenus » et cochez ici les pays, plutôt qu'un périmètre limité à un seul pays. Laissez une liste vide pour ne pas filtrer sur ce champ. Les visiteurs ne peuvent pas lever ces restrictions."
+
+msgid "Showing the %d most common values — the index holds more."
+msgstr "Affichage des %d valeurs les plus fréquentes — l'index en contient davantage."
+
+msgid "The search index is unreachable, so this list could not be loaded. Existing selections are preserved; reopen this form once the index is back, or use the Locked filters field below."
+msgstr "L'index de recherche est injoignable : cette liste n'a pas pu être chargée. Les sélections existantes sont conservées ; rouvrez ce formulaire une fois l'index rétabli, ou utilisez le champ Filtres verrouillés ci-dessous."
+
+msgid "The index holds no values for this field yet."
+msgstr "L'index ne contient encore aucune valeur pour ce champ."
+
+msgid "— saved, but not in the index"
+msgstr "— enregistrée, mais absente de l'index"
+
+msgid "Locked filters (Typesense filter_by)"
+msgstr "Filtres verrouillés (filter_by Typesense)"
+
+msgid "Advanced escape hatch, for conditions the pickers above cannot express (date ranges, exclusions). Custom scope only. Applied to every query from this block (cosmetic scoping — not a privacy boundary). Example: date:>=946684800 && type_s:!=reference"
+msgstr "Solution avancée, pour les conditions que les listes ci-dessus ne peuvent pas exprimer (plages de dates, exclusions). Périmètre personnalisé uniquement. Appliqués à toutes les requêtes de ce bloc (restriction d'affichage — pas une barrière de confidentialité). Exemple : date:>=946684800 && type_s:!=reference"
+
+msgid "Prominent facets"
+msgstr "Facettes affichées"
+
+msgid "Custom scope only — preset scopes use their own facet set. The filter panel of this block offers the facets ticked here."
+msgstr "Périmètre personnalisé uniquement — les périmètres prédéfinis ont leurs propres facettes. Le panneau de filtres de ce bloc propose les facettes cochées ici."
+
+msgid "Default sort"
+msgstr "Tri par défaut"
+
+msgid "Initial result order. Leave on “Use scope default” to follow the scope (e.g. most-mentioned for the Entity index, newest for a country). The Entity index orders apply only when the scope is the Entity index; an order that does not fit the chosen scope is ignored."
+msgstr "Ordre initial des résultats. Laissez « Selon le périmètre » pour suivre le périmètre (par ex. les plus mentionnées pour l'index des entités, les plus récents pour un pays). Les tris de l'index des entités ne s'appliquent que si le périmètre est l'index des entités ; un tri qui ne convient pas au périmètre choisi est ignoré."
+
+msgid "Use scope default"
+msgstr "Selon le périmètre"
+
+msgid "Content (articles, references…)"
+msgstr "Contenus (articles, références…)"
+
+msgid "Entity index"
+msgstr "Index des entités"
+
+msgid "Results per page"
+msgstr "Résultats par page"
 
 # Page block (view/common/block-layout/iwac-search-block.phtml)
 msgid "Search and filter the collection"
@@ -26,3 +326,145 @@ msgstr "Parcourir plutôt les documents."
 # Item-set search surface (view/common/iwac-item-set-search.phtml)
 msgid "Search the items in this set"
 msgstr "Rechercher parmi les contenus de cette collection"
+
+# Maintenance page (view/iwac-search/admin/maintenance/index.phtml)
+msgid "IWAC Search: maintenance"
+msgstr "Recherche IWAC : maintenance"
+
+msgid "Trigger Typesense maintenance tasks without dropping into the docker container. Every action dispatches an Omeka background job; track progress in the Jobs admin page."
+msgstr "Lancez les tâches de maintenance de Typesense sans passer par le conteneur Docker. Chaque action déclenche une tâche Omeka en arrière-plan ; suivez sa progression sur la page Tâches de l'administration."
+
+msgid "Index status"
+msgstr "État de l'index"
+
+msgid "Collection"
+msgstr "Collection"
+
+msgid "Alias"
+msgstr "Alias"
+
+msgid "Status"
+msgstr "Statut"
+
+msgid "Documents"
+msgstr "Documents"
+
+msgid "Reachable"
+msgstr "Joignable"
+
+msgid "Unreachable"
+msgstr "Injoignable"
+
+msgid "Live counts read directly from Typesense. A reachable collection with 0 documents has never been built — run a full reindex."
+msgstr "Décomptes lus directement dans Typesense. Une collection joignable qui contient 0 document n'a jamais été construite — lancez une réindexation complète."
+
+msgid "Index generations"
+msgstr "Générations de l'index"
+
+msgid "Generation list unavailable — Typesense is unreachable."
+msgstr "Liste des générations indisponible — Typesense est injoignable."
+
+msgid "Serves"
+msgstr "Alias servis"
+
+msgid "Created"
+msgstr "Créé"
+
+msgid "retained (not live)"
+msgstr "conservée (non active)"
+
+msgid "Typesense memory in use: %1$s. Host memory used: %2$s of %3$s."
+msgstr "Mémoire utilisée par Typesense : %1$s. Mémoire de l'hôte utilisée : %2$s sur %3$s."
+
+msgid "Every generation stays in Typesense memory until the cleanup below removes it. The container memory cap is set in IWAC-docker; host figures ignore it."
+msgstr "Chaque génération reste en mémoire dans Typesense jusqu'à ce que le nettoyage ci-dessous la supprime. La limite de mémoire du conteneur est fixée dans IWAC-docker ; les chiffres de l'hôte n'en tiennent pas compte."
+
+msgid "Search analytics"
+msgstr "Statistiques de recherche"
+
+msgid "Analytics could not be read:"
+msgstr "Les statistiques n'ont pas pu être lues :"
+
+msgid "Not provisioned yet. Start the Typesense server with %1$s and %2$s (an IWAC-docker change), then use the \"Provision analytics\" button below. Once live, this panel shows what visitors search — and, more usefully, what they search WITHOUT finding: raw material for %3$s."
+msgstr "Pas encore en place. Démarrez le serveur Typesense avec %1$s et %2$s (une modification d'IWAC-docker), puis utilisez le bouton « Mettre en place les statistiques » ci-dessous. Une fois actif, ce panneau montre ce que les visiteurs recherchent — et, plus utile encore, ce qu'ils recherchent SANS le trouver : de la matière pour %3$s."
+
+msgid "Top queries"
+msgstr "Requêtes les plus fréquentes"
+
+msgid "Nothing aggregated yet."
+msgstr "Rien n'a encore été agrégé."
+
+msgid "Queries with no results"
+msgstr "Requêtes sans résultat"
+
+msgid "No zero-result queries recorded — good sign."
+msgstr "Aucune requête sans résultat enregistrée — bon signe."
+
+msgid "Aggregated by Typesense from live public searches (a query counts once the visitor pauses typing for 4 seconds). No-result queries are the curator worklist: recurring spellings belong in the synonym set; recurring topics reveal cataloguing gaps."
+msgstr "Agrégées par Typesense à partir des recherches publiques en direct (une requête est comptée dès que le visiteur cesse de taper pendant 4 secondes). Les requêtes sans résultat sont la liste de travail du curateur : les graphies récurrentes ont leur place dans le jeu de synonymes ; les sujets récurrents révèlent des lacunes de catalogage."
+
+msgid "Run full reindex"
+msgstr "Lancer une réindexation complète"
+
+msgid "Reads fresh data directly from the Omeka database, builds a fresh %1$s_<timestamp> collection alongside the live one, and atomic-swaps the %2$s alias to it once verification passes. Also re-syncs the %3$s stopword set, the %4$s synonym set, and the diversification curation set as its first step."
+msgstr "Lit les données à jour directement dans la base de données Omeka, construit une nouvelle collection %1$s_<timestamp> à côté de la collection en ligne, puis bascule l'alias %2$s vers elle, de manière atomique, une fois la vérification réussie. Resynchronise aussi, en première étape, le jeu de mots vides %3$s, le jeu de synonymes %4$s et le jeu de curation de diversification."
+
+msgid "Duration:"
+msgstr "Durée :"
+
+msgid "5–15 minutes for the full ~14K-doc corpus. Live search keeps serving the previous collection until the swap completes, so there is no downtime."
+msgstr "5 à 15 minutes pour l'ensemble du corpus (environ 14 000 documents). La recherche publique continue de servir la collection précédente jusqu'à la bascule : aucune interruption de service."
+
+msgid "Run reindex"
+msgstr "Lancer la réindexation"
+
+msgid "Sync French stopwords only"
+msgstr "Synchroniser uniquement les mots vides français"
+
+msgid "Refreshes the %1$s stopword set in Typesense from %2$s. Idempotent — safe to run repeatedly."
+msgstr "Actualise le jeu de mots vides %1$s dans Typesense à partir de %2$s. Idempotent — peut être relancé sans risque."
+
+msgid "When to use:"
+msgstr "Quand l'utiliser :"
+
+msgid "After editing the stopword list, or to recover from a missing set without paying for a full reindex."
+msgstr "Après une modification de la liste des mots vides, ou pour rétablir un jeu manquant sans passer par une réindexation complète."
+
+msgid "Sync stopwords"
+msgstr "Synchroniser les mots vides"
+
+msgid "Sync synonyms only"
+msgstr "Synchroniser uniquement les synonymes"
+
+msgid "Refreshes the %1$s synonym set in Typesense from %2$s — transliteration variants like cheikh/sheikh/shaykh or Tidjaniyya/Tijaniyya. Idempotent — safe to run repeatedly."
+msgstr "Actualise le jeu de synonymes %1$s dans Typesense à partir de %2$s — variantes de translittération comme cheikh/sheikh/shaykh ou Tidjaniyya/Tijaniyya. Idempotent — peut être relancé sans risque."
+
+msgid "After editing the synonym list. Expansion happens at search time, so the change is live immediately — no reindex needed."
+msgstr "Après une modification de la liste des synonymes. L'expansion a lieu au moment de la recherche : la modification s'applique donc immédiatement — aucune réindexation nécessaire."
+
+msgid "Sync synonyms"
+msgstr "Synchroniser les synonymes"
+
+msgid "Provision search analytics"
+msgstr "Mettre en place les statistiques de recherche"
+
+msgid "Creates the popular-queries and no-hit-queries analytics rules plus their destination collections. Run once after enabling analytics on the Typesense server; the bulk reindex also (re)applies them non-fatally."
+msgstr "Crée les règles d'analyse des requêtes populaires et des requêtes sans résultat, ainsi que leurs collections de destination. À lancer une fois après l'activation des statistiques sur le serveur Typesense ; la réindexation complète les (ré)applique aussi, sans s'interrompre en cas d'échec."
+
+msgid "Prerequisite:"
+msgstr "Prérequis :"
+
+msgid "Typesense started with %1$s and %2$s — see ROADMAP.md for the IWAC-docker change."
+msgstr "Typesense démarré avec %1$s et %2$s — voir ROADMAP.md pour la modification d'IWAC-docker."
+
+msgid "Provision analytics"
+msgstr "Mettre en place les statistiques"
+
+msgid "Pending index changes"
+msgstr "Modifications en attente d'indexation"
+
+msgid "%d queued changes. Oldest: %s"
+msgstr "%d modifications en file d'attente. La plus ancienne : %s"
+
+msgid "Queue status unavailable."
+msgstr "État de la file d'attente indisponible."

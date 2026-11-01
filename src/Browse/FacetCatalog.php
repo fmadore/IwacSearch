@@ -36,49 +36,49 @@ final class FacetCatalog
      * admin saved, which wins at render time.
      */
     public const FACETABLE_FIELDS = [
-        'type_s'             => 'Type',
-        'entity_type_s'      => 'Entity type',
-        'reference_type_ss'  => 'Reference type',
+        'type_s'             => 'Type', // @translate
+        'entity_type_s'      => 'Entity type', // @translate
+        'reference_type_ss'  => 'Reference type', // @translate
         // Boolean: full text (bibo:content) exists AND is publicly visible.
         // Only the primary-source subsets carry it (references never do).
-        'has_fulltext'       => 'Full text available',
+        'has_fulltext'       => 'Full text available', // @translate
         // Journal title (journal articles) or publisher (books/chapters/…).
-        'publisher_s'        => 'Journal / Publisher',
+        'publisher_s'        => 'Journal / Publisher', // @translate
         // MERGED dcterms:subject facet (persons + organisations + topics in
         // one list) — used on the references scope.
-        'subjects_ss'        => 'Subject headings (combined)',
+        'subjects_ss'        => 'Subject headings (combined)', // @translate
         // dcterms:isPartOf on entity items — organisation category on the
         // entity index.
-        'is_part_of_ss'      => 'Part of (entity category)',
+        'is_part_of_ss'      => 'Part of (entity category)', // @translate
         // Authorship — mapped from Omeka dcterms:creator to creator_ss by
         // AbstractMapper; facet:true in schema.yaml and populated in the live
         // index, but it was never in this catalog, so it couldn't be picked in
         // the admin or survive a save (normaliseFacets dropped it). Used on the
         // references browse page.
-        'creator_ss'         => 'Author',
+        'creator_ss'         => 'Author', // @translate
         // Book editors (bibo:editorList on references): a chapter's book
         // editors and an edited volume's editors, clickable on the card.
-        'editor_ss'          => 'Editor',
-        'country_ss'         => 'Country',
-        'newspaper_ss'       => 'Newspaper',
+        'editor_ss'          => 'Book editor', // @translate
+        'country_ss'         => 'Country', // @translate
+        'newspaper_ss'       => 'Newspaper', // @translate
         // Audiovisual: the producing channel / broadcaster (dcterms:publisher
         // on class 38). Separate from newspaper_ss on purpose — see
         // AudiovisualMapper. media_kind_s / media_platform_s are the
         // normalised dcterms:type / dcterms:medium headings, so the filter
         // values are stable enum keys rather than French display strings.
-        'channel_ss'         => 'Channel / Producer',
-        'media_kind_s'       => 'Media kind',
-        'media_platform_s'   => 'Format / Platform',
-        'rights_s'           => 'Rights',
-        'language_ss'        => 'Language',
+        'channel_ss'         => 'Channel / Producer', // @translate
+        'media_kind_s'       => 'Media kind', // @translate
+        'media_platform_s'   => 'Format / Platform', // @translate
+        'rights_s'           => 'Rights', // @translate
+        'language_ss'        => 'Language', // @translate
         // The stack's entity labels (People, Places, Organisations, Subjects,
         // Events); "Subjects", never "Topics", which means LDA topics here.
-        'topics_ss'          => 'Subjects',
-        'persons_ss'         => 'People',
-        'places_ss'          => 'Places',
-        'organisations_ss'   => 'Organisations',
-        'events_ss'          => 'Events',
-        'date_decade_ss'     => 'Decade',
+        'topics_ss'          => 'Subjects', // @translate
+        'persons_ss'         => 'People', // @translate
+        'places_ss'          => 'Places', // @translate
+        'organisations_ss'   => 'Organisations', // @translate
+        'events_ss'          => 'Events', // @translate
+        'date_decade_ss'     => 'Decade', // @translate
         // Sentiment trio — rendered together under one collapsible
         // "Sentiment" group in the client. subjectivite is a 1–5 numeric
         // facet. The other four annotating models (mistral_small_2603_*,
@@ -92,9 +92,9 @@ final class FacetCatalog
         // generation-2 annotator complete on all three properties (12,305
         // articles); DeepSeek is ~489 subjectivity values short, and on
         // centralité the Mistral family is a documented systematic outlier.
-        'gpt_5_6_luna_polarite_ss'   => 'Polarity (GPT-5.6 Luna)',
-        'gpt_5_6_luna_centralite_ss' => 'Centrality (GPT-5.6 Luna)',
-        'gpt_5_6_luna_subjectivite'  => 'Subjectivity (GPT-5.6 Luna)',
+        'gpt_5_6_luna_polarite_ss'   => 'Polarity (GPT-5.6 Luna)', // @translate
+        'gpt_5_6_luna_centralite_ss' => 'Centrality (GPT-5.6 Luna)', // @translate
+        'gpt_5_6_luna_subjectivite'  => 'Subjectivity (GPT-5.6 Luna)', // @translate
     ];
 
     /**
@@ -128,14 +128,14 @@ final class FacetCatalog
     ];
 
     public const SORT_OPTIONS = [
-        '_text_match:desc' => 'Relevance',
-        'date:desc'        => 'Newest first',
-        'date:asc'         => 'Oldest first',
+        '_text_match:desc' => 'Relevance', // @translate
+        'date:desc'        => 'Newest first', // @translate
+        'date:asc'         => 'Oldest first', // @translate
         // Optional scalar creator_sort field — author-less docs sort last
         // (missing_values rule applied in typesense.ts + InitialResponseRenderer).
         // Mirrors the client content sort set in src/svelte/lib/i18n.ts
         // (sortOptions, card='content').
-        'creator_sort:asc' => 'Author (A–Z)',
+        'creator_sort:asc' => 'Author (A–Z)', // @translate
     ];
 
     /**
@@ -145,20 +145,20 @@ final class FacetCatalog
      * the client entity sort set in src/svelte/lib/i18n.ts (card='entity').
      */
     public const SORT_OPTIONS_ENTITY = [
-        'frequency:desc' => 'Most mentioned',
-        'frequency:asc'  => 'Least mentioned',
+        'frequency:desc' => 'Most mentioned', // @translate
+        'frequency:asc'  => 'Least mentioned', // @translate
         // frequency counts every role at once, so it cannot answer "who wrote
         // the most" — authored_count can. Entities that signed nothing carry
         // a 0 and sort to the bottom.
-        'authored_count:desc' => 'Most authored',
-        'title:asc'      => 'Title (A–Z)',
-        'date:desc'      => 'Newest first',
+        'authored_count:desc' => 'Most authored', // @translate
+        'title:asc'      => 'Title (A–Z)', // @translate
+        'date:desc'      => 'Newest first', // @translate
     ];
 
     public const RENDER_MODES = [
-        'full'         => 'Full (search box + facets + results)',
-        'compact'      => 'Compact (search box only — links to /search)',
-        'results-only' => 'Results only (curated grid, no search box)',
+        'full'         => 'Full (search box + facets + results)', // @translate
+        'compact'      => 'Compact (search box only — links to /search)', // @translate
+        'results-only' => 'Results only (curated grid, no search box)', // @translate
     ];
 
     /** Resolve a possibly-retired field name to the one the schema declares. */

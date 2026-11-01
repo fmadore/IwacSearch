@@ -14,6 +14,7 @@
     "build:header": "cross-env IWAC_BUNDLE=header vite build",
     "check:size": "node scripts/check-bundle-size.js",
     "build:mo": "node scripts/build-mo.js",
+    "build:pot": "node scripts/build-pot.js",
     "check": "svelte-check --tsconfig ./tsconfig.json",
     "check:versions": "node scripts/check-versions.js",
     "check:audit": "node scripts/check-audit.js",
@@ -28,8 +29,9 @@
     "lint:drift": "node scripts/check-schema-drift.js",
     "lint:i18n": "node scripts/check-i18n.js",
     "lint:docblocks": "node scripts/check-docblocks.js",
+    "lint:pot": "node scripts/build-pot.js --check",
     "lint:mo": "node scripts/build-mo.js --check",
-    "lint": "npm run lint:theme && npm run lint:drift && npm run lint:i18n && npm run lint:docblocks && npm run lint:mo && eslint src/svelte src/svelte-shared scripts tests playwright.config.ts && prettier --check \"src/svelte/**/*.{ts,svelte}\" \"src/svelte-shared/**/*.{ts,svelte}\" \"scripts/**/*.js\" \"tests/client/**/*.{ts,svelte}\" \"tests/browser/**/*.ts\" \"*.{ts,json,md}\"",
+    "lint": "npm run lint:theme && npm run lint:drift && npm run lint:i18n && npm run lint:docblocks && npm run lint:pot && npm run lint:mo && eslint src/svelte src/svelte-shared scripts tests playwright.config.ts && prettier --check \"src/svelte/**/*.{ts,svelte}\" \"src/svelte-shared/**/*.{ts,svelte}\" \"scripts/**/*.js\" \"tests/client/**/*.{ts,svelte}\" \"tests/browser/**/*.ts\" \"*.{ts,json,md}\"",
     "lint:fix": "eslint src/svelte src/svelte-shared scripts tests playwright.config.ts --fix && prettier --write \"src/svelte/**/*.{ts,svelte}\" \"src/svelte-shared/**/*.{ts,svelte}\" \"scripts/**/*.js\" \"tests/client/**/*.{ts,svelte}\" \"tests/browser/**/*.ts\" \"*.{ts,json,md}\"",
     "format": "prettier --write \"src/svelte/**/*.{ts,svelte}\" \"src/svelte-shared/**/*.{ts,svelte}\" \"scripts/**/*.js\" \"tests/client/**/*.{ts,svelte}\" \"tests/browser/**/*.ts\" \"*.{ts,json,md}\""
   },

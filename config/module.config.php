@@ -172,11 +172,13 @@ return [
         ],
     ],
 
-    // The PHP side's own strings (the block's landmark name, its noscript
-    // fallback) go through Omeka's translator; without a catalogue they were
-    // English on the French site. language/fr.mo is compiled from fr.po by
-    // `npm run build:mo` and committed — the release zip is `git archive`d.
-    // Same registration as IwacVisualizations.
+    // The PHP side's own strings (the block form and its landmark, the
+    // maintenance page, the scope and facet catalogues) go through Omeka's
+    // translator; without a catalogue they were English on the French site.
+    // `npm run build:pot` extracts them into language/template.pot, fr.po
+    // translates every one (`npm run lint` checks both), and fr.mo is
+    // compiled from it by `npm run build:mo` and committed — the release zip
+    // is `git archive`d. Same registration as IwacVisualizations.
     'translator' => [
         'translation_file_patterns' => [
             [

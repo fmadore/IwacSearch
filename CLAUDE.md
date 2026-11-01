@@ -102,6 +102,13 @@ The cutover, retention and retry contracts are documented in `docs/operations-3.
   The same script also pins the server contracts the client restates:
   query_by/highlight constants, sort sets, the multi-search limit and the
   stopword set name.
+- **PHP strings are gettext msgids.** A literal passed to `translate()` /
+  `$t()` / `$translate()`, or a catalogue label marked `// @translate`, is
+  extracted into `language/template.pot` by `npm run build:pot`; translate it
+  in `language/fr.po` and run `npm run build:mo`. `npm run lint:pot` fails on a
+  stale template, an untranslated msgid, a placeholder mismatch, and a marker
+  or call the extractor cannot read. A msgid Omeka core also translates takes
+  core's French verbatim: catalogues share one text domain, ours loads last.
 - `npm run lint:docblocks` fails on two stacked PHP docblocks (only the
   last attaches to the symbol) — the drift that 3.20's review cleaned up.
 - **Every locale table in `i18n.ts` must carry the same keys in `fr` and

@@ -107,9 +107,9 @@ class MaintenanceController extends AbstractActionController
             $this->journal?->assertInstalled();
             $queue = $this->journal?->status();
         } catch (TableNotFoundException) {
-            $queueError = 'IWAC Search database setup is incomplete. Open Modules and upgrade IWAC Search. If no upgrade is offered, ask your administrator to run php cli/repair-schema.php from the IwacSearch module directory, then reload this page. Run a full reindex after recovery.';
+            $queueError = 'IWAC Search database setup is incomplete. Open Modules and upgrade IWAC Search. If no upgrade is offered, ask your administrator to run php cli/repair-schema.php from the IwacSearch module directory, then reload this page. Run a full reindex after recovery.'; // @translate
         } catch (Throwable) {
-            $queueError = 'IWAC Search could not read its indexing queue. Check the Omeka database connection and permissions before running maintenance.';
+            $queueError = 'IWAC Search could not read its indexing queue. Check the Omeka database connection and permissions before running maintenance.'; // @translate
         }
         return new ViewModel([
             'queue' => $queue,
@@ -198,8 +198,8 @@ class MaintenanceController extends AbstractActionController
     {
         $client = $this->client();
         $targets = [
-            ['alias' => $this->contentAlias, 'label' => 'Content (articles, documents, publications, references)'],
-            ['alias' => $this->indexAlias,   'label' => 'Entity index (people, places, organisations, topics…)'],
+            ['alias' => $this->contentAlias, 'label' => 'Content (articles, documents, publications, references)'], // @translate
+            ['alias' => $this->indexAlias,   'label' => 'Entity index (people, places, organisations, topics…)'], // @translate
         ];
 
         $rows = [];
@@ -380,14 +380,14 @@ class MaintenanceController extends AbstractActionController
         $form = $this->getForm(MaintenanceForm::class);
         $form->setData($request->getPost()->toArray());
         if (!$form->isValid()) {
-            $this->messenger()->addError('Invalid form submission. Please reload the page and try again.');
+            $this->messenger()->addError('Invalid form submission. Please reload the page and try again.'); // @translate
             return $this->redirect()->toRoute('admin/iwac-search/maintenance');
         }
 
         try {
             $this->journal?->assertInstalled();
         } catch (Throwable) {
-            $this->messenger()->addError('IWAC Search database setup is unavailable. Open the maintenance page for recovery instructions before retrying.');
+            $this->messenger()->addError('IWAC Search database setup is unavailable. Open the maintenance page for recovery instructions before retrying.'); // @translate
             return $this->redirect()->toRoute('admin/iwac-search/maintenance');
         }
 

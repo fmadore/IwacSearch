@@ -191,7 +191,10 @@ final class PresetCatalog
         foreach (self::COUNTRIES as $country) {
             $presets[$country['slug']] = new Preset(
                 key:           $country['slug'],
-                label:         $country['name'], // @translate
+                // Not marked for translation: the name is the exact
+                // country_ss value the scope filters on, already French,
+                // and the form prints it as such on every admin locale.
+                label:         $country['name'],
                 card:          self::CARD_CONTENT,
                 // Backticks escape spaces + the apostrophe in Côte d'Ivoire.
                 lockedFilters: sprintf('country_ss:=`%s` && type_s:!=reference', $country['name']),
