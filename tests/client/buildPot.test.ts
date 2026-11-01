@@ -1,12 +1,10 @@
 import { describe, expect, it } from 'vitest';
 // @ts-expect-error — a plain-JS Node script with no type declarations.
-import {
-  checkCatalogue,
-  extract,
-  placeholders,
-  renderPot,
-  unquotePhp,
-} from '../../scripts/build-pot.js';
+import * as buildPot from '../../scripts/build-pot.js';
+
+// One import line, so the directive above covers it (a multi-line import
+// reports the missing declaration on its `from` line, out of the directive's reach).
+const { checkCatalogue, extract, placeholders, renderPot, unquotePhp } = buildPot;
 
 /**
  * scripts/build-pot.js — the PHP-side msgid extractor behind `npm run lint:pot`.
