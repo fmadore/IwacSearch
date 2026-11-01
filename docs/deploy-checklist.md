@@ -1,5 +1,23 @@
 # Deployment and acceptance checklist — 3.19.0
 
+## 3.27.0 (2026-11-01): the cross-module review with DRESearch
+
+**No reindex; run the module upgrade.** It creates the generation ledger
+(`iwac_search_generation`) and the drain worker's lease (`iwac_search_worker`), and moves
+`iwac_search_rollback` into the ledger. The write gate becomes eight MySQL locks, so let any
+rebuild finish before swapping the code. The release zip carries the client bundle as
+before; a checkout deployed by hand needs `npm ci && npm run build`. Everything operational
+is in [operations-3.27.md](operations-3.27.md).
+
+- [ ] Let in-flight rebuild jobs finish, install the zip, then **Modules → IWAC Search → Upgrade**; the maintenance page shows no schema warning and a **Ledger** column.
+- [ ] `curl -s https://islam.zmo.de/discovery/health` answers 200 with `typesense.reachable: true` and a pending count; point the uptime monitor at it and let IWAC-docker's nginx rate-limit it like `/discovery/token`.
+- [ ] Check that nginx's `/discovery/token` limit allows about one renewal a minute per open tab: while changes are pending, fresh keys last two minutes.
+- [ ] Save two items from two browser tabs at once: neither save waits for the other, and both reach search within a minute.
+- [ ] Run a full reindex: it succeeds, and afterwards the generation list shows one live and one previous generation per alias, older ones removed. A rebuild with a subset emptied on purpose needs **Allow a smaller corpus**.
+- [ ] A page block with a title: the facet and result headings are one level below it (h3). Make a locked filter with an unbalanced `)` on a test block: saving is refused with a message, in French on the French admin.
+- [ ] Search with Typesense stopped: the typeahead and the search show translated errors with Retry; the map says its places could not be loaded and offers Retry.
+- [ ] The GitHub release lists the changelog section, and `gh attestation verify IwacSearch-v3.27.0.zip --repo fmadore/IwacSearch` passes.
+
 ## 3.26.2 (2026-10-27): DOI and Wikidata marks in colour
 
 **No reindex.** A result card's DOI and Wikidata marks are drawn in their own colours (the

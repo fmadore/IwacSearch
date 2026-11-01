@@ -6,6 +6,44 @@ Versions that were never published (tagged and released) are folded into the nex
 
 ## [Unreleased]
 
+**Upgrade:** run **Modules → IWAC Search → Upgrade** (it creates `iwac_search_generation` and `iwac_search_worker`, moves `iwac_search_rollback` into the first and drops it). No reindex: the schemas stay `iwac_v11` and `iwac_index_v5`. Do not start a rebuild across the code swap — the write gate's MySQL lock names changed. A checkout deployed by hand now needs `npm ci && npm run build`; the release zip still carries the bundle. Details: [docs/operations-3.27.md](docs/operations-3.27.md).
+
+### Security
+
+- The server-side first page ran a page block's hand-written locked filter with the admin key, behind `is_public:=true && …`. A filter with an unbalanced parenthesis, such as `type_s:=article) || (type_s:=document`, escaped that guard and put private documents' metadata into the page and the shared snapshot cache (never their OCR). A locked filter is now checked when the block is saved and again before every render: unbalanced parentheses or backticks, a backslash and any mention of `is_public` are refused, and a stored one that fails falls back to the client's scoped key. Picker values ending in `*`, holding a backslash or wrapped in quotes are dropped.
+- Resources with an unapplied change are left out of the server-rendered first page and of newly minted search keys (which then last two minutes) until the drain applies it, so a record just made private stops showing there at once.
+- Uninstall revokes every search key the module cached in Typesense and deletes all their settings slots; it used to delete only the legacy slot, leaving the live key behind.
+
+### Added
+
+- `GET /discovery/health` for uptime monitors: Typesense reachability and the indexing backlog (pending changes, age of the oldest), 200 or 503, no secrets.
+- JSON errors carry a stable `code` and a `request_id`, also sent as `X-Request-ID` and written to the log with the cause.
+- The page block can be given theme or module markup through Omeka's block templates, and Omeka's site search finds a page by its search block's title and intro.
+- A generation ledger: a rebuild records every collection it builds, deletes the generations it supersedes at once (keeping the live one and one previous per alias), and removes what an interrupted rebuild left. The maintenance page shows each generation's ledger status and whether a drain worker is active.
+- The admin block form, the maintenance page and the scope, facet and error labels are translated into French.
+
+### Changed
+
+- A rebuild far smaller than the live corpus (a content type or the entity index below half) is refused, unless **Allow a smaller corpus** (`--allow-shrink`) is ticked. A rebuild waits up to two minutes for a Typesense that is still loading, and a stopped rebuild ends as stopped with a notice instead of an error.
+- Saves no longer wait for each other: the write gate is eight striped locks, all of which only the drain and the rebuild cutover take.
+- The drain is dispatched through a worker lease: a change saved while a drain runs is applied in the same run instead of waiting for the scheduled drain, and a Typesense outage costs one retry every two minutes rather than one failing job per save.
+- A document Typesense rejects no longer stops the drain: it is removed from search, its changes are acknowledged and its id is logged. A batch with nothing accepted still counts as a server failure and is retried.
+- On page blocks with a title, and on item-set pages, the surface's headings sit one level below the page's own heading. The federated "All" tab has a hidden Results heading.
+- A missing `vendor/` makes the module report search unavailable instead of taking the whole site down.
+- The facet "Editor" is labelled "Book editor" ("Directeur d'ouvrage"), since Omeka's own French for "Editor" reads as publisher.
+- `asset/dist` is no longer committed; CI and the release build it. Release notes come from this changelog, and each release carries a `.sha256` and a build provenance attestation (`gh attestation verify <zip> --repo fmadore/IwacSearch`).
+- The theme contract is synced from IWAC-theme 2.31.0.
+- Development: browser tests with Playwright and axe; the client tests are type-checked, with `noUncheckedIndexedAccess` and type-aware ESLint; PHPUnit fails on deprecations and notices; CodeQL, `composer audit` and job timeouts in CI; Dependabot waits five days; Lighthouse budgets hold `/search` and `/search/everything`; PHPUnit 13.4.5.
+
+### Fixed
+
+- Typeahead, export and map failures showed raw English transport errors; they now show translated text, and a failed map fetch says so and offers a retry instead of "no places". A surface that fails to mount shows a notice instead of an empty box, without stopping the others on the page.
+- On screens narrower than 400 px, the List/Gallery/Map toggle lost its accessible names.
+- Picking a typeahead entry within 250 ms of the last keystroke left the typed prefix as a query on top of the new filter.
+- A slow "did you mean" reply could reappear above the next search's results.
+- Syncing the URL wiped the browser history entry's existing state.
+- The "Prominent facets" help mentioned a "More filters" control the client no longer has.
+
 ## [3.26.2] - 2026-10-27
 
 No reindex. Install alongside IWAC-theme 2.30.1.
