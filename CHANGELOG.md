@@ -6,6 +6,8 @@ Versions that were never published (tagged and released) are folded into the nex
 
 ## [Unreleased]
 
+## [3.27.1] - 2026-11-02
+
 ### Fixed
 
 - The pager's Previous/Next buttons announced a name that did not contain their visible word ("Préc.", "Suiv.", "Prev"), which fails WCAG 2.5.3 for speech-input users and axe-core 4.14's `label-content-name-mismatch`. The visible words are now "Précédente"/"Suivante" and "Previous"/"Next", each part of the button's name; below 600px the buttons still show only chevrons.
