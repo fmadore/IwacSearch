@@ -6,9 +6,11 @@ Versions that were never published (tagged and released) are folded into the nex
 
 ## [Unreleased]
 
+## [3.27.2] - 2026-11-02
+
 ### Fixed
 
-- A search sorted by anything other than relevance mixed in documents that do not contain the query. Every query also returned the embedding's nearest neighbours, and a date sort interleaved them with the real matches: on the Benin page, `koudouss` showed 108 results for 11 matches, and its whole first page was 1980s articles on a Kérékou visit to Libya. Date and author orders, with their histogram, facet search and export, now list keyword matches only. Relevance order still adds semantically related documents after the matches.
+- Search results mixed in documents that do not contain the query. Every query also returned the embedding's nearest neighbours and counted them as results: on the Benin page, `koudouss` showed 108 results for 11 matches, and sorted by date its whole first page was 1980s articles on a Kérékou visit to Libya. Results, their count, the year histogram, facet counts, export and the federated tab badges now cover the documents that match. Sorted by relevance, the related documents are offered after the matches ("Show 97 semantically related items"); opting in lists them together with the matches under a banner, with a way back.
 - Choosing "Relevance" on a page block whose default sort is a date order did nothing: the results stayed date-sorted and the dropdown snapped back. It now ranks by relevance.
 
 ### Security
