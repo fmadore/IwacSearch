@@ -350,7 +350,7 @@
   }
 
   @media (max-width: 599px) {
-    /* Hide "Prev"/"Next" word labels on tiny screens — chevrons keep
+    /* Hide "Previous"/"Next" word labels on tiny screens — chevrons keep
        the meaning, and the row stops wrapping awkwardly. */
     .iwac-pager__nav-label {
       display: none;

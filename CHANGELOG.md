@@ -6,6 +6,10 @@ Versions that were never published (tagged and released) are folded into the nex
 
 ## [Unreleased]
 
+### Fixed
+
+- The pager's Previous/Next buttons announced a name that did not contain their visible word ("Préc.", "Suiv.", "Prev"), which fails WCAG 2.5.3 for speech-input users and axe-core 4.14's `label-content-name-mismatch`. The visible words are now "Précédente"/"Suivante" and "Previous"/"Next", each part of the button's name; below 600px the buttons still show only chevrons.
+
 ## [3.27.0] - 2026-11-01
 
 **Upgrade:** run **Modules → IWAC Search → Upgrade** (it creates `iwac_search_generation` and `iwac_search_worker`, moves `iwac_search_rollback` into the first and drops it). No reindex: the schemas stay `iwac_v11` and `iwac_index_v5`. Do not start a rebuild across the code swap — the write gate's MySQL lock names changed. A checkout deployed by hand now needs `npm ci && npm run build`; the release zip still carries the bundle. Details: [docs/operations-3.27.md](docs/operations-3.27.md).
