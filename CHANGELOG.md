@@ -6,6 +6,10 @@ Versions that were never published (tagged and released) are folded into the nex
 
 ## [Unreleased]
 
+### Security
+
+- The build toolchain pins minimatch 11 and glob 14 through npm `overrides`, clearing a denial-of-service advisory in minimatch below 11.0.1 (reached through ESLint and typescript-eslint) and a cancellation-bypass advisory in glob 9–14.0.1 (reached through Lighthouse's Sentry plugin). Neither package ships in the release zip. A low-severity deepmerge advisory, reached through `@sveltejs/vite-plugin-svelte`, stays open: no deepmerge release fixes it, and the plugin only merges the build's own config.
+
 ## [3.27.1] - 2026-11-02
 
 ### Fixed
