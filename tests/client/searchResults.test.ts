@@ -143,7 +143,7 @@ describe('createSearchResults', () => {
     expect(results.response).toEqual(snapshot);
     results.run(req());
     expect(client.search).not.toHaveBeenCalled();
-    expect(client.yearDistribution).toHaveBeenCalledWith('', true);
+    expect(client.yearDistribution).toHaveBeenCalledWith('', true, 'date:desc');
     await flush();
     expect(results.yearDistribution).toEqual(YEARS);
     // The next change searches — and the histogram it fetched is reused.
@@ -198,6 +198,25 @@ describe('createSearchResults', () => {
     expect(asked()).toBe(true);
     await flush();
     results.run(req({ q: 'coran', filters: { country_ss: ['Niger'] } }));
+    expect(asked()).toBe(true);
+  });
+
+  it('asks again when the sort moves between relevance and any other order', async () => {
+    // Relevance blends in the vector leg; date orders do not (blendsSemantic),
+    // so the bars of one are not the bars of the other.
+    const client = fakeClient(async () => ({ response: res(3), years: YEARS }));
+    const { results } = make(client);
+    const asked = () => client.search.mock.calls.at(-1)![0].withYearDistribution;
+
+    results.run(req({ q: 'islam' }));
+    expect(asked()).toBe(true);
+    await flush();
+    results.run(req({ q: 'islam', sort: '_text_match:desc' }));
+    expect(asked()).toBe(true);
+    await flush();
+    results.run(req({ q: 'islam', sort: '_text_match:desc', page: 2 }));
+    expect(asked()).toBe(false);
+    results.run(req({ q: 'islam', sort: 'date:asc' }));
     expect(asked()).toBe(true);
   });
 

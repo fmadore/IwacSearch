@@ -6,6 +6,11 @@ Versions that were never published (tagged and released) are folded into the nex
 
 ## [Unreleased]
 
+### Fixed
+
+- A search sorted by anything other than relevance mixed in documents that do not contain the query. Every query also returned the embedding's nearest neighbours, and a date sort interleaved them with the real matches: on the Benin page, `koudouss` showed 108 results for 11 matches, and its whole first page was 1980s articles on a Kérékou visit to Libya. Date and author orders, with their histogram, facet search and export, now list keyword matches only. Relevance order still adds semantically related documents after the matches.
+- Choosing "Relevance" on a page block whose default sort is a date order did nothing: the results stayed date-sorted and the dropdown snapped back. It now ranks by relevance.
+
 ### Security
 
 - The build toolchain pins minimatch 11 and glob 14 through npm `overrides`, clearing a denial-of-service advisory in minimatch below 11.0.1 (reached through ESLint and typescript-eslint) and a cancellation-bypass advisory in glob 9–14.0.1 (reached through Lighthouse's Sentry plugin). Neither package ships in the release zip. A low-severity deepmerge advisory, reached through `@sveltejs/vite-plugin-svelte`, stays open: no deepmerge release fixes it, and the plugin only merges the build's own config.

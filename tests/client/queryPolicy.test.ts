@@ -56,15 +56,64 @@ describe('shared population policy', () => {
     }));
     const outcome = await new TypesenseClient(bootstrap).search({
       q: 'imam de Lomé',
-      sortBy: 'date:desc',
+      sortBy: '_text_match:desc',
       withYearDistribution: true,
     });
     expect(outcome.response.keyword_found).toBe(1);
     expect(sent[0]).toHaveLength(3);
+    expect(sent[0]?.[0]?.query_by).toContain('embedding');
     expect(sent[0]?.every((s) => s.stopwords === 'fr_default')).toBe(true);
     expect(sent[0]?.every((s) => s.exclude_fields === 'ocr_text,toc_txt,embedding')).toBe(true);
     expect(sent[0]?.[1]?.enable_analytics).toBe(false);
     expect(sent[0]?.[2]?.query_by).not.toContain('embedding');
+  });
+  it('runs every non-relevance sort keyword-only, in every request', async () => {
+    // A date-sorted list interleaves the vector leg's top-k with the matches
+    // (live: `koudouss` on the Benin block, 11 matches shown as 108 results,
+    // page 1 all non-matches). A sorted population is matches only.
+    const sent = server((searches) => ({
+      results: searches.map((s, i) =>
+        i === 0
+          ? { found: 11, hits: [{ document: { id: '1' }, text_match: 1 }] }
+          : { found: 11, hits: [], facet_counts: s.facet_by ? [] : undefined },
+      ),
+    }));
+    const client = new TypesenseClient({ ...bootstrap, default_sort: 'date:asc' });
+    const outcome = await client.search({
+      q: 'koudouss',
+      sortBy: 'date:asc',
+      withYearDistribution: true,
+    });
+    // Main + histogram; no keyword probe — the main search is its own count.
+    expect(sent[0]).toHaveLength(2);
+    expect(outcome.response.keyword_found).toBe(11);
+    await client.yearDistribution('koudouss', false, 'date:asc');
+    await client.searchFacetValues({
+      q: 'koudouss',
+      sortBy: 'date:asc',
+      query: 'Porto',
+      field: 'places_ss',
+    });
+    await client.fetchForExport({ q: 'koudouss', sortBy: 'date:asc' });
+    for (const request of sent.flat()) {
+      expect(request.query_by).not.toContain('embedding');
+      // Typo tolerance and stopwords stay: this is not exact mode.
+      expect(request).not.toHaveProperty('num_typos');
+      expect(request.stopwords).toBe('fr_default');
+    }
+  });
+  it('blends the vector leg when the reader picks relevance on a date-sorted block', async () => {
+    const sent = server((searches) => ({
+      results: searches.map((_, i) => (i === 0 ? page : { found: 1, hits: [] })),
+    }));
+    const outcome = await new TypesenseClient({ ...bootstrap, default_sort: 'date:asc' }).search({
+      q: 'koudouss',
+      sortBy: '_text_match:desc',
+    });
+    expect(sent[0]?.[0]).toMatchObject({ sort_by: '_text_match:desc' });
+    expect(sent[0]?.[0]?.query_by).toContain('embedding');
+    expect(sent[0]?.[1]?.query_by).not.toContain('embedding');
+    expect(outcome.response.keyword_found).toBe(1);
   });
   it('preserves main results when the histogram fails, without claiming empty data', async () => {
     server(() => ({ results: [page, { code: 500, error: 'histogram failed' }, { found: 1 }] }));

@@ -144,17 +144,47 @@ export const EXACT_MODE_PARAMS = {
  * state value that asked for it. Labelling the unresolved value is how the
  * resting state of /references and FR /parcourir came to say "sorted by
  * Relevance" over strictly date-ordered results.
+ *
+ * With a query, a requested relevance sort is honoured. The state starts at
+ * the surface's own default (urlState), so `_text_match:desc` there is the
+ * reader's pick; treating it as "unset" made Relevance unselectable on every
+ * block whose default is a date order — the dropdown snapped back.
  */
 export function effectiveSortValue(
   requested: string | undefined,
   isBrowse: boolean,
   defaultSort: string | undefined,
 ): string {
-  return requested && requested !== '_text_match:desc'
-    ? requested
-    : isBrowse
-      ? 'date:desc'
-      : (defaultSort ?? '_text_match:desc');
+  if (requested && (requested !== RELEVANCE_SORT || !isBrowse)) return requested;
+  return isBrowse ? 'date:desc' : (defaultSort ?? RELEVANCE_SORT);
+}
+
+/** The relevance sort value. */
+export const RELEVANCE_SORT = '_text_match:desc';
+
+/**
+ * Does this search blend the vector leg into its population?
+ *
+ * Only a relevance-ranked text query does. Hybrid search returns every
+ * keyword match PLUS the embedding's nearest neighbours, which match no query
+ * word. Ranked by relevance, rank fusion puts those neighbours after the
+ * matches. Any other order interleaves them: on a date-sorted block,
+ * `koudouss` (11 matches) came back as 108 results, led by ten 1980s articles
+ * on a Kérékou visit to Libya, none containing the word. A sorted list is a
+ * set of matches, so every non-relevance order runs keyword-only, as exact
+ * queries (isExactQuery) already did.
+ *
+ * The single rule for the main search, its histogram, facet-value search and
+ * export, so all of them count the same population.
+ */
+export function blendsSemantic(
+  q: string,
+  requestedSort: string | undefined,
+  defaultSort: string | undefined,
+): boolean {
+  const query = q.trim();
+  if (query === '' || query === '*' || isExactQuery(query)) return false;
+  return effectiveSortValue(requestedSort, false, defaultSort) === RELEVANCE_SORT;
 }
 
 /**

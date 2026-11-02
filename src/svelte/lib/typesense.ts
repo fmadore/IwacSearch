@@ -14,6 +14,7 @@ import {
   CONTENT_HIGHLIGHT_FALLBACK,
   CONTENT_QUERY_BY_FALLBACK,
   EXACT_MODE_PARAMS,
+  blendsSemantic,
   buildFilterBy,
   buildYearRangeFilter,
   combineFilters,
@@ -180,11 +181,13 @@ interface SearchContext {
   /** Empty query → Typesense's `*` wildcard. */
   isBrowse: boolean;
   q: string;
-  /** Already exact-adjusted when the caller asked for it. */
+  /** Carries `embedding` only when {@link hybrid}. */
   queryBy: string;
   highlightFields: string;
   sortBy: string;
   exact: boolean;
+  /** Vector leg blended in (see blendsSemantic): relevance-ranked text queries only. */
+  hybrid: boolean;
 }
 
 /**
@@ -350,7 +353,9 @@ export class TypesenseClient {
               },
             ]
           : []),
-        ...(!isBrowse
+        // The keyword-only count, which tells real matches from the vector
+        // leg's top-k. A keyword-only main search is its own count.
+        ...(ctx.hybrid
           ? [
               {
                 collection,
@@ -366,7 +371,7 @@ export class TypesenseClient {
     });
     // Sub-search positions: [main, histogram?, keyword count?, span?].
     const keywordIndex = args.withYearDistribution ? 2 : 1;
-    const spanIndex = keywordIndex + (isBrowse ? 0 : 1);
+    const spanIndex = keywordIndex + (ctx.hybrid ? 1 : 0);
 
     return this.withStopwordRetry({
       label: 'Search',
@@ -381,7 +386,11 @@ export class TypesenseClient {
         lastEnvelope = raw as MultiSearchEnvelope;
       },
     }).then((response) => {
-      if (!isBrowse) response.keyword_found = readCount(lastEnvelope?.results?.[keywordIndex]);
+      if (ctx.hybrid) {
+        response.keyword_found = readCount(lastEnvelope?.results?.[keywordIndex]);
+      } else if (!isBrowse) {
+        response.keyword_found = response.found;
+      }
       const outcome: SearchOutcome = { response };
       if (args.withYearSpan) {
         const span = readYearSpan(lastEnvelope?.results?.[spanIndex]);
@@ -404,8 +413,9 @@ export class TypesenseClient {
    * full span). Used when a full-mode surface adopts the SSR snapshot, which
    * carries the first page but no histogram — and, with `withSpan`, no span.
    */
-  async yearDistribution(q: string, withSpan = false): Promise<HistogramOutcome> {
-    const ctx = await this.resolveContext({ q, includeYearRange: false });
+  async yearDistribution(q: string, withSpan = false, sortBy?: string): Promise<HistogramOutcome> {
+    // The sort decides the population (blendsSemantic), so it is passed too.
+    const ctx = await this.resolveContext({ q, sortBy, includeYearRange: false });
     const json = await this.auxiliary(
       ctx.key.key,
       (stopwords) => ({
@@ -462,6 +472,8 @@ export class TypesenseClient {
     query: string;
     /** The surface's current main query, for contextual counts. */
     q: string;
+    /** The current sort, which decides whether the vector leg is counted. */
+    sortBy?: string;
     activeFilters?: ActiveFilters;
     yearRange?: YearRange | null;
     maxValues?: number;
@@ -880,11 +892,12 @@ export class TypesenseClient {
     const baseQueryBy = this.bootstrap.query_by ?? CONTENT_QUERY_BY_FALLBACK;
 
     // Exact mode — the user typed a "quoted phrase" or a -excluded term, so
-    // they mean it literally. Drop `embedding` so no semantically-similar
-    // (but non-matching) document is blended in by hybrid rank-fusion; the
-    // caller adds EXACT_MODE_PARAMS and skips stopwords. Browse mode is
-    // never exact. See isExactQuery().
+    // they mean it literally; the caller adds EXACT_MODE_PARAMS and skips
+    // stopwords. Browse mode is never exact. See isExactQuery().
     const exact = !isBrowse && isExactQuery(q);
+    // Exact queries and every non-relevance sort drop `embedding`, so no
+    // semantically similar but non-matching document is blended in.
+    const hybrid = blendsSemantic(q, args.sortBy, this.bootstrap.default_sort);
 
     return {
       key,
@@ -892,10 +905,11 @@ export class TypesenseClient {
       filterBy,
       isBrowse,
       q,
-      queryBy: exact ? withoutField(baseQueryBy, 'embedding') : baseQueryBy,
+      queryBy: hybrid ? baseQueryBy : withoutField(baseQueryBy, 'embedding'),
       highlightFields: this.bootstrap.highlight_fields ?? CONTENT_HIGHLIGHT_FALLBACK,
       sortBy: resolveSortBy(args.sortBy, isBrowse, this.bootstrap.default_sort),
       exact,
+      hybrid,
     };
   }
 

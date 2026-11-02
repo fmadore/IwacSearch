@@ -42,7 +42,7 @@ import type {
 } from './types';
 import type { TypesenseClient } from './typesense';
 import { SeqGuard, isAbortError } from './transport';
-import { facetUnion } from './queryBuilders';
+import { blendsSemantic, facetUnion } from './queryBuilders';
 import { isSemanticOnlyResponse } from './semanticFallback';
 import { recordSearch } from './searchHistory';
 
@@ -73,6 +73,8 @@ export interface SearchResultsOptions {
   prominentFacets: readonly string[];
   /** Reported on the outcome event. */
   collection?: string;
+  /** The surface's configured sort, which a request's sort resolves against. */
+  defaultSort?: string;
   /** The SSR snapshot, when the initial state is pristine enough to adopt it. */
   initialResponse: IwacSearchResponse | null;
   /** Settled, non-empty query. Defaults to dispatching `iwac-search:outcome`. */
@@ -98,9 +100,13 @@ export interface SearchResults {
   run(req: SearchRequest): (() => void) | undefined;
 }
 
-/** The histogram is keyed on the query + categorical filters, never page/sort/years. */
-function histogramKeyOf(q: string, filters: ActiveFilters): string {
-  return `${q}\u0000${JSON.stringify(filters)}`;
+/**
+ * The histogram is keyed on the query + categorical filters, never page/years.
+ * The sort counts only where it changes the population: relevance blends in
+ * the vector leg, every other order does not (see blendsSemantic).
+ */
+function histogramKeyOf(q: string, filters: ActiveFilters, hybrid: boolean): string {
+  return `${q}\u0000${JSON.stringify(filters)}\u0000${hybrid}`;
 }
 
 function dispatchOutcome(detail: SearchOutcomeDetail): void {
@@ -172,6 +178,7 @@ export function createSearchResults(
 
   function run(req: SearchRequest): (() => void) | undefined {
     const { q, page, sort, filters, yearRange, perPage } = req;
+    const hybrid = blendsSemantic(q, sort, opts.defaultSort);
     // Read for its dependency only: bumping it re-runs the calling effect.
     void retryVersion;
 
@@ -182,11 +189,11 @@ export function createSearchResults(
       if (!opts.withHistogram) return undefined;
       let cancelled = false;
       client
-        .yearDistribution(q, !spanKnown)
+        .yearDistribution(q, !spanKnown, sort)
         .then(({ years, span }) => {
           if (cancelled) return;
           yearDistribution = years;
-          lastHistogramKey = histogramKeyOf(q, filters);
+          lastHistogramKey = histogramKeyOf(q, filters, hybrid);
           adoptSpan(span);
         })
         .catch(() => {
@@ -197,7 +204,7 @@ export function createSearchResults(
       };
     }
 
-    const histogramKey = opts.withHistogram ? histogramKeyOf(q, filters) : null;
+    const histogramKey = opts.withHistogram ? histogramKeyOf(q, filters, hybrid) : null;
     const needHistogram = histogramKey !== null && histogramKey !== lastHistogramKey;
 
     isLoading = true;

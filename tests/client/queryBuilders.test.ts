@@ -5,6 +5,7 @@ import {
   buildFilterBy,
   buildYearRangeFilter,
   combineFilters,
+  blendsSemantic,
   effectiveSortValue,
   isExactQuery,
   resolveSortBy,
@@ -156,6 +157,23 @@ describe('resolveSortBy', () => {
  * read "sorted by Relevance" over strictly date-ordered results (Phase-1
  * critique P2).
  */
+describe('blendsSemantic', () => {
+  it('blends the vector leg only into a relevance-ranked text query', () => {
+    expect(blendsSemantic('koudouss', '_text_match:desc', 'date:asc')).toBe(true);
+    expect(blendsSemantic('koudouss', undefined, undefined)).toBe(true);
+    expect(blendsSemantic('koudouss', undefined, '_text_match:desc')).toBe(true);
+  });
+
+  it('runs every other order, browse and exact syntax keyword-only', () => {
+    expect(blendsSemantic('koudouss', 'date:asc', 'date:asc')).toBe(false);
+    expect(blendsSemantic('koudouss', undefined, 'date:asc')).toBe(false);
+    expect(blendsSemantic('koudouss', 'creator_sort:asc', undefined)).toBe(false);
+    expect(blendsSemantic('', '_text_match:desc', undefined)).toBe(false);
+    expect(blendsSemantic('*', '_text_match:desc', undefined)).toBe(false);
+    expect(blendsSemantic('"imam de Lomé"', '_text_match:desc', undefined)).toBe(false);
+  });
+});
+
 describe('effectiveSortValue', () => {
   it('agrees with resolveSortBy on every case that needs no decoration', () => {
     const cases: Array<[string | undefined, boolean, string | undefined]> = [
@@ -176,6 +194,13 @@ describe('effectiveSortValue', () => {
   it('reports the substitution the browse surfaces actually apply', () => {
     // /references and FR /parcourir at rest: configured relevance, served date.
     expect(effectiveSortValue('_text_match:desc', true, '_text_match:desc')).toBe('date:desc');
+  });
+
+  it('honours a picked relevance sort on a surface whose default is a date order', () => {
+    // The state starts at the surface default, so relevance here is the
+    // reader's choice; resolving it back to date:asc snapped the dropdown back.
+    expect(effectiveSortValue('_text_match:desc', false, 'date:asc')).toBe('_text_match:desc');
+    expect(resolveSortBy('_text_match:desc', false, 'date:asc')).toBe('_text_match:desc');
   });
 
   it('stays a plain sort-option value for creator_sort — no Typesense decoration', () => {

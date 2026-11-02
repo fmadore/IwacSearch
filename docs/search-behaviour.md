@@ -90,12 +90,27 @@ is carried across, being the one thing the visitor actually typed.
 
 ## Semantic search
 
-Every search is hybrid: the `query_by` includes the `embedding` field
-alongside `title_txt`, `ocr_text`, and `entity_aliases_txt`. Typesense
-fuses keyword and vector scores automatically — typing
-`"laïcité au Burkina"` matches docs about secularism in Burkina Faso
-even when the exact words don't appear. No toggle needed; it just
-works.
+A relevance-ranked search is hybrid: the `query_by` includes the
+`embedding` field alongside `title_txt`, `ocr_text`, and
+`entity_aliases_txt`. Typesense fuses keyword and vector scores
+automatically — typing `laïcité au Burkina` matches docs about
+secularism in Burkina Faso even when the exact words don't appear.
+
+Hybrid search returns every keyword match **plus** the vector leg's
+nearest neighbours, which match no query word. Rank fusion places them
+after the matches, so they only make sense in relevance order. Any other
+sort (date, author) interleaves them with the real matches. The
+`koudouss` search on the date-sorted Benin block showed 108 results for
+11 matches, and its first page was all neighbours. So every non-relevance
+order runs keyword-only, as quoted and `-excluded` queries always have.
+`blendsSemantic()` in `lib/queryBuilders.ts` is the one rule, shared by
+the main search, its histogram, facet-value search and export. The
+keyword-count probe that detects a semantic-only response runs only
+alongside a hybrid search; a keyword-only search is its own count.
+
+A distance cutoff would not separate them: with `multilingual-e5-small`,
+real matches and unrelated neighbours sat at the same vector distance
+(0.19–0.22) on that query.
 
 The embedding model is `ts/multilingual-e5-small` (384d, in-process
 ONNX) — no external API calls at query time.

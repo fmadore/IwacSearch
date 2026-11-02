@@ -215,6 +215,7 @@
     withHistogram: bootstrap.mode === 'full',
     prominentFacets: bootstrap.prominent_facets,
     collection: bootstrap.collection_alias,
+    defaultSort: bootstrap.default_sort,
     initialResponse: adoptableSnapshot(bootstrap, initial, defaultSort),
   });
   const response = $derived(results.response);
@@ -460,6 +461,7 @@
       field,
       query: text,
       q: query,
+      sortBy: sort,
       activeFilters: filters,
       yearRange,
     });
