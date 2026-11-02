@@ -48,7 +48,7 @@ describe('shared population policy', () => {
       expect(p).toMatchObject({ num_typos: 0, prefix: false, drop_tokens_threshold: 0 });
     },
   );
-  it('keeps stopwords on main, histogram and keyword probes, including retry', async () => {
+  it('keeps stopwords on main, histogram and count probes, including retry', async () => {
     const sent = server((searches) => ({
       results: searches.map((s, i) =>
         i === 0 ? page : { found: 1, hits: [], facet_counts: s.facet_by ? [] : undefined },
@@ -57,6 +57,7 @@ describe('shared population policy', () => {
     const outcome = await new TypesenseClient(bootstrap).search({
       q: 'imam de Lomé',
       sortBy: '_text_match:desc',
+      semantic: true,
       withYearDistribution: true,
     });
     expect(outcome.response.keyword_found).toBe(1);
@@ -102,18 +103,53 @@ describe('shared population policy', () => {
       expect(request.stopwords).toBe('fr_default');
     }
   });
-  it('blends the vector leg when the reader picks relevance on a date-sorted block', async () => {
+  it('lists keyword matches under relevance and counts the related documents beside them', async () => {
+    // Live: `koudouss` on the Benin block, 11 matches and a hybrid set of 108.
+    // The list and its count are the 11; the 97 others are offered.
     const sent = server((searches) => ({
-      results: searches.map((_, i) => (i === 0 ? page : { found: 1, hits: [] })),
+      results: searches.map((_, i) =>
+        i === 0 ? { found: 11, hits: [{ document: { id: '1' } }] } : { found: 108, hits: [] },
+      ),
     }));
-    const outcome = await new TypesenseClient({ ...bootstrap, default_sort: 'date:asc' }).search({
+    const client = new TypesenseClient({ ...bootstrap, default_sort: 'date:asc' });
+    const outcome = await client.search({ q: 'koudouss', sortBy: '_text_match:desc' });
+    expect(sent[0]?.[0]).toMatchObject({ sort_by: '_text_match:desc' });
+    expect(sent[0]?.[0]?.query_by).not.toContain('embedding');
+    expect(sent[0]?.[1]?.query_by).toContain('embedding');
+    expect(outcome.response).toMatchObject({
+      found: 11,
+      keyword_found: 11,
+      hybrid_found: 108,
+      blended: false,
+    });
+  });
+  it('lists the hybrid set once the reader opts in, counting the matches beside it', async () => {
+    const sent = server((searches) => ({
+      results: searches.map((_, i) => (i === 0 ? page : { found: 11, hits: [] })),
+    }));
+    const outcome = await new TypesenseClient(bootstrap).search({
       q: 'koudouss',
       sortBy: '_text_match:desc',
+      semantic: true,
     });
-    expect(sent[0]?.[0]).toMatchObject({ sort_by: '_text_match:desc' });
     expect(sent[0]?.[0]?.query_by).toContain('embedding');
     expect(sent[0]?.[1]?.query_by).not.toContain('embedding');
-    expect(outcome.response.keyword_found).toBe(1);
+    expect(outcome.response).toMatchObject({
+      found: 100,
+      keyword_found: 11,
+      hybrid_found: 100,
+      blended: true,
+    });
+  });
+  it('ignores an opt-in on a date order: a sorted list is matches only', async () => {
+    const sent = server(() => ({ results: [page] }));
+    await new TypesenseClient(bootstrap).search({
+      q: 'koudouss',
+      sortBy: 'date:asc',
+      semantic: true,
+    });
+    expect(sent[0]).toHaveLength(1);
+    expect(sent[0]?.[0]?.query_by).not.toContain('embedding');
   });
   it('preserves main results when the histogram fails, without claiming empty data', async () => {
     server(() => ({ results: [page, { code: 500, error: 'histogram failed' }, { found: 1 }] }));
@@ -149,14 +185,15 @@ describe('shared population policy', () => {
     ).rejects.toMatchObject({ name: 'AbortError' });
     expect(sent).toHaveLength(1);
   });
-  it('uses query-level counts for federated badges', async () => {
-    server(() => ({ results: [{ found: 100 }, { found: 1 }, { found: 100 }, { found: 0 }] }));
+  it('badges federated tabs with query-level keyword counts', async () => {
+    const sent = server(() => ({ results: [{ found: 1 }, { found: 0 }] }));
     expect(
       await new TypesenseClient(bootstrap).countAcross('imam', [
         { collection: 'a', queryBy: 'title_txt,embedding' },
         { collection: 'b', queryBy: 'title_txt,embedding' },
       ]),
-    ).toEqual([100, 0]);
+    ).toEqual([1, 0]);
+    expect(sent[0]?.every((s) => !String(s.query_by).includes('embedding'))).toBe(true);
   });
 });
 

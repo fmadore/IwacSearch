@@ -160,6 +160,12 @@ const STRINGS: Record<Locale, Record<string, string>> = {
     semantic_only_banner:
       'Aucune correspondance exacte pour « {q} » — voici des documents sémantiquement proches.',
     hide_semantic: 'Masquer ces résultats',
+    // Opted in with keyword matches present: the list holds both.
+    semantic_mixed_banner_one:
+      'La correspondance pour « {q} » est affichée avec des documents sémantiquement proches.',
+    semantic_mixed_banner_other:
+      'Les {n} correspondances pour « {q} » sont affichées avec des documents sémantiquement proches.',
+    hide_semantic_mixed: 'Afficher les correspondances seules',
     // Count-line noun for the opted-in semantic set. "N résultats" would
     // re-assert as findings the very thing the opt-in exists to qualify.
     semantic_result_one: 'document sémantiquement proche',
@@ -306,6 +312,11 @@ const STRINGS: Record<Locale, Record<string, string>> = {
     show_semantic_other: 'Show {n} semantically related items',
     semantic_only_banner: 'No exact matches for “{q}” — showing semantically related items.',
     hide_semantic: 'Hide these results',
+    semantic_mixed_banner_one:
+      'The match for “{q}” is shown together with semantically related items.',
+    semantic_mixed_banner_other:
+      'The {n} matches for “{q}” are shown together with semantically related items.',
+    hide_semantic_mixed: 'Show matches only',
     semantic_result_one: 'semantically related item',
     semantic_result_other: 'semantically related items',
     recent_searches: 'Recent searches',

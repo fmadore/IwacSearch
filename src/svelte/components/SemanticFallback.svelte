@@ -1,13 +1,14 @@
 <script lang="ts">
   /**
-   * The two faces of a semantic-only response (lib/semanticFallback.ts): a
-   * query the keyword leg matched nothing for, answered only by the vector
-   * leg's near neighbours.
+   * The two faces of the related-documents offer (lib/semanticFallback.ts):
+   * the vector leg's near neighbours, which match no query word.
    *
-   *   shown = false  the offer under the empty state — one control, labelled
-   *                  with what it will actually show. Offered, not asserted.
-   *   shown = true   the banner over the rendered set, so it never appears
-   *                  unlabelled, with the way back.
+   *   shown = false  the offer, after the matches or under the empty state —
+   *                  one control, labelled with what it will add. Offered,
+   *                  not asserted.
+   *   shown = true   the banner over the blended set, so it never appears
+   *                  unlabelled, with the way back. It names the keyword
+   *                  matches when there are any, since they are in the list.
    *
    * Full-mode and compact surfaces render the same pair; App used to carry
    * two copies of each.
@@ -15,23 +16,29 @@
   import { useI18n } from '../lib/i18n';
 
   interface Props {
-    /** The vector leg's count — what the offer promises to show. */
+    /** Related documents the hybrid set adds — what the offer promises. */
     found: number;
+    /** Keyword matches in the blended set (banner only); 0 when there are none. */
+    matches?: number;
     query: string;
     shown: boolean;
     onShow: () => void;
     onHide: () => void;
   }
 
-  const { found, query, shown, onShow, onHide }: Props = $props();
+  const { found, matches = 0, query, shown, onShow, onHide }: Props = $props();
   const { t, tp } = useI18n();
 </script>
 
 {#if shown}
   <div class="iwac-search__semantic-banner">
-    <p class="iwac-search__semantic-banner-text">{t('semantic_only_banner', { q: query })}</p>
+    <p class="iwac-search__semantic-banner-text">
+      {matches > 0
+        ? tp('semantic_mixed_banner', matches, { q: query })
+        : t('semantic_only_banner', { q: query })}
+    </p>
     <button type="button" class="iwac-search__semantic-btn iwac-quiet-btn" onclick={onHide}>
-      {t('hide_semantic')}
+      {matches > 0 ? t('hide_semantic_mixed') : t('hide_semantic')}
     </button>
   </div>
 {:else}

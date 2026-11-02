@@ -163,21 +163,18 @@ export function effectiveSortValue(
 export const RELEVANCE_SORT = '_text_match:desc';
 
 /**
- * Does this search blend the vector leg into its population?
+ * Can this search offer the vector leg's related documents?
  *
- * Only a relevance-ranked text query does. Hybrid search returns every
- * keyword match PLUS the embedding's nearest neighbours, which match no query
- * word. Ranked by relevance, rank fusion puts those neighbours after the
- * matches. Any other order interleaves them: on a date-sorted block,
+ * Only a relevance-ranked text query can. Hybrid search returns every keyword
+ * match PLUS the embedding's nearest neighbours, which match no query word.
+ * Any other order interleaves them with the matches: on a date-sorted block,
  * `koudouss` (11 matches) came back as 108 results, led by ten 1980s articles
- * on a Kérékou visit to Libya, none containing the word. A sorted list is a
- * set of matches, so every non-relevance order runs keyword-only, as exact
- * queries (isExactQuery) already did.
- *
- * The single rule for the main search, its histogram, facet-value search and
- * export, so all of them count the same population.
+ * on a Kérékou visit to Libya, none containing the word. So every search
+ * lists keyword matches; a relevance-ranked one also counts the hybrid set,
+ * and the reader's opt-in lists it (see lib/semanticFallback.ts). Exact
+ * queries (isExactQuery) never offer it.
  */
-export function blendsSemantic(
+export function offersSemantic(
   q: string,
   requestedSort: string | undefined,
   defaultSort: string | undefined,
@@ -185,6 +182,20 @@ export function blendsSemantic(
   const query = q.trim();
   if (query === '' || query === '*' || isExactQuery(query)) return false;
   return effectiveSortValue(requestedSort, false, defaultSort) === RELEVANCE_SORT;
+}
+
+/**
+ * Does this search LIST the vector leg? Only when it can offer it and the
+ * reader opted in. The single rule for the main search, its histogram,
+ * facet-value search and export, so all of them count the same population.
+ */
+export function blendsSemantic(
+  q: string,
+  requestedSort: string | undefined,
+  defaultSort: string | undefined,
+  optedIn: boolean,
+): boolean {
+  return optedIn && offersSemantic(q, requestedSort, defaultSort);
 }
 
 /**

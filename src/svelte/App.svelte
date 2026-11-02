@@ -2,7 +2,7 @@
   import type { IwacBootstrap, IwacFacetCount } from './lib/types';
   import { TypesenseClient } from './lib/typesense';
   import { effectiveSortValue } from './lib/queryBuilders';
-  import { isSemanticOnlyResponse } from './lib/semanticFallback';
+  import { semanticView } from './lib/semanticFallback';
   import { FALLBACK_SORT, createTypingBurst, createUrlSync, onUrlPop } from './lib/urlState';
   import { adoptableSnapshot, initialSearchState } from './lib/initialState';
   import { resultAnnouncement } from './lib/announce';
@@ -231,17 +231,16 @@
   );
 
   /**
-   * The query the reader explicitly asked to see semantic near-matches for.
+   * The query the reader explicitly asked to see related documents for.
    *
-   * Content surfaces search hybrid, so a query the keyword leg doesn't match
-   * still comes back full: the vector leg returns its fixed top-k (100) and
-   * the client used to render them as ordinary results — "100 results" with
-   * confident facet counts over a set nothing in it actually matched
-   * (lib/semanticFallback.ts). Those hits are now offered rather than
-   * asserted, behind this opt-in.
+   * Every search lists keyword matches; a relevance-ranked one also counts
+   * the hybrid set, whose extra documents (the vector leg's nearest
+   * neighbours, matching no query word) are offered rather than asserted,
+   * behind this opt-in (lib/semanticFallback.ts). Opting in re-runs the
+   * search with the vector leg listed.
    *
    * Keyed by the query string rather than a bare boolean: an opt-in belongs to
-   * ONE dead query and must not carry over to the next one, while paging or
+   * ONE query and must not carry over to the next one, while paging or
    * narrowing a facet within that query keeps it.
    */
   let semanticOptInFor = $state<string | null>(null);
@@ -254,13 +253,16 @@
     void refocus(() => rootEl?.querySelector<HTMLElement>('.iwac-search__semantic-btn'));
   }
 
+  // A different population: its pages are not this one's.
   function showSemantic(): void {
     semanticOptInFor = query;
+    page = 1;
     focusSemanticToggle();
   }
 
   function hideSemantic(): void {
     semanticOptInFor = null;
+    page = 1;
     focusSemanticToggle();
   }
 
@@ -351,14 +353,12 @@
   // SHOWN, when that set is image-heavy and no view has been chosen (design
   // review §01). Never overrides an explicit choice; doesn't persist.
   //
-  // The `semanticHidden` guard is the fix for a real inversion: this effect
-  // used to run before the withhold, so a query that matched nothing had its
-  // presentation decided by the vector-only set the surface was refusing to
-  // show — a gallery chosen on the strength of documents the reader was
-  // being told did not exist.
+  // Decided on the keyword matches, never on an opted-in set of related
+  // documents: a gallery chosen on the strength of documents that do not
+  // contain the query would outlast the opt-in.
   $effect(() => {
     const r = response;
-    if (r && !semanticHidden) view.autoSuggest(r);
+    if (r && !semantic.blended) view.autoSuggest(r);
   });
 
   // Query → search. Tracks every state field by reading it here. Always fires
@@ -366,7 +366,17 @@
   // pages, blocks with locked_filters, or just a bare /search arrival — show
   // items + facets immediately. The typesense client translates an empty
   // query into `q=*` browse mode.
-  $effect(() => results.run({ q: query, page, sort, filters, yearRange, perPage: perPageChoice }));
+  $effect(() =>
+    results.run({
+      q: query,
+      page,
+      sort,
+      semantic: semanticOptIn,
+      filters,
+      yearRange,
+      perPage: perPageChoice,
+    }),
+  );
 
   // Map data: when the Map view is active, every geo-tagged entity matching
   // the current query + filters (year range included — unlike the histogram,
@@ -462,6 +472,7 @@
       query: text,
       q: query,
       sortBy: sort,
+      semantic: semanticOptIn,
       activeFilters: filters,
       yearRange,
     });
@@ -476,6 +487,7 @@
     return client.fetchForExport({
       q: query,
       sortBy: sort,
+      semantic: semanticOptIn,
       activeFilters: filters,
       yearRange,
     });
@@ -511,22 +523,16 @@
   /** The compact surfaces' result list wrapper — their pager's landing place. */
   let compactRegion: HTMLElement | null = $state(null);
 
-  // ── Semantic-only fallback ──────────────────────────────────────────
-  // Did the keyword leg match nothing at all? (See lib/semanticFallback.ts.)
-  const semanticOnly = $derived(isSemanticOnlyResponse(response, query));
+  // ── Related documents (lib/semanticFallback.ts) ─────────────────────
   const semanticOptIn = $derived(semanticOptInFor !== null && semanticOptInFor === query);
   /**
-   * The default state for such a response: the vector set is withheld. No
-   * result list, no count, no facet counts, no export — nothing that would
-   * present it as findings. The scope-aware empty state shows instead, with
-   * the set offered behind one explicit control.
+   * What the response is: a keyword list, maybe with related documents on
+   * offer, or (opted in) a blended list that is labelled as such. The count,
+   * facets and export always describe the list on screen.
    */
-  const semanticHidden = $derived(semanticOnly && !semanticOptIn);
+  const semantic = $derived(semanticView(response, query));
 
-  // Facet counts computed over a withheld set would under-write the same
-  // claim the summary strip no longer makes, so the panel falls back to its
-  // "Search to see filter options." state.
-  const facets = $derived(semanticHidden ? [] : (response?.facet_counts ?? []));
+  const facets = $derived(response?.facet_counts ?? []);
   const perPage = $derived(
     perPageChoice ?? response?.request_params?.per_page ?? bootstrap.results_per_page ?? 20,
   );
@@ -537,7 +543,10 @@
 
   /** What a screen reader should be told once the surface settles (lib/announce.ts). */
   const announcement = $derived(
-    resultAnnouncement({ response, semanticHidden, semanticOnly, page, totalPages }, i18n),
+    resultAnnouncement(
+      { response, offered: semantic.related, semanticOnly: semantic.only, page, totalPages },
+      i18n,
+    ),
   );
 
   /**
@@ -754,7 +763,7 @@
             activeFilterCount={filterState.activeCount}
             onOpenFilters={() => drawer.show()}
             showCopyLink={syncUrl}
-            fetchDocs={card === 'content' && response && response.found > 0 && !semanticHidden
+            fetchDocs={card === 'content' && response && response.found > 0
               ? handleExportFetch
               : null}
             {query}
@@ -766,9 +775,9 @@
         {#if response}
           <!-- Persistent count + scope + sort summary, visible on every
                viewport (the mobile filter readout). Closed by a 2px ink rule.
-               Withheld for a semantic-only response: its count is the vector
-               leg's top-k, not a number of matches. -->
-          {#if response.found > 0 && !semanticHidden}
+               It counts the list on screen: keyword matches, or an opted-in
+               set that the banner below labels. -->
+          {#if response.found > 0}
             <ResultSummary
               found={response.found}
               {searchTimeMs}
@@ -778,7 +787,7 @@
               sort={effectiveSort}
               onRemoveChip={(c) => filterState.removeChip(c)}
               onClearAll={() => filterState.clearAll()}
-              semantic={semanticOnly}
+              semantic={semantic.only}
             />
           {/if}
         {/if}
@@ -797,7 +806,7 @@
           <!-- Galley-proof skeleton in the active view (replaces the opacity
                dim) — holds geometry so the page doesn't jump (§03A). -->
           <ResultSkeleton view={view.mode} count={Math.min(Math.max(perPage, 4), 8)} />
-        {:else if response && (response.found === 0 || semanticHidden)}
+        {:else if response && response.found === 0}
           {#if results.didYouMean.length > 0}
             <DidYouMean
               suggestions={results.didYouMean}
@@ -812,9 +821,9 @@
             onRemoveChip={(c) => thenFocusResults(() => filterState.removeChip(c))}
             onClearAll={() => thenFocusResults(() => filterState.clearAll())}
           />
-          {#if semanticHidden}
+          {#if semantic.offer}
             <SemanticFallback
-              found={response.found}
+              found={semantic.related}
               {query}
               shown={false}
               onShow={showSemantic}
@@ -822,9 +831,10 @@
             />
           {/if}
         {:else if response}
-          {#if semanticOnly}
+          {#if semantic.blended}
             <SemanticFallback
-              found={response.found}
+              found={semantic.related}
+              matches={response.keyword_found ?? 0}
               {query}
               shown={true}
               onShow={showSemantic}
@@ -841,6 +851,17 @@
             {hideCountry}
             view={view.mode}
           />
+          <!-- After the matches: related documents are the weaker answer, so
+               they come after the list, not over it. -->
+          {#if semantic.offer}
+            <SemanticFallback
+              found={semantic.related}
+              {query}
+              shown={false}
+              onShow={showSemantic}
+              onHide={hideSemantic}
+            />
+          {/if}
         {/if}
       </section>
     </div>
@@ -848,23 +869,23 @@
     <!-- No aria-live: the persistent region above already owns announcements,
          and two polite regions on one surface talk over each other. -->
     <p class="iwac-search__status">{t('searching')}</p>
-  {:else if response && semanticHidden}
-    <!-- Compact / results-only blocks have no facet panel or summary strip, but
-         they run the same hybrid query and so could present the same vector-only
-         set as findings. Same contract, smaller frame: say nothing matched, and
-         offer the near neighbours explicitly. -->
+  {:else if response && response.found === 0 && semantic.offer}
+    <!-- Compact / results-only blocks have no facet panel or summary strip.
+         Same contract, smaller frame: say nothing matched, and offer the
+         related documents explicitly. -->
     <p class="iwac-search__status">{t('results_empty_list')}</p>
     <SemanticFallback
-      found={response.found}
+      found={semantic.related}
       {query}
       shown={false}
       onShow={showSemantic}
       onHide={hideSemantic}
     />
   {:else if response}
-    {#if semanticOnly}
+    {#if semantic.blended}
       <SemanticFallback
-        found={response.found}
+        found={semantic.related}
+        matches={response.keyword_found ?? 0}
         {query}
         shown={true}
         onShow={showSemantic}
@@ -881,6 +902,15 @@
         {hideCountry}
       />
     </div>
+    {#if semantic.offer}
+      <SemanticFallback
+        found={semantic.related}
+        {query}
+        shown={false}
+        onShow={showSemantic}
+        onHide={hideSemantic}
+      />
+    {/if}
   {/if}
 </div>
 

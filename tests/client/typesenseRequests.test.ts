@@ -110,7 +110,7 @@ describe('search()', () => {
 });
 
 describe('unionSearch()', () => {
-  it('pages in the URL, sorts every leg alike, and counts the keyword legs alongside', async () => {
+  it('pages in the URL, sorts every leg alike, and counts the hybrid legs alongside', async () => {
     const { bodies, urls } = serve((body) =>
       body.union ? page(12) : { results: [page(4), page(2)] },
     );
@@ -127,27 +127,51 @@ describe('unionSearch()', () => {
 
     const unionAt = bodies.findIndex((b) => b.union);
     const union = defined(bodies[unionAt], 'the union body');
-    const counts = defined(bodies[1 - unionAt], 'the keyword-count body');
+    const counts = defined(bodies[1 - unionAt], 'the hybrid-count body');
     const unionUrl = defined(urls[unionAt], 'the union URL');
     expect(bodies).toHaveLength(2);
     expect(new URL(unionUrl, 'http://x').searchParams.get('page')).toBe('3');
     expect(new URL(unionUrl, 'http://x').searchParams.get('per_page')).toBe('20');
     expect(union.searches!.map((s) => s.sort_by)).toEqual(['_text_match:desc', '_text_match:desc']);
     expect(union.searches?.[1]?.filter_by).toBe('entity_type_s:=Lieux');
-    // The keyword-only legs drop the embedding.
-    expect(counts.searches?.[0]?.query_by).toBe('title_txt');
-    expect(out.keyword_found).toBe(6);
+    // The listed legs are keyword-only; the count beside them is hybrid.
+    expect(union.searches?.[0]?.query_by).toBe('title_txt');
+    expect(counts.searches?.[0]?.query_by).toBe('title_txt,embedding');
+    expect(out).toMatchObject({ keyword_found: 12, hybrid_found: 6, blended: false });
   });
 
-  /** S-10: paging the merged list used to re-send the keyword counts every time. */
-  it('reuses the keyword counts when only the page changes', async () => {
-    const { bodies } = serve((body) => (body.union ? page(12) : { results: [page(4)] }));
+  it('lists the hybrid legs once opted in, counting the keyword legs alongside', async () => {
+    const { bodies } = serve((body) => (body.union ? page(40) : { results: [page(3), page(2)] }));
+    const out = await new TypesenseClient(bootstrap()).unionSearch({
+      q: 'tabaski',
+      semantic: true,
+      searches: [
+        { collection: 'iwac_current', queryBy: 'title_txt,embedding' },
+        { collection: 'iwac_index_current', queryBy: 'title' },
+      ],
+    });
+    const union = defined(
+      bodies.find((b) => b.union),
+      'the union body',
+    );
+    const counts = defined(
+      bodies.find((b) => !b.union),
+      'the keyword-count body',
+    );
+    expect(union.searches?.[0]?.query_by).toBe('title_txt,embedding');
+    expect(counts.searches?.[0]?.query_by).toBe('title_txt');
+    expect(out).toMatchObject({ keyword_found: 5, hybrid_found: 40, blended: true });
+  });
+
+  /** S-10: paging the merged list used to re-send the counts every time. */
+  it('reuses the hybrid count when only the page changes', async () => {
+    const { bodies } = serve((body) => (body.union ? page(4) : { results: [page(12)] }));
     const client = new TypesenseClient(bootstrap());
-    const searches = [{ collection: 'iwac_current', queryBy: 'title_txt' }];
+    const searches = [{ collection: 'iwac_current', queryBy: 'title_txt,embedding' }];
     await client.unionSearch({ q: 'tabaski', page: 1, searches });
     const second = await client.unionSearch({ q: 'tabaski', page: 2, searches });
     expect(bodies.filter((b) => !b.union)).toHaveLength(1);
-    expect(second.keyword_found).toBe(4);
+    expect(second.hybrid_found).toBe(12);
     await client.unionSearch({ q: 'coran', page: 1, searches });
     expect(bodies.filter((b) => !b.union)).toHaveLength(2);
   });
@@ -164,22 +188,18 @@ describe('unionSearch()', () => {
 });
 
 describe('countAcross()', () => {
-  it('sends a hybrid and a keyword count per collection, and zeroes a keyword miss', async () => {
-    const { bodies } = serve(() => ({
-      results: [page(100), page(0), page(30), page(12)],
-    }));
+  it('badges each tab with its keyword matches, the count the tab lists', async () => {
+    const { bodies } = serve(() => ({ results: [page(0), page(12)] }));
     const counts = await new TypesenseClient(bootstrap()).countAcross('zzkw', [
       { collection: 'iwac_current', queryBy: 'title_txt,embedding' },
       { collection: 'iwac_index_current', queryBy: 'title' },
     ]);
 
     const searches = defined(bodies[0]?.searches, 'the searches sent');
-    expect(searches).toHaveLength(4);
-    expect(searches.map((s) => s.per_page)).toEqual([0, 0, 0, 0]);
-    expect(searches[0]?.query_by).toBe('title_txt,embedding');
-    expect(searches[1]?.query_by).toBe('title_txt');
-    // 100 hybrid hits over zero keyword hits is the vector leg's top-k, not a count.
-    expect(counts).toEqual([0, 30]);
+    expect(searches).toHaveLength(2);
+    expect(searches.map((s) => s.per_page)).toEqual([0, 0]);
+    expect(searches[0]?.query_by).toBe('title_txt');
+    expect(counts).toEqual([0, 12]);
   });
 
   it('asks nothing for no collections', async () => {

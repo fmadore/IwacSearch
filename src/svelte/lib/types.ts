@@ -304,6 +304,13 @@ export interface IwacFacet {
 export interface IwacSearchResponse {
   /** Query-wide keyword-only count, independent of sorting and pagination. */
   keyword_found?: number;
+  /**
+   * Query-wide hybrid count (keyword matches + the vector leg's top-k). Set
+   * only on a relevance-ranked text query, where the vector leg is on offer.
+   */
+  hybrid_found?: number;
+  /** The listed population includes the vector leg (the reader opted in). */
+  blended?: boolean;
   found: number;
   page: number;
   request_params: { q?: string; per_page?: number };

@@ -7,6 +7,7 @@ import {
   combineFilters,
   blendsSemantic,
   effectiveSortValue,
+  offersSemantic,
   isExactQuery,
   resolveSortBy,
   withoutField,
@@ -157,20 +158,26 @@ describe('resolveSortBy', () => {
  * read "sorted by Relevance" over strictly date-ordered results (Phase-1
  * critique P2).
  */
-describe('blendsSemantic', () => {
-  it('blends the vector leg only into a relevance-ranked text query', () => {
-    expect(blendsSemantic('koudouss', '_text_match:desc', 'date:asc')).toBe(true);
-    expect(blendsSemantic('koudouss', undefined, undefined)).toBe(true);
-    expect(blendsSemantic('koudouss', undefined, '_text_match:desc')).toBe(true);
+describe('offersSemantic / blendsSemantic', () => {
+  it('offers related documents only on a relevance-ranked text query', () => {
+    expect(offersSemantic('koudouss', '_text_match:desc', 'date:asc')).toBe(true);
+    expect(offersSemantic('koudouss', undefined, undefined)).toBe(true);
+    expect(offersSemantic('koudouss', undefined, '_text_match:desc')).toBe(true);
   });
 
-  it('runs every other order, browse and exact syntax keyword-only', () => {
-    expect(blendsSemantic('koudouss', 'date:asc', 'date:asc')).toBe(false);
-    expect(blendsSemantic('koudouss', undefined, 'date:asc')).toBe(false);
-    expect(blendsSemantic('koudouss', 'creator_sort:asc', undefined)).toBe(false);
-    expect(blendsSemantic('', '_text_match:desc', undefined)).toBe(false);
-    expect(blendsSemantic('*', '_text_match:desc', undefined)).toBe(false);
-    expect(blendsSemantic('"imam de Lomé"', '_text_match:desc', undefined)).toBe(false);
+  it('offers nothing on any other order, browse or exact syntax', () => {
+    expect(offersSemantic('koudouss', 'date:asc', 'date:asc')).toBe(false);
+    expect(offersSemantic('koudouss', undefined, 'date:asc')).toBe(false);
+    expect(offersSemantic('koudouss', 'creator_sort:asc', undefined)).toBe(false);
+    expect(offersSemantic('', '_text_match:desc', undefined)).toBe(false);
+    expect(offersSemantic('*', '_text_match:desc', undefined)).toBe(false);
+    expect(offersSemantic('"imam de Lomé"', '_text_match:desc', undefined)).toBe(false);
+  });
+
+  it('lists the vector leg only once the reader opts in', () => {
+    expect(blendsSemantic('koudouss', '_text_match:desc', undefined, false)).toBe(false);
+    expect(blendsSemantic('koudouss', '_text_match:desc', undefined, true)).toBe(true);
+    expect(blendsSemantic('koudouss', 'date:asc', undefined, true)).toBe(false);
   });
 });
 

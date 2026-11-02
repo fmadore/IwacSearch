@@ -15,9 +15,9 @@ import type { I18n } from './i18n';
 
 export interface AnnouncementInput {
   response: IwacSearchResponse | null;
-  /** A semantic-only response that the surface is withholding. */
-  semanticHidden: boolean;
-  /** A semantic-only response, withheld or shown. */
+  /** Related documents on offer (lib/semanticFallback.ts); announced when nothing matched. */
+  offered: number;
+  /** An opted-in list with no keyword match in it: all related documents. */
   semanticOnly: boolean;
   /** Fallback only: the page the RESPONSE answers is the one announced. */
   page: number;
@@ -33,7 +33,7 @@ export function resultAnnouncement(
   input: AnnouncementInput,
   i18n: Pick<I18n, 't' | 'tp' | 'formatNumber'>,
 ): string {
-  const { response, semanticHidden, semanticOnly, totalPages } = input;
+  const { response, offered, semanticOnly, totalPages } = input;
   const { t, tp, formatNumber } = i18n;
   if (!response) return '';
   // The response's own page, not the state's: the state moves on the click,
@@ -41,8 +41,7 @@ export function resultAnnouncement(
   // the old results announced a page the reader was not yet looking at.
   const page = response.page || input.page;
   const found = response.found;
-  if (semanticHidden) return tp('announce_semantic', found);
-  if (found === 0) return t('announce_no_results');
+  if (found === 0) return offered > 0 ? tp('announce_semantic', offered) : t('announce_no_results');
   // Opted in to the near-neighbour set: it is rendered, so it is announced —
   // but as what it is. Reading "100 results found" over the set the banner
   // and the count line both just qualified would put the fabrication back in

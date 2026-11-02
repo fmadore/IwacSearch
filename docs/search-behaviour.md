@@ -90,23 +90,31 @@ is carried across, being the one thing the visitor actually typed.
 
 ## Semantic search
 
-A relevance-ranked search is hybrid: the `query_by` includes the
-`embedding` field alongside `title_txt`, `ocr_text`, and
-`entity_aliases_txt`. Typesense fuses keyword and vector scores
-automatically — typing `laïcité au Burkina` matches docs about
-secularism in Burkina Faso even when the exact words don't appear.
+Every search **lists keyword matches**, and its count, histogram, facet
+counts and export describe those matches. Semantic search is offered on
+top, never asserted: the `embedding` field in `query_by` powers a hybrid
+search (Typesense fuses keyword and vector scores, so `laïcité au
+Burkina` also finds documents about secularism in Burkina Faso), but a
+hybrid search returns every keyword match **plus** the vector leg's
+nearest neighbours, which match no query word, as a fixed top-k. Listed
+as results, they inflated the count (`koudouss` on the Benin block: 108
+"results" for 11 matches) and, under a date sort, filled the first page.
+Rank fusion does not even keep them after the matches: a neighbour's
+vector score alone (0.3 at vector rank 1) can outrank a keyword match
+ranked third or lower.
 
-Hybrid search returns every keyword match **plus** the vector leg's
-nearest neighbours, which match no query word. Rank fusion places them
-after the matches, so they only make sense in relevance order. Any other
-sort (date, author) interleaves them with the real matches. The
-`koudouss` search on the date-sorted Benin block showed 108 results for
-11 matches, and its first page was all neighbours. So every non-relevance
-order runs keyword-only, as quoted and `-excluded` queries always have.
-`blendsSemantic()` in `lib/queryBuilders.ts` is the one rule, shared by
-the main search, its histogram, facet-value search and export. The
-keyword-count probe that detects a semantic-only response runs only
-alongside a hybrid search; a keyword-only search is its own count.
+So a relevance-ranked text query lists the keyword matches and counts
+the hybrid set beside them in the same multi_search (`per_page: 0`).
+The difference is offered after the list — "Show 97 semantically related
+items" — and under the empty state when nothing matched. Opting in
+re-runs the search hybrid, under a banner naming the matches it
+contains, with a way back; the opt-in is keyed to the query. Date and
+author orders, browse, quoted and `-excluded` queries never offer it.
+`offersSemantic()` / `blendsSemantic()` in `lib/queryBuilders.ts` are the
+rule, shared by the main search, histogram, facet-value search and
+export; `semanticView()` in `lib/semanticFallback.ts` is the state App
+and the federated "All" tab render from. The tab badges are keyword
+counts, the number each tab lists.
 
 A distance cutoff would not separate them: with `multilingual-e5-small`,
 real matches and unrelated neighbours sat at the same vector distance

@@ -173,11 +173,12 @@ describe('exact-query handling', () => {
     expect(search).toMatchObject({ num_typos: 0, drop_tokens_threshold: 0 });
   });
 
-  it('leaves an ordinary query fuzzy, with embedding and stopwords intact', async () => {
+  it('leaves an ordinary query fuzzy, with embedding and stopwords intact once opted in', async () => {
     const { sent } = mockServer([{ results: [HIT_PAGE] }]);
 
     await new TypesenseClient(bootstrap({ query_by: 'title_txt,ocr_text,embedding' })).search({
       q: 'ramadan',
+      semantic: true,
     });
 
     const search = sub(sent, 0);

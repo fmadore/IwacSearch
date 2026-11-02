@@ -51,6 +51,8 @@ export interface SearchRequest {
   q: string;
   page: number;
   sort: string;
+  /** The reader opted in to related documents for this query (lib/semanticFallback.ts). */
+  semantic: boolean;
   filters: ActiveFilters;
   yearRange: YearRange | null;
   /** The reader's page-size choice; null means the surface's configured one. */
@@ -102,8 +104,8 @@ export interface SearchResults {
 
 /**
  * The histogram is keyed on the query + categorical filters, never page/years.
- * The sort counts only where it changes the population: relevance blends in
- * the vector leg, every other order does not (see blendsSemantic).
+ * The sort and the opt-in count only where they change the population: the
+ * vector leg is listed only for an opted-in relevance query (blendsSemantic).
  */
 function histogramKeyOf(q: string, filters: ActiveFilters, hybrid: boolean): string {
   return `${q}\u0000${JSON.stringify(filters)}\u0000${hybrid}`;
@@ -177,8 +179,8 @@ export function createSearchResults(
   }
 
   function run(req: SearchRequest): (() => void) | undefined {
-    const { q, page, sort, filters, yearRange, perPage } = req;
-    const hybrid = blendsSemantic(q, sort, opts.defaultSort);
+    const { q, page, sort, semantic, filters, yearRange, perPage } = req;
+    const hybrid = blendsSemantic(q, sort, opts.defaultSort, semantic);
     // Read for its dependency only: bumping it re-runs the calling effect.
     void retryVersion;
 
@@ -189,7 +191,7 @@ export function createSearchResults(
       if (!opts.withHistogram) return undefined;
       let cancelled = false;
       client
-        .yearDistribution(q, !spanKnown, sort)
+        .yearDistribution(q, !spanKnown, sort, semantic)
         .then(({ years, span }) => {
           if (cancelled) return;
           yearDistribution = years;
@@ -216,6 +218,7 @@ export function createSearchResults(
         q,
         page,
         sortBy: sort,
+        semantic,
         activeFilters: filters,
         yearRange,
         perPage: perPage ?? undefined,

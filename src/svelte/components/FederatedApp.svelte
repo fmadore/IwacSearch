@@ -8,7 +8,7 @@
   import { TypesenseClient } from '../lib/typesense';
   import { isAbortError } from '../lib/transport';
   import { createTypingBurst } from '../lib/urlState';
-  import { isSemanticOnlyResponse } from '../lib/semanticFallback';
+  import { semanticView } from '../lib/semanticFallback';
   import { resultAnnouncement } from '../lib/announce';
   import { landOnResults, refocus } from '../lib/refocus';
   import { provideI18n, normalizeLocale, type Locale } from '../lib/i18n';
@@ -161,11 +161,12 @@
     if (activeTab !== 'all') return;
     const q = query;
     const p = unionPage;
+    const semantic = unionSemanticOptInFor === q;
     void unionRetry;
     unionLoading = true;
     unionError = null;
     countClient
-      .unionSearch({ q, page: p, perPage: unionPerPage, searches: collectionSearches })
+      .unionSearch({ q, page: p, perPage: unionPerPage, semantic, searches: collectionSearches })
       .then((r) => {
         unionResponse = r;
         unionLoading = false;
@@ -181,19 +182,15 @@
   });
 
   /**
-   * The union carries the same vector-fabrication exposure the per-collection
-   * surfaces closed in 3.14.0, by the same mechanism: the content leg's
-   * `query_by` ends in `embedding`, so a query the keyword leg matches
-   * nowhere still comes back full of the vector leg's fixed top-k. Merged
-   * with the entity collection and labelled "N results", that reads as a
-   * federated finding — the strongest claim on the site.
-   *
-   * Same contract as App.svelte, keyed to the query so the opt-in belongs to
-   * ONE dead query and pages within it without carrying over to the next.
+   * Same contract as App.svelte (lib/semanticFallback.ts): the union lists
+   * keyword matches, and the content leg's related documents are offered
+   * behind an opt-in. Merged with the entity collection and labelled "N
+   * results", a vector top-k would read as a federated finding — the
+   * strongest claim on the site. Keyed to the query so the opt-in pages
+   * within it without carrying over to the next.
    */
   let unionSemanticOptInFor = $state<string | null>(null);
-  const unionSemanticOnly = $derived(isSemanticOnlyResponse(unionResponse, query));
-  const unionSemanticHidden = $derived(unionSemanticOnly && unionSemanticOptInFor !== query);
+  const unionSemantic = $derived(semanticView(unionResponse, query));
 
   /**
    * The merged ranking is capped rather than fully pageable. Deep paging a
@@ -230,6 +227,7 @@
   /** The offer and the banner are different buttons: focus follows to the other one. */
   function setUnionSemantic(optIn: boolean): void {
     unionSemanticOptInFor = optIn ? query : null;
+    unionPage = 1;
     void refocus(() => rootEl?.querySelector<HTMLElement>('.iwac-search__semantic-btn'));
   }
 
@@ -239,8 +237,8 @@
       ? resultAnnouncement(
           {
             response: unionResponse,
-            semanticHidden: unionSemanticHidden,
-            semanticOnly: unionSemanticOnly,
+            offered: unionSemantic.related,
+            semanticOnly: unionSemantic.only,
             page: unionPage,
             totalPages: unionTotalPages,
           },
@@ -492,14 +490,14 @@
         {:else if unionLoading && !unionResponse}
           <p class="iwac-fed__union-status">{t('searching')}</p>
         {:else if unionResponse}
-          {#if unionResponse.found === 0 || unionSemanticHidden}
-            <!-- Withheld exactly as the per-collection surfaces withhold: say
-                 nothing matched, then offer the near neighbours as an offer —
-                 the same SemanticFallback component, not a second copy. -->
+          {#if unionResponse.found === 0}
+            <!-- The same contract as the per-collection surfaces: say nothing
+                 matched, then offer the related documents as an offer — the
+                 same SemanticFallback component, not a second copy. -->
             <p class="iwac-fed__union-status">{t('results_empty_list')}</p>
-            {#if unionSemanticHidden}
+            {#if unionSemantic.offer}
               <SemanticFallback
-                found={unionResponse.found}
+                found={unionSemantic.related}
                 {query}
                 shown={false}
                 onShow={() => setUnionSemantic(true)}
@@ -507,10 +505,11 @@
               />
             {/if}
           {:else}
-            {#if unionSemanticOnly}
+            {#if unionSemantic.blended}
               <!-- Opted in: rendered, but never unlabelled. -->
               <SemanticFallback
-                found={unionResponse.found}
+                found={unionSemantic.related}
+                matches={unionResponse.keyword_found ?? 0}
                 {query}
                 shown={true}
                 onShow={() => setUnionSemantic(true)}
@@ -519,7 +518,7 @@
             {/if}
             <p class="iwac-fed__union-count">
               {formatNumber(unionResponse.found)}
-              {i18n.tp(unionSemanticOnly ? 'semantic_result' : 'result', unionResponse.found)}
+              {i18n.tp(unionSemantic.only ? 'semantic_result' : 'result', unionResponse.found)}
             </p>
             <ol class="iwac-fed__union-list">
               {#each unionResponse.hits as hit (hit.document.id)}
@@ -539,6 +538,15 @@
               <!-- Only at the cap: saying this up front would read as a
                    limitation on a list most people never page through. -->
               <p class="iwac-fed__cap">{t('union_cap_hint')}</p>
+            {/if}
+            {#if unionSemantic.offer}
+              <SemanticFallback
+                found={unionSemantic.related}
+                {query}
+                shown={false}
+                onShow={() => setUnionSemantic(true)}
+                onHide={() => setUnionSemantic(false)}
+              />
             {/if}
           {/if}
         {/if}

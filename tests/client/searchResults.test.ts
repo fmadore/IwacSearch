@@ -91,6 +91,7 @@ function req(over: Partial<SearchRequest> = {}): SearchRequest {
     q: '',
     page: 1,
     sort: 'date:desc',
+    semantic: false,
     filters: {},
     yearRange: null,
     perPage: null,
@@ -143,7 +144,7 @@ describe('createSearchResults', () => {
     expect(results.response).toEqual(snapshot);
     results.run(req());
     expect(client.search).not.toHaveBeenCalled();
-    expect(client.yearDistribution).toHaveBeenCalledWith('', true, 'date:desc');
+    expect(client.yearDistribution).toHaveBeenCalledWith('', true, 'date:desc', false);
     await flush();
     expect(results.yearDistribution).toEqual(YEARS);
     // The next change searches — and the histogram it fetched is reused.
@@ -201,22 +202,28 @@ describe('createSearchResults', () => {
     expect(asked()).toBe(true);
   });
 
-  it('asks again when the sort moves between relevance and any other order', async () => {
-    // Relevance blends in the vector leg; date orders do not (blendsSemantic),
-    // so the bars of one are not the bars of the other.
+  it('asks again when the opt-in changes the listed population', async () => {
+    // Only an opted-in relevance query lists the vector leg (blendsSemantic),
+    // so its bars are not the keyword list's.
     const client = fakeClient(async () => ({ response: res(3), years: YEARS }));
     const { results } = make(client);
     const asked = () => client.search.mock.calls.at(-1)![0].withYearDistribution;
+    const rel = '_text_match:desc';
 
     results.run(req({ q: 'islam' }));
     expect(asked()).toBe(true);
     await flush();
-    results.run(req({ q: 'islam', sort: '_text_match:desc' }));
-    expect(asked()).toBe(true);
-    await flush();
-    results.run(req({ q: 'islam', sort: '_text_match:desc', page: 2 }));
+    // Relevance alone lists the same keyword matches.
+    results.run(req({ q: 'islam', sort: rel }));
     expect(asked()).toBe(false);
-    results.run(req({ q: 'islam', sort: 'date:asc' }));
+    results.run(req({ q: 'islam', sort: rel, semantic: true }));
+    expect(asked()).toBe(true);
+    expect(client.search.mock.calls.at(-1)![0].semantic).toBe(true);
+    await flush();
+    results.run(req({ q: 'islam', sort: rel, semantic: true, page: 2 }));
+    expect(asked()).toBe(false);
+    // A date order lists keyword matches whatever the opt-in says.
+    results.run(req({ q: 'islam', sort: 'date:asc', semantic: true }));
     expect(asked()).toBe(true);
   });
 

@@ -14,7 +14,7 @@ import {
   CONTENT_HIGHLIGHT_FALLBACK,
   CONTENT_QUERY_BY_FALLBACK,
   EXACT_MODE_PARAMS,
-  blendsSemantic,
+  offersSemantic,
   buildFilterBy,
   buildYearRangeFilter,
   combineFilters,
@@ -183,10 +183,14 @@ interface SearchContext {
   q: string;
   /** Carries `embedding` only when {@link hybrid}. */
   queryBy: string;
+  /** The surface's query_by with `embedding`: what the hybrid count probe runs. */
+  hybridQueryBy: string;
   highlightFields: string;
   sortBy: string;
   exact: boolean;
-  /** Vector leg blended in (see blendsSemantic): relevance-ranked text queries only. */
+  /** Related documents can be offered (see offersSemantic): the hybrid set is counted. */
+  offers: boolean;
+  /** The reader opted in, so the listed population includes the vector leg. */
   hybrid: boolean;
 }
 
@@ -240,6 +244,8 @@ export class TypesenseClient {
     page?: number;
     perPage?: number;
     sortBy?: string;
+    /** The reader opted in to related documents (lib/semanticFallback.ts). */
+    semantic?: boolean;
     activeFilters?: ActiveFilters;
     /** Numeric year range. Either bound may be omitted. */
     yearRange?: YearRange | null;
@@ -353,13 +359,14 @@ export class TypesenseClient {
               },
             ]
           : []),
-        // The keyword-only count, which tells real matches from the vector
-        // leg's top-k. A keyword-only main search is its own count.
-        ...(ctx.hybrid
+        // The population NOT listed, counted: the hybrid set beside a keyword
+        // list (what the offer promises), or the keyword matches beside an
+        // opted-in hybrid list. A search that offers nothing is its own count.
+        ...(ctx.offers
           ? [
               {
                 collection,
-                ...queryPolicy(q, ctx.queryBy, includeStopwords, true),
+                ...queryPolicy(q, ctx.hybridQueryBy, includeStopwords, ctx.hybrid),
                 filter_by: filterBy || undefined,
                 per_page: 0,
                 enable_analytics: false,
@@ -369,9 +376,9 @@ export class TypesenseClient {
         ...(args.withYearSpan ? [this.yearSpanSearch(ctx, includeStopwords)] : []),
       ],
     });
-    // Sub-search positions: [main, histogram?, keyword count?, span?].
-    const keywordIndex = args.withYearDistribution ? 2 : 1;
-    const spanIndex = keywordIndex + (ctx.hybrid ? 1 : 0);
+    // Sub-search positions: [main, histogram?, other count?, span?].
+    const countIndex = args.withYearDistribution ? 2 : 1;
+    const spanIndex = countIndex + (ctx.offers ? 1 : 0);
 
     return this.withStopwordRetry({
       label: 'Search',
@@ -386,10 +393,11 @@ export class TypesenseClient {
         lastEnvelope = raw as MultiSearchEnvelope;
       },
     }).then((response) => {
-      if (ctx.hybrid) {
-        response.keyword_found = readCount(lastEnvelope?.results?.[keywordIndex]);
-      } else if (!isBrowse) {
-        response.keyword_found = response.found;
+      if (!isBrowse) {
+        const other = ctx.offers ? readCount(lastEnvelope?.results?.[countIndex]) : undefined;
+        response.keyword_found = ctx.hybrid ? other : response.found;
+        if (ctx.offers) response.hybrid_found = ctx.hybrid ? response.found : other;
+        response.blended = ctx.hybrid;
       }
       const outcome: SearchOutcome = { response };
       if (args.withYearSpan) {
@@ -413,9 +421,14 @@ export class TypesenseClient {
    * full span). Used when a full-mode surface adopts the SSR snapshot, which
    * carries the first page but no histogram — and, with `withSpan`, no span.
    */
-  async yearDistribution(q: string, withSpan = false, sortBy?: string): Promise<HistogramOutcome> {
-    // The sort decides the population (blendsSemantic), so it is passed too.
-    const ctx = await this.resolveContext({ q, sortBy, includeYearRange: false });
+  async yearDistribution(
+    q: string,
+    withSpan = false,
+    sortBy?: string,
+    semantic = false,
+  ): Promise<HistogramOutcome> {
+    // The sort and the opt-in decide the population (blendsSemantic).
+    const ctx = await this.resolveContext({ q, sortBy, semantic, includeYearRange: false });
     const json = await this.auxiliary(
       ctx.key.key,
       (stopwords) => ({
@@ -472,8 +485,9 @@ export class TypesenseClient {
     query: string;
     /** The surface's current main query, for contextual counts. */
     q: string;
-    /** The current sort, which decides whether the vector leg is counted. */
+    /** The current sort and opt-in, which decide whether the vector leg is counted. */
     sortBy?: string;
+    semantic?: boolean;
     activeFilters?: ActiveFilters;
     yearRange?: YearRange | null;
     maxValues?: number;
@@ -541,6 +555,7 @@ export class TypesenseClient {
   async fetchForExport(args: {
     q: string;
     sortBy?: string;
+    semantic?: boolean;
     activeFilters?: ActiveFilters;
     yearRange?: YearRange | null;
   }): Promise<{ docs: IwacDoc[]; found: number }> {
@@ -679,6 +694,8 @@ export class TypesenseClient {
     q: string;
     page?: number;
     perPage?: number;
+    /** The reader opted in to related documents (lib/semanticFallback.ts). */
+    semantic?: boolean;
     searches: Array<{ collection: string; queryBy: string; filterBy?: string }>;
   }): Promise<IwacSearchResponse> {
     // Signal first, for the same reason as search().
@@ -689,13 +706,20 @@ export class TypesenseClient {
     const q = isBrowse ? '*' : args.q;
     const exact = !isBrowse && isExactQuery(q);
     const sortBy = isBrowse ? 'date:desc' : '_text_match:desc';
+    // Relevance-ranked, so any text query can offer related documents, as on
+    // the per-collection tabs: keyword legs by default, hybrid once opted in.
+    const offers =
+      !isBrowse &&
+      !exact &&
+      args.searches.some((s) => s.queryBy.split(',').some((f) => f.trim() === 'embedding'));
+    const blended = offers && args.semantic === true;
 
     const buildBody = (includeStopwords: boolean) => ({
       union: true,
       searches: args.searches.map((s) => ({
         collection: s.collection,
         q,
-        query_by: exact ? withoutField(s.queryBy, 'embedding') : s.queryBy,
+        query_by: blended ? s.queryBy : withoutField(s.queryBy, 'embedding'),
         ...(includeStopwords && !exact ? { stopwords: STOPWORD_SET } : {}),
         ...(exact ? EXACT_MODE_PARAMS : {}),
         filter_by: s.filterBy?.trim() || undefined,
@@ -713,19 +737,18 @@ export class TypesenseClient {
 
     // Union mode returns ONE merged result object, not {results: [...]},
     // so the payload IS the response — no `pick` needed.
-    // The keyword counts that tell a real union from a vector-only one used
-    // to be a second POST awaited AFTER the union — serial latency on the tab
-    // every masthead search lands on — and re-sent on every page turn. They
-    // run alongside the union now, once per query (paging reuses them).
-    const countsKey = JSON.stringify([q, args.searches]);
-    const keywordFound =
-      isBrowse || this.unionKeywordCounts?.key === countsKey
-        ? Promise.resolve(isBrowse ? undefined : this.unionKeywordCounts?.value)
-        : this.unionKeywordFound(key.key, q, args.searches, signal).then((value) => {
-            if (value !== undefined) this.unionKeywordCounts = { key: countsKey, value };
+    // The count of the population NOT listed (hybrid beside a keyword union,
+    // keyword beside an opted-in one) runs alongside the union, once per
+    // query and mode: paging reuses it.
+    const countsKey = JSON.stringify([q, blended, args.searches]);
+    const otherFound =
+      !offers || this.unionOtherCounts?.key === countsKey
+        ? Promise.resolve(offers ? this.unionOtherCounts?.value : undefined)
+        : this.unionCountSum(key.key, q, args.searches, blended, signal).then((value) => {
+            if (value !== undefined) this.unionOtherCounts = { key: countsKey, value };
             return value;
           });
-    const [response, keyword] = await Promise.all([
+    const [response, other] = await Promise.all([
       this.withStopwordRetry({
         label: 'Everything',
         url: url.toString(),
@@ -733,20 +756,25 @@ export class TypesenseClient {
         signal,
         buildBody,
       }),
-      keywordFound,
+      otherFound,
     ]);
-    if (keyword !== undefined) response.keyword_found = keyword;
+    if (!isBrowse) {
+      response.keyword_found = blended ? other : response.found;
+      if (offers) response.hybrid_found = blended ? response.found : other;
+      response.blended = blended;
+    }
     return response;
   }
 
-  /** Last union keyword total, keyed by query + legs, so paging does not recount. */
-  private unionKeywordCounts: { key: string; value: number } | null = null;
+  /** Last union count of the unlisted population, keyed by query + mode + legs. */
+  private unionOtherCounts: { key: string; value: number } | null = null;
 
-  /** Sum of the keyword-only counts of every union leg; undefined if any failed. */
-  private async unionKeywordFound(
+  /** Sum of every union leg's keyword-only or hybrid count; undefined if any failed. */
+  private async unionCountSum(
     key: string,
     q: string,
     searches: Array<{ collection: string; queryBy: string; filterBy?: string }>,
+    keywordOnly: boolean,
     signal: AbortSignal,
   ): Promise<number | undefined> {
     const counts = await this.auxiliary(
@@ -754,13 +782,13 @@ export class TypesenseClient {
       (stopwords) => ({
         searches: searches.map((s) => ({
           collection: s.collection,
-          ...queryPolicy(q, s.queryBy, stopwords, true),
+          ...queryPolicy(q, s.queryBy, stopwords, keywordOnly),
           filter_by: s.filterBy || undefined,
           per_page: 0,
           enable_analytics: false,
         })),
       }),
-      'Keyword counts',
+      'Union counts',
       signal,
     );
     const values = counts.results?.map(readCount);
@@ -769,7 +797,11 @@ export class TypesenseClient {
       : undefined;
   }
 
-  /** Hybrid totals paired with explicit keyword counts. Failed counts become blank badges. */
+  /**
+   * Keyword-only counts, one per tab: the number of matches each tab lists
+   * before the reader opts in to related documents. Failed counts become
+   * blank badges.
+   */
   async countAcross(
     q: string,
     collections: Array<{ collection: string; queryBy: string; filterBy?: string }>,
@@ -781,30 +813,17 @@ export class TypesenseClient {
     const json = await this.auxiliary(
       key.key,
       (stopwords) => ({
-        searches: collections.flatMap((c) => [
-          {
-            collection: c.collection,
-            ...queryPolicy(q, c.queryBy, stopwords),
-            filter_by: c.filterBy || undefined,
-            per_page: 0,
-            enable_analytics: false,
-          },
-          {
-            collection: c.collection,
-            ...queryPolicy(q, c.queryBy, stopwords, true),
-            filter_by: c.filterBy || undefined,
-            per_page: 0,
-            enable_analytics: false,
-          },
-        ]),
+        searches: collections.map((c) => ({
+          collection: c.collection,
+          ...queryPolicy(q, c.queryBy, stopwords, true),
+          filter_by: c.filterBy || undefined,
+          per_page: 0,
+          enable_analytics: false,
+        })),
       }),
       'Counts',
     );
-    return collections.map((_, i) => {
-      const total = readCount(json.results?.[i * 2]);
-      const keyword = readCount(json.results?.[i * 2 + 1]);
-      return total === undefined || keyword === undefined ? null : keyword === 0 ? 0 : total;
-    });
+    return collections.map((_, i) => readCount(json.results?.[i]) ?? null);
   }
 
   /** Counts/facets share stopword degradation and validate each envelope. */
@@ -869,6 +888,7 @@ export class TypesenseClient {
     activeFilters?: ActiveFilters;
     yearRange?: YearRange | null;
     sortBy?: string;
+    semantic?: boolean;
     includeYearRange?: boolean;
   }): Promise<SearchContext> {
     const key = await this.getKey();
@@ -895,9 +915,13 @@ export class TypesenseClient {
     // they mean it literally; the caller adds EXACT_MODE_PARAMS and skips
     // stopwords. Browse mode is never exact. See isExactQuery().
     const exact = !isBrowse && isExactQuery(q);
-    // Exact queries and every non-relevance sort drop `embedding`, so no
-    // semantically similar but non-matching document is blended in.
-    const hybrid = blendsSemantic(q, args.sortBy, this.bootstrap.default_sort);
+    // Every search lists keyword matches. A relevance-ranked text query on a
+    // collection with embeddings also counts the hybrid set, and lists it
+    // once the reader opts in (lib/semanticFallback.ts).
+    const offers =
+      offersSemantic(q, args.sortBy, this.bootstrap.default_sort) &&
+      baseQueryBy.split(',').some((f) => f.trim() === 'embedding');
+    const hybrid = offers && args.semantic === true;
 
     return {
       key,
@@ -906,9 +930,11 @@ export class TypesenseClient {
       isBrowse,
       q,
       queryBy: hybrid ? baseQueryBy : withoutField(baseQueryBy, 'embedding'),
+      hybridQueryBy: baseQueryBy,
       highlightFields: this.bootstrap.highlight_fields ?? CONTENT_HIGHLIGHT_FALLBACK,
       sortBy: resolveSortBy(args.sortBy, isBrowse, this.bootstrap.default_sort),
       exact,
+      offers,
       hybrid,
     };
   }

@@ -22,7 +22,7 @@ function input(over: Partial<AnnouncementInput> & { found?: number } = {}): Anno
       request_params: {},
       search_time_ms: 1,
     } as IwacSearchResponse,
-    semanticHidden: false,
+    offered: 0,
     semanticOnly: false,
     page: 1,
     totalPages: 1,
@@ -62,13 +62,15 @@ describe('resultAnnouncement', () => {
     expect(resultAnnouncement(input({ found: 0 }), i18n)).toBe(t('announce_no_results'));
   });
 
-  it('never announces a withheld semantic set as results', () => {
-    const s = resultAnnouncement(
-      input({ found: 100, semanticOnly: true, semanticHidden: true }),
-      i18n,
-    );
+  it('announces related documents on offer when nothing matched, never as results', () => {
+    const s = resultAnnouncement(input({ found: 0, offered: 100 }), i18n);
     expect(s).toBe(t('announce_semantic_other', { n: '100' }));
     expect(s).not.toBe(t('announce_results_other', { n: '100' }));
+  });
+
+  it('announces the matches, not the offer, when there are matches', () => {
+    const s = resultAnnouncement(input({ found: 11, offered: 97 }), i18n);
+    expect(s).toBe(t('announce_results_other', { n: '11' }));
   });
 
   it('announces a shown semantic set as near matches, with its page', () => {
