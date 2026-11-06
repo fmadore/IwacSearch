@@ -6,6 +6,10 @@ Versions that were never published (tagged and released) are folded into the nex
 
 ## [Unreleased]
 
+### Security
+
+- symfony/yaml goes to 8.1.11, which fixes exponential and quadratic parse times in its YAML parser ([GHSA-hwfg-qwvh-2wfx](https://github.com/symfony/symfony/security/advisories/GHSA-hwfg-qwvh-2wfx)). The module parses only its own bundled schema file with it (`SchemaLoader`), never visitor input, so nothing was exposed. The update clears `composer audit`, which had started failing CI.
+
 ## [3.27.2] - 2026-11-02
 
 ### Fixed
