@@ -569,11 +569,12 @@
 
   /*
    * Shared query box. The field itself is SearchInput (same component the
-   * per-tab surfaces use), so this only owns the measure — everything
-   * inside, including the clear button, is the component's.
+   * per-tab surfaces use); it fills the column like the per-collection
+   * surfaces' box — the 44rem measure it used to stop at left an empty half
+   * beside it.
    */
   .iwac-fed__search {
-    max-width: var(--measure-narrow, 44rem);
+    max-width: none;
   }
   .iwac-fed__search :global(.iwac-input) {
     width: 100%;
@@ -593,9 +594,10 @@
 
   /*
    * Result-type tabs — the stack's RULED tab (the grammar of the theme's
-   * "How to cite" strip and its masthead nav): a tracked uppercase strip on a
-   * hairline, ink labels, and the selected tab in ink-strong over a 2px
-   * --primary underline. No fill, no pill, no radius: a filled orange tab was
+   * "How to cite" strip): a sentence-case strip on a hairline (tracked
+   * capitals are the masthead nav's and the datelines' alone), ink labels,
+   * and the selected tab in ink-strong over a 2px --primary underline. No
+   * fill, no pill, no radius: a filled tab was
    * the one control here DESIGN-PHILOSOPHY rules out by name, and it needed
    * twenty !importants to beat the theme's button base. The descendant
    * selectors below outrank that base's hover rule
@@ -619,10 +621,8 @@
     border-block-end: 2px solid transparent;
     border-radius: 0;
     font: inherit;
-    font-size: var(--text-xs, 0.8125rem);
+    font-size: var(--text-sm, 0.9375rem);
     font-weight: 600;
-    letter-spacing: var(--tracking-wide, 0.04em);
-    text-transform: uppercase;
     transition:
       color var(--transition-fast, 150ms cubic-bezier(0.25, 1, 0.5, 1)),
       border-color var(--transition-fast, 150ms cubic-bezier(0.25, 1, 0.5, 1));
@@ -649,7 +649,6 @@
   }
   .iwac-fed__tab-count {
     font-variant-numeric: tabular-nums;
-    letter-spacing: 0;
     color: var(--muted, #66696e);
   }
 

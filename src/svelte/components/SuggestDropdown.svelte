@@ -390,7 +390,8 @@
     background: var(--surface, #fdfcfb);
     border: 1px solid var(--border, #ced1d6);
     border-radius: var(--radius-md, 0);
-    /* Published overlay shadow (dark-variant aware), not a hand-rolled pair. */
+    /* Square, but it keeps the published overlay shadow (dark-variant aware):
+       a floating panel is where the flat theme still separates a layer. */
     box-shadow: var(
       --shadow-lg,
       0 4px 12px -4px rgba(9, 11, 15, 0.18),
@@ -451,7 +452,7 @@
   }
   /* --active is the aria-activedescendant highlight (focus stays in the
      input), so it keeps the tint alone. Real keyboard focus on the row gets a
-     solid indicator, drawn INSET because the panel is rounded and clipped. */
+     solid indicator, drawn INSET because the panel is clipped. */
   .iwac-suggest__item:focus-visible {
     outline: var(--focus-outline, 2px solid #18298d);
     outline-offset: -2px;
@@ -521,7 +522,7 @@
   .iwac-suggest__title :global(mark) {
     background: color-mix(in oklab, var(--primary, #18298d) 22%, transparent);
     color: var(--ink-strong, #05070c);
-    border-radius: 0.125em;
+    border-radius: 0;
     padding: 0 0.125em;
     font-weight: 500;
   }
@@ -532,7 +533,7 @@
     color: var(--muted, #66696e);
     background: var(--surface-sunken, #f4f1ef);
     padding: 0.125rem 0.5rem;
-    border-radius: var(--radius-full, 9999px);
+    border-radius: var(--radius-sm, 0);
   }
   .iwac-suggest__sr {
     position: absolute;

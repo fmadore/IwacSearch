@@ -594,6 +594,17 @@
   .iwac-card__body--gallery {
     gap: 0.2rem;
   }
+  /* A tile is too narrow for TYPE · DATE on one line, and the wrap left the
+     date opening on a stray interpunct. The tile stacks the dateline instead:
+     type over date (over running time), no separators. */
+  .iwac-card__body--gallery .iwac-card__head {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .iwac-card__body--gallery .iwac-card__type + .iwac-card__eyebrow::before,
+  .iwac-card__body--gallery .iwac-card__eyebrow--duration::before {
+    content: none;
+  }
   .iwac-card__head {
     display: flex;
     align-items: baseline;
@@ -932,11 +943,10 @@
   .iwac-card__matched :global(mark) {
     color: var(--ink-strong, #05070c);
   }
+  /* "Matched in": a sentence-case label at the line's own size. It was a
+     tracked-caps eyebrow; the theme keeps those for datelines only. */
   .iwac-card__matched-label {
     font-weight: 600;
-    letter-spacing: var(--tracking-wide, 0.04em);
-    text-transform: uppercase;
-    font-size: 0.85em;
     margin-inline-end: 0.35em;
   }
   .iwac-card__matched-field {
@@ -1060,6 +1070,9 @@
     border-radius: 0;
     font: inherit;
     font-weight: 500;
+    /* A filter chip is a <button>, which centres its text: a source name that
+       wraps in a narrow gallery tile sat centred under the line's start. */
+    text-align: start;
     vertical-align: baseline;
   }
   .iwac-card__chip--filter,

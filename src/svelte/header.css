@@ -33,8 +33,9 @@
   background: var(--surface, #fdfcfb);
   border: 1px solid var(--border, #ced1d6);
   border-radius: var(--radius-md, 0);
-  /* Published overlay shadow (dark-variant aware), not the hand-rolled neutral
-     black pair this used to carry in common with two other files. */
+  /* Square, but it keeps the published overlay shadow (dark-variant aware):
+     a panel floating over the page is where the flat theme still separates a
+     layer with one (IWAC-theme 2.33). */
   box-shadow: var(--shadow-lg, 0 4px 12px -4px rgba(9, 11, 15, 0.18), 0 1px 3px 0 rgba(20, 22, 27, 0.06));
   max-height: min(24rem, 70vh);
   overflow: hidden auto;
@@ -123,7 +124,7 @@
 }
 
 /* --active is the aria-activedescendant highlight; real keyboard focus gets a
-   solid indicator, inset because the panel is rounded and clipped. */
+   solid indicator, inset because the panel is clipped. */
 .iwac-header-suggest__item:focus-visible {
   outline: var(--focus-outline, 2px solid #18298d);
   outline-offset: -2px;
@@ -155,7 +156,7 @@
 .iwac-header-suggest__title mark {
   background: color-mix(in oklab, var(--primary, #18298d) 22%, transparent);
   color: var(--ink-strong, #05070c);
-  border-radius: 0.125em;
+  border-radius: 0;
   padding: 0 0.125em;
   font-weight: 500;
 }
@@ -167,7 +168,7 @@
   color: var(--muted, #66696e);
   background: var(--surface-sunken, #f4f1ef);
   padding: 0.125rem 0.5rem;
-  border-radius: var(--radius-full, 9999px);
+  border-radius: var(--radius-sm, 0);
 }
 
 /* The status line sits after the listbox (a listbox may own only options),

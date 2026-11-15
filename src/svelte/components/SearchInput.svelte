@@ -203,7 +203,7 @@
     font-size: var(--text-lg, 1.1875rem);
     line-height: 1;
     cursor: pointer;
-    border-radius: var(--radius-full, 9999px);
+    border-radius: var(--radius-sm, 0);
   }
   .iwac-input__clear:hover {
     background: var(--surface-sunken, #f4f1ef);

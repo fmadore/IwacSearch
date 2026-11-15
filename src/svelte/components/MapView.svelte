@@ -127,8 +127,9 @@
     // themed page paints with. `--surface` is the page ground, so the marker
     // stroke and the cluster numeral track the basemap: near-white on positron,
     // near-black on dark-matter. It is also the one choice that keeps the
-    // numeral legible on the marker fill in both themes (white on the dark
-    // theme's lighter --primary measures 3.23:1; --surface measures 6.1:1).
+    // numeral legible on the marker fill in both themes: the dark theme
+    // lightens --primary, so a fixed white numeral loses contrast there while
+    // --surface moves the other way with it.
     const css = getComputedStyle(el);
     const readColor = (name: string, fallback: string): string =>
       normalizeColor(css.getPropertyValue(name).trim() || fallback, fallback);

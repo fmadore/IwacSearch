@@ -362,11 +362,10 @@
     gap: var(--space-2, 0.5rem);
     color: var(--ink-strong, #05070c);
   }
+  /* Same sentence-case label as the facet headings below it. */
   .iwac-daterange__label {
-    font-size: var(--text-xs, 0.8125rem);
-    font-weight: 700;
-    letter-spacing: var(--tracking-wider, 0.08em);
-    text-transform: uppercase;
+    font-size: var(--text-sm, 0.9375rem);
+    font-weight: 600;
   }
   .iwac-daterange__range {
     flex: 1;
@@ -417,9 +416,8 @@
     min-width: 0;
     /* A year with documents the user hasn't selected — quiet, present. */
     background: color-mix(in oklab, var(--muted, #66696e) 28%, transparent);
-    /* Bars are only a few px wide, so the radius tokens (≥6px) would round
-       them into blobs; a 1px cap just softens the top edge. */
-    border-radius: 1px 1px 0 0;
+    /* Square, like every other mark on the page (IWAC-theme 2.33). */
+    border-radius: 0;
     transition:
       height var(--transition-base, 200ms cubic-bezier(0.25, 1, 0.5, 1)),
       background-color var(--transition-fast, 150ms cubic-bezier(0.25, 1, 0.5, 1));
@@ -464,7 +462,8 @@
     /* 3:1 against the page in both themes (WCAG 1.4.11): --surface-sunken
        alone measured 1.1:1, a track nobody could see. */
     background: color-mix(in oklab, var(--muted, #66696e) 80%, var(--surface-sunken, #f4f1ef));
-    border-radius: var(--radius-full, 9999px);
+    /* A ruled bar, not a capsule: only the thumbs (dots) stay round. */
+    border-radius: 0;
     pointer-events: none;
   }
   .iwac-daterange__filled {
@@ -475,7 +474,7 @@
     width: calc(var(--iwac-fill-end) - var(--iwac-fill-start));
     height: 6px;
     background: var(--primary, #18298d);
-    border-radius: var(--radius-full, 9999px);
+    border-radius: 0;
     pointer-events: none;
     transform: translateX(calc(-1 * var(--iwac-fill-start) * 0));
     /* Constrain to track-inner width: see comment below. */

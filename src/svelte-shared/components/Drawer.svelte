@@ -309,7 +309,7 @@
     cursor: pointer;
     width: 2rem;
     height: 2rem;
-    border-radius: var(--radius-full, 9999px);
+    border-radius: var(--radius-sm, 0);
     display: inline-flex;
     align-items: center;
     justify-content: center;

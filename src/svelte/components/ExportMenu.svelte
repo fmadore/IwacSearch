@@ -181,7 +181,9 @@
     }
   }
 
-  /* Floating format menu — same chrome as the suggest dropdown. */
+  /* Floating format menu — same chrome as the suggest dropdown. Square, but it
+     keeps --shadow-lg: a menu floating over the results is the one place the
+     flat theme still separates a layer with a shadow. */
   .iwac-export__menu {
     position: absolute;
     inset-inline-end: 0;
@@ -227,7 +229,7 @@
     background: color-mix(in oklab, var(--primary, #18298d) 8%, var(--surface, #fdfcfb));
   }
   .iwac-export__item:focus-visible {
-    /* Inset: the menu is a rounded, clipped panel and these items run its full
+    /* Inset: the menu is a clipped panel and these items run its full
        width, so an outset outline would be trimmed on both edges. */
     outline: var(--focus-outline, 2px solid #18298d);
     outline-offset: -2px;

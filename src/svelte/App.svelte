@@ -1033,6 +1033,26 @@
        its own padding from src/svelte-shared/components/Drawer.svelte. */
     padding: var(--space-4, 1rem);
   }
+  /* In the drawer the dialog's own title already says "Filters"; once the
+     panel's heading lost its tracked-caps eyebrow look it read as the same
+     title printed twice. It stays in the tree (the facet headings nest under
+     it) but leaves the eye; the header row keeps only "Clear all". */
+  .iwac-search__facets-body :global(.iwac-facets__heading) {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  .iwac-search__facets-body :global(.iwac-facets__header) {
+    justify-content: flex-end;
+  }
+  .iwac-search__facets-body :global(.iwac-facets__header:not(:has(.iwac-facets__clear-all))) {
+    padding: 0;
+    border: 0;
+  }
 
   /* 767px = md 768 − 1 on the theme's published scale. This literal has a
      twin in lib/filterDrawer.svelte.ts's matchMedia, which decides whether

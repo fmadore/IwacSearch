@@ -227,12 +227,11 @@
   }
   .iwac-pager__page.is-current {
     /*
-     * Outlined, not filled. A --primary fill with a --white label measures
-     * 4.78:1 in light mode and 3.23:1 in dark, because the dark theme's
-     * --primary is a LIGHTER orange — fill and label converge. No single ink
-     * passes on both fills (a dark ink on the light-mode fill is 3.92:1), and
-     * the module may not define theme tokens, so the fill is the thing that
-     * had to go. A 2px brand border under an ink-strong bold numeral reads as
+     * Outlined, not filled. Under the old orange a --primary fill with a
+     * --white label measured 3.23:1 in dark mode, where --primary is lighter;
+     * --ink-on-primary has since fixed the label, but the page number stays
+     * ruled rather than filled: the theme spends its one filled control on
+     * the primary action, not on pager state. A 2px brand border under an ink-strong bold numeral reads as
      * "you are here" at 15.7:1 light and ~16:1 dark, and matches the
      * ViewToggle's ruled current-state grammar.
      */

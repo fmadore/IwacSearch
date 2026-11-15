@@ -281,12 +281,12 @@
     padding-block: var(--space-1, 0.25rem) var(--space-2, 0.5rem);
     border-bottom: 1px solid var(--border, #ced1d6);
   }
+  /* Sentence case, untracked: tracked capitals are rationed to the theme's
+     nav strip and the result datelines (IWAC-theme 2.33 stance). */
   .iwac-facets__heading {
     margin: 0;
-    font-size: var(--text-xs, 0.8125rem);
+    font-size: var(--text-base, 1.0625rem);
     font-weight: 700;
-    letter-spacing: var(--tracking-wider, 0.08em);
-    text-transform: uppercase;
     color: var(--ink-strong, #05070c);
   }
   .iwac-facets__clear-all {
@@ -366,10 +366,8 @@
     cursor: pointer;
     font: inherit;
     color: var(--ink-strong, #05070c);
-    font-size: var(--text-xs, 0.8125rem);
-    font-weight: 700;
-    letter-spacing: var(--tracking-wider, 0.08em);
-    text-transform: uppercase;
+    font-size: var(--text-sm, 0.9375rem);
+    font-weight: 600;
     text-align: start;
     transition: color var(--transition-fast, 150ms cubic-bezier(0.25, 1, 0.5, 1));
   }
@@ -394,8 +392,6 @@
     font-size: var(--text-xs, 0.8125rem);
     font-weight: 700;
     font-variant-numeric: tabular-nums;
-    letter-spacing: 0;
-    text-transform: none;
   }
   .iwac-facets__group-chevron {
     display: inline-flex;

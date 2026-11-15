@@ -385,16 +385,16 @@
 
   /*
    * Heading button: the base button's border, padding and background are
-   * reset so the heading reads as an eyebrow label, not a control box.
+   * reset so the heading reads as a label, not a control box.
    */
   .iwac-facet__heading {
     display: flex;
     align-items: center;
     gap: var(--space-1, 0.25rem);
     width: 100%;
-    /* SC 2.5.8: the collapse/expand target measured 261×20.8. The label is an
-       uppercase 13px eyebrow, so height came from the line box alone; this
-       floors it at 24 without adding a padding box around the eyebrow. */
+    /* SC 2.5.8: the collapse/expand target measured 261×20.8 when the label
+       was a 13px eyebrow, so height came from the line box alone; this floors
+       it at 24 without adding a padding box around the label. */
     min-height: 1.5rem;
     padding: 0;
     background: none;
@@ -403,10 +403,10 @@
     cursor: pointer;
     font: inherit;
     color: var(--ink-strong, #05070c);
-    font-size: var(--text-xs, 0.8125rem);
-    font-weight: 700;
-    letter-spacing: var(--tracking-wider, 0.08em);
-    text-transform: uppercase;
+    /* A sentence-case label, not a tracked-caps eyebrow: the theme rations
+       tracked capitals to its nav strip and the datelines. */
+    font-size: var(--text-sm, 0.9375rem);
+    font-weight: 600;
     text-align: start;
     transition: color var(--transition-fast, 150ms cubic-bezier(0.25, 1, 0.5, 1));
   }
@@ -421,7 +421,7 @@
   .iwac-facet__label {
     flex: 1;
   }
-  /* The heading wrapper carries no type of its own: the button inside is the eyebrow. */
+  /* The heading wrapper carries no type of its own: the button inside is the label. */
   .iwac-facet__h {
     margin: 0;
     font: inherit;
@@ -441,8 +441,6 @@
     font-size: var(--text-xs, 0.8125rem);
     font-weight: 700;
     font-variant-numeric: tabular-nums;
-    letter-spacing: 0;
-    text-transform: none;
   }
   .iwac-facet__chevron {
     display: inline-flex;
@@ -503,7 +501,7 @@
     background: transparent;
     color: var(--muted, #66696e);
     border: none;
-    border-radius: var(--radius-full, 9999px);
+    border-radius: var(--radius-sm, 0);
     box-shadow: none;
     font-size: var(--text-base, 1.0625rem);
     line-height: 1;

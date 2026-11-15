@@ -49,7 +49,7 @@
     gap: var(--space-1, 0.25rem);
     padding: 0.25rem var(--space-2, 0.5rem);
     border: 1px solid var(--border, #ced1d6);
-    border-radius: var(--radius-full, 9999px);
+    border-radius: var(--radius-sm, 0);
     background: var(--surface, #fdfcfb);
     color: var(--ink, #13161c);
     box-shadow: none;
@@ -75,6 +75,6 @@
     color: var(--muted, #66696e);
     background: var(--surface-sunken, #f4f1ef);
     padding: 0.0625rem 0.375rem;
-    border-radius: var(--radius-full, 9999px);
+    border-radius: var(--radius-sm, 0);
   }
 </style>

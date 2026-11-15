@@ -48,7 +48,8 @@
 
 <style>
   /*
-   * Outlined chip, primary border, value in ink. It sets its own border and
+   * Outlined chip, primary border, value in ink; square, like every control
+   * since the theme's flat redesign (pills are kept for dots). It sets its own border and
    * background over the theme's base <button> is quiet (outlined, ink, no shadow or lift — IWAC-theme 2.10+).
    */
   .iwac-chip {
@@ -57,7 +58,7 @@
     gap: var(--space-1, 0.25rem);
     background: transparent;
     border: 1px solid var(--primary, #18298d);
-    border-radius: var(--radius-full, 9999px);
+    border-radius: var(--radius-sm, 0);
     box-shadow: none;
     cursor: pointer;
     font: inherit;
