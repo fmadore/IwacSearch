@@ -1,5 +1,14 @@
 # Deployment and acceptance checklist — 3.19.0
 
+## Next release: the theme's ink-and-blue redesign
+
+Presentation only: no reindex, no schema or key change. Ship it with the IWAC theme release that carries the new tokens (`tokens.json` here was synced from it).
+
+- [ ] On `/search?q=ramadan`, in light **and** dark mode: corners are square (search box, buttons, chips, highlights, the Export and Sort controls), highlights and the year slider are blue, and spaced-out capitals appear only on the result datelines.
+- [ ] The header typeahead and the Export menu still float with a small shadow; nothing else on the page has one.
+- [ ] On a phone (390px), open Filters: the drawer's title reads "Filters" once, and "Clear all" appears at the top once a filter is on.
+- [ ] A page with a compact search block shows it between two thin rules (one under a titled block), not as a card.
+
 ## 3.27.0 (2026-11-01): the cross-module review with DRESearch
 
 **No reindex; run the module upgrade.** It creates the generation ledger

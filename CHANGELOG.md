@@ -6,6 +6,19 @@ Versions that were never published (tagged and released) are folded into the nex
 
 ## [Unreleased]
 
+**Upgrade:** install together with (or after) the IWAC theme release that introduces the ink-and-blue design; with an older theme the module follows that theme's colours and corners as before, since every colour, corner and shadow comes from the theme's tokens. No reindex.
+
+### Changed
+
+- **The search pages follow the theme's new look: ink and one blue.** Corners are square on the search box, buttons, filter chips, suggestion tags, highlights and menus, and nothing casts a shadow except the menus, the search suggestions and the phone filter drawer that float over the page. Highlighted search terms, active filters and the current view are marked in the theme's blue.
+- **Fewer capital letters.** Spaced-out capitals stay only on each result's dateline ("NEWS ARTICLE · SEPTEMBER 15, 1977"). The "Filters" heading, the filter names (Year, Type, Country…), "Matched in", and the All / Content / Entities tabs are now written in normal sentence case.
+- **The compact search block** placed on site pages is no longer a shadowed card: it sits between two thin rules, like the theme's other page sections. Its introduction text and the search box on `/search/everything` now use the full width instead of stopping at a narrow column.
+- **Gallery view:** each tile's type and date sit on two lines instead of wrapping onto a line that started with a stray dot, and long source names wrap from the left.
+
+### Fixed
+
+- The filter drawer on phones showed "Filters" twice, once as its title and once as the panel's heading. The heading is kept for screen readers but no longer shown there.
+
 ### Security
 
 - symfony/yaml goes to 8.1.11, which fixes exponential and quadratic parse times in its YAML parser ([GHSA-hwfg-qwvh-2wfx](https://github.com/symfony/symfony/security/advisories/GHSA-hwfg-qwvh-2wfx)). The module parses only its own bundled schema file with it (`SchemaLoader`), never visitor input, so nothing was exposed. The update clears `composer audit`, which had started failing CI.
