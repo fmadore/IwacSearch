@@ -636,7 +636,7 @@
   .iwac-fed__tabs .iwac-fed__tab--active,
   .iwac-fed__tabs .iwac-fed__tab--active:hover:not(:disabled) {
     color: var(--ink-strong, #05070c);
-    border-block-end-color: var(--primary, #ce4115);
+    border-block-end-color: var(--primary, #18298d);
   }
   /* An empty tab steps down by colour, never by opacity: it is still a
      control, and --muted is the token built to clear 4.5:1. */
@@ -644,7 +644,7 @@
     color: var(--muted, #66696e);
   }
   .iwac-fed__tabs .iwac-fed__tab:focus-visible {
-    outline: var(--focus-outline, 2px solid #ce4115);
+    outline: var(--focus-outline, 2px solid #18298d);
     outline-offset: 2px;
   }
   .iwac-fed__tab-count {
@@ -692,7 +692,7 @@
     align-items: flex-start;
     background: color-mix(in oklab, var(--error, #c9222b) 12%, var(--surface, #fdfcfb));
     border: 1px solid color-mix(in oklab, var(--error, #c9222b) 35%, transparent);
-    border-radius: var(--radius-md, 0.5rem);
+    border-radius: var(--radius-md, 0);
     padding: var(--space-4, 1rem);
     display: flex;
     flex-direction: column;

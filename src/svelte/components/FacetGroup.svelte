@@ -411,11 +411,11 @@
     transition: color var(--transition-fast, 150ms cubic-bezier(0.25, 1, 0.5, 1));
   }
   .iwac-facet__heading:hover {
-    color: var(--primary-hover, #b03710);
+    color: var(--primary-hover, #132278);
     background: none;
   }
   .iwac-facet__heading:focus-visible {
-    outline: var(--focus-outline, 2px solid #ce4115);
+    outline: var(--focus-outline, 2px solid #18298d);
     outline-offset: 2px;
   }
   .iwac-facet__label {
@@ -437,7 +437,7 @@
     white-space: nowrap;
   }
   .iwac-facet__active-count {
-    color: var(--primary-hover, #b03710);
+    color: var(--primary-hover, #132278);
     font-size: var(--text-xs, 0.8125rem);
     font-weight: 700;
     font-variant-numeric: tabular-nums;
@@ -465,7 +465,7 @@
     background: var(--surface, #fdfcfb);
     color: var(--ink, #13161c);
     border: 1px solid var(--border, #ced1d6);
-    border-radius: var(--radius-md, 0.5rem);
+    border-radius: var(--radius-md, 0);
     font: inherit;
     font-size: var(--text-sm, 0.9375rem);
     box-shadow: none;
@@ -485,8 +485,8 @@
     display: none;
   }
   .iwac-facet__search-input:focus {
-    border-color: var(--primary, #ce4115);
-    outline: var(--focus-outline, 2px solid #ce4115);
+    border-color: var(--primary, #18298d);
+    outline: var(--focus-outline, 2px solid #18298d);
     outline-offset: 2px;
   }
   .iwac-facet__search-clear {
@@ -518,7 +518,7 @@
     transform: translateY(-50%);
   }
   .iwac-facet__search-clear:focus-visible {
-    outline: var(--focus-outline, 2px solid #ce4115);
+    outline: var(--focus-outline, 2px solid #18298d);
     outline-offset: 2px;
   }
 
@@ -560,7 +560,7 @@
     gap: var(--space-2, 0.5rem);
     align-items: center;
     padding: 0.375rem var(--space-1, 0.25rem);
-    border-radius: var(--radius-sm, 0.375rem);
+    border-radius: var(--radius-sm, 0);
     cursor: pointer;
     color: var(--ink, #13161c);
     font-size: var(--text-sm, 0.9375rem);
@@ -580,7 +580,7 @@
      column's own inline padding in App.svelte; both are scroll containers,
      which clip ink drawn outside their padding box. */
   .iwac-facet__option:has(input:focus-visible) {
-    outline: var(--focus-outline, 2px solid #ce4115);
+    outline: var(--focus-outline, 2px solid #18298d);
     outline-offset: 2px;
   }
   .iwac-facet__checkbox {
@@ -594,7 +594,7 @@
     display: inline-block;
     place-content: normal;
     box-sizing: border-box;
-    accent-color: var(--primary, #ce4115);
+    accent-color: var(--primary, #18298d);
     width: 1rem;
     height: 1rem;
     margin: 0;
@@ -628,7 +628,7 @@
     background: none;
     border: none;
     box-shadow: none;
-    color: var(--primary-hover, #b03710);
+    color: var(--primary-hover, #132278);
     font-size: var(--text-xs, 0.8125rem);
     font-weight: 500;
     cursor: pointer;
@@ -641,7 +641,7 @@
     text-underline-offset: 2px;
   }
   .iwac-facet__more:focus-visible {
-    outline: var(--focus-outline, 2px solid #ce4115);
+    outline: var(--focus-outline, 2px solid #18298d);
     outline-offset: 2px;
   }
 

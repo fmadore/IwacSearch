@@ -152,7 +152,7 @@
     color: var(--muted, #66696e);
     padding: var(--space-4, 1rem);
     background: var(--surface-sunken, #f4f1ef);
-    border-radius: var(--radius-md, 0.5rem);
+    border-radius: var(--radius-md, 0);
     margin: 0;
   }
 </style>

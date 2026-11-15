@@ -377,12 +377,12 @@
     text-align: end;
   }
   .iwac-daterange__range--dirty {
-    color: var(--primary-hover, #b03710);
+    color: var(--primary-hover, #132278);
   }
   .iwac-daterange__reset {
     background: none;
     border: none;
-    color: var(--primary-hover, #b03710);
+    color: var(--primary-hover, #132278);
     font-size: var(--text-xs, 0.8125rem);
     font-weight: 500;
     cursor: pointer;
@@ -394,7 +394,7 @@
     text-underline-offset: 2px;
   }
   .iwac-daterange__reset:focus-visible {
-    outline: var(--focus-outline, 2px solid #ce4115);
+    outline: var(--focus-outline, 2px solid #18298d);
     outline-offset: 2px;
   }
 
@@ -426,7 +426,7 @@
   }
   /* Years inside the selected range take the brand, echoing the fill bar. */
   .iwac-daterange__bar--in {
-    background: color-mix(in oklab, var(--primary, #ce4115) 70%, transparent);
+    background: color-mix(in oklab, var(--primary, #18298d) 70%, transparent);
   }
   @media (prefers-reduced-motion: reduce) {
     .iwac-daterange__bar {
@@ -474,7 +474,7 @@
     inset-inline-start: calc(0.625rem + var(--iwac-fill-start));
     width: calc(var(--iwac-fill-end) - var(--iwac-fill-start));
     height: 6px;
-    background: var(--primary, #ce4115);
+    background: var(--primary, #18298d);
     border-radius: var(--radius-full, 9999px);
     pointer-events: none;
     transform: translateX(calc(-1 * var(--iwac-fill-start) * 0));
@@ -490,13 +490,9 @@
     width: 1.25rem;
     height: 1.25rem;
     background: var(--surface, #fdfcfb);
-    border: 2px solid var(--primary, #ce4115);
+    border: 2px solid var(--primary, #18298d);
     border-radius: var(--radius-full, 9999px);
-    box-shadow: var(
-      --shadow-sm,
-      0 1px 3px 0 rgba(9, 11, 15, 0.12),
-      0 1px 2px -1px rgba(20, 22, 27, 0.06)
-    );
+    box-shadow: var(--shadow-sm, 0 0 0 0 transparent);
     cursor: grab;
     transition:
       transform 80ms ease,
@@ -525,27 +521,19 @@
   }
   .iwac-daterange__thumb:hover {
     transform: translateX(-50%) scale(1.08);
-    box-shadow: var(
-      --shadow-md,
-      0 4px 6px -1px rgba(9, 11, 15, 0.12),
-      0 2px 4px -2px rgba(20, 22, 27, 0.06)
-    );
+    box-shadow: var(--shadow-md, 0 0 0 0 transparent);
   }
   .iwac-daterange__thumb:focus-visible {
     /* The translucent halo measured 1.01:1 against the dark track — a slider
        thumb is exactly the control that cannot afford a tint-only indicator.
        The solid outline keeps the thumb's resting shadow underneath it. */
-    outline: var(--focus-outline, 2px solid #ce4115);
+    outline: var(--focus-outline, 2px solid #18298d);
     outline-offset: 2px;
   }
   .iwac-daterange__thumb--dragging {
     cursor: grabbing;
     transform: translateX(-50%) scale(1.12);
-    box-shadow: var(
-      --shadow-md,
-      0 4px 6px -1px rgba(9, 11, 15, 0.12),
-      0 2px 4px -2px rgba(20, 22, 27, 0.06)
-    );
+    box-shadow: var(--shadow-md, 0 0 0 0 transparent);
   }
 
   /*

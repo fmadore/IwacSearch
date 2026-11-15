@@ -62,12 +62,12 @@
   }
   .iwac-search__didyoumean-chip:hover,
   .iwac-search__didyoumean-chip:focus-visible {
-    border-color: var(--primary, #ce4115);
-    color: var(--primary, #ce4115);
+    border-color: var(--primary, #18298d);
+    color: var(--primary, #18298d);
     background: var(--surface, #fdfcfb);
   }
   .iwac-search__didyoumean-chip:focus-visible {
-    outline: var(--focus-outline, 2px solid #ce4115);
+    outline: var(--focus-outline, 2px solid #18298d);
     outline-offset: 2px;
   }
   .iwac-search__didyoumean-tag {

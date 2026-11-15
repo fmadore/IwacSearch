@@ -293,7 +293,7 @@
     background: none;
     border: none;
     box-shadow: none;
-    color: var(--primary-hover, #b03710);
+    color: var(--primary-hover, #132278);
     cursor: pointer;
     font-size: var(--text-xs, 0.8125rem);
     font-weight: 500;
@@ -305,7 +305,7 @@
     text-underline-offset: 2px;
   }
   .iwac-facets__clear-all:focus-visible {
-    outline: var(--focus-outline, 2px solid #ce4115);
+    outline: var(--focus-outline, 2px solid #18298d);
     outline-offset: 2px;
   }
 
@@ -374,11 +374,11 @@
     transition: color var(--transition-fast, 150ms cubic-bezier(0.25, 1, 0.5, 1));
   }
   .iwac-facets__group-heading:hover {
-    color: var(--primary-hover, #b03710);
+    color: var(--primary-hover, #132278);
     background: none;
   }
   .iwac-facets__group-heading:focus-visible {
-    outline: var(--focus-outline, 2px solid #ce4115);
+    outline: var(--focus-outline, 2px solid #18298d);
     outline-offset: 2px;
   }
   .iwac-facets__group-label {
@@ -390,7 +390,7 @@
     letter-spacing: normal;
   }
   .iwac-facets__group-count {
-    color: var(--primary-hover, #b03710);
+    color: var(--primary-hover, #132278);
     font-size: var(--text-xs, 0.8125rem);
     font-weight: 700;
     font-variant-numeric: tabular-nums;

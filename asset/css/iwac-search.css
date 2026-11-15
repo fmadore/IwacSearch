@@ -124,8 +124,8 @@
 .iwac-search-block--compact .iwac-search-block__root {
   background: var(--panel-bg, var(--surface, #fdfcfb));
   border: var(--panel-border, 1px solid #ced1d6);
-  box-shadow: var(--panel-shadow, var(--shadow-sm, 0 1px 3px 0 rgba(9, 11, 15, 0.12), 0 1px 2px -1px rgba(20, 22, 27, 0.06)));
-  border-radius: var(--panel-radius, var(--radius-md, 0.5rem));
+  box-shadow: var(--panel-shadow, var(--shadow-sm, 0 0 0 0 transparent));
+  border-radius: var(--panel-radius, var(--radius-md, 0));
   padding: var(--space-6, 1.5rem);
   transition: box-shadow var(--transition-base, 200ms cubic-bezier(0.25, 1, 0.5, 1));
 }
@@ -137,7 +137,7 @@
  * a tint behind a solid ring, rather than a tint standing in for one.
  */
 .iwac-search-block--compact .iwac-search-block__root:focus-within {
-  box-shadow: var(--ring-focus, 0 0 0 3px rgba(206, 65, 21, 0.3));
+  box-shadow: var(--ring-focus, 0 0 0 3px rgba(24, 41, 141, 0.3));
 }
 
 /*
@@ -154,7 +154,7 @@
 .iwac-search-block__skeleton-input {
   height: var(--size-control-lg, 2.75rem);
   background: var(--surface-sunken, #f4f1ef);
-  border-radius: var(--radius-md, 0.5rem);
+  border-radius: var(--radius-md, 0);
 }
 
 /*
@@ -180,7 +180,7 @@
   content: '';
   position: absolute;
   inset-block-start: var(--space-4, 1rem);
-  border-radius: var(--radius-sm, 0.375rem);
+  border-radius: var(--radius-sm, 0);
   background: var(--surface-sunken, #f4f1ef);
 }
 
@@ -295,7 +295,7 @@
   min-height: var(--size-control-sm, 2.25rem);
   padding-inline: var(--space-4, 1rem);
   border: 1px solid var(--border, #ced1d6);
-  border-radius: var(--radius-md, 0.5rem);
+  border-radius: var(--radius-md, 0);
   background: var(--surface, #fdfcfb);
   color: var(--ink, #13161c);
   box-shadow: none;
@@ -311,8 +311,8 @@
 .iwac-search-block__root .iwac-quiet-btn:hover:not(:disabled):not(.disabled),
 .iwac-search-block__root .iwac-quiet-btn:active:not(:disabled):not(.disabled) {
   background: var(--surface, #fdfcfb);
-  border-color: var(--primary, #ce4115);
-  color: var(--primary-hover, #b03710);
+  border-color: var(--primary, #18298d);
+  color: var(--primary-hover, #132278);
   box-shadow: none;
   transform: none;
 }
@@ -321,6 +321,6 @@
    treatment sets --ink-on-primary on focus — white text on this surface. */
 .iwac-search-block__root .iwac-quiet-btn:focus-visible {
   color: var(--ink, #13161c);
-  outline: var(--focus-outline, 2px solid #ce4115);
+  outline: var(--focus-outline, 2px solid #18298d);
   outline-offset: 2px;
 }

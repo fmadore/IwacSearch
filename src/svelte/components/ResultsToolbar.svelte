@@ -173,8 +173,8 @@
     height: var(--size-control-md, 2.5rem);
   }
   .iwac-search__copylink.is-copied {
-    border-color: var(--primary, #ce4115);
-    color: var(--primary-hover, #b03710);
+    border-color: var(--primary, #18298d);
+    color: var(--primary-hover, #132278);
   }
   .iwac-search__copylink-status {
     position: absolute;
@@ -193,7 +193,7 @@
   }
   .iwac-search__copylink:hover .iwac-search__copylink-icon,
   .iwac-search__copylink.is-copied .iwac-search__copylink-icon {
-    color: var(--primary, #ce4115);
+    color: var(--primary, #18298d);
   }
 
   /* 767px = md 768 − 1 on the theme's published scale — the same boundary at
@@ -253,7 +253,7 @@
       gap: var(--space-1, 0.25rem);
       padding-inline: var(--space-4, 1rem);
       border: 1px solid var(--border, #ced1d6);
-      border-radius: var(--radius-md, 0.5rem);
+      border-radius: var(--radius-md, 0);
       background: var(--surface, #fdfcfb);
       color: var(--ink, #13161c);
       box-shadow: none;
@@ -266,11 +266,11 @@
     }
     .iwac-search__filters-trigger:hover {
       background: var(--surface, #fdfcfb);
-      border-color: var(--primary, #ce4115);
-      color: var(--primary, #ce4115);
+      border-color: var(--primary, #18298d);
+      color: var(--primary, #18298d);
     }
     .iwac-search__filters-trigger:focus-visible {
-      outline: var(--focus-outline, 2px solid #ce4115);
+      outline: var(--focus-outline, 2px solid #18298d);
       outline-offset: 2px;
     }
     .iwac-search__filters-trigger-icon {
@@ -280,14 +280,14 @@
       color: var(--muted, #66696e);
     }
     .iwac-search__filters-trigger:hover .iwac-search__filters-trigger-icon {
-      color: var(--primary, #ce4115);
+      color: var(--primary, #18298d);
     }
     /* The active count as primary tabular text, as the facet headings show
        theirs — not a filled pill, which the ledger grammar reserves for
        nothing (DESIGN-PHILOSOPHY: "active counts as primary tabular text").
        --primary-hover, the primary that clears 4.5:1 on every ground. */
     .iwac-search__filters-trigger-badge {
-      color: var(--primary-hover, #b03710);
+      color: var(--primary-hover, #132278);
       font-size: var(--text-xs, 0.8125rem);
       font-weight: 700;
       font-variant-numeric: tabular-nums;

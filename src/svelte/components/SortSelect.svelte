@@ -68,7 +68,7 @@
     background: var(--surface, #fdfcfb);
     color: var(--ink, #13161c);
     border: 1px solid var(--border, #ced1d6);
-    border-radius: var(--radius-md, 0.5rem);
+    border-radius: var(--radius-md, 0);
     font: inherit;
     font-size: var(--text-sm, 0.9375rem);
     cursor: pointer;
@@ -80,8 +80,8 @@
     border-color: var(--border-strong, #aeb1b7);
   }
   .iwac-sort__select:focus-visible {
-    border-color: var(--primary, #ce4115);
-    outline: var(--focus-outline, 2px solid #ce4115);
+    border-color: var(--primary, #18298d);
+    outline: var(--focus-outline, 2px solid #18298d);
     outline-offset: 2px;
   }
 </style>

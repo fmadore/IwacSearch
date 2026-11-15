@@ -973,13 +973,13 @@
     margin-block-end: var(--space-2, 0.5rem);
     padding: var(--space-1, 0.25rem) var(--space-4, 1rem);
     border: 1px solid var(--border, #ced1d6);
-    border-radius: var(--radius-md, 0.5rem);
+    border-radius: var(--radius-md, 0);
     background: var(--surface, #fdfcfb);
     color: var(--ink-strong, #05070c);
     font-size: var(--text-sm, 0.9375rem);
     font-weight: 500;
     text-decoration: none;
-    outline: var(--focus-outline, 2px solid #ce4115);
+    outline: var(--focus-outline, 2px solid #18298d);
     outline-offset: 2px;
   }
   .iwac-search__layout {
@@ -1066,7 +1066,7 @@
   .iwac-search__error {
     background: color-mix(in oklab, var(--error, #c9222b) 12%, var(--surface, #fdfcfb));
     border: 1px solid color-mix(in oklab, var(--error, #c9222b) 35%, transparent);
-    border-radius: var(--radius-md, 0.5rem);
+    border-radius: var(--radius-md, 0);
     padding: var(--space-4, 1rem);
     color: var(--ink-strong, #05070c);
     display: flex;

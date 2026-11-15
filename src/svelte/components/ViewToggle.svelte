@@ -106,7 +106,7 @@
   .iwac-view {
     display: inline-flex;
     border: 1px solid var(--border, #ced1d6);
-    border-radius: var(--radius-md, 0.5rem);
+    border-radius: var(--radius-md, 0);
     overflow: hidden;
     /*
      * Never shrink. `overflow: hidden` rounds the segment corners, so a flex
@@ -141,7 +141,7 @@
     border-inline-start: 1px solid var(--border, #ced1d6);
   }
   .iwac-view__btn:hover:not(.is-active) {
-    background: color-mix(in oklab, var(--primary, #ce4115) 6%, transparent);
+    background: color-mix(in oklab, var(--primary, #18298d) 6%, transparent);
     color: var(--ink-strong, #05070c);
   }
   .iwac-view__btn.is-active {
@@ -151,7 +151,7 @@
     background: transparent;
     color: var(--ink-strong, #05070c);
     font-weight: 600;
-    box-shadow: inset 0 -2px 0 0 var(--primary, #ce4115);
+    box-shadow: inset 0 -2px 0 0 var(--primary, #18298d);
     transform: none;
     cursor: default;
   }
@@ -160,7 +160,7 @@
      would be trimmed on three sides of each end segment and on two of the
      middle one. z-index cannot rescue ink a clipping ancestor has cut. */
   .iwac-view__btn:focus-visible {
-    outline: var(--focus-outline, 2px solid #ce4115);
+    outline: var(--focus-outline, 2px solid #18298d);
     outline-offset: -2px;
   }
   .iwac-view__icon {

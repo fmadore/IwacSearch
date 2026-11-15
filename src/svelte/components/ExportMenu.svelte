@@ -190,15 +190,15 @@
     min-width: 14rem;
     background: var(--surface, #fdfcfb);
     border: 1px solid var(--border, #ced1d6);
-    border-radius: var(--radius-md, 0.5rem);
+    border-radius: var(--radius-md, 0);
     /* The theme's floating-panel shadow. It used to be a hand-rolled neutral
        black pair, copy-pasted into three files and warm-blind in both themes;
        --shadow-lg is the published overlay step and carries its own dark
        variant. */
     box-shadow: var(
       --shadow-lg,
-      0 10px 15px -3px rgba(9, 11, 15, 0.12),
-      0 4px 6px -4px rgba(20, 22, 27, 0.06)
+      0 4px 12px -4px rgba(9, 11, 15, 0.18),
+      0 1px 3px 0 rgba(20, 22, 27, 0.06)
     );
     overflow: hidden;
   }
@@ -224,12 +224,12 @@
   }
   .iwac-export__item:hover,
   .iwac-export__item:focus-visible {
-    background: color-mix(in oklab, var(--primary, #ce4115) 8%, var(--surface, #fdfcfb));
+    background: color-mix(in oklab, var(--primary, #18298d) 8%, var(--surface, #fdfcfb));
   }
   .iwac-export__item:focus-visible {
     /* Inset: the menu is a rounded, clipped panel and these items run its full
        width, so an outset outline would be trimmed on both edges. */
-    outline: var(--focus-outline, 2px solid #ce4115);
+    outline: var(--focus-outline, 2px solid #18298d);
     outline-offset: -2px;
   }
   .iwac-export__hint,

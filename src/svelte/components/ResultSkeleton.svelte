@@ -96,7 +96,7 @@
   .iwac-skeleton__thumb {
     width: 7rem;
     height: 7rem;
-    border-radius: var(--radius-sm, 0.375rem);
+    border-radius: var(--radius-sm, 0);
   }
   .iwac-skeleton__lines {
     display: flex;
@@ -105,7 +105,7 @@
     padding-block-start: 0.25rem;
   }
   .iwac-skeleton__bar {
-    border-radius: var(--radius-sm, 0.375rem);
+    border-radius: var(--radius-sm, 0);
   }
 
   /* ── Gallery: tile grid, matching ResultGallery geometry ── */
@@ -123,7 +123,7 @@
   .iwac-skeleton__plate {
     width: 100%;
     aspect-ratio: 4 / 3;
-    border-radius: var(--radius-sm, 0.375rem);
+    border-radius: var(--radius-sm, 0);
   }
 
   /* Shimmer sweep — surface→border→surface gradient slid across. */

@@ -230,7 +230,7 @@
     border: none;
     box-shadow: none;
     padding: 0;
-    color: var(--primary-hover, #b03710);
+    color: var(--primary-hover, #132278);
     cursor: pointer;
     font: inherit;
     font-size: var(--text-xs, 0.8125rem);
@@ -240,10 +240,10 @@
   }
   .iwac-summary__clear:hover {
     background: none;
-    color: var(--primary-hover, #b03710);
+    color: var(--primary-hover, #132278);
   }
   .iwac-summary__clear:focus-visible {
-    outline: var(--focus-outline, 2px solid #ce4115);
+    outline: var(--focus-outline, 2px solid #18298d);
     outline-offset: 2px;
   }
 

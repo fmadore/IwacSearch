@@ -389,12 +389,12 @@
     z-index: var(--z-dropdown, 100);
     background: var(--surface, #fdfcfb);
     border: 1px solid var(--border, #ced1d6);
-    border-radius: var(--radius-md, 0.5rem);
+    border-radius: var(--radius-md, 0);
     /* Published overlay shadow (dark-variant aware), not a hand-rolled pair. */
     box-shadow: var(
       --shadow-lg,
-      0 10px 15px -3px rgba(9, 11, 15, 0.12),
-      0 4px 6px -4px rgba(20, 22, 27, 0.06)
+      0 4px 12px -4px rgba(9, 11, 15, 0.18),
+      0 1px 3px 0 rgba(20, 22, 27, 0.06)
     );
     overflow: hidden;
     /* Bounded against the VIEWPORT too, not just an absolute cap: 24rem is two
@@ -447,13 +447,13 @@
   .iwac-suggest__item--active,
   .iwac-suggest__item:hover,
   .iwac-suggest__item:focus-visible {
-    background: color-mix(in oklab, var(--primary, #ce4115) 8%, var(--surface, #fdfcfb));
+    background: color-mix(in oklab, var(--primary, #18298d) 8%, var(--surface, #fdfcfb));
   }
   /* --active is the aria-activedescendant highlight (focus stays in the
      input), so it keeps the tint alone. Real keyboard focus on the row gets a
      solid indicator, drawn INSET because the panel is rounded and clipped. */
   .iwac-suggest__item:focus-visible {
-    outline: var(--focus-outline, 2px solid #ce4115);
+    outline: var(--focus-outline, 2px solid #18298d);
     outline-offset: -2px;
   }
   /* The "Search for …" action reads as the primary affordance. */
@@ -465,7 +465,7 @@
     display: inline-flex;
     align-items: center;
     flex-shrink: 0;
-    color: var(--primary, #ce4115);
+    color: var(--primary, #18298d);
     font-size: var(--text-base, 1.0625rem);
     line-height: 1;
   }
@@ -490,7 +490,7 @@
     padding: 0.125rem 0.375rem;
     background: transparent;
     border: 0;
-    border-radius: var(--radius-sm, 0.375rem);
+    border-radius: var(--radius-sm, 0);
     box-shadow: none;
     font: inherit;
     font-size: var(--text-xs, 0.8125rem);
@@ -499,12 +499,12 @@
   }
   .iwac-suggest__clear:hover,
   .iwac-suggest__clear:focus-visible {
-    color: var(--primary, #ce4115);
+    color: var(--primary, #18298d);
     background: transparent;
     text-decoration: underline;
   }
   .iwac-suggest__clear:focus-visible {
-    outline: var(--focus-outline, 2px solid #ce4115);
+    outline: var(--focus-outline, 2px solid #18298d);
     outline-offset: -2px;
   }
   .iwac-suggest__title {
@@ -519,7 +519,7 @@
   }
   /* Inherited <mark> from the highlight snippet. */
   .iwac-suggest__title :global(mark) {
-    background: color-mix(in oklab, var(--primary, #ce4115) 22%, transparent);
+    background: color-mix(in oklab, var(--primary, #18298d) 22%, transparent);
     color: var(--ink-strong, #05070c);
     border-radius: 0.125em;
     padding: 0 0.125em;

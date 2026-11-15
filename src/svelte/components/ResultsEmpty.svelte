@@ -101,7 +101,7 @@
    * Its own border and colour sit over the theme's base <button> is quiet (outlined, ink, no shadow or lift — IWAC-theme 2.10+).
    */
   .iwac-empty__sep {
-    color: var(--primary, #ce4115);
+    color: var(--primary, #18298d);
     font-weight: 700;
   }
   .iwac-empty__hint {
@@ -110,9 +110,9 @@
   /* Outlined clear control — same vocabulary as App's old clear-link. */
   .iwac-empty__clear {
     background: none;
-    border: 1px solid var(--primary, #ce4115);
-    color: var(--primary-hover, #b03710);
-    border-radius: var(--radius-md, 0.5rem);
+    border: 1px solid var(--primary, #18298d);
+    color: var(--primary-hover, #132278);
+    border-radius: var(--radius-md, 0);
     padding: 0.4rem 0.75rem;
     box-shadow: none;
     font-size: var(--text-sm, 0.9375rem);
@@ -123,11 +123,11 @@
       color var(--transition-fast, 150ms cubic-bezier(0.25, 1, 0.5, 1));
   }
   .iwac-empty__clear:hover {
-    background: var(--primary, #ce4115);
-    color: var(--ink-on-primary, #fff);
+    background: var(--primary, #18298d);
+    color: var(--ink-on-primary, #ffffff);
   }
   .iwac-empty__clear:focus-visible {
-    outline: var(--focus-outline, 2px solid #ce4115);
+    outline: var(--focus-outline, 2px solid #18298d);
     outline-offset: 2px;
   }
 </style>

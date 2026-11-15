@@ -203,7 +203,7 @@
     background: var(--surface, #fdfcfb);
     color: var(--ink, #13161c);
     border: 1px solid var(--border, #ced1d6);
-    border-radius: var(--radius-md, 0.5rem);
+    border-radius: var(--radius-md, 0);
     box-shadow: none;
     font: inherit;
     font-size: var(--text-sm, 0.9375rem);
@@ -217,12 +217,12 @@
   .iwac-pager__page:hover:not(.is-current),
   .iwac-pager__nav:hover:not(:disabled) {
     background: var(--surface, #fdfcfb);
-    border-color: var(--primary, #ce4115);
-    color: var(--primary, #ce4115);
+    border-color: var(--primary, #18298d);
+    color: var(--primary, #18298d);
   }
   .iwac-pager__page:focus-visible,
   .iwac-pager__nav:focus-visible {
-    outline: var(--focus-outline, 2px solid #ce4115);
+    outline: var(--focus-outline, 2px solid #18298d);
     outline-offset: 2px;
   }
   .iwac-pager__page.is-current {
@@ -237,7 +237,7 @@
      * ViewToggle's ruled current-state grammar.
      */
     background: var(--surface, #fdfcfb);
-    border-color: var(--primary, #ce4115);
+    border-color: var(--primary, #18298d);
     border-width: 2px;
     color: var(--ink-strong, #05070c);
     /* NO `box-shadow: none` here. It used to sit after the :focus-visible rule
@@ -302,15 +302,15 @@
     background: var(--surface, #fdfcfb);
     color: var(--ink, #13161c);
     border: 1px solid var(--border, #ced1d6);
-    border-radius: var(--radius-md, 0.5rem);
+    border-radius: var(--radius-md, 0);
     box-shadow: none;
     font: inherit;
     font-size: var(--text-sm, 0.9375rem);
     font-variant-numeric: tabular-nums;
   }
   .iwac-pager__jump-input:focus {
-    border-color: var(--primary, #ce4115);
-    outline: var(--focus-outline, 2px solid #ce4115);
+    border-color: var(--primary, #18298d);
+    outline: var(--focus-outline, 2px solid #18298d);
     outline-offset: 2px;
   }
   /* A SUBMIT control, which the theme paints filled-and-glowing ("the loud
@@ -321,7 +321,7 @@
     height: var(--size-control-sm, 2.25rem);
   }
   .iwac-pager__size-select:focus-visible {
-    outline: var(--focus-outline, 2px solid #ce4115);
+    outline: var(--focus-outline, 2px solid #18298d);
     outline-offset: 2px;
   }
   .iwac-pager__jump-total {
@@ -335,7 +335,7 @@
     background: var(--surface, #fdfcfb);
     color: var(--ink, #13161c);
     border: 1px solid var(--border, #ced1d6);
-    border-radius: var(--radius-md, 0.5rem);
+    border-radius: var(--radius-md, 0);
     box-shadow: none;
     font: inherit;
     font-size: var(--text-sm, 0.9375rem);

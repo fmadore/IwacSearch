@@ -56,7 +56,7 @@
     align-items: center;
     gap: var(--space-1, 0.25rem);
     background: transparent;
-    border: 1px solid var(--primary, #ce4115);
+    border: 1px solid var(--primary, #18298d);
     border-radius: var(--radius-full, 9999px);
     box-shadow: none;
     cursor: pointer;
@@ -78,8 +78,8 @@
     color: var(--ink-strong, #05070c);
   }
   .iwac-chip:hover {
-    background: color-mix(in oklab, var(--primary, #ce4115) 10%, transparent);
-    border-color: var(--primary, #ce4115);
+    background: color-mix(in oklab, var(--primary, #18298d) 10%, transparent);
+    border-color: var(--primary, #18298d);
     color: var(--ink-strong, #05070c);
   }
   .iwac-chip:hover .iwac-chip__field,
@@ -88,7 +88,7 @@
     opacity: 0.85;
   }
   .iwac-chip:focus-visible {
-    outline: var(--focus-outline, 2px solid #ce4115);
+    outline: var(--focus-outline, 2px solid #18298d);
     outline-offset: 2px;
   }
   .iwac-chip__field {

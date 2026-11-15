@@ -32,14 +32,10 @@
   max-width: min(28rem, 92vw);
   background: var(--surface, #fdfcfb);
   border: 1px solid var(--border, #ced1d6);
-  border-radius: var(--radius-md, 0.5rem);
+  border-radius: var(--radius-md, 0);
   /* Published overlay shadow (dark-variant aware), not the hand-rolled neutral
      black pair this used to carry in common with two other files. */
-  box-shadow: var(
-    --shadow-lg,
-    0 10px 15px -3px rgba(9, 11, 15, 0.12),
-    0 4px 6px -4px rgba(20, 22, 27, 0.06)
-  );
+  box-shadow: var(--shadow-lg, 0 4px 12px -4px rgba(9, 11, 15, 0.18), 0 1px 3px 0 rgba(20, 22, 27, 0.06));
   max-height: min(24rem, 70vh);
   overflow: hidden auto;
   display: none;
@@ -123,13 +119,13 @@
 .iwac-header-suggest__item--active,
 .iwac-header-suggest__item:hover,
 .iwac-header-suggest__item:focus-visible {
-  background: color-mix(in oklab, var(--primary, #ce4115) 8%, var(--surface, #fdfcfb));
+  background: color-mix(in oklab, var(--primary, #18298d) 8%, var(--surface, #fdfcfb));
 }
 
 /* --active is the aria-activedescendant highlight; real keyboard focus gets a
    solid indicator, inset because the panel is rounded and clipped. */
 .iwac-header-suggest__item:focus-visible {
-  outline: var(--focus-outline, 2px solid #ce4115);
+  outline: var(--focus-outline, 2px solid #18298d);
   outline-offset: -2px;
 }
 
@@ -140,7 +136,7 @@
 
 .iwac-header-suggest__icon {
   flex-shrink: 0;
-  color: var(--primary, #ce4115);
+  color: var(--primary, #18298d);
   font-size: var(--text-base, 1.0625rem);
   line-height: 1;
 }
@@ -157,7 +153,7 @@
 }
 
 .iwac-header-suggest__title mark {
-  background: color-mix(in oklab, var(--primary, #ce4115) 22%, transparent);
+  background: color-mix(in oklab, var(--primary, #18298d) 22%, transparent);
   color: var(--ink-strong, #05070c);
   border-radius: 0.125em;
   padding: 0 0.125em;

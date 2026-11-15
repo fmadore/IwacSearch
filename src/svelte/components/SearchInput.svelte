@@ -162,8 +162,8 @@
     color: var(--ink, #13161c);
     background: var(--surface, #fdfcfb);
     border: 1px solid var(--border, #ced1d6);
-    border-radius: var(--radius-md, 0.5rem);
-    box-shadow: var(--shadow-xs, 0 1px 2px 0 rgba(20, 22, 27, 0.06));
+    border-radius: var(--radius-md, 0);
+    box-shadow: var(--shadow-xs, 0 0 0 0 transparent);
     transition:
       border-color var(--transition-fast, 150ms cubic-bezier(0.25, 1, 0.5, 1)),
       box-shadow var(--transition-fast, 150ms cubic-bezier(0.25, 1, 0.5, 1));
@@ -183,8 +183,8 @@
     border-color: var(--border-strong, #aeb1b7);
   }
   .iwac-input__field:focus {
-    border-color: var(--primary, #ce4115);
-    outline: var(--focus-outline, 2px solid #ce4115);
+    border-color: var(--primary, #18298d);
+    outline: var(--focus-outline, 2px solid #18298d);
     outline-offset: 2px;
   }
   .iwac-input__clear {

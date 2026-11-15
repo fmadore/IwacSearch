@@ -132,7 +132,7 @@
     const css = getComputedStyle(el);
     const readColor = (name: string, fallback: string): string =>
       normalizeColor(css.getPropertyValue(name).trim() || fallback, fallback);
-    const primary = readColor('--primary', '#ce4115');
+    const primary = readColor('--primary', '#18298d');
     const ground = readColor('--surface', '#fdfcfb');
 
     loadMapLibre()
@@ -351,7 +351,7 @@
     width: 100%;
     height: min(70vh, 34rem);
     border: 1px solid var(--border, #ced1d6);
-    border-radius: var(--radius-md, 0.5rem);
+    border-radius: var(--radius-md, 0);
     overflow: hidden;
     background: var(--surface-sunken, #f4f1ef);
   }
@@ -395,7 +395,7 @@
     font-size: var(--text-sm, 0.9375rem);
   }
   .iwac-map :global(.iwac-map__popup a) {
-    color: var(--primary-hover, #b03710);
+    color: var(--primary-hover, #132278);
   }
   .iwac-map :global(.iwac-map__popup span) {
     color: var(--muted, #66696e);

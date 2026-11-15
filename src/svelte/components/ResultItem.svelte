@@ -478,14 +478,14 @@
     transition: background-color var(--transition-fast, 150ms cubic-bezier(0.25, 1, 0.5, 1));
   }
   .iwac-card:hover {
-    background: color-mix(in oklab, var(--primary, #ce4115) 4%, transparent);
+    background: color-mix(in oklab, var(--primary, #18298d) 4%, transparent);
   }
   /* Row-level context for whichever control inside is focused. The indicator
      itself is that control's own --focus-outline; this is the hover wash
      reused so the eye finds the row, not a second (weaker) ring competing
      with it. */
   .iwac-card:has(:focus-visible) {
-    background: color-mix(in oklab, var(--primary, #ce4115) 4%, transparent);
+    background: color-mix(in oklab, var(--primary, #18298d) 4%, transparent);
   }
   /* Drop the thumb column when there's no image (list only). */
   .iwac-card--no-thumb {
@@ -513,7 +513,7 @@
        scanning (design review §01). */
     width: 7rem;
     height: 7rem;
-    border-radius: var(--radius-sm, 0.375rem);
+    border-radius: var(--radius-sm, 0);
     overflow: hidden;
     background: var(--surface-sunken, #f4f1ef);
     border: 1px solid var(--border-light, #e2e5e8);
@@ -636,7 +636,7 @@
   /* Primary interpunct between the leading type token and the date. */
   .iwac-card__type + .iwac-card__eyebrow::before {
     content: '·';
-    color: var(--primary, #ce4115);
+    color: var(--primary, #18298d);
     font-weight: 700;
     padding-inline: 0.45em 0.5em;
   }
@@ -666,13 +666,13 @@
      (IWAC-theme docs/DESIGN-SYSTEM.md §3); the hex is the degraded-mode
      fallback when the theme isn't loaded. */
   .iwac-card__type[data-type='article'] {
-    --iwac-type-dot: var(--type-article, #ce4115);
+    --iwac-type-dot: var(--type-article, #18298d);
   }
   .iwac-card__type[data-type='audiovisual'] {
-    --iwac-type-dot: var(--type-audiovisual, #037ac0);
+    --iwac-type-dot: var(--type-audiovisual, #007980);
   }
   .iwac-card__type[data-type='publication'] {
-    --iwac-type-dot: var(--type-publication, #394f68);
+    --iwac-type-dot: var(--type-publication, #85253a);
   }
   .iwac-card__type[data-type='document'] {
     --iwac-type-dot: var(--type-document, #d66800);
@@ -684,7 +684,7 @@
     --iwac-type-dot: var(--type-reference, #66696e);
   }
   .iwac-card__type[data-entity-type='Personnes'] {
-    --iwac-type-dot: var(--type-entity-personnes, #037ac0);
+    --iwac-type-dot: var(--type-entity-personnes, #007980);
   }
   .iwac-card__type[data-entity-type='Lieux'] {
     --iwac-type-dot: var(--type-entity-lieux, #2e9052);
@@ -696,7 +696,7 @@
     --iwac-type-dot: var(--type-entity-sujets, #7c5295);
   }
   .iwac-card__type[data-entity-type='Événements'] {
-    --iwac-type-dot: var(--type-entity-evenements, #4c9491);
+    --iwac-type-dot: var(--type-entity-evenements, #a53c75);
   }
 
   /*
@@ -722,10 +722,10 @@
      own colour. No pill fill on every row. */
   .iwac-card__type--filter.is-active {
     background: transparent;
-    color: var(--primary-hover, #b03710);
+    color: var(--primary-hover, #132278);
   }
   .iwac-card__type--filter:focus-visible {
-    outline: var(--focus-outline, 2px solid #ce4115);
+    outline: var(--focus-outline, 2px solid #18298d);
     outline-offset: 2px;
   }
 
@@ -752,7 +752,7 @@
     text-decoration: none;
   }
   .iwac-card__title a:hover {
-    color: var(--primary-hover, #b03710);
+    color: var(--primary-hover, #132278);
     text-decoration: underline;
     text-underline-offset: 2px;
   }
@@ -783,19 +783,19 @@
     transition: color var(--transition-fast, 150ms cubic-bezier(0.25, 1, 0.5, 1));
   }
   .iwac-card__author:hover {
-    color: var(--primary-hover, #b03710);
+    color: var(--primary-hover, #132278);
     background: none;
     text-decoration: underline;
     text-underline-offset: 2px;
   }
   .iwac-card__author.is-active {
-    color: var(--primary-hover, #b03710);
+    color: var(--primary-hover, #132278);
     font-weight: 600;
     text-decoration: underline;
     text-underline-offset: 2px;
   }
   .iwac-card__author:focus-visible {
-    outline: var(--focus-outline, 2px solid #ce4115);
+    outline: var(--focus-outline, 2px solid #18298d);
     outline-offset: 2px;
   }
   .iwac-card__byline-sep::before {
@@ -876,19 +876,19 @@
     transition: color var(--transition-fast, 150ms cubic-bezier(0.25, 1, 0.5, 1));
   }
   .iwac-card__cite-link:hover {
-    color: var(--primary-hover, #b03710);
+    color: var(--primary-hover, #132278);
     background: none;
     text-decoration: underline;
     text-underline-offset: 2px;
   }
   .iwac-card__cite-link.is-active {
-    color: var(--primary-hover, #b03710);
+    color: var(--primary-hover, #132278);
     font-weight: 600;
     text-decoration: underline;
     text-underline-offset: 2px;
   }
   .iwac-card__cite-link:focus-visible {
-    outline: var(--focus-outline, 2px solid #ce4115);
+    outline: var(--focus-outline, 2px solid #18298d);
     outline-offset: 2px;
   }
 
@@ -913,11 +913,11 @@
   .iwac-card__title :global(mark) {
     background: color-mix(
       in oklab,
-      var(--primary, #ce4115) var(--accent-mix-subtle, 25%),
+      var(--primary, #18298d) var(--accent-mix-subtle, 25%),
       transparent
     );
     color: inherit;
-    border-radius: var(--radius-sm, 0.375rem);
+    border-radius: var(--radius-sm, 0);
     padding-inline: 0.15em;
   }
 
@@ -1015,7 +1015,7 @@
     color: var(--muted, #66696e);
   }
   .iwac-card__spark[data-entity-type='Personnes'] {
-    color: var(--type-entity-personnes, #037ac0);
+    color: var(--type-entity-personnes, #007980);
   }
   .iwac-card__spark[data-entity-type='Lieux'] {
     color: var(--type-entity-lieux, #2e9052);
@@ -1027,7 +1027,7 @@
     color: var(--type-entity-sujets, #7c5295);
   }
   .iwac-card__spark[data-entity-type='Événements'] {
-    color: var(--type-entity-evenements, #4c9491);
+    color: var(--type-entity-evenements, #a53c75);
   }
 
   /*
@@ -1075,19 +1075,19 @@
   }
   .iwac-card__chip--filter:hover {
     background: transparent;
-    color: var(--primary-hover, #b03710);
+    color: var(--primary-hover, #132278);
     text-decoration: underline;
     text-underline-offset: 2px;
   }
   .iwac-card__chip--filter.is-active {
     background: transparent;
-    color: var(--primary-hover, #b03710);
+    color: var(--primary-hover, #132278);
     font-weight: 600;
     text-decoration: underline;
     text-underline-offset: 2px;
   }
   .iwac-card__chip--filter:focus-visible {
-    outline: var(--focus-outline, 2px solid #ce4115);
+    outline: var(--focus-outline, 2px solid #18298d);
     outline-offset: 2px;
   }
 
@@ -1104,11 +1104,11 @@
     text-decoration-style: dotted;
   }
   .iwac-card__chip--external:hover {
-    color: var(--primary-hover, #b03710);
+    color: var(--primary-hover, #132278);
     text-decoration-style: solid;
   }
   .iwac-card__chip--external:focus-visible {
-    outline: var(--focus-outline, 2px solid #ce4115);
+    outline: var(--focus-outline, 2px solid #18298d);
     outline-offset: 2px;
   }
   /* DOI / Wikidata: a DOI has no break opportunity of its own and outruns a
