@@ -6,6 +6,8 @@ Versions that were never published (tagged and released) are folded into the nex
 
 ## [Unreleased]
 
+## [3.28.0] - 2026-11-15
+
 **Upgrade:** install together with (or after) the IWAC theme release that introduces the ink-and-blue design; with an older theme the module follows that theme's colours and corners as before, since every colour, corner and shadow comes from the theme's tokens. No reindex.
 
 ### Changed
