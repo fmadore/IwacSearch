@@ -18,6 +18,7 @@
  */
 
 import { getContext, setContext } from 'svelte';
+import { languageLabel } from './languages';
 
 export type Locale = 'fr' | 'en';
 
@@ -783,8 +784,9 @@ const SUBJECTIVITY_LABELS: Record<Locale, Record<string, string>> = {
  * labels the field). Remapped fields: the type_s discriminator and the
  * entity_type_s data values get their locale labels (the filter list must
  * read "Publication islamique", not the raw "publication"), booleans get
- * Available/Not available, the subjectivity scale gets its 1–5 words, and
- * country spellings are normalised. Falls back to the raw value for
+ * Available/Not available, the subjectivity scale gets its 1–5 words,
+ * country spellings are normalised, and language names (stored as the
+ * authority's French title) read in English on the English site. Falls back to the raw value for
  * unknown fields/values, so the underlying filter value the caller
  * toggles on is never altered.
  */
@@ -800,6 +802,9 @@ export function facetValueLabel(field: string, value: string, locale: Locale): s
   }
   if (field === 'country_ss') {
     return countryLabel(value, locale);
+  }
+  if (field === 'language_ss') {
+    return languageLabel(value, locale);
   }
   if (field === 'media_kind_s') {
     return mediaKindLabel(value, locale);

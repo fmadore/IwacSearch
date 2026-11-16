@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   SORT_VALUES,
   createI18n,
+  facetValueLabel,
   formatNumber,
   pluralKey,
   sortOptions,
@@ -120,5 +121,28 @@ describe('plurals', () => {
         expect(translate(locale, key)).not.toMatch(/\(s\)/);
       }
     }
+  });
+});
+
+describe('facetValueLabel: language_ss', () => {
+  it('shows the English name on the English site', () => {
+    expect(facetValueLabel('language_ss', 'Français', 'en')).toBe('French');
+    expect(facetValueLabel('language_ss', 'Anglais', 'en')).toBe('English');
+    expect(facetValueLabel('language_ss', 'Allemand', 'en')).toBe('German');
+    expect(facetValueLabel('language_ss', 'Arabe', 'en')).toBe('Arabic');
+    expect(facetValueLabel('language_ss', 'Haoussa', 'en')).toBe('Hausa');
+    expect(facetValueLabel('language_ss', 'Slovène', 'en')).toBe('Slovene');
+  });
+
+  it("uses the authority's English title where CLDR differs", () => {
+    expect(facetValueLabel('language_ss', 'Mooré', 'en')).toBe('Mooré');
+    expect(facetValueLabel('language_ss', 'Dioula', 'en')).toBe('Dyula');
+    expect(facetValueLabel('language_ss', 'Dendi', 'en')).toBe('Dendi');
+  });
+
+  it('keeps the stored value on the French site and for unknown names', () => {
+    expect(facetValueLabel('language_ss', 'Français', 'fr')).toBe('Français');
+    expect(facetValueLabel('language_ss', 'Mooré', 'fr')).toBe('Mooré');
+    expect(facetValueLabel('language_ss', 'Gulmancema', 'en')).toBe('Gulmancema');
   });
 });
