@@ -6,6 +6,8 @@ Versions that were never published (tagged and released) are folded into the nex
 
 ## [Unreleased]
 
+## [3.28.1] - 2026-11-16
+
 ### Fixed
 
 - The Language filter on the English site names each language in English (French, English, German…) instead of showing the French authority title (Français, Anglais, Allemand). Filter links and saved searches are unchanged, and no reindex is needed.
