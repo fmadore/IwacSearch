@@ -48,7 +48,7 @@ final class PublicationMapper extends AbstractMapper
         $values = $values->publicMetadata();
         $doc = $this->buildBase($item, $values, $thumbnailUrl);
 
-        $this->addCommonFacets($doc, $values);
+        $this->addCommonFacets($doc, $values, press: true);
         $this->addAuthorityEntities($doc, $values);
         $this->addDateFields($doc, $values);
         $this->addBodyFields($doc, $values);

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace IwacSearch\Indexer;
 
 use IwacSearch\IwacInstance;
+use Psr\Log\LoggerInterface;
 use RuntimeException;
 
 /**
@@ -39,6 +40,9 @@ final class CountryResolver
     /** @var array<string, string> normalised place heading → country */
     private array $byPlace;
 
+    /** @var array<string, int> press publisher with no country → records seen */
+    private array $unmappedPress = [];
+
     public function __construct(string $mapJsonPath)
     {
         // Re-keyed through normalise() rather than written pre-lowercased, so
@@ -67,8 +71,8 @@ final class CountryResolver
 
     /**
      * Resolve countries from one or more newspaper/publisher names. Unknown
-     * names yield nothing (logged as a coverage gap by the reindexer if it
-     * cares) rather than a bogus facet value.
+     * names yield nothing rather than a bogus facet value; for the press,
+     * {@see forPress()} also records them so the reindex can say so.
      *
      * @param  list<string> $newspapers
      * @return list<string>
@@ -83,6 +87,66 @@ final class CountryResolver
             }
         }
         return array_values(array_unique($out));
+    }
+
+    /**
+     * {@see forNewspapers()} for a record whose ONLY country signal is its
+     * publisher (articles, Islamic publications), remembering every name that
+     * resolves to nothing.
+     *
+     * Articles have no fallback: a newspaper missing from
+     * data/newspaper-countries.json leaves its articles out of every country
+     * filter and preset, silently. Five Burkinabè titles (1,792 articles) sat
+     * in that state until the November 2026 audit counted them, because
+     * nothing said so. {@see reportUnmapped()} now does, once per run.
+     *
+     * @phpstan-impure it records what it could not place
+     * @param  list<string> $newspapers
+     * @return list<string>
+     */
+    public function forPress(array $newspapers): array
+    {
+        $out = $this->forNewspapers($newspapers);
+        if ($out === []) {
+            foreach ($newspapers as $name) {
+                $name = trim($name);
+                if ($name !== '') {
+                    $this->unmappedPress[$name] = ($this->unmappedPress[$name] ?? 0) + 1;
+                }
+            }
+        }
+        return $out;
+    }
+
+    /**
+     * Press publishers {@see forPress()} could not place, with how many
+     * records named each, most frequent first.
+     *
+     * @return array<string, int>
+     */
+    public function unmappedPress(): array
+    {
+        $out = $this->unmappedPress;
+        arsort($out);
+        return $out;
+    }
+
+    /**
+     * Log the press publishers seen since the last report as one warning, then
+     * forget them. Silent when every publisher resolved.
+     */
+    public function reportUnmapped(LoggerInterface $logger): void
+    {
+        $unmapped = $this->unmappedPress();
+        $this->unmappedPress = [];
+        if ($unmapped === []) {
+            return;
+        }
+        $logger->warning(
+            'Press publishers with no country: add them to data/newspaper-countries.json, then reindex. '
+            . 'Their records are missing from every country filter.',
+            ['publishers' => $unmapped, 'records' => array_sum($unmapped)],
+        );
     }
 
     /**
@@ -123,8 +187,12 @@ final class CountryResolver
         return array_values(array_unique($out));
     }
 
+    /**
+     * Case, surrounding space and the apostrophe's typography do not matter:
+     * a title typed with a curly apostrophe is the same title.
+     */
     private function normalise(string $name): string
     {
-        return mb_strtolower(trim($name), 'UTF-8');
+        return mb_strtolower(str_replace(["\u{2019}", "\u{02BC}"], "'", trim($name)), 'UTF-8');
     }
 }

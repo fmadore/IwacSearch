@@ -581,6 +581,22 @@ final class MapperTest extends TestCase
         self::assertArrayNotHasKey('country_ss', $doc);
     }
 
+    public function testOnlyThePressRecordsAPublisherWithNoCountry(): void
+    {
+        // Articles and publications have no other country signal, so an
+        // unknown title is a gap the reindex must name; a recording's
+        // producer is not (the place heading takes over).
+        $countries = new CountryResolver(dirname(__DIR__, 3) . '/data/newspaper-countries.json');
+        $registry = MapperRegistry::default(new EntityAuthority(), $countries);
+        $unknown = self::values(['dcterms:publisher' => [['value' => 'Nouveau Journal']]]);
+
+        self::doc($registry->get('articles'), self::item(), $unknown, null);
+        self::doc($registry->get('publications'), self::item(['class' => IwacInstance::CLASS_PUBLICATION]), $unknown, null);
+        self::doc($registry->get('audiovisual'), self::item(['class' => IwacInstance::CLASS_AUDIOVISUAL]), self::values(self::depositedRecording()), null);
+
+        self::assertSame(['Nouveau Journal' => 2], $countries->unmappedPress());
+    }
+
     public function testDocumentsFallBackToTheirCountryItemSet(): void
     {
         // Documents rarely carry a publisher; membership of the per-country

@@ -36,6 +36,7 @@ final class IncrementalIndexer
         private readonly string $collectionAlias = IwacInstance::CONTENT_ALIAS,
         private readonly LoggerInterface $logger = new NullLogger(),
         private readonly ?string $indexAlias = IwacInstance::INDEX_ALIAS,
+        private readonly ?CountryResolver $countries = null,
     ) {
     }
 
@@ -56,14 +57,16 @@ final class IncrementalIndexer
         LoggerInterface $logger = new NullLogger(),
     ): self {
         $authority = new EntityAuthority();
+        $countries = new CountryResolver($moduleRoot . '/data/newspaper-countries.json');
         return new self(
             $ops,
             new OmekaSourceReader($connection),
-            MapperRegistry::default($authority, new CountryResolver($moduleRoot . '/data/newspaper-countries.json')),
+            MapperRegistry::default($authority, $countries),
             $authority,
             $collection,
             $logger,
             $index,
+            $countries,
         );
     }
 
@@ -79,6 +82,9 @@ final class IncrementalIndexer
             $outcome['content'] = array_replace($outcome['content'], $result['content']);
             $outcome['entity'] = array_replace($outcome['entity'], $result['entity']);
         }
+        // A new title usually reaches the index through a save, long before
+        // the next rebuild: say so here too.
+        $this->countries?->reportUnmapped($this->logger);
         return $outcome;
     }
 

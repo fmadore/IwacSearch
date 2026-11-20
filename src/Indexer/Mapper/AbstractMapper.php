@@ -247,17 +247,24 @@ abstract class AbstractMapper implements MapperInterface
      * `$publisherField` is which facet `dcterms:publisher` lands in. It is
      * `newspaper_ss` everywhere except audiovisual, where the publisher is a
      * broadcaster or a YouTube channel and calling it a newspaper is simply
-     * false (see AudiovisualMapper). The COUNTRY derivation is unaffected
-     * either way: `data/newspaper-countries.json` also covers the Burkinabè
-     * broadcasters (Radio Oméga, Burkina Info), and a producer that resolves
-     * to a country is a stronger signal than the place-heading fallback.
+     * false (see AudiovisualMapper). The COUNTRY derivation is the same
+     * either way: a publisher listed in `data/newspaper-countries.json` gives
+     * its country. The broadcasters (Radio Oméga, Burkina Info, RTB,
+     * L'Autregard, the CERFI channel) are NOT listed; AudiovisualMapper falls
+     * back to the place heading for them.
+     *
+     * `$press` marks a record whose publisher is its only country signal
+     * (articles, Islamic publications): a name the table does not know is
+     * then recorded and reported at the end of the run, because those records
+     * otherwise fall out of every country filter without a word.
      *
      * @param array<string, mixed> $doc
      */
     protected function addCommonFacets(
         array &$doc,
         PropertyValues $values,
-        string $publisherField = 'newspaper_ss'
+        string $publisherField = 'newspaper_ss',
+        bool $press = false,
     ): void {
         $creators = $values->displays('dcterms:creator');
         $this->maybeAddList($doc, 'creator_ss', $creators);
@@ -271,7 +278,11 @@ abstract class AbstractMapper implements MapperInterface
 
         $publishers = $values->displays('dcterms:publisher');
         $this->maybeAddList($doc, $publisherField, $publishers);
-        $this->maybeAddList($doc, 'country_ss', $this->countries->forNewspapers($publishers));
+        $this->maybeAddList(
+            $doc,
+            'country_ss',
+            $press ? $this->countries->forPress($publishers) : $this->countries->forNewspapers($publishers),
+        );
     }
 
     /**

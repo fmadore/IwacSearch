@@ -111,7 +111,8 @@ final class ReindexOrchestrator
 
         $reader = new OmekaSourceReader($this->connection);
         $authority = new EntityAuthority();
-        $registry = MapperRegistry::default($authority, new CountryResolver($this->moduleRoot . '/data/newspaper-countries.json'));
+        $countries = new CountryResolver($this->moduleRoot . '/data/newspaper-countries.json');
+        $registry = MapperRegistry::default($authority, $countries);
         $stats = (new Reindexer(
             $ops,
             $contentSchema,
@@ -124,6 +125,9 @@ final class ReindexOrchestrator
             new SynonymsSync($this->typesense, $this->moduleRoot . '/data/synonyms-fr.json', $this->logger),
             $this->logger,
         ))->run(false);
+        // Pass 1 mapped every record once: name the press titles it could not
+        // place. Pass 2 re-maps them, so the resolver forgets on report.
+        $countries->reportUnmapped($this->logger);
         $content = $stats['collection'];
         $index = null;
 

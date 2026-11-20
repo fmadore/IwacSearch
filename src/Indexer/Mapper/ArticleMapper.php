@@ -46,7 +46,7 @@ final class ArticleMapper extends AbstractMapper
         $doc = $this->buildBase($item, $values, $thumbnailUrl);
 
         $this->maybeAdd($doc, 'source_url', $values->firstScalar('fabio:hasURL'));
-        $this->addCommonFacets($doc, $values);
+        $this->addCommonFacets($doc, $values, press: true);
         $this->addAuthorityEntities($doc, $values);
         $this->addDateFields($doc, $values);
         $this->addBodyFields($doc, $values);

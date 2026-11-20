@@ -8,7 +8,9 @@ use IwacSearch\Indexer\CountryResolver;
 use IwacSearch\IwacInstance;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
+use Psr\Log\AbstractLogger;
 use RuntimeException;
+use Stringable;
 
 /**
  * `country_ss` is not a stored Omeka property — it is derived, and it is the
@@ -180,6 +182,55 @@ final class CountryResolverTest extends TestCase
         } finally {
             @unlink($path);
         }
+    }
+
+    public function testTheTitlesTheNovember2026AuditFoundUnmappedResolve(): void
+    {
+        // 1,792 articles from the first five had no country at all.
+        $resolver = $this->resolver();
+        foreach (['Aujourd\'hui au Faso', 'ActuBurkina', 'Actualite.bf', 'Burkimbia', 'Toute Info', 'L\'Express du Faso'] as $title) {
+            self::assertSame(['Burkina Faso'], $resolver->forNewspapers([$title]), $title);
+        }
+        self::assertSame(['Bénin'], $resolver->forNewspapers(['Crystal News']));
+    }
+
+    public function testACurlyApostropheMatchesTheStraightOne(): void
+    {
+        self::assertSame(['Burkina Faso'], $this->resolver()->forNewspapers(["Aujourd\u{2019}hui au Faso"]));
+    }
+
+    public function testPressPublishersWithNoCountryAreReportedOnceThenForgotten(): void
+    {
+        $resolver = $this->resolver();
+        self::assertSame([], $resolver->forPress(['Nouveau Journal']));
+        self::assertSame([], $resolver->forPress(['Nouveau Journal']));
+        self::assertSame([], $resolver->forPress(['Autre Titre']));
+        self::assertSame(['Bénin'], $resolver->forPress(['La Nation']));
+        // The plain lookup records nothing: audiovisual and documents have
+        // other country signals, so an unknown producer there is no gap.
+        self::assertSame([], $resolver->forNewspapers(['Radio Inconnue']));
+
+        self::assertSame(['Nouveau Journal' => 2, 'Autre Titre' => 1], $resolver->unmappedPress());
+
+        $logger = new class extends AbstractLogger {
+            /** @var list<array{level: mixed, message: string, context: array<array-key, mixed>}> */
+            public array $records = [];
+
+            /** @param array<array-key, mixed> $context */
+            public function log($level, string|Stringable $message, array $context = []): void
+            {
+                $this->records[] = ['level' => $level, 'message' => (string) $message, 'context' => $context];
+            }
+        };
+        $resolver->reportUnmapped($logger);
+        $resolver->reportUnmapped($logger);
+
+        self::assertCount(1, $logger->records, 'reported once, then forgotten');
+        self::assertSame('warning', $logger->records[0]['level']);
+        self::assertStringContainsString('newspaper-countries.json', $logger->records[0]['message']);
+        self::assertSame(['Nouveau Journal' => 2, 'Autre Titre' => 1], $logger->records[0]['context']['publishers']);
+        self::assertSame(3, $logger->records[0]['context']['records']);
+        self::assertSame([], $resolver->unmappedPress());
     }
 
     public function testDocumentationKeysInTheMapAreIgnored(): void

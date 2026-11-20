@@ -6,7 +6,11 @@ Versions that were never published (tagged and released) are folded into the nex
 
 ## [Unreleased]
 
+**Upgrade:** run a full reindex after installing (`discovery:reindex` or the admin button), so that the newspapers added below give their articles a country.
+
 ### Fixed
+
+- 1,792 articles had no country and were missing from every country filter and country page: five Burkinabè newspapers (Aujourd'hui au Faso, ActuBurkina, Actualite.bf, Burkimbia, Toute Info) were not in the newspaper-to-country table. They are now, with Crystal News (Bénin) and L'Express du Faso (Burkina Faso), whose articles are not online yet. Every reindex and every save now logs a warning naming any newspaper or publication whose publisher has no country, so the next new title is noticed.
 
 - A filter value containing a comma was split in two when the address was read back. Selecting "Conseil Supérieur des Imams, des Mosquées et des Affaires islamiques" (organisations), a book title with a comma, or the CERFI channel worked, but reloading the page, opening a shared link or pressing Back found nothing. Each value now comes back whole. Old links that joined countries, types or decades with commas (`?f.country_ss=Bénin,Togo`) still work.
 
