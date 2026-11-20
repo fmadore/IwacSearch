@@ -62,8 +62,18 @@
   // it — the job an effect mirroring the prop used to do, a tick late and
   // with an untrack() to keep typing from re-triggering it.
   let local = $derived(value);
-  let timer = $state<number | null>(null);
+  // Plain, not $state: nothing renders from it. Cleared on unmount, or a
+  // box removed within 250 ms of a keystroke (a tab switch, a closed drawer)
+  // still committed into a parent that had moved on.
+  let timer: number | null = null;
   let inputEl: HTMLInputElement | null = $state(null);
+
+  $effect(() => () => {
+    if (timer !== null) {
+      clearTimeout(timer);
+      timer = null;
+    }
+  });
 
   function handleInput(e: Event): void {
     const target = e.target as HTMLInputElement;

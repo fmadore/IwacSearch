@@ -24,6 +24,7 @@ import {
 } from './queryBuilders';
 import {
   AbortSlot,
+  isAbortError,
   type MultiSearchEnvelope,
   type TypesensePerSearchError,
   perSearchError,
@@ -769,7 +770,16 @@ export class TypesenseClient {
   /** Last union count of the unlisted population, keyed by query + mode + legs. */
   private unionOtherCounts: { key: string; value: number } | null = null;
 
-  /** Sum of every union leg's keyword-only or hybrid count; undefined if any failed. */
+  /**
+   * Sum of every union leg's keyword-only or hybrid count; undefined if any
+   * failed.
+   *
+   * A transport failure (a 429, a timeout) is a missing count too, not a
+   * failed search: it runs in the same Promise.all as the union itself, and
+   * rethrowing used to reject the whole Everything tab over the one optional
+   * number beside it. Only an abort still propagates, so a superseded search
+   * stops here as it does everywhere else.
+   */
   private async unionCountSum(
     key: string,
     q: string,
@@ -777,20 +787,26 @@ export class TypesenseClient {
     keywordOnly: boolean,
     signal: AbortSignal,
   ): Promise<number | undefined> {
-    const counts = await this.auxiliary(
-      key,
-      (stopwords) => ({
-        searches: searches.map((s) => ({
-          collection: s.collection,
-          ...queryPolicy(q, s.queryBy, stopwords, keywordOnly),
-          filter_by: s.filterBy || undefined,
-          per_page: 0,
-          enable_analytics: false,
-        })),
-      }),
-      'Union counts',
-      signal,
-    );
+    let counts: MultiSearchEnvelope;
+    try {
+      counts = await this.auxiliary(
+        key,
+        (stopwords) => ({
+          searches: searches.map((s) => ({
+            collection: s.collection,
+            ...queryPolicy(q, s.queryBy, stopwords, keywordOnly),
+            filter_by: s.filterBy || undefined,
+            per_page: 0,
+            enable_analytics: false,
+          })),
+        }),
+        'Union counts',
+        signal,
+      );
+    } catch (error) {
+      if (isAbortError(error) || signal.aborted) throw error;
+      return undefined;
+    }
     const values = counts.results?.map(readCount);
     return values?.length === searches.length && values.every((n): n is number => n !== undefined)
       ? values.reduce((a, b) => a + b, 0)

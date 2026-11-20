@@ -403,6 +403,31 @@ test.describe('the federated page', () => {
     expect(new URL(page.url()).searchParams.get('tab')).toBe('all');
   });
 
+  test('a chip filter handed to a tab is not re-applied once removed', async ({ page }) => {
+    await serve(page, 'federated');
+    await page.goto(`${EVERYTHING}?tab=all`);
+    await expect(cards(page)).toHaveCount(6);
+    // A chip on a merged card opens Content filtered on its value…
+    const tabaski = cards(page).filter({ hasText: 'La Tabaski à Niamey' });
+    await tabaski.getByRole('button', { name: /^Filter by .*: Niger$/ }).click();
+    const content = page.getByRole('tab', { name: /^Content/ });
+    await expect(content).toHaveAttribute('aria-selected', 'true');
+    const niger = page.getByRole('checkbox', { name: /^Niger/ });
+    await expect(niger).toBeChecked();
+    await expect(cards(page)).toHaveCount(2);
+
+    // …the reader removes it, goes back to All and returns to Content: the
+    // remount used to bring the chip's filter back.
+    await niger.uncheck();
+    await expect(cards(page)).toHaveCount(3);
+    await page.getByRole('tab', { name: /^All/ }).click();
+    await expect(cards(page)).toHaveCount(6);
+    await content.click();
+    await expect(content).toHaveAttribute('aria-selected', 'true');
+    await expect(cards(page)).toHaveCount(3);
+    await expect(page.getByRole('checkbox', { name: /^Niger/ })).not.toBeChecked();
+  });
+
   test('a failed merged search offers Retry', async ({ page }) => {
     const stub = await serve(page, 'federated');
     await page.goto(`${EVERYTHING}?tab=all`);

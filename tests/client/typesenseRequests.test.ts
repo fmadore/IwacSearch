@@ -176,6 +176,34 @@ describe('unionSearch()', () => {
     expect(bodies.filter((b) => !b.union)).toHaveLength(2);
   });
 
+  it('renders without the optional count when that count fails', async () => {
+    // The count ran in the same Promise.all as the union and rethrew, so a
+    // transient 429 on it failed the whole Everything tab.
+    const bodies: Body[] = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string, init?: RequestInit) => {
+        if (String(url).includes('/token-')) {
+          return new Response(JSON.stringify(TOKEN), { status: 200 });
+        }
+        const body = JSON.parse(String(init?.body ?? '{}')) as Body;
+        bodies.push(body);
+        return body.union
+          ? new Response(JSON.stringify(page(12)), { status: 200 })
+          : new Response('{"message":"Rate limit exceeded"}', { status: 429 });
+      }),
+    );
+    const client = new TypesenseClient(bootstrap());
+    const searches = [{ collection: 'iwac_current', queryBy: 'title_txt,embedding' }];
+    const out = await client.unionSearch({ q: 'tabaski', searches });
+    expect(out.found).toBe(12);
+    expect(out.keyword_found).toBe(12);
+    expect(out.hybrid_found).toBeUndefined();
+    // A failed count is not cached: the next page asks again.
+    await client.unionSearch({ q: 'tabaski', page: 2, searches });
+    expect(bodies.filter((b) => !b.union)).toHaveLength(2);
+  });
+
   it('sorts browse mode by date and asks for no keyword counts', async () => {
     const { bodies } = serve(() => page(40));
     await new TypesenseClient(bootstrap()).unionSearch({

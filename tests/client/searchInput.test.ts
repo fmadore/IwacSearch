@@ -44,6 +44,15 @@ describe('SearchInput', () => {
     expect(onChange).toHaveBeenCalledExactlyOnceWith('Tabas');
   });
 
+  it('drops the pending commit when the box is unmounted', () => {
+    const { box, onChange, type } = setup();
+    type('Tabas');
+    void unmount(box);
+    app = null;
+    vi.advanceTimersByTime(1000);
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
   it('drops the pending commit when the parent resets the query', () => {
     const { box, input, onChange, type } = setup();
     type('Tabas');

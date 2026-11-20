@@ -1,13 +1,9 @@
 <script lang="ts">
-  import type {
-    ActiveFilters,
-    IwacBootstrap,
-    IwacFederatedBootstrap,
-    IwacSearchResponse,
-  } from '../lib/types';
+  import type { IwacBootstrap, IwacFederatedBootstrap, IwacSearchResponse } from '../lib/types';
   import { TypesenseClient } from '../lib/typesense';
   import { isAbortError } from '../lib/transport';
   import { createTypingBurst } from '../lib/urlState';
+  import { createTabSeed } from '../lib/tabSeed.svelte';
   import { semanticView } from '../lib/semanticFallback';
   import { resultAnnouncement } from '../lib/announce';
   import { landOnResults, refocus } from '../lib/refocus';
@@ -95,8 +91,9 @@
   let counts = $state<Record<string, number | null>>({});
   let countsReady = $state(false);
 
-  // Filter handed off from a union-tab chip to a per-collection tab.
-  let seed = $state<{ tab: TabId; filters: ActiveFilters } | null>(null);
+  // Filter handed off from a union-tab chip to a per-collection tab, for the
+  // one mount it opens (lib/tabSeed.svelte.ts says why only that one).
+  const seed = createTabSeed<TabId>();
 
   // One client just for the counts call; the active tab's App holds its own.
   // svelte-ignore state_referenced_locally
@@ -256,7 +253,7 @@
     if (!nextChecked) return; // nothing is ever active on the union tab
     const target: TabId =
       field === 'entity_type_s' || field === 'is_part_of_ss' ? 'entities' : 'content';
-    seed = { tab: target, filters: { [field]: [value] } };
+    seed.handOff(target, field, value);
     activeTab = focusTab = target;
   }
 
@@ -304,6 +301,7 @@
       if (q !== query) unionPage = 1;
       query = q;
       inputValue = q;
+      seed.end();
       activeTab = focusTab = readTabFromUrl();
     };
     window.addEventListener('popstate', onPop);
@@ -319,7 +317,7 @@
     // Stop re-seeding the hand-off on a later tab switch. A filter already
     // applied inside the mounted tab stays applied — same as typing a new
     // query on /search, where filters are the scope you search WITHIN.
-    seed = null;
+    seed.end();
     if (next.trim() !== query) {
       typingCommit = true;
       // A new query restarts the merged list — in the handler, not in an
@@ -330,6 +328,10 @@
   }
 
   function selectTab(id: TabId): void {
+    if (id === activeTab) return;
+    // A tab the reader chose is not the hand-off's mount: returning to the
+    // seeded tab must not re-apply a filter they may have removed there.
+    seed.end();
     activeTab = focusTab = id;
   }
 
@@ -405,7 +407,7 @@
     const base = tabs.find((tab) => tab.id === activeTab)?.bootstrap ?? tabs[0].bootstrap;
     return {
       ...base,
-      initial_filters: seed?.tab === activeTab ? seed.filters : undefined,
+      initial_filters: seed.filtersFor(activeTab),
     };
   });
 </script>
