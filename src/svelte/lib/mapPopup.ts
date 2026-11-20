@@ -28,6 +28,15 @@ export interface MapPopupLabels {
  * they are listed together, most-mentioned first. Duplicates are dropped:
  * MapLibre can report one feature once per tile it straddles.
  */
+/**
+ * Only an http(s) URL or a site-relative path becomes an href, as in
+ * resultCard.ts and export.ts: escaping keeps a value from breaking out of
+ * the attribute, not a `javascript:` scheme from running on click.
+ */
+function isSafeHref(url: string | null | undefined): url is string {
+  return typeof url === 'string' && /^(https?:\/\/|\/(?!\/))/i.test(url.trim());
+}
+
 export function mapPopupHtml(points: readonly MapPointProps[], labels: MapPopupLabels): string {
   const seen = new Set<string>();
   const unique = points.filter((p) => {
@@ -37,7 +46,7 @@ export function mapPopupHtml(points: readonly MapPointProps[], labels: MapPopupL
     return true;
   });
   const entry = (p: MapPointProps): string => {
-    const title = p.url
+    const title = isSafeHref(p.url)
       ? `<a href="${escapeHtml(p.url)}">${escapeHtml(p.title)}</a>`
       : escapeHtml(p.title);
     return (

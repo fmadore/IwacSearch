@@ -40,6 +40,31 @@ final class OmekaPsrLogger extends AbstractLogger
     public function log($level, string|Stringable $message, array $context = []): void
     {
         $priority = self::LEVEL_MAP[$level] ?? self::LEVEL_MAP[LogLevel::INFO];
-        $this->logger->log($priority, (string) $message, $context);
+        $this->logger->log($priority, self::interpolate((string) $message, $context), $context);
+    }
+
+    /**
+     * PSR-3 placeholders: `{key}` becomes the context value when it is a
+     * scalar or Stringable; anything else, and an unknown key, stays as
+     * written. Laminas does not do this, so a message logged as
+     * "…: {message}" reached Omeka's log with the braces in it.
+     *
+     * @param array<array-key, mixed> $context
+     */
+    public static function interpolate(string $message, array $context): string
+    {
+        if (!str_contains($message, '{')) {
+            return $message;
+        }
+        $replace = [];
+        foreach ($context as $key => $value) {
+            if (is_bool($value)) {
+                $value = $value ? 'true' : 'false';
+            }
+            if (is_scalar($value) || $value instanceof Stringable) {
+                $replace['{' . $key . '}'] = (string) $value;
+            }
+        }
+        return strtr($message, $replace);
     }
 }

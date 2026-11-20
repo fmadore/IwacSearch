@@ -297,7 +297,7 @@
         <!-- Visible digit, spoken phrase: aria-label on a plain span is not
              reliably read. -->
         <span class="iwac-facet__active-count" aria-hidden="true">{selected.length}</span>
-        <span class="iwac-facet__sr">{tp('n_active', selected.length)}</span>
+        <span class="iwac-sr-only">{tp('n_active', selected.length)}</span>
       {/if}
       <span class="iwac-facet__chevron" aria-hidden="true"
         ><Icon name={collapsed ? 'chevron-right' : 'chevron-down'} /></span
@@ -335,7 +335,7 @@
 
         <!-- One live region, mounted for as long as the body is: a region
              inserted together with its text is often not announced at all. -->
-        <p class="iwac-facet__sr" aria-live="polite">{searchStatus}</p>
+        <p class="iwac-sr-only" aria-live="polite">{searchStatus}</p>
         {#if searchPending}
           <p class="iwac-facet__empty" aria-hidden="true">{t('searching')}</p>
         {:else if visible.length === 0}
@@ -447,15 +447,6 @@
     margin: 0;
     font: inherit;
     letter-spacing: normal;
-  }
-  .iwac-facet__sr {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    margin: -1px;
-    overflow: hidden;
-    clip-path: inset(50%);
-    white-space: nowrap;
   }
   .iwac-facet__active-count {
     color: var(--primary-hover, #132278);

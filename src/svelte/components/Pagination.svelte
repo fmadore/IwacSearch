@@ -128,7 +128,9 @@
     </button>
   </nav>
 
-  {#if showJump || sizeOptions.length > 1}
+  <!-- The size picker needs onPerPageChange too: without it, a row with
+       neither control rendered empty, padding and all. -->
+  {#if showJump || (sizeOptions.length > 1 && onPerPageChange)}
     <div class="iwac-pager__tools">
       {#if showJump}
         <form class="iwac-pager__jump" onsubmit={submitJump}>

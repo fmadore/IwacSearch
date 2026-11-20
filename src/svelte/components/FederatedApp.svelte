@@ -472,7 +472,7 @@
 
   <!-- The union tab's live region; persistent, so it announces (App speaks
        for the per-collection tabs). -->
-  <p class="iwac-fed__sr" role="status">{unionAnnouncement}</p>
+  <p class="iwac-sr-only" role="status">{unionAnnouncement}</p>
 
   <div
     class="iwac-fed__panel"
@@ -489,9 +489,9 @@
              merged list's card titles sat a level below a heading that was
              never there. -->
         {#if headingLevel === 3}
-          <h3 class="iwac-fed__sr">{t('results_heading')}</h3>
+          <h3 class="iwac-sr-only">{t('results_heading')}</h3>
         {:else}
-          <h2 class="iwac-fed__sr">{t('results_heading')}</h2>
+          <h2 class="iwac-sr-only">{t('results_heading')}</h2>
         {/if}
         {#if unionError}
           <div class="iwac-fed__union-error" role="alert">
@@ -664,16 +664,6 @@
     color: var(--muted, #66696e);
   }
 
-  .iwac-fed__sr {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    margin: -1px;
-    overflow: hidden;
-    clip-path: inset(50%);
-    white-space: nowrap;
-  }
-
   /* Union "All" tab — a lean merged list (ResultItem rows + pagination). */
   .iwac-fed__union {
     display: flex;
@@ -705,6 +695,7 @@
     border: 1px solid color-mix(in oklab, var(--error, #c9222b) 35%, transparent);
     border-radius: var(--radius-md, 0);
     padding: var(--space-4, 1rem);
+    color: var(--ink-strong, #05070c);
     display: flex;
     flex-direction: column;
     gap: var(--space-1, 0.25rem);

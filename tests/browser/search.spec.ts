@@ -42,7 +42,7 @@ async function horizontalOverflow(page: Page): Promise<number> {
 const cards = (page: Page): Locator => page.getByRole('article');
 const searchBox = (page: Page): Locator => page.getByRole('combobox', { name: 'Search the IWAC…' });
 /** The surface's own live region (the typeahead has a second one). */
-const announcer = (page: Page): Locator => page.locator('.iwac-search__sr-only[role="status"]');
+const announcer = (page: Page): Locator => page.locator('.iwac-search__announcer[role="status"]');
 
 test.describe('the /search shell', () => {
   test('mounts from the built bundle and fetches its first page', async ({ page }) => {
@@ -131,6 +131,34 @@ test.describe('the /search shell', () => {
     await expect(page).toHaveURL(/\/s\/westafrica\/item\/102$/);
   });
 
+  test("the year slider's fill runs from one thumb's centre to the other's", async ({ page }) => {
+    await serve(page, 'search');
+    await page.goto(SEARCH);
+    await expect(cards(page)).toHaveCount(3);
+    const from = page.getByRole('slider', { name: 'From year' });
+    await expect(from).toBeVisible();
+    // Move both thumbs inward, so neither sits at an end of the track.
+    await from.focus();
+    await page.keyboard.press('ArrowRight');
+    const to = page.getByRole('slider', { name: 'To year' });
+    await to.focus();
+    await page.keyboard.press('ArrowLeft');
+    const geometry = await page.evaluate(() => {
+      const box = (selector: string): DOMRect =>
+        document.querySelector(selector)!.getBoundingClientRect();
+      const fill = box('.iwac-daterange__filled');
+      const a = box('.iwac-daterange__thumb--from');
+      const b = box('.iwac-daterange__thumb--to');
+      return {
+        start: fill.left - (a.left + a.width / 2),
+        end: fill.right - (b.left + b.width / 2),
+      };
+    });
+    // It was one thumb radius (10px) to the right of both.
+    expect(Math.abs(geometry.start)).toBeLessThan(1);
+    expect(Math.abs(geometry.end)).toBeLessThan(1);
+  });
+
   test('a facet toggles a filter, and so do the chips on a result', async ({ page }) => {
     const stub = await serve(page, 'search');
     await page.goto(SEARCH);
@@ -212,7 +240,7 @@ test.describe('the /search shell', () => {
     const stub = await serve(page, 'search');
     await page.goto(SEARCH);
     const box = searchBox(page);
-    const status = page.locator('.iwac-suggest__sr[role="status"]');
+    const status = page.locator('.iwac-suggest__status[role="status"]');
 
     await box.pressSequentially('zzz');
     await expect(status).toHaveText('No matches.');

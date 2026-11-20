@@ -696,7 +696,12 @@
     ResultSummary managed to be torn down for each skeleton and re-mounted
     silently. Empty at mount, filled 600ms after the surface settles.
   -->
-  <p class="iwac-search__sr-only" role="status" aria-live="polite" aria-atomic="true">
+  <p
+    class="iwac-sr-only iwac-search__announcer"
+    role="status"
+    aria-live="polite"
+    aria-atomic="true"
+  >
     {announced}
   </p>
 
@@ -748,9 +753,9 @@
         aria-busy={results.isLoading}
       >
         {#if headingLevel === 3}
-          <h3 id={resultsHeadingId} class="iwac-search__sr-only">{t('results_heading')}</h3>
+          <h3 id={resultsHeadingId} class="iwac-sr-only">{t('results_heading')}</h3>
         {:else}
-          <h2 id={resultsHeadingId} class="iwac-search__sr-only">{t('results_heading')}</h2>
+          <h2 id={resultsHeadingId} class="iwac-sr-only">{t('results_heading')}</h2>
         {/if}
         <!-- Kept through an error: the mobile Filters trigger is the only way to
              the drawer, and the drawer is where the reader undoes the filter
@@ -934,7 +939,11 @@
    * than the legacy `clip`, and a 1px box rather than `display: none`, which
    * would take it out of the accessibility tree entirely.
    */
-  .iwac-search__sr-only {
+  /* The one visually-hidden rule of the bundle: every component's
+     screen-reader-only text uses this class (there were six copies, which
+     had started to differ). Global because components share it; its name is
+     namespaced like everything else here. */
+  :global(.iwac-sr-only) {
     position: absolute;
     width: 1px;
     height: 1px;

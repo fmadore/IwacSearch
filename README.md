@@ -27,15 +27,17 @@ stopwords / synonyms / analytics sync buttons (each an Omeka background
 job), and the search-analytics digest. Editors and admins reach it via ACL
 rules in `Module::onBootstrap`.
 
-| Milestone  |   Status   | Highlights                                                                         |
-| ---------- | :--------: | ---------------------------------------------------------------------------------- |
-| M0–M2      |  ✅ done   | Schema, MySQL indexer, atomic alias swap, facets, URL state, hybrid search         |
-| M3 / M3.5  |  ✅ done   | Browse-config table + admin CRUD — both retired, superseded by presets and blocks  |
-| Public SSR |  ✅ done   | PHP-side Typesense call inlines first page + facets into every public surface      |
-| M4         |  ✅ done   | Full incremental sync: items, batch ops, media, item sets                          |
-| M5         |  ✅ done   | Typeahead dropdown — prefix search, keyboard nav, click-to-navigate                |
-| M6         | 🟡 partial | Mobile filter drawer, result count, empty-state polish; cutover still planned      |
-| 3.6–3.9    |  ✅ done   | Synonyms, analytics, union "All" tab, Map view, ToC search, legacy-route redirects |
+| Milestone  |   Status   | Highlights                                                                                                  |
+| ---------- | :--------: | ----------------------------------------------------------------------------------------------------------- |
+| M0–M2      |  ✅ done   | Schema, MySQL indexer, atomic alias swap, facets, URL state, hybrid search                                  |
+| M3 / M3.5  |  ✅ done   | Browse-config table + admin CRUD — both retired, superseded by presets and blocks                           |
+| Public SSR |  ✅ done   | PHP-side Typesense call inlines first page + facets into every public surface                               |
+| M4         |  ✅ done   | Full incremental sync: items, batch ops, media, item sets                                                   |
+| M5         |  ✅ done   | Typeahead dropdown — prefix search, keyboard nav, click-to-navigate                                         |
+| M6         | 🟡 partial | Mobile filter drawer, result count, empty-state polish; cutover still planned                               |
+| 3.6–3.9    |  ✅ done   | Synonyms, analytics, union "All" tab, Map view, ToC search, legacy-route redirects                          |
+| 3.10–3.19  |  ✅ done   | Block value pickers, YouTube audiovisual fields, generation-2 sentiment, mention counts, cutover contracts  |
+| 3.20–3.28  |  ✅ done   | Phased cutover and write gate, DOI and Wikidata links, generation ledger, health probe, ink-and-blue design |
 
 Per-version notes: [CHANGELOG.md](CHANGELOG.md), from which each
 [release](https://github.com/fmadore/IwacSearch/releases)'s notes are built.

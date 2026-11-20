@@ -379,7 +379,7 @@
     {/if}
   </div>
 {/if}
-<p class="iwac-suggest__sr" role="status">{enabled ? statusText : ''}</p>
+<p class="iwac-sr-only iwac-suggest__status" role="status">{enabled ? statusText : ''}</p>
 
 <style>
   .iwac-suggest {
@@ -534,15 +534,6 @@
     background: var(--surface-sunken, #f4f1ef);
     padding: 0.125rem 0.5rem;
     border-radius: var(--radius-sm, 0);
-  }
-  .iwac-suggest__sr {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    margin: -1px;
-    overflow: hidden;
-    clip-path: inset(50%);
-    white-space: nowrap;
   }
   .iwac-suggest__empty {
     padding: var(--space-2, 0.5rem) var(--space-4, 1rem);

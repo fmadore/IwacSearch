@@ -65,4 +65,16 @@ describe('mapPopupHtml', () => {
     expect(html).toContain('<strong>&lt;b&gt;X&lt;/b&gt; &amp; co</strong>');
     expect(html).toContain('href="/a?b=&quot;c&quot;"');
   });
+
+  it('links only an http(s) URL or a site-relative path', () => {
+    // Escaping stops a value from leaving the attribute, not a scheme from
+    // running: resultCard.ts and export.ts already refused these.
+    for (const bad of ['javascript:alert(1)', 'data:text/html,x', '//evil.example/x']) {
+      const html = mapPopupHtml([point(1, 'X', 1, bad)], labels);
+      expect(html).not.toContain('<a ');
+    }
+    expect(mapPopupHtml([point(1, 'X', 1, 'https://islam.zmo.de/s/x/item/1')], labels)).toContain(
+      'href="https://islam.zmo.de/s/x/item/1"',
+    );
+  });
 });

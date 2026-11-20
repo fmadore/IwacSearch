@@ -13,7 +13,6 @@ import type {
 import {
   CONTENT_HIGHLIGHT_FALLBACK,
   CONTENT_QUERY_BY_FALLBACK,
-  EXACT_MODE_PARAMS,
   offersSemantic,
   buildFilterBy,
   buildYearRangeFilter,
@@ -30,7 +29,7 @@ import {
   perSearchError,
   validateSearchResult,
 } from './transport';
-import { STOPWORD_SET, queryPolicy } from './queryPolicy';
+import { queryPolicy } from './queryPolicy';
 import { authenticatedSearch } from './authenticatedSearch';
 import { getScopedKey } from './scopedKey';
 import { runSuggest } from './suggestQuery';
@@ -282,7 +281,7 @@ export class TypesenseClient {
     const signal = this.searchAbort.next();
     const ctx = await this.resolveContext(args);
     signal.throwIfAborted();
-    const { collection, q, filterBy, isBrowse, exact } = ctx;
+    const { collection, q, filterBy, isBrowse } = ctx;
 
     let lastEnvelope: MultiSearchEnvelope | undefined;
 
@@ -303,14 +302,11 @@ export class TypesenseClient {
           // collection uses only title + aliases. Typesense ignores
           // query_by when q=* so browse mode drops straight through. Exact
           // queries drop `embedding` (queryByEffective) for literal matching.
+          // queryPolicy() also adds the stopwords (dropped by the recovery
+          // retry, never on an exact query, so a quoted phrase keeps its
+          // "en" and "de") and an exact query's strict-matching params: one
+          // place, not a copy per request kind (lib/queryPolicy.ts).
           ...queryPolicy(q, ctx.queryBy, includeStopwords),
-          // Stopwords keep "le", "la", "des" etc. from polluting matches.
-          // Conditionally included so the recovery retry can drop it — and
-          // never applied to an exact query, so a quoted phrase keeps its
-          // stopwords ("radicalisation en Côte d'Ivoire" stays intact).
-          ...(includeStopwords && !exact ? { stopwords: STOPWORD_SET } : {}),
-          // Strict matching for an exact query (see `exact` above).
-          ...(exact ? EXACT_MODE_PARAMS : {}),
           filter_by: filterBy || undefined,
           sort_by: ctx.sortBy,
           page: args.page ?? 1,
@@ -347,7 +343,6 @@ export class TypesenseClient {
               {
                 collection,
                 ...queryPolicy(q, ctx.queryBy, includeStopwords),
-                ...(exact ? EXACT_MODE_PARAMS : {}),
                 filter_by: filterByWithoutYears || undefined,
                 enable_analytics: false,
                 facet_by: 'pub_year',
@@ -576,8 +571,6 @@ export class TypesenseClient {
             collection,
             ...queryPolicy(q, queryBy, useStopwords),
             enable_analytics: false,
-            ...(useStopwords ? { stopwords: STOPWORD_SET } : {}),
-            ...(exact ? EXACT_MODE_PARAMS : {}),
             filter_by: filterBy || undefined,
             sort_by: sortBy,
             page,
@@ -717,15 +710,12 @@ export class TypesenseClient {
       union: true,
       searches: args.searches.map((s) => ({
         collection: s.collection,
-        q,
-        query_by: blended ? s.queryBy : withoutField(s.queryBy, 'embedding'),
-        ...(includeStopwords && !exact ? { stopwords: STOPWORD_SET } : {}),
-        ...(exact ? EXACT_MODE_PARAMS : {}),
+        // The listed legs are keyword-only until the reader opts in.
+        ...queryPolicy(q, s.queryBy, includeStopwords, !blended),
         filter_by: s.filterBy?.trim() || undefined,
         sort_by: sortBy,
         highlight_fields: 'title_txt',
         highlight_full_fields: 'title_txt',
-        exclude_fields: 'ocr_text,toc_txt,embedding',
       })),
     });
 

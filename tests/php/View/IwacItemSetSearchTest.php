@@ -27,7 +27,7 @@ final class IwacItemSetSearchTest extends TestCase
 {
     private CallLog $sent;
 
-    /** @var list<array{0: string, 1: array<string, mixed>}> */
+    /** @var list<array{0: string, 1: array<string, mixed>, 2: array<string, mixed>}> */
     private array $apiCalls = [];
 
     /** @var list<array{0: string, 1: array<string, mixed>}> */
@@ -113,10 +113,13 @@ final class IwacItemSetSearchTest extends TestCase
                     {
                     }
 
-                    /** @param array<string, mixed> $query */
-                    public function search(string $resource, array $query = []): object
+                    /**
+                     * @param array<string, mixed> $query
+                     * @param array<string, mixed> $options
+                     */
+                    public function search(string $resource, array $query = [], array $options = []): object
                     {
-                        $this->test->recordApi($resource, $query);
+                        $this->test->recordApi($resource, $query, $options);
                         if ($this->count instanceof \Throwable) {
                             throw $this->count;
                         }
@@ -158,10 +161,13 @@ final class IwacItemSetSearchTest extends TestCase
         };
     }
 
-    /** @param array<string, mixed> $query */
-    public function recordApi(string $resource, array $query): void
+    /**
+     * @param array<string, mixed> $query
+     * @param array<string, mixed> $options
+     */
+    public function recordApi(string $resource, array $query, array $options = []): void
     {
-        $this->apiCalls[] = [$resource, $query];
+        $this->apiCalls[] = [$resource, $query, $options];
     }
 
     /** @param array<string, mixed> $values */
@@ -206,9 +212,11 @@ final class IwacItemSetSearchTest extends TestCase
     {
         $this->search(self::found(25), 25, self::site());
 
-        [$resource, $query] = $this->apiCalls[0];
+        [$resource, $query, $options] = $this->apiCalls[0];
         self::assertSame('items', $resource);
         self::assertSame(['item_set_id' => 2200, 'limit' => 1, 'site_id' => 1], $query);
+        // Only the total is read: references, not representations.
+        self::assertSame(['responseContent' => 'reference'], $options);
         self::assertArrayNotHasKey('page', $query, "page/per_page would reconfigure the ledger's Omeka\\Paginator");
         self::assertArrayNotHasKey('per_page', $query);
     }

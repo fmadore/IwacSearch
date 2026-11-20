@@ -77,7 +77,8 @@ final class IwacItemSetSearch extends AbstractHelper
             if ($site !== null) {
                 $query['site_id'] = (int) $site->id();
             }
-            $coreCount = (int) $view->api()->search('items', $query)->getTotalResults();
+            // References, not representations: only the total is read.
+            $coreCount = (int) $view->api()->search('items', $query, ['responseContent' => 'reference'])->getTotalResults();
             if (!ItemSetSurface::covers($found, $coreCount)) {
                 return '';
             }

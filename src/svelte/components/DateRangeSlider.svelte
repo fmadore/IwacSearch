@@ -467,17 +467,19 @@
     pointer-events: none;
   }
   .iwac-daterange__filled {
-    /* Selected segment between the two thumbs. */
+    /* Selected segment, from one thumb's centre to the other's: the same
+       percentages of the same padding box the thumbs are placed in. It used
+       to add the 0.625rem inset on top, which shifted it one thumb radius
+       to the right of both thumbs (hidden under the right one, short of the
+       left one's centre). */
     position: absolute;
     inset-block: calc(50% - 3px);
-    inset-inline-start: calc(0.625rem + var(--iwac-fill-start));
+    inset-inline-start: var(--iwac-fill-start);
     width: calc(var(--iwac-fill-end) - var(--iwac-fill-start));
     height: 6px;
     background: var(--primary, #18298d);
     border-radius: 0;
     pointer-events: none;
-    transform: translateX(calc(-1 * var(--iwac-fill-start) * 0));
-    /* Constrain to track-inner width: see comment below. */
   }
 
   .iwac-daterange__thumb {
@@ -537,8 +539,8 @@
 
   /*
    * The thumbs use `inset-inline-start: NN%` plus `transform: translateX(-50%)`
-   * to centre on their value. To make the .iwac-daterange__filled segment
-   * line up perfectly with the thumbs even at the extremes, we anchor it
-   * to the same coordinate space (0.625rem inline-padding offset).
+   * to centre on their value, in the track's padding box. The filled segment
+   * uses the same percentages without a transform, so it runs from centre to
+   * centre; at 0% and 100% the half-thumbs past the drawn line cover it.
    */
 </style>
