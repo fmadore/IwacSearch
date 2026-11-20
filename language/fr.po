@@ -487,3 +487,48 @@ msgstr "%d modifications en file d'attente. La plus ancienne : %s"
 
 msgid "Queue status unavailable."
 msgstr "État de la file d'attente indisponible."
+
+msgid "live"
+msgstr "en service"
+
+msgid "previous (rollback target)"
+msgstr "précédente (cible d'un retour arrière)"
+
+msgid "retired (removed by the next cleanup)"
+msgstr "retirée (supprimée au prochain nettoyage)"
+
+msgid "building, or left by an interrupted rebuild"
+msgstr "en construction, ou laissée par une reconstruction interrompue"
+
+msgid "not recorded (built before 3.27)"
+msgstr "non enregistrée (construite avant la 3.27)"
+
+msgid "Retry pending changes"
+msgstr "Relancer les modifications en attente"
+
+msgid "Clean up old index generations"
+msgstr "Nettoyer les anciennes générations de l'index"
+
+msgid "Bulk reindex queued — reads fresh data from the Omeka database, builds a fresh %s_<timestamp> collection alongside the live one, and atomic-swaps the iwac_current alias once verification passes."
+msgstr "Réindexation complète en file d'attente — elle relit les données de la base Omeka, construit une nouvelle collection %s_<horodatage> à côté de celle en service, puis bascule l'alias iwac_current de façon atomique une fois la vérification passée."
+
+msgid "The smaller-corpus check is off for this run."
+msgstr "La vérification d'un corpus plus petit est désactivée pour cette exécution."
+
+msgid "Stopwords sync queued — refreshes the fr_default set from data/stopwords-fr.json."
+msgstr "Synchronisation des mots vides en file d'attente — elle met à jour l'ensemble fr_default à partir de data/stopwords-fr.json."
+
+msgid "Synonyms sync queued — refreshes the iwac_synonyms set from data/synonyms-fr.json."
+msgstr "Synchronisation des synonymes en file d'attente — elle met à jour l'ensemble iwac_synonyms à partir de data/synonyms-fr.json."
+
+msgid "Analytics provisioning queued — creates the popular-queries and no-hit-queries rules."
+msgstr "Mise en place des statistiques en file d'attente — elle crée les règles des requêtes fréquentes et des requêtes sans résultat."
+
+msgid "Pending index changes queued for retry."
+msgstr "Modifications en attente d'indexation remises en file pour une nouvelle tentative."
+
+msgid "Old index generations queued for cleanup; every alias target and each alias's previous generation are retained."
+msgstr "Nettoyage des anciennes générations de l'index en file d'attente ; la cible de chaque alias et la génération précédente de chacun sont conservées."
+
+msgid "%1$s Track progress: %2$sjob #%3$d%4$s"
+msgstr "%1$s Suivre l'avancement : %2$stâche nº %3$d%4$s"

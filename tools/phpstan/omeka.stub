@@ -62,6 +62,7 @@ namespace Laminas\Mvc\Controller;
  * @method \Laminas\Form\Form getForm(string $class, array<string, mixed>|null $options = null)
  * @method \Omeka\Mvc\Controller\Plugin\Messenger messenger()
  * @method \Omeka\Job\Dispatcher jobDispatcher()
+ * @method string translate(string $message, string $textDomain = 'default', string|null $locale = null)
  */
 abstract class AbstractController
 {

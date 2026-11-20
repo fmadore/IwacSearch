@@ -64,7 +64,7 @@ $analytics = $analytics ?? ['available' => false, 'reason' => null, 'popular' =>
 <fieldset<?php echo !empty($queueError) ? ' disabled' : ''; ?> style="border:0;padding:0;margin:0;min-width:0;">
 <?php $statuses = $statuses ?? []; ?>
 <section class="iwac-maintenance-status" style="margin-top:1.5rem;border:1px solid #ddd;border-radius:6px;padding:1rem 1.5rem;background:#fff;">
-    <h3 style="margin-top:0;"><?php echo $translate('Index status'); ?></h3>
+    <h2 style="margin-top:0;"><?php echo $translate('Index status'); ?></h2>
     <table style="width:100%;border-collapse:collapse;">
         <thead>
             <tr style="text-align:left;border-bottom:2px solid #eee;">
@@ -105,14 +105,15 @@ $analytics = $analytics ?? ['available' => false, 'reason' => null, 'popular' =>
 $generations = $generations ?? ['available' => false, 'generations' => [], 'memory' => null];
 $mib = static fn (?int $bytes): string => $bytes === null ? '—' : number_format($bytes / 1048576) . ' MiB';
 $ledgerLabels = [
-    'live'     => 'live',
-    'previous' => 'previous (rollback target)',
-    'retired'  => 'retired (removed by the next cleanup)',
-    'building' => 'building, or left by an interrupted rebuild',
+    'live'     => 'live', // @translate
+    'previous' => 'previous (rollback target)', // @translate
+    'retired'  => 'retired (removed by the next cleanup)', // @translate
+    'building' => 'building, or left by an interrupted rebuild', // @translate
 ];
+$unrecordedLabel = 'not recorded (built before 3.27)'; // @translate
 ?>
 <section class="iwac-maintenance-generations" style="margin-top:1.5rem;border:1px solid #ddd;border-radius:6px;padding:1rem 1.5rem;background:#fff;">
-    <h3 style="margin-top:0;"><?php echo $translate('Index generations'); ?></h3>
+    <h2 style="margin-top:0;"><?php echo $translate('Index generations'); ?></h2>
     <?php if (!$generations['available']): ?>
         <p><?php echo $translate('Generation list unavailable — Typesense is unreachable.'); ?></p>
     <?php else: ?>
@@ -136,7 +137,7 @@ $ledgerLabels = [
                                 : $escape(implode(', ', $generation['serves'])); ?>
                         </td>
                         <td style="padding:0.4rem 0.5rem;">
-                            <?php echo $escape($translate($ledgerLabels[$generation['ledger'] ?? ''] ?? 'not recorded (built before 3.27)')); ?>
+                            <?php echo $escape($translate($ledgerLabels[$generation['ledger'] ?? ''] ?? $unrecordedLabel)); ?>
                         </td>
                         <td style="padding:0.4rem 0.5rem;">
                             <?php echo $generation['created'] === null ? '—' : $escape(gmdate('Y-m-d H:i', $generation['created']) . ' UTC'); ?>
@@ -165,7 +166,7 @@ $ledgerLabels = [
 </section>
 
 <section class="iwac-maintenance-analytics" style="margin-top:1.5rem;border:1px solid #ddd;border-radius:6px;padding:1rem 1.5rem;background:#fff;">
-    <h3 style="margin-top:0;"><?php echo $translate('Search analytics'); ?></h3>
+    <h2 style="margin-top:0;"><?php echo $translate('Search analytics'); ?></h2>
     <?php if (!$analytics['available']): ?>
         <?php if (!empty($analytics['reason'])): ?>
             <p class="description" style="margin-bottom:0;color:#c62828;">
@@ -192,7 +193,7 @@ $ledgerLabels = [
             ?>
             <?php foreach ($panels as $panel): ?>
                 <div>
-                    <h4 style="margin:0 0 0.5rem;"><?php echo $escape($panel['title']); ?></h4>
+                    <h3 style="margin:0 0 0.5rem;"><?php echo $escape($panel['title']); ?></h3>
                     <?php if ($panel['rows'] === []): ?>
                         <p class="description" style="margin:0;"><?php echo $escape($panel['empty']); ?></p>
                     <?php else: ?>
@@ -219,7 +220,7 @@ $ledgerLabels = [
 <div class="iwac-maintenance-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:1.5rem;margin-top:1.5rem;">
 
     <section class="iwac-maintenance-card" style="border:1px solid #ddd;border-radius:6px;padding:1.5rem;background:#fff;">
-        <h3 style="margin-top:0;"><?php echo $translate('Run full reindex'); ?></h3>
+        <h2 style="margin-top:0;"><?php echo $translate('Run full reindex'); ?></h2>
         <p>
             <?php echo sprintf(
                 // Format string is translated then escaped, so any literal
@@ -255,7 +256,7 @@ $ledgerLabels = [
     </section>
 
     <section class="iwac-maintenance-card" style="border:1px solid #ddd;border-radius:6px;padding:1.5rem;background:#fff;">
-        <h3 style="margin-top:0;"><?php echo $translate('Sync French stopwords only'); ?></h3>
+        <h2 style="margin-top:0;"><?php echo $translate('Sync French stopwords only'); ?></h2>
         <p>
             <?php echo sprintf(
                 $escape($translate('Refreshes the %1$s stopword set in Typesense from %2$s. Idempotent — safe to run repeatedly.')),
@@ -276,7 +277,7 @@ $ledgerLabels = [
     </section>
 
     <section class="iwac-maintenance-card" style="border:1px solid #ddd;border-radius:6px;padding:1.5rem;background:#fff;">
-        <h3 style="margin-top:0;"><?php echo $translate('Sync synonyms only'); ?></h3>
+        <h2 style="margin-top:0;"><?php echo $translate('Sync synonyms only'); ?></h2>
         <p>
             <?php echo sprintf(
                 $escape($translate('Refreshes the %1$s synonym set in Typesense from %2$s — transliteration variants like cheikh/sheikh/shaykh or Tidjaniyya/Tijaniyya. Idempotent — safe to run repeatedly.')),
@@ -297,7 +298,7 @@ $ledgerLabels = [
     </section>
 
     <section class="iwac-maintenance-card" style="border:1px solid #ddd;border-radius:6px;padding:1.5rem;background:#fff;">
-        <h3 style="margin-top:0;"><?php echo $translate('Provision search analytics'); ?></h3>
+        <h2 style="margin-top:0;"><?php echo $translate('Provision search analytics'); ?></h2>
         <p>
             <?php echo $translate('Creates the popular-queries and no-hit-queries analytics rules plus their destination collections. Run once after enabling analytics on the Typesense server; the bulk reindex also (re)applies them non-fatally.'); ?>
         </p>
@@ -335,7 +336,12 @@ $ledgerLabels = [
     <?php else: ?>
         <p><?php echo $translate('Queue status unavailable.'); ?></p>
     <?php endif; ?>
-    <?php foreach ([['form' => $retryForm, 'route' => 'retry-changes', 'label' => 'Retry pending changes'], ['form' => $pruneForm, 'route' => 'prune-collections', 'label' => 'Clean up old index generations']] as $action):
+    <?php
+    $queueActions = [
+        ['form' => $retryForm, 'route' => 'retry-changes', 'label' => 'Retry pending changes'], // @translate
+        ['form' => $pruneForm, 'route' => 'prune-collections', 'label' => 'Clean up old index generations'], // @translate
+    ];
+    foreach ($queueActions as $action):
         $form = $action['form'];
         $form->setAttribute('action', $this->url('admin/iwac-search/maintenance-' . $action['route']));
         $form->setAttribute('method', 'POST');

@@ -325,12 +325,16 @@ class MaintenanceController extends AbstractActionController
     {
         $request = $this->httpRequest();
         $allowShrink = $request->isPost() && (string) $request->getPost('allow_shrink', '') === '1';
+        $description = sprintf(
+            $this->translate('Bulk reindex queued — reads fresh data from the Omeka database, builds a fresh %s_<timestamp> collection alongside the live one, and atomic-swaps the iwac_current alias once verification passes.'),
+            $this->collectionBaseName
+        );
+        if ($allowShrink) {
+            $description .= ' ' . $this->translate('The smaller-corpus check is off for this run.');
+        }
         return $this->dispatchJob(
             BulkReindex::class,
-            sprintf(
-                'Bulk reindex queued — reads fresh data from the Omeka database, builds a fresh %s_<timestamp> collection alongside the live one, and atomic-swaps the iwac_current alias once verification passes.',
-                $this->collectionBaseName
-            ) . ($allowShrink ? ' The smaller-corpus check is off for this run.' : ''),
+            $description,
             $allowShrink ? ['allow_shrink' => true] : []
         );
     }
@@ -343,7 +347,7 @@ class MaintenanceController extends AbstractActionController
     {
         return $this->dispatchJob(
             SyncStopwords::class,
-            'Stopwords sync queued — refreshes the fr_default set from data/stopwords-fr.json.'
+            $this->translate('Stopwords sync queued — refreshes the fr_default set from data/stopwords-fr.json.')
         );
     }
 
@@ -355,7 +359,7 @@ class MaintenanceController extends AbstractActionController
     {
         return $this->dispatchJob(
             SyncSynonyms::class,
-            'Synonyms sync queued — refreshes the iwac_synonyms set from data/synonyms-fr.json.'
+            $this->translate('Synonyms sync queued — refreshes the iwac_synonyms set from data/synonyms-fr.json.')
         );
     }
 
@@ -368,7 +372,7 @@ class MaintenanceController extends AbstractActionController
     {
         return $this->dispatchJob(
             ProvisionAnalytics::class,
-            'Analytics provisioning queued — creates the popular-queries and no-hit-queries rules.'
+            $this->translate('Analytics provisioning queued — creates the popular-queries and no-hit-queries rules.')
         );
     }
 
@@ -378,7 +382,10 @@ class MaintenanceController extends AbstractActionController
      */
     public function retryChangesAction(): Response
     {
-        return $this->dispatchJob(\IwacSearch\Job\DrainChanges::class, 'Pending index changes queued for retry.');
+        return $this->dispatchJob(
+            \IwacSearch\Job\DrainChanges::class,
+            $this->translate('Pending index changes queued for retry.')
+        );
     }
 
     /**
@@ -389,13 +396,19 @@ class MaintenanceController extends AbstractActionController
      */
     public function pruneCollectionsAction(): Response
     {
-        return $this->dispatchJob(\IwacSearch\Job\PruneCollections::class, 'Old index generations queued for cleanup; every alias target and each alias\'s previous generation are retained.');
+        return $this->dispatchJob(
+            \IwacSearch\Job\PruneCollections::class,
+            $this->translate('Old index generations queued for cleanup; every alias target and each alias\'s previous generation are retained.')
+        );
     }
 
     /**
      * Shared dispatch path: validate the form (= validate CSRF), dispatch
      * the job, attach a flash message linking to the job log, redirect
      * back to the maintenance page.
+     *
+     * `$description` arrives translated: the messenger translates the flash
+     * message's own text ("%1$s Track progress: …"), never its arguments.
      *
      * @param class-string $jobClass
      * @param array<string, mixed> $args job arguments
@@ -429,7 +442,7 @@ class MaintenanceController extends AbstractActionController
             ['controller' => 'job', 'id' => $job->getId()]
         );
         $message = new Message(
-            '%1$s Track progress: %2$sjob #%3$d%4$s',
+            '%1$s Track progress: %2$sjob #%3$d%4$s', // @translate
             $description,
             sprintf('<a href="%s">', htmlspecialchars($jobUrl, ENT_QUOTES, 'UTF-8')),
             $job->getId(),

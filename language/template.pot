@@ -170,11 +170,45 @@ msgid "Entity index (people, places, organisations, topics…)"
 msgstr ""
 
 #: src/Controller/Admin/MaintenanceController.php
+#, php-format
+msgid "Bulk reindex queued — reads fresh data from the Omeka database, builds a fresh %s_<timestamp> collection alongside the live one, and atomic-swaps the iwac_current alias once verification passes."
+msgstr ""
+
+#: src/Controller/Admin/MaintenanceController.php
+msgid "The smaller-corpus check is off for this run."
+msgstr ""
+
+#: src/Controller/Admin/MaintenanceController.php
+msgid "Stopwords sync queued — refreshes the fr_default set from data/stopwords-fr.json."
+msgstr ""
+
+#: src/Controller/Admin/MaintenanceController.php
+msgid "Synonyms sync queued — refreshes the iwac_synonyms set from data/synonyms-fr.json."
+msgstr ""
+
+#: src/Controller/Admin/MaintenanceController.php
+msgid "Analytics provisioning queued — creates the popular-queries and no-hit-queries rules."
+msgstr ""
+
+#: src/Controller/Admin/MaintenanceController.php
+msgid "Pending index changes queued for retry."
+msgstr ""
+
+#: src/Controller/Admin/MaintenanceController.php
+msgid "Old index generations queued for cleanup; every alias target and each alias's previous generation are retained."
+msgstr ""
+
+#: src/Controller/Admin/MaintenanceController.php
 msgid "Invalid form submission. Please reload the page and try again."
 msgstr ""
 
 #: src/Controller/Admin/MaintenanceController.php
 msgid "IWAC Search database setup is unavailable. Open the maintenance page for recovery instructions before retrying."
+msgstr ""
+
+#: src/Controller/Admin/MaintenanceController.php
+#, php-format
+msgid "%1$s Track progress: %2$sjob #%3$d%4$s"
 msgstr ""
 
 #: src/Search/FilterExpression.php
@@ -439,6 +473,26 @@ msgid "Live counts read directly from Typesense. A reachable collection with 0 d
 msgstr ""
 
 #: view/iwac-search/admin/maintenance/index.phtml
+msgid "live"
+msgstr ""
+
+#: view/iwac-search/admin/maintenance/index.phtml
+msgid "previous (rollback target)"
+msgstr ""
+
+#: view/iwac-search/admin/maintenance/index.phtml
+msgid "retired (removed by the next cleanup)"
+msgstr ""
+
+#: view/iwac-search/admin/maintenance/index.phtml
+msgid "building, or left by an interrupted rebuild"
+msgstr ""
+
+#: view/iwac-search/admin/maintenance/index.phtml
+msgid "not recorded (built before 3.27)"
+msgstr ""
+
+#: view/iwac-search/admin/maintenance/index.phtml
 msgid "Index generations"
 msgstr ""
 
@@ -616,4 +670,12 @@ msgstr ""
 
 #: view/iwac-search/admin/maintenance/index.phtml
 msgid "Queue status unavailable."
+msgstr ""
+
+#: view/iwac-search/admin/maintenance/index.phtml
+msgid "Retry pending changes"
+msgstr ""
+
+#: view/iwac-search/admin/maintenance/index.phtml
+msgid "Clean up old index generations"
 msgstr ""
