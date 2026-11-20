@@ -14,7 +14,9 @@ Every public discovery surface — `/search`, the federated
 `/search/everything`, and page blocks — is **server-rendered**. PHP calls
 Typesense during dispatch and inlines the first page plus facet counts into
 the bootstrap JSON, so the client renders them as soon as its (deferred)
-bundle runs, with no key mint and no search roundtrip — the HTML's own
+bundle runs, with no key mint and no search roundtrip for that first page
+(the year histogram on `/search` is still fetched after load; the
+`/search/everything` tab counts come from the snapshot) — the HTML's own
 first frame is a skeleton, not the results. The SSR is skipped when the URL
 already carries search state, and if Typesense is unreachable it returns
 null (and pauses for 20 s) and the client falls back to its scoped-key flow.

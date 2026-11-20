@@ -65,8 +65,11 @@ final class Reindexer
         // mapper in the registry (which hold the same reference) and by the
         // IndexReindexer that runs next.
         private readonly EntityAuthority $authority,
-        // Filled during the content pass; consumed by the IndexReindexer.
-        private readonly EntityOccurrences $occurrences,
+        // Filled during the content pass for a caller that consumes it; null
+        // when nothing does. The rebuild passes null: its pass 2 re-maps every
+        // record into a fresh accumulator, and filling one here for the whole
+        // corpus only to throw it away cost memory and time.
+        private readonly ?EntityOccurrences $occurrences,
         private readonly StopwordsSync $stopwordsSync,
         private readonly CurationSync $curationSync,
         private readonly SynonymsSync $synonymsSync,
@@ -186,7 +189,7 @@ final class Reindexer
             if ($doc === null) {
                 continue;
             }
-            $this->occurrences->record($doc);
+            $this->occurrences?->record($doc);
             yield $doc;
         }
     }

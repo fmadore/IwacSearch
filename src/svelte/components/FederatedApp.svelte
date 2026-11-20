@@ -4,6 +4,7 @@
   import { isAbortError } from '../lib/transport';
   import { createTypingBurst } from '../lib/urlState';
   import { createTabSeed } from '../lib/tabSeed.svelte';
+  import { ssrTabCounts } from '../lib/federatedCounts';
   import { semanticView } from '../lib/semanticFallback';
   import { resultAnnouncement } from '../lib/announce';
   import { landOnResults, refocus } from '../lib/refocus';
@@ -140,7 +141,16 @@
   }
 
   // Re-run counts whenever the committed query changes (incl. on mount).
+  // With no query the server-rendered first pages already carry every tab's
+  // total (lib/federatedCounts.ts), so no request is made for them.
   $effect(() => {
+    const seeded = ssrTabCounts(tabs, query);
+    if (seeded) {
+      countReq++; // a count still in flight for an older query must not land
+      counts = seeded;
+      countsReady = true;
+      return;
+    }
     void loadCounts(query);
   });
 

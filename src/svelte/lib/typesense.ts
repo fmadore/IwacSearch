@@ -287,10 +287,8 @@ export class TypesenseClient {
     let lastEnvelope: MultiSearchEnvelope | undefined;
 
     // The histogram sub-search needs the same filter MINUS the year range.
-    const filterByWithoutYears = args.withYearDistribution
-      ? (await this.resolveContext({ ...args, includeYearRange: false })).filterBy
-      : '';
-    signal.throwIfAborted();
+    // Built directly: a second resolveContext() only re-awaited the key.
+    const filterByWithoutYears = args.withYearDistribution ? this.filterByOf(args, false) : '';
 
     const facets = args.facetBy ?? this.bootstrap.prominent_facets;
 
@@ -899,6 +897,18 @@ export class TypesenseClient {
    * @param includeYearRange  false only for the year histogram, which must
    *   show the full span regardless of the selected window.
    */
+  /** Locked + active facet filters, with or without the year range. */
+  private filterByOf(
+    args: { activeFilters?: ActiveFilters; yearRange?: YearRange | null },
+    includeYearRange: boolean,
+  ): string {
+    return combineFilters(
+      this.bootstrap.locked_filters,
+      buildFilterBy(args.activeFilters ?? {}),
+      includeYearRange ? buildYearRangeFilter(args.yearRange ?? null) : '',
+    );
+  }
+
   private async resolveContext(args: {
     q: string;
     activeFilters?: ActiveFilters;
@@ -910,11 +920,7 @@ export class TypesenseClient {
     const key = await this.getKey();
     const collection = this.bootstrap.collection_alias ?? key.collection;
 
-    const filterBy = combineFilters(
-      this.bootstrap.locked_filters,
-      buildFilterBy(args.activeFilters ?? {}),
-      (args.includeYearRange ?? true) ? buildYearRangeFilter(args.yearRange ?? null) : '',
-    );
+    const filterBy = this.filterByOf(args, args.includeYearRange ?? true);
 
     // Browse mode: empty query becomes Typesense's wildcard `*`. Text-match
     // scoring is meaningless without a query, so resolveSortBy falls back to

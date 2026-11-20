@@ -119,7 +119,8 @@ final class ReindexOrchestrator
             $reader,
             $registry,
             $authority,
-            new EntityOccurrences(),
+            // Pass 2 counts occurrences itself, after the late changes.
+            null,
             new StopwordsSync($this->typesense, $this->moduleRoot . '/data/stopwords-fr.json', $this->logger),
             new CurationSync($this->typesense, $this->logger),
             new SynonymsSync($this->typesense, $this->moduleRoot . '/data/synonyms-fr.json', $this->logger),

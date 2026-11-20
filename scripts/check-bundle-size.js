@@ -21,11 +21,16 @@ import { fileURLToPath } from 'node:url';
 
 const DIST = join(dirname(fileURLToPath(import.meta.url)), '..', 'asset', 'dist');
 
-/** Gzipped budgets in bytes, with headroom above the current size. */
+/**
+ * Gzipped budgets in bytes, with headroom above the current size. The app's
+ * went from 64 000 to 65 000 in November 2026, when the audit fixes (a sixth
+ * sentiment model's labels, mounted live regions, the tab hand-off and the
+ * SSR tab counts) took it to ~64 050 B.
+ */
 const BUDGETS = {
   'iwac-search-header.js': 7_000,
   'iwac-search-header.css': 1_500,
-  'iwac-search.js': 64_000,
+  'iwac-search.js': 65_000,
   'iwac-search.css': 10_000,
 };
 
