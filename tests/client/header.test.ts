@@ -17,7 +17,8 @@ vi.mock('../../src/svelte/lib/suggestQuery', () => ({
   runSuggest: (...args: unknown[]) => runSuggest(...args),
 }));
 
-const { HeaderSearch, init } = await import('../../src/svelte/header');
+const { HeaderSearch, init, readConfig, CONFIG_ISLAND_ID } =
+  await import('../../src/svelte/header');
 
 const RESULT: SuggestResult = {
   articles: [
@@ -50,7 +51,7 @@ function mount(): {
   new HeaderSearch(
     form,
     input,
-    { endpoints: { token: '/t', search: '/s' }, locale: 'fr' },
+    { endpoints: { token: '/t', search: '/s' }, locale: 'fr', stylesheet: null },
     navigate,
   );
   return { form, input, navigate };
@@ -244,5 +245,42 @@ describe('init', () => {
     init();
     expect(document.querySelectorAll('[role="listbox"]')).toHaveLength(1);
     expect(document.querySelector('form')!.dataset.iwacHeaderEnhanced).toBe('1');
+  });
+
+  it('reads its config from the JSON island and loads the stylesheet once', () => {
+    // An inert data island, not `window.IWAC_HEADER_SEARCH = …` in an inline
+    // script, so the site can run a `script-src 'self'` CSP.
+    document.head.innerHTML = `<script type="application/json" id="${CONFIG_ISLAND_ID}">${JSON.stringify(
+      {
+        endpoints: { token: '/s/token', search: '/s/multi' },
+        locale: 'en',
+        stylesheet: '/asset/dist/iwac-search-header.css?v=1',
+      },
+    )}</script>`;
+    document.body.innerHTML = `
+      <form data-iwac-header-search action="/search/everything"><input name="q"></form>`;
+    expect(readConfig()).toEqual({
+      endpoints: { token: '/s/token', search: '/s/multi' },
+      locale: 'en',
+      stylesheet: '/asset/dist/iwac-search-header.css?v=1',
+    });
+    init();
+    init();
+    const links = document.head.querySelectorAll<HTMLLinkElement>('link[rel="stylesheet"]');
+    expect(links).toHaveLength(1);
+    expect(links[0]!.getAttribute('href')).toBe('/asset/dist/iwac-search-header.css?v=1');
+    document.head.innerHTML = '';
+  });
+
+  it('falls back to the defaults when the island is missing or broken', () => {
+    document.documentElement.setAttribute('lang', 'en-GB');
+    document.head.innerHTML = `<script type="application/json" id="${CONFIG_ISLAND_ID}">{oops</script>`;
+    expect(readConfig()).toEqual({
+      endpoints: { token: '/discovery/token', search: '/search-api/multi_search' },
+      locale: 'en',
+      stylesheet: null,
+    });
+    document.head.innerHTML = '';
+    document.documentElement.removeAttribute('lang');
   });
 });

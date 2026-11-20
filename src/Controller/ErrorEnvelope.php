@@ -21,6 +21,21 @@ namespace IwacSearch\Controller;
  */
 final class ErrorEnvelope
 {
+    /**
+     * Headers on every JSON response of SearchController (the scoped key, the
+     * health probe, their errors), besides X-Request-ID.
+     *
+     * Never cacheable: a cached 200 from the health probe would hide the
+     * outage it exists to report. Never indexed: these are machine endpoints,
+     * and `/discovery/health` sent no X-Robots-Tag, so a search engine could
+     * list it as a page (robots.txt is IWAC-SEO's side of the same fix).
+     */
+    public const HEADERS = [
+        'Cache-Control' => 'no-store, max-age=0',
+        'Pragma'        => 'no-cache',
+        'X-Robots-Tag'  => 'noindex',
+    ];
+
     /** A fresh, opaque id for one request: 24 hex characters. */
     public static function requestId(): string
     {

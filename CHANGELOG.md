@@ -12,14 +12,21 @@ Versions that were never published (tagged and released) are folded into the nex
 
 - The sixth sentiment model, Claude Haiku 5.5, is indexed like the other five: a link can filter on its polarity, centrality and subjectivity (`claude_haiku_5_5_*`), and its filter chips name it. Article pages and the IwacVisualizations dashboards already showed it. A weekly check (`npm run check:sentiment`) now compares the indexed models with IwacVisualizations' model registry, so the next model added there fails CI here instead of going unnoticed.
 
+### Changed
+
+- The header search's settings are printed as an inert JSON block instead of an inline script, the last inline script the module put on every page; the site can now adopt a Content-Security-Policy that allows scripts from its own origin only. The header search's stylesheet is loaded by its script, on pages that have the search box.
+
 ### Fixed
 
 - **Screen readers:** the search box in the site header no longer announces "No matches" on every keystroke, only once the suggestions have arrived and there are none; a superseded suggestion request is now cancelled rather than left to finish. The "Searching…" and match-count messages of a filter's value search, and the map's "Loading…", are announced reliably. The search box's clear button shows a focus ring, and the Export menu's list of formats is a labelled group.
 - Searching within a long filter (organisations, authors…) kept showing the counts of the previous search after the query or another filter changed. It now searches again.
 - **"Everything" tab:** a filter chip clicked on a merged result opens the matching tab filtered on it, but it came back each time that tab was reopened, even after it had been removed. It now applies once. A failed count of related documents beside the merged results no longer fails the whole tab: the results show, without that count.
 - 1,792 articles had no country and were missing from every country filter and country page: five Burkinabè newspapers (Aujourd'hui au Faso, ActuBurkina, Actualite.bf, Burkimbia, Toute Info) were not in the newspaper-to-country table. They are now, with Crystal News (Bénin) and L'Express du Faso (Burkina Faso), whose articles are not online yet. Every reindex and every save now logs a warning naming any newspaper or publication whose publisher has no country, so the next new title is noticed.
-
 - A filter value containing a comma was split in two when the address was read back. Selecting "Conseil Supérieur des Imams, des Mosquées et des Affaires islamiques" (organisations), a book title with a comma, or the CERFI channel worked, but reloading the page, opening a shared link or pressing Back found nothing. Each value now comes back whole. Old links that joined countries, types or decades with commas (`?f.country_ss=Bénin,Togo`) still work.
+
+### Security
+
+- `/discovery/health` and `/discovery/token` answer with `X-Robots-Tag: noindex`, so search engines do not list them.
 
 ## [3.28.1] - 2026-11-16
 

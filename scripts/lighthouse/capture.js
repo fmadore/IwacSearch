@@ -6,7 +6,7 @@
  * rendered markup: the `.iwac-search-shell` fragment (heading, noscript, mount
  * root, skeleton and the bootstrap JSON with its server-rendered first page
  * of results), the header search form the theme prints on every page, and the
- * `window.IWAC_HEADER_SEARCH` blob Module.php injects beside it — lifted from
+ * header search's JSON config island Module.php prints in the head — lifted from
  * the page, not restated, so the fixture cannot describe markup the module
  * never printed. Only the module's asset URLs are rewritten, to this
  * checkout's `asset/` files, so the gate measures the tree under review.
@@ -79,8 +79,11 @@ async function capture(name, route) {
     throw new Error(`${route}: no server-rendered first page — the fixture would need Typesense`);
   }
   const form = pick(html, 'data-iwac-header-search', 'form', 'header search form');
-  const blob = /window\.IWAC_HEADER_SEARCH = [^\n]*/.exec(html)?.[0];
-  if (!blob) throw new Error(`${route}: no IWAC_HEADER_SEARCH blob`);
+  const island =
+    /<script type="application\/json" id="iwac-header-search-config">([^<]*)<\/script>/.exec(
+      html,
+    )?.[1];
+  if (!island) throw new Error(`${route}: no header search config island`);
 
   const page = [
     '<!doctype html>',
@@ -95,7 +98,7 @@ async function capture(name, route) {
     '    <link rel="stylesheet" href="/asset/dist/iwac-search.css">',
     '    <script defer src="/asset/dist/iwac-search.js"></script>',
     '    <script defer src="/asset/dist/iwac-search-header.js"></script>',
-    `    <script>${localAssets(unescapeAttr(blob))}</script>`,
+    `    <script type="application/json" id="iwac-header-search-config">${localAssets(island.trim())}</script>`,
     '</head>',
     '<body>',
     '    <header class="main-header__search-form">',

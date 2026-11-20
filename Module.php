@@ -250,11 +250,12 @@ class Module extends AbstractModule
      * client put the export / map / union / histogram / facet-value code on
      * every public page. Adding an import here is a site-wide cost.
      *
-     * Skips admin + API layouts via the status() helper. The inline config
-     * blob carries the (basePath-resolved) token + search endpoints and the
-     * site locale; the bundle reads it as window.IWAC_HEADER_SEARCH and the
-     * landing URL from the form's own action (set by the iwacSearchUrl
-     * helper in the theme).
+     * Skips admin + API layouts via the status() helper. A JSON data island
+     * ({@see Site\HeaderSearchIsland}, no executable inline script) carries
+     * the (basePath-resolved) token + search endpoints, the site locale and
+     * the header stylesheet's URL; the bundle reads it by id, and the landing
+     * URL from the form's own action (set by the iwacSearchUrl helper in the
+     * theme).
      *
      * @param Event<object, array<string, mixed>> $event view.layout, whose
      *   target is the layout's renderer
@@ -278,42 +279,30 @@ class Module extends AbstractModule
         // Endpoints are global (the site mount doesn't prefix /discovery/token
         // or /search-api); basePath() keeps them correct under a subdirectory
         // install. Locale picks the FR/EN dropdown strings.
-        $config = [
+        // The header CSS only styles the typeahead dropdown, which stays hidden
+        // until the reader focuses or types, so it must never block first
+        // paint: header.js appends it once it has found a form to enhance. A
+        // no-JS visitor never gets the dropdown, so loses nothing. (The inline
+        // media="print" swap this replaces did not start the fetch during head
+        // parse either: the theme moves inline head scripts to the end of
+        // <body>.)
+        $json = Site\HeaderSearchIsland::json([
             'endpoints' => array_map(
                 static fn(string $stem): string => $view->basePath($stem),
                 Search\SurfaceBootstrap::ENDPOINT_STEMS
             ),
             'locale' => $view->iwacLocale(),
-        ];
-        // JSON_HEX_TAG neutralises any "</script>" inside the (server-trusted)
-        // values so the inline blob can't break out of the <script> element.
-        $json = json_encode(
-            $config,
-            JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_HEX_TAG
-        );
-        if ($json === false) {
+            'stylesheet' => $view->assetUrl('dist/iwac-search-header.css', 'IwacSearch'),
+        ]);
+        if ($json === null) {
             return;
         }
-
-        // The header CSS only styles the typeahead dropdown, which stays hidden
-        // until the user focuses / types — so it must never block first paint.
-        // The whole feature is JS-gated (header.js enhances the form), so loading
-        // the stylesheet from JS via the media="print" → onload swap costs no-JS
-        // users nothing they'd otherwise get, and drops one render-blocking
-        // request from every site page (incl. the homepage). The fetch still
-        // starts during head parse, so the dropdown is styled well before any
-        // interaction.
-        $headerCssUrl = json_encode(
-            $view->assetUrl('dist/iwac-search-header.css', 'IwacSearch'),
-            JSON_UNESCAPED_SLASHES | JSON_HEX_TAG
-        );
-        // Config first so it's defined before the deferred bundle executes.
+        // noescape: Laminas would otherwise wrap the source in `//<!--` lines,
+        // which are not JSON.
         $view->headScript()->appendScript(
-            'window.IWAC_HEADER_SEARCH = ' . $json . ';'
-            . '(function(){var l=document.createElement("link");l.rel="stylesheet";'
-            . 'l.href=' . $headerCssUrl . ';l.media="print";'
-            . 'l.onload=function(){this.media="all";};'
-            . '(document.head||document.documentElement).appendChild(l);})();'
+            $json,
+            'application/json',
+            ['id' => Site\HeaderSearchIsland::ID, 'noescape' => true]
         );
         $view->headScript()->appendFile(
             $view->assetUrl('dist/iwac-search-header.js', 'IwacSearch'),

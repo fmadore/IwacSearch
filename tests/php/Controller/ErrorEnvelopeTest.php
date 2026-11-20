@@ -25,6 +25,14 @@ final class ErrorEnvelopeTest extends TestCase
         );
     }
 
+    public function testJsonResponsesAreNeverCachedNorIndexed(): void
+    {
+        // /discovery/health answered with no X-Robots-Tag and could be
+        // listed by a search engine as a page.
+        self::assertSame('noindex', ErrorEnvelope::HEADERS['X-Robots-Tag']);
+        self::assertSame('no-store, max-age=0', ErrorEnvelope::HEADERS['Cache-Control']);
+    }
+
     public function testExtraFieldsNeverOverrideTheEnvelope(): void
     {
         $body = ErrorEnvelope::body('search_unavailable', 'Typesense is unreachable.', 'id1', [

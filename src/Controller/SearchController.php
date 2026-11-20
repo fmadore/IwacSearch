@@ -358,12 +358,16 @@ class SearchController extends AbstractActionController
         return new JsonModel(ErrorEnvelope::body($code, $message, $requestId, $extra));
     }
 
-    /** Never cacheable, and traceable to the log lines of this request. */
+    /**
+     * Never cacheable, never indexed ({@see ErrorEnvelope::HEADERS}), and
+     * traceable to the log lines of this request.
+     */
     private function jsonHeaders(string $requestId): void
     {
-        $this->httpResponse()->getHeaders()
-            ->addHeaderLine('Cache-Control', 'no-store, max-age=0')
-            ->addHeaderLine('Pragma', 'no-cache')
-            ->addHeaderLine('X-Request-ID', $requestId);
+        $headers = $this->httpResponse()->getHeaders();
+        foreach (ErrorEnvelope::HEADERS as $name => $value) {
+            $headers->addHeaderLine($name, $value);
+        }
+        $headers->addHeaderLine('X-Request-ID', $requestId);
     }
 }

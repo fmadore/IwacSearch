@@ -32,8 +32,10 @@
  * scripts/check-bundle-size.js for both budgets. Its strings come from
  * `translateSuggest()`, never `translate()`: the latter reads the app's whole
  * STRINGS table, which the size check refuses to find in this bundle.
- * Endpoints + locale come from an inline `window.IWAC_HEADER_SEARCH` blob
- * the module injects; the landing URL is read from the form's own action.
+ * Endpoints, locale and the stylesheet URL come from a JSON data island the
+ * module prints in the head (`Site\HeaderSearchIsland`, never an executable
+ * inline script, so a `script-src 'self'` CSP holds); the landing URL is read
+ * from the form's own action.
  */
 
 import { runSuggest } from './lib/suggestQuery';
@@ -55,30 +57,60 @@ const DEBOUNCE_MS = 140;
 const MIN_CHARS = 2;
 const BLUR_CLOSE_MS = 140;
 
-declare global {
-  interface Window {
-    IWAC_HEADER_SEARCH?: {
-      endpoints?: { token?: string; search?: string };
-      locale?: string;
-    };
-  }
+/** The island's id: `Site\HeaderSearchIsland::ID` (tests/php pins the two). */
+export const CONFIG_ISLAND_ID = 'iwac-header-search-config';
+
+interface RawConfig {
+  endpoints?: { token?: string; search?: string };
+  locale?: string;
+  stylesheet?: string;
 }
 
 export interface HeaderConfig {
   endpoints: { token: string; search: string };
   locale: Locale;
+  /** The dropdown's stylesheet; absent → none is loaded. */
+  stylesheet: string | null;
 }
 
 let uid = 0;
 
-function readConfig(): HeaderConfig {
-  const raw = window.IWAC_HEADER_SEARCH ?? {};
+/** The island's object, or {} when it is missing or not JSON. */
+function readIsland(): RawConfig {
+  const text = document.getElementById(CONFIG_ISLAND_ID)?.textContent;
+  if (!text) return {};
+  try {
+    const parsed: unknown = JSON.parse(text);
+    return parsed !== null && typeof parsed === 'object' ? (parsed as RawConfig) : {};
+  } catch {
+    return {};
+  }
+}
+
+export function readConfig(): HeaderConfig {
+  const raw = readIsland();
   const token = raw.endpoints?.token || DEFAULT_TOKEN_ENDPOINT;
   const search = raw.endpoints?.search || DEFAULT_SEARCH_ENDPOINT;
   // Prefer the server-stamped locale; fall back to <html lang>; default fr.
   const langAttr = document.documentElement.getAttribute('lang') ?? '';
   const locale = normalizeLocale(raw.locale ?? langAttr.slice(0, 2));
-  return { endpoints: { token, search }, locale };
+  const stylesheet = typeof raw.stylesheet === 'string' && raw.stylesheet ? raw.stylesheet : null;
+  return { endpoints: { token, search }, locale, stylesheet };
+}
+
+/**
+ * Load the dropdown's stylesheet, once. Appended from here rather than linked
+ * in the head because it styles a panel that stays hidden until the reader
+ * types, so it must never hold the first paint, and only a page with a form
+ * to enhance needs it.
+ */
+function loadStylesheet(href: string | null): void {
+  if (!href || document.querySelector(`link[data-iwac-header-css]`)) return;
+  const link = document.createElement('link');
+  link.rel = 'stylesheet';
+  link.href = href;
+  link.dataset.iwacHeaderCss = '';
+  document.head.appendChild(link);
 }
 
 /** Minimal bootstrap — `suggest()` only touches endpoints + (optional) scope. */
@@ -517,6 +549,7 @@ export function init(): void {
   const forms = document.querySelectorAll<HTMLFormElement>('form[data-iwac-header-search]');
   if (forms.length === 0) return;
   const cfg = readConfig();
+  loadStylesheet(cfg.stylesheet);
   forms.forEach((form) => {
     if (form.dataset.iwacHeaderEnhanced === '1') return;
     const input = form.querySelector<HTMLInputElement>(
