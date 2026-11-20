@@ -90,13 +90,16 @@ abstract class AbstractMapper implements MapperInterface
      * are other runs IwacVisualizations hides. Terms are matched exactly, so
      * neither can leak into `qwen3_8_27b_*`.
      *
-     * These are the five annotators IwacVisualizations' dashboards show
-     * (its `config/sentiment-models.json` is the registry of which families
-     * exist); the field prefixes are the Hugging Face column prefixes.
+     * These are the six annotators IwacVisualizations' dashboards show
+     * (its `config/sentiment-models.json` is the registry: each `active[]`
+     * entry's `stem` is a key here and its `id` the value); the field
+     * prefixes are the Hugging Face column prefixes.
      * `scripts/check-schema-drift.js` holds data/schema.yaml and the client's
-     * field sets to exactly this map, and {@see sentimentTerms()} derives
-     * what the reader loads from it — so adding a row here, a schema bump
-     * and the i18n entries are the whole change.
+     * field sets to exactly this map, `scripts/check-sentiment-models.js`
+     * holds this map to that registry (weekly, in sentiment-models.yml), and
+     * {@see sentimentTerms()} derives what the reader loads from it — so
+     * adding a row here, a schema bump and the i18n entries are the whole
+     * change.
      *
      * Re-annotating with a different model = swap the row here for one with
      * new field names + a schema bump. Never repoint an existing prefix at a
@@ -109,6 +112,7 @@ abstract class AbstractMapper implements MapperInterface
         'deepseekV4Flash0731' => 'deepseek_v4_flash_0731',
         'gemma431bIt'         => 'gemma_4_31b_it',
         'qwen3827b'           => 'qwen3_8_27b',
+        'claudeHaiku55'       => 'claude_haiku_5_5',
     ];
 
     /**

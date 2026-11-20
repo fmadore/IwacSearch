@@ -6,7 +6,11 @@ Versions that were never published (tagged and released) are folded into the nex
 
 ## [Unreleased]
 
-**Upgrade:** run a full reindex after installing (`discovery:reindex` or the admin button), so that the newspapers added below give their articles a country.
+**Upgrade:** the content schema becomes `iwac_v12`: run a full reindex right after installing (`discovery:reindex` or the admin button). It adds the sixth sentiment model and gives the articles of the newspapers added below their country.
+
+### Added
+
+- The sixth sentiment model, Claude Haiku 5.5, is indexed like the other five: a link can filter on its polarity, centrality and subjectivity (`claude_haiku_5_5_*`), and its filter chips name it. Article pages and the IwacVisualizations dashboards already showed it. A weekly check (`npm run check:sentiment`) now compares the indexed models with IwacVisualizations' model registry, so the next model added there fails CI here instead of going unnoticed.
 
 ### Fixed
 

@@ -34,7 +34,7 @@
 #     dependency at search time.
 #
 # Versioning:
-#   - The actual collection is named `iwac_v11` and aliased as `iwac_current`.
+#   - The actual collection is named `iwac_v12` and aliased as `iwac_current`.
 #     (v1 → v2: French stemming + the `iwac_diversity` curation set.
 #      v2 → v3: accent-insensitive indexing (locale dropped), alt_title_txt,
 #      subjects_ss, searchable/facetable publisher_s + book_title_s, and the
@@ -86,8 +86,11 @@
 #      with (a wikidata.org URI on dcterms:identifier), which the card links
 #      out beside the DOI; and `editor_ss` becomes a facet, so a book's
 #      editors filter like its authors. `doi` also becomes the bare `10.…`
-#      form whichever way bibo:doi was catalogued.)
-#   - Schema changes ⇒ bump the name (`iwac_v10` → `iwac_v11`), atomic-swap
+#      form whichever way bibo:doi was catalogued.
+#      v11 → v12: the sixth sentiment annotator, claude-haiku-5.5 (Omeka
+#      `iwac:claudeHaiku55*`), which IwacVisualizations' registry had listed
+#      as active while search could not filter on it. New fields only.)
+#   - Schema changes ⇒ bump the name (`iwac_v11` → `iwac_v12`), atomic-swap
 #     the alias. The browser only ever queries the alias, so swaps are
 #     zero-downtime.
 #
@@ -97,7 +100,7 @@
 # both the bulk reindex and the M4 incremental path. No Hugging Face.
 # country_ss is derived (newspaper→country / item-set). See docs/data-sources.md.
 
-name: iwac_v11
+name: iwac_v12
 
 # Global curation set linked to this collection. The set itself is created
 # (idempotently) by src/Indexer/CurationSync.php during the bulk reindex.
@@ -325,7 +328,7 @@ fields:
   - { name: editor_ss,    type: "string[]", facet: true, optional: true }
   - { name: edition_s,    type: string,     index: false, optional: true }
 
-  # ── AI sentiment (5 models — keep every one for cross-model queries) ──
+  # ── AI sentiment (6 models — keep every one for cross-model queries) ──
   # `centralite` and `polarite` are categorical → facets.
   # `subjectivite` is 1–5 float → range facet + sort.
   #
@@ -343,7 +346,8 @@ fields:
   # `gemini_3_flash_preview_*` / `gpt_5_mini_*` / `ministral_14b_2512_*`) are
   # no longer indexed; their values remain in Omeka and in the dataset.
   # v9 adds the two later annotators, gemma-4-31b-it and qwen3.8-27b
-  # (`iwac:gemma431bIt*`, `iwac:qwen3827b*`), on the same pattern.
+  # (`iwac:gemma431bIt*`, `iwac:qwen3827b*`), on the same pattern, and v12
+  # the sixth, claude-haiku-5.5 (`iwac:claudeHaiku55*`).
   # AbstractMapper::SENTIMENT_MODELS holds the Omeka-term → field-prefix map,
   # and scripts/check-schema-drift.js fails when this block and that map
   # disagree.
@@ -366,6 +370,9 @@ fields:
   - { name: qwen3_8_27b_centralite_ss,            type: "string[]", facet: true, optional: true }
   - { name: qwen3_8_27b_polarite_ss,              type: "string[]", facet: true, optional: true }
   - { name: qwen3_8_27b_subjectivite,             type: float,    facet: true, sort: true, optional: true }
+  - { name: claude_haiku_5_5_centralite_ss,       type: "string[]", facet: true, optional: true }
+  - { name: claude_haiku_5_5_polarite_ss,         type: "string[]", facet: true, optional: true }
+  - { name: claude_haiku_5_5_subjectivite,        type: float,    facet: true, sort: true, optional: true }
 
   # ── ACL ───────────────────────────────────────────────────────────────
   # Sourced from Omeka, NOT HF. Public scoped keys carry filter_by:is_public:=true

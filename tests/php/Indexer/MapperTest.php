@@ -1025,25 +1025,26 @@ final class MapperTest extends TestCase
         self::assertArrayNotHasKey('gpt_5_6_luna_subjectivite', $doc);
     }
 
-    /** Omeka term infix => document field prefix, for all five annotators. */
+    /** Omeka term infix => document field prefix, for all six annotators. */
     private const SENTIMENT_MODELS = [
         'gpt56Luna' => 'gpt_5_6_luna',
         'mistralSmall2603' => 'mistral_small_2603',
         'deepseekV4Flash0731' => 'deepseek_v4_flash_0731',
         'gemma431bIt' => 'gemma_4_31b_it',
         'qwen3827b' => 'qwen3_8_27b',
+        'claudeHaiku55' => 'claude_haiku_5_5',
     ];
 
     /**
      * Each model's Omeka terms feed its OWN document fields — no bleed between
-     * the five. Every model gets a distinct value on every reading, so a
+     * the six. Every model gets a distinct value on every reading, so a
      * mapper that read one model's term into another's field would show up as
      * a wrong value, not just a missing one. Asserting the camelCase →
      * snake_case crossover explicitly (`iwac:qwen3827b*` → `qwen3_8_27b_*`),
      * because a mapper that echoed the Omeka infix straight through would
      * still populate something that looked plausible.
      */
-    public function testAllFiveSentimentModelsAreMappedIndependently(): void
+    public function testAllSixSentimentModelsAreMappedIndependently(): void
     {
         $scale = ['Très objectif', 'Plutôt objectif', 'Mixte', 'Plutôt subjectif', 'Très subjectif'];
         $terms = [];
@@ -1051,8 +1052,9 @@ final class MapperTest extends TestCase
         foreach (self::SENTIMENT_MODELS as $model => $prefix) {
             $terms["iwac:{$model}Polarite"] = [['value' => "polarite {$prefix}"]];
             $terms["iwac:{$model}Centralite"] = [['vrid' => 10 + $i, 'title' => "centralite {$prefix}"]];
-            // Subjectivité links to one of the five scale items.
-            $terms["iwac:{$model}SubjectiviteScore"] = [['vrid' => 78043 + $i, 'title' => $scale[$i]]];
+            // Subjectivité links to one of the five scale items (the sixth
+            // model wraps round to the first).
+            $terms["iwac:{$model}SubjectiviteScore"] = [['vrid' => 78043 + $i % 5, 'title' => $scale[$i % 5]]];
             $i++;
         }
 
@@ -1062,13 +1064,14 @@ final class MapperTest extends TestCase
         foreach (self::SENTIMENT_MODELS as $prefix) {
             self::assertSame(["polarite {$prefix}"], $doc["{$prefix}_polarite_ss"]);
             self::assertSame(["centralite {$prefix}"], $doc["{$prefix}_centralite_ss"]);
-            self::assertSame((float) ($i + 1), $doc["{$prefix}_subjectivite"]);
+            self::assertSame((float) ($i % 5 + 1), $doc["{$prefix}_subjectivite"]);
             $i++;
         }
         self::assertArrayNotHasKey('qwen3827b_polarite_ss', $doc);
         self::assertArrayNotHasKey('gemma431bIt_polarite_ss', $doc);
         $sentiment = preg_grep('/_(centralite_ss|polarite_ss|subjectivite)$/', array_keys($doc));
-        self::assertSame(15, count($sentiment ?: []), 'three readings for each of five models, nothing else');
+        self::assertArrayNotHasKey('claudeHaiku55_polarite_ss', $doc);
+        self::assertSame(18, count($sentiment ?: []), 'three readings for each of six models, nothing else');
     }
 
     /**

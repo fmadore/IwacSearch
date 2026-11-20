@@ -142,7 +142,9 @@ The cutover, retention and retry contracts are documented in `docs/operations-3.
   `FACET_LABELS` disagree. If you add a facet, all four must move together.
   The same script also pins the server contracts the client restates:
   query_by/highlight constants, sort sets, the multi-search limit and the
-  stopword set name.
+  stopword set name. `AbstractMapper::SENTIMENT_MODELS` itself is held to
+  IwacVisualizations' `config/sentiment-models.json` (its `active[]` list)
+  by `npm run check:sentiment`, weekly in `sentiment-models.yml`.
 - **PHP strings are gettext msgids.** A literal passed to `translate()` /
   `$t()` / `$translate()`, or a catalogue label marked `// @translate`, is
   extracted into `language/template.pot` by `npm run build:pot`; translate it

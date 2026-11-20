@@ -82,10 +82,11 @@ final class FacetCatalog
         'date_decade_ss'     => 'Decade', // @translate
         // Sentiment trio — rendered together under one collapsible
         // "Sentiment" group in the client. subjectivite is a 1–5 numeric
-        // facet. The other four annotating models (mistral_small_2603_*,
-        // deepseek_v4_flash_0731_*, gemma_4_31b_it_*, qwen3_8_27b_*) are
-        // indexed and facetable in schema.yaml but deliberately NOT offered
-        // here: five parallel sentiment trios in the admin picker read as
+        // facet. The other five annotating models (mistral_small_2603_*,
+        // deepseek_v4_flash_0731_*, gemma_4_31b_it_*, qwen3_8_27b_*,
+        // claude_haiku_5_5_*) are indexed and facetable in schema.yaml but
+        // deliberately NOT offered here: six parallel sentiment trios in the
+        // admin picker read as
         // noise, and the panel only has room for one. Cross-model comparison
         // is a dataset job, not a search-sidebar one.
         //

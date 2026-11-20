@@ -526,7 +526,7 @@ const FACET_LABELS: Record<Locale, Record<string, string>> = {
     // Sentiment fields are keyed by the annotating model (see
     // data/schema.yaml). The surfaced trio keeps a bare label — the panel
     // groups it under "Sentiment" and only one model is offered, so naming
-    // it in every heading would be noise. The other four are labelled
+    // it in every heading would be noise. The other five are labelled
     // because their only reason to appear (a filter chip from a hand-built
     // link) is which model said it. check-schema-drift.js requires a label
     // here for every sentiment field the schema declares. The model names are
@@ -547,6 +547,9 @@ const FACET_LABELS: Record<Locale, Record<string, string>> = {
     qwen3_8_27b_polarite_ss: 'Polarité (Qwen3.8 27B)',
     qwen3_8_27b_centralite_ss: 'Centralité (Qwen3.8 27B)',
     qwen3_8_27b_subjectivite: 'Subjectivité (Qwen3.8 27B)',
+    claude_haiku_5_5_polarite_ss: 'Polarité (Claude Haiku 5.5)',
+    claude_haiku_5_5_centralite_ss: 'Centralité (Claude Haiku 5.5)',
+    claude_haiku_5_5_subjectivite: 'Subjectivité (Claude Haiku 5.5)',
   },
   en: {
     country_ss: 'Country',
@@ -591,6 +594,9 @@ const FACET_LABELS: Record<Locale, Record<string, string>> = {
     qwen3_8_27b_polarite_ss: 'Polarity (Qwen3.8 27B)',
     qwen3_8_27b_centralite_ss: 'Centrality (Qwen3.8 27B)',
     qwen3_8_27b_subjectivite: 'Subjectivity (Qwen3.8 27B)',
+    claude_haiku_5_5_polarite_ss: 'Polarity (Claude Haiku 5.5)',
+    claude_haiku_5_5_centralite_ss: 'Centrality (Claude Haiku 5.5)',
+    claude_haiku_5_5_subjectivite: 'Subjectivity (Claude Haiku 5.5)',
   },
 };
 
@@ -601,7 +607,7 @@ export function facetLabel(field: string, locale: Locale): string {
 /**
  * Sentiment sub-facets render under one collapsible "Sentiment" group.
  * Keyed by the annotating model, mirroring data/schema.yaml and the Hugging
- * Face dataset's column names — all five models, three readings each;
+ * Face dataset's column names — all six models, three readings each;
  * check-schema-drift.js holds this set to the schema.
  */
 export const SENTIMENT_FIELDS: ReadonlySet<string> = new Set([
@@ -620,6 +626,9 @@ export const SENTIMENT_FIELDS: ReadonlySet<string> = new Set([
   'qwen3_8_27b_polarite_ss',
   'qwen3_8_27b_centralite_ss',
   'qwen3_8_27b_subjectivite',
+  'claude_haiku_5_5_polarite_ss',
+  'claude_haiku_5_5_centralite_ss',
+  'claude_haiku_5_5_subjectivite',
 ]);
 
 /**
@@ -635,6 +644,7 @@ export const NUMERIC_FACET_FIELDS: ReadonlySet<string> = new Set([
   'deepseek_v4_flash_0731_subjectivite',
   'gemma_4_31b_it_subjectivite',
   'qwen3_8_27b_subjectivite',
+  'claude_haiku_5_5_subjectivite',
   'pub_year',
 ]);
 

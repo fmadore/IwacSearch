@@ -1,0 +1,43 @@
+name: Sentiment models
+
+# IwacVisualizations' config/sentiment-models.json is the registry of the
+# sentiment annotators the site shows; this module indexes the same models from
+# AbstractMapper::SENTIMENT_MODELS. Nothing in this repository's own CI can see
+# the other repository, so when a sixth model went active there, search could
+# not filter on it and nobody noticed.
+#
+# Once a week (and on demand, and on a PR that touches the map) compare the two.
+# A model active there and missing here fails, with the change to make; a model
+# indexed here that the registry retired is reported and passes. Modelled on
+# maplibre-pins.yml. It never edits anything: adding a model is a schema bump
+# and a reindex, made deliberately.
+
+on:
+  schedule:
+    - cron: '47 6 * * 1'
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'src/Indexer/Mapper/AbstractMapper.php'
+      - 'scripts/check-sentiment-models.js'
+      - '.github/workflows/sentiment-models.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  compare:
+    name: Indexed sentiment models match IwacVisualizations main
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+
+      # No `npm ci`: the checker has no dependencies (global fetch + fs).
+      - run: node scripts/check-sentiment-models.js

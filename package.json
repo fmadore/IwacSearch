@@ -19,6 +19,7 @@
     "check:versions": "node scripts/check-versions.js",
     "check:audit": "node scripts/check-audit.js",
     "check:maplibre": "node scripts/check-maplibre-pins.js",
+    "check:sentiment": "node scripts/check-sentiment-models.js",
     "check:lighthouse": "node scripts/check-lighthouse.js",
     "capture:lighthouse": "node scripts/lighthouse/capture.js",
     "bump": "node scripts/bump-version.js",

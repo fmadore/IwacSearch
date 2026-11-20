@@ -1,6 +1,18 @@
 # Deployment and acceptance checklist — 3.19.0
 
-## Next release: the theme's ink-and-blue redesign
+## Next release: the November 2026 audit fixes
+
+**Schema `iwac_v12` — a full reindex is required** (the entity schema is unchanged). The content
+collection gains the sixth sentiment annotator, Claude Haiku 5.5 (`claude_haiku_5_5_*`), and the
+same reindex gives a country to the 1,792 articles of the five Burkinabè newspapers that were
+missing from `data/newspaper-countries.json`. Reindex right after installing.
+
+- [ ] Install the module update, run the full reindex, and confirm `iwac_current` points at `iwac_v12`.
+- [ ] The reindex log has no "Press publishers with no country" warning, or only titles that are genuinely new (add those to the table).
+- [ ] `/search?f.country_ss=Burkina+Faso&f.newspaper_ss=ActuBurkina` returns articles.
+- [ ] `/search?f.claude_haiku_5_5_polarite_ss=Neutre` returns articles, and its chip reads "Polarity (Claude Haiku 5.5)".
+
+## 3.28.0 (2026-11-15): the theme's ink-and-blue redesign
 
 Presentation only: no reindex, no schema or key change. Ship it with the IWAC theme release that carries the new tokens (`tokens.json` here was synced from it).
 

@@ -58,6 +58,12 @@ Changed in v6 (schema `iwac_v6`):
 | `gpt_5_6_luna_*` (surfaced sentiment trio)       | `iwac:gpt56Luna*` — replaces the generation-1 `gemini_3_flash_preview_*` trio     |
 | `mistral_small_2603_*`, `deepseek_v4_flash_0731_*` | `iwac:mistralSmall2603*` / `iwac:deepseekV4Flash0731*` — indexed, not surfaced  |
 
+Added in v12 (schema `iwac_v12`):
+
+| Search field          | Source / behavior                                                         |
+| --------------------- | ------------------------------------------------------------------------- |
+| `claude_haiku_5_5_*`  | `iwac:claudeHaiku55*` — the sixth annotator; indexed, not surfaced        |
+
 Added in v11 (schema `iwac_v11`, entity schema `iwac_index_v5`):
 
 | Search field  | Source / behavior                                                                                         |
@@ -224,12 +230,14 @@ is a linked-resource category for **every** model, resolved to a 1–5 score:
 `Très objectif`→1 … `Très subjectif`→5. Each reading is read on its own, so a
 model that answered one and not another contributes what it has.
 
-#### Which five models, and why the field names say so
+#### Which six models, and why the field names say so
 
-The index carries the same five annotators IwacVisualizations shows — its
-`config/sentiment-models.json` is the registry of which families exist. Schema
-v6 brought in the three **generation-2** annotators and v9 the two that
-followed. Their Omeka properties name the model outright, so the term and the
+The index carries the same six annotators IwacVisualizations shows — its
+`config/sentiment-models.json` is the registry of which families exist, and
+`npm run check:sentiment` (weekly in `sentiment-models.yml`) fails when
+`AbstractMapper::SENTIMENT_MODELS` and that registry's `active[]` list
+disagree. Schema v6 brought in the three **generation-2** annotators, v9 the
+two that followed and v12 the sixth. Their Omeka properties name the model outright, so the term and the
 index field are the same name in two spellings, and the field prefix is the
 Hugging Face column prefix:
 
@@ -242,6 +250,7 @@ Hugging Face column prefix:
 | `iwac:deepseekV4Flash0731*`             | `deepseek_v4_flash_0731_*`           |
 | `iwac:gemma431bIt*` (v9)                | `gemma_4_31b_it_*`                   |
 | `iwac:qwen3827b*` (v9)                  | `qwen3_8_27b_*`                      |
+| `iwac:claudeHaiku55*` (v12)             | `claude_haiku_5_5_*`                 |
 
 Until v9 the index carried three of the five, so a reader could see five
 models' readings on an item page and filter on three. Adding a model is now one
