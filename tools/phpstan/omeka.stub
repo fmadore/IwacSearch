@@ -37,6 +37,7 @@ namespace Laminas\View\Renderer;
  * @method \Laminas\View\Helper\HeadScript headScript()
  * @method \Laminas\View\Helper\HeadLink headLink()
  * @method string iwacBootstrapJson(array<string, mixed> $bootstrap)
+ * @method mixed siteSetting(string $id, mixed $default = null, int|null $siteId = null)
  * @method string iwacLocale()
  * @method string iwacSearchUrl()
  * @method string iwacItemSetSearch(object $itemSet)

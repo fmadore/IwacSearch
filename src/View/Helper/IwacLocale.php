@@ -13,10 +13,12 @@ use Throwable;
  * Resolves the active UI locale ('fr' | 'en') for the discovery surface.
  *
  * The IWAC instance runs a French site and an English one (slugs in
- * {@see IwacInstance}). Site-scoped surfaces (curated browse pages, page
- * blocks) carry a site context, so we map the site slug to a locale. The
- * global /search route has no site context — it defaults to French (the
- * primary audience).
+ * {@see IwacInstance}). Site-scoped surfaces (page blocks, the site search
+ * routes) carry a site context: its `locale` site setting decides, as it does
+ * in the theme, IWAC-SEO and IwacVisualizations. Only a site whose setting is
+ * empty or neither French nor English falls back to the slug, so a staging
+ * site under another slug still speaks its own language. The global /search
+ * route has no site context — it defaults to French (the primary audience).
  *
  * Used by:
  *   - the mount partial, to stamp `locale` into the Svelte bootstrap, and
@@ -34,11 +36,13 @@ final class IwacLocale extends AbstractHelper
             return 'fr';
         }
 
-        // Slug heuristic. The site `locale` setting isn't exposed on the
-        // SiteRepresentation, so the slug is the signal — and it's the same
-        // one the rest of the module keys off (nav links, noscript
-        // fallbacks), which is why the slugs live in IwacInstance with
-        // everything else instance-specific.
+        $setting = $this->siteLocaleSetting();
+        if ($setting !== null) {
+            return $setting;
+        }
+
+        // Slug heuristic, for a site with no usable locale setting: the slugs
+        // live in IwacInstance with everything else instance-specific.
         try {
             $slug = strtolower((string) $site->slug());
         } catch (Throwable) {
@@ -48,6 +52,29 @@ final class IwacLocale extends AbstractHelper
             return 'en';
         }
         return 'fr';
+    }
+
+    /**
+     * 'fr' or 'en' from the current site's `locale` setting ("fr", "en_US"…),
+     * or null when it is empty (the site follows the global locale), names
+     * another language, or the siteSetting helper is unavailable.
+     */
+    private function siteLocaleSetting(): ?string
+    {
+        $view = $this->getView();
+        if (!$view instanceof PhpRenderer) {
+            return null;
+        }
+        try {
+            $value = $view->siteSetting('locale');
+        } catch (Throwable) {
+            return null;
+        }
+        if (!is_string($value)) {
+            return null;
+        }
+        $language = strtolower(substr(trim($value), 0, 2));
+        return $language === 'fr' || $language === 'en' ? $language : null;
     }
 
     /**

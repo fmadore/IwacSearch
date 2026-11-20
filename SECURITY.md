@@ -20,9 +20,10 @@ hardcoded rather than configurable.
 
 **The public scoped key.** `TypesenseSearchKeyProvider::mintPublicScopedKey()`
 mints a 1-hour Typesense scoped key carrying both
-`filter_by: is_public:=true` and `exclude_fields: ocr_text,toc_txt`. The first
-keeps non-public records out of every response; the second keeps full OCR text
-out of responses for the records that _are_ public. They are belt-and-braces:
+`filter_by: is_public:=true` and `exclude_fields: ocr_text,toc_txt,embedding`. The first
+keeps non-public records out of every response; the second keeps the full OCR
+text, the table of contents and the embedding vector out of responses for the
+records that _are_ public. They are belt-and-braces:
 either one failing alone should not disclose anything, and neither is driven by
 site configuration. Anything that widens or bypasses that key is in scope.
 

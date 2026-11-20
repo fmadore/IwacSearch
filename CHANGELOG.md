@@ -14,6 +14,8 @@ Versions that were never published (tagged and released) are folded into the nex
 
 ### Changed
 
+- **Requires Omeka S 4.2.1 or later** (the module declared `^4.0`). Its page block uses the block-template interface Omeka added in 4.1.0, and only 4.2.1 is tested.
+- The interface language of a site's search follows the site's own locale setting, then its slug: a copy of the English site under another slug (a staging site) no longer shows French.
 - The header search's settings are printed as an inert JSON block instead of an inline script, the last inline script the module put on every page; the site can now adopt a Content-Security-Policy that allows scripts from its own origin only. The header search's stylesheet is loaded by its script, on pages that have the search box.
 
 ### Fixed
