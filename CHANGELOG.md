@@ -6,6 +6,10 @@ Versions that were never published (tagged and released) are folded into the nex
 
 ## [Unreleased]
 
+### Fixed
+
+- A filter value containing a comma was split in two when the address was read back. Selecting "Conseil Supérieur des Imams, des Mosquées et des Affaires islamiques" (organisations), a book title with a comma, or the CERFI channel worked, but reloading the page, opening a shared link or pressing Back found nothing. Each value now comes back whole. Old links that joined countries, types or decades with commas (`?f.country_ss=Bénin,Togo`) still work.
+
 ## [3.28.1] - 2026-11-16
 
 ### Fixed

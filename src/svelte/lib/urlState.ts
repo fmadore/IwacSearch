@@ -48,6 +48,26 @@ const LEGACY_FILTER_FIELDS: Readonly<Record<string, string>> = {
 };
 
 /**
+ * Facet fields whose old comma-joined links (`?f.country_ss=Bénin,Togo`) still
+ * decode as several values.
+ *
+ * The encoder has always written one repeated param per value, but early
+ * links joined them with commas, and the decoder used to split EVERY field on
+ * `,`. That broke the open fields, whose values carry commas of their own
+ * ("Conseil Supérieur des Imams, des Mosquées et des Affaires islamiques" in
+ * `organisations_ss`, dozens of `book_title_s` values): a reload, a shared link
+ * or Back came back filtered on two values that exist nowhere, and found
+ * nothing. Only these closed vocabularies keep the legacy split, because none
+ * of their values can contain a comma: six countries, six types, and decades
+ * spelled `1990s`. Any other field takes each param verbatim.
+ */
+const LEGACY_COMMA_FIELDS: ReadonlySet<string> = new Set([
+  'country_ss',
+  'type_s',
+  'date_decade_ss',
+]);
+
+/**
  * Sort used when a surface declares none. Every caller should pass the
  * surface's own `bootstrap.default_sort` instead — this is only the
  * last-resort fallback for a bootstrap that omits it.
@@ -101,9 +121,15 @@ export function readUrlState(
       ? LEGACY_FILTER_FIELDS[rawField]
       : undefined;
     const field = alias ?? rawField;
-    // getAll handles repeated keys; values that came in comma-separated
-    // (legacy) get split too.
-    const raw = params.getAll(key).flatMap((v) => v.split(',').map((s) => s.trim()));
+    // getAll handles repeated keys. A value is split on `,` ONLY for a
+    // closed vocabulary (see LEGACY_COMMA_FIELDS): open fields carry real
+    // values with commas in them, which a blanket split turned into two
+    // values that exist nowhere, so a reload returned nothing.
+    const raw = params
+      .getAll(key)
+      .flatMap((v) =>
+        LEGACY_COMMA_FIELDS.has(field) ? v.split(',').map((s) => s.trim()) : [v.trim()],
+      );
     // A URL naming both the old and the new spelling of one field merges
     // into a single entry rather than the second silently winning.
     const seen = Object.hasOwn(filters, field) ? (filters[field] ?? []) : [];

@@ -55,9 +55,35 @@ describe('readUrlState', () => {
     expect(s.yearRange).toEqual({ from: 1990, to: 1999 });
   });
 
-  it('decodes repeated and comma-joined facet params into one list', () => {
-    const s = readUrlState(`${base}?f.country_ss=Niger&f.country_ss=T%C3%B3go,B%C3%A9nin`);
-    expect(s.filters).toEqual({ country_ss: ['Niger', 'Tógo', 'Bénin'] });
+  it('round-trips a facet value that contains a comma', () => {
+    // The decoder used to split every value on `,`, so this selection came
+    // back as two values that exist nowhere and a reload found nothing.
+    const organisation = 'Conseil Supérieur des Imams, des Mosquées et des Affaires islamiques';
+    const book = 'Islam, État et société';
+    const selected = state({
+      filters: { organisations_ss: [organisation, 'CERFI'], book_title_s: [book] },
+    });
+    const decoded = readUrlState(`${base}${writeUrlState(selected)}`);
+    expect(decoded.filters).toEqual({
+      organisations_ss: [organisation, 'CERFI'],
+      book_title_s: [book],
+    });
+    // The same through a page block's prefix.
+    const block = readUrlState(`${base}${writeUrlState(selected, 'b42.')}`, 'b42.');
+    expect(block.filters).toEqual(decoded.filters);
+  });
+
+  it('still splits old comma-joined links for closed vocabularies only', () => {
+    const s = readUrlState(
+      `${base}?f.country_ss=Niger&f.country_ss=T%C3%B3go,B%C3%A9nin` +
+        '&f.type_s=article,%20document&f.date_decade_ss=1990s,2000s&f.subjects_ss=Islam,%20politique',
+    );
+    expect(s.filters).toEqual({
+      country_ss: ['Niger', 'Tógo', 'Bénin'],
+      type_s: ['article', 'document'],
+      date_decade_ss: ['1990s', '2000s'],
+      subjects_ss: ['Islam, politique'],
+    });
   });
 
   it('passes a retired sentiment facet name through rather than remapping it', () => {
