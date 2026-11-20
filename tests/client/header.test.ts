@@ -164,6 +164,43 @@ describe('fetching', () => {
     expect(options()).toHaveLength(3);
   });
 
+  it('says nothing in its live region until the answer arrives', async () => {
+    // "No matches" used to be written into the role=status line on every
+    // keystroke, before the debounce had even sent the request, so a screen
+    // reader announced it while the reader was still typing.
+    let resolve!: (r: SuggestResult) => void;
+    runSuggest.mockImplementationOnce(() => new Promise((r) => (resolve = r)));
+    const { input } = mount();
+    const status = document.querySelector('[role="status"]')!;
+    type(input, 'zzz');
+    expect(status.textContent).toBe('');
+    await vi.advanceTimersByTimeAsync(200); // request sent, not answered
+    expect(status.textContent).toBe('');
+    type(input, 'zzzz'); // a further keystroke while it is out
+    expect(status.textContent).toBe('');
+    runSuggest.mockResolvedValueOnce({ articles: [], entities: [] });
+    await vi.advanceTimersByTimeAsync(200);
+    expect(status.textContent).toBe('Aucune correspondance.');
+    resolve({ articles: [], entities: [] });
+  });
+
+  it('aborts the request a newer keystroke supersedes', async () => {
+    runSuggest.mockImplementation(() => new Promise(() => {}));
+    const { input } = mount();
+    type(input, 'Ou');
+    await vi.advanceTimersByTimeAsync(200);
+    const first = runSuggest.mock.calls[0]?.[3] as AbortSignal;
+    expect(first).toBeInstanceOf(AbortSignal);
+    expect(first.aborted).toBe(false);
+    type(input, 'Oua');
+    expect(first.aborted).toBe(true);
+    await vi.advanceTimersByTimeAsync(200);
+    const second = runSuggest.mock.calls[1]?.[3] as AbortSignal;
+    expect(second.aborted).toBe(false);
+    type(input, 'O'); // below the minimum: nothing left to wait for
+    expect(second.aborted).toBe(true);
+  });
+
   it('stays closed below two characters', async () => {
     const { input } = mount();
     await typeAndSettle(input, 'O');

@@ -209,6 +209,12 @@
 
   $effect(() => {
     const text = filterText.trim();
+    // The counts come from the search as it stands (query, every other
+    // facet): a new `counts` means the search changed, so the matches found
+    // for the typed text are counts of a search that no longer exists. The
+    // effect used to depend on the text, the field and a stable callback
+    // only, and left them on screen.
+    void counts;
     // Bump first so any in-flight request from a previous run is invalidated,
     // even when this run early-returns (e.g. the box was just cleared).
     const seq = ++searchSeq;
@@ -250,6 +256,18 @@
   // A server search is mid-flight with nothing to show yet → render a
   // "searching…" placeholder instead of a premature "no matches".
   const searchPending = $derived(usingServerResults && searchLoading && visible.length === 0);
+  // What the server value search says, for the live region that stays
+  // mounted (the visible lines come and go with {#if}, so they are hidden
+  // from assistive technology and this one speaks for them).
+  const searchStatus = $derived(
+    !usingServerResults
+      ? ''
+      : searchLoading
+        ? t('searching')
+        : visible.length > 0
+          ? tp('facet_search_count', visible.length)
+          : t('no_matches'),
+  );
 
   // Bound the list height (with its own scroll) once it shows more than the
   // default truncated view — i.e. after "show more" or while searching — so a
@@ -315,8 +333,11 @@
           </div>
         {/if}
 
+        <!-- One live region, mounted for as long as the body is: a region
+             inserted together with its text is often not announced at all. -->
+        <p class="iwac-facet__sr" aria-live="polite">{searchStatus}</p>
         {#if searchPending}
-          <p class="iwac-facet__empty" aria-live="polite">{t('searching')}</p>
+          <p class="iwac-facet__empty" aria-hidden="true">{t('searching')}</p>
         {:else if visible.length === 0}
           <p class="iwac-facet__empty">{t('no_matches')}</p>
         {:else}
@@ -347,7 +368,7 @@
 
         {#if usingServerResults}
           {#if visible.length > 0}
-            <p class="iwac-facet__hint" aria-live="polite">
+            <p class="iwac-facet__hint" aria-hidden="true">
               {searchLoading ? t('searching') : tp('facet_search_count', visible.length)}
             </p>
           {/if}

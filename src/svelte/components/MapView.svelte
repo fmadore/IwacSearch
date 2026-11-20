@@ -323,8 +323,13 @@
     <p class="iwac-map__status" role="alert">{t('map_error')}</p>
   {:else}
     <div class="iwac-map__canvas" bind:this={container}></div>
+    <!-- Mounted with the map, so its text changing is announced: a region
+         inserted together with its text often is not. -->
+    <p class="iwac-map__sr" aria-live="polite">
+      {loading || !styleReady ? t('map_loading') : ''}
+    </p>
     {#if loading || !styleReady}
-      <p class="iwac-map__status" aria-live="polite">{t('map_loading')}</p>
+      <p class="iwac-map__status" aria-hidden="true">{t('map_loading')}</p>
     {:else if failed}
       <p class="iwac-map__status" role="alert">
         {t('map_fetch_failed')}
@@ -363,6 +368,15 @@
   }
   .iwac-map__status--note {
     font-style: italic;
+  }
+  .iwac-map__sr {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
   }
   /* MapLibre paints its popup white whatever the page's theme, and the dark
      theme's lightened primary/muted inks measure under 3:1 on white. The

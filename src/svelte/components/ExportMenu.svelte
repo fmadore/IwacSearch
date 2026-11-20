@@ -115,7 +115,7 @@
   </button>
 
   {#if open}
-    <div class="iwac-export__menu" id={menuId} aria-label={t('export_results')}>
+    <div class="iwac-export__menu" id={menuId} role="group" aria-label={t('export_results')}>
       {#each EXPORT_FORMATS as spec (spec.format)}
         <button
           type="button"

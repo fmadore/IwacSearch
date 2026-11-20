@@ -129,6 +129,15 @@ export class HeaderSearch {
   private isOpen = false;
   private debounceTimer: number | null = null;
   private inflight = 0;
+  /**
+   * Suggestions for the current text are on their way (the debounce or the
+   * request). The status line stays empty meanwhile: it is a live region,
+   * and writing "No matches" into it before the answer arrived made a screen
+   * reader say so on every keystroke.
+   */
+  private pending = false;
+  /** The request a newer keystroke supersedes: aborted, not merely ignored. */
+  private request: AbortController | null = null;
 
   constructor(
     private readonly form: HTMLFormElement,
@@ -253,24 +262,35 @@ export class HeaderSearch {
       clearTimeout(this.debounceTimer);
       this.debounceTimer = null;
     }
+    // The token guard below already keeps a stale answer off the screen;
+    // aborting also spares the request it would have wasted.
+    this.request?.abort();
+    this.request = null;
     if (q.length < MIN_CHARS) {
+      this.pending = false;
       this.rows = [];
       this.close();
       return;
     }
+    this.pending = true;
     this.setRows({ articles: [], entities: [] }); // show the "Search for…" row immediately
     this.open();
     const token = ++this.inflight;
     this.debounceTimer = window.setTimeout(() => {
       this.debounceTimer = null;
-      runSuggest(this.bootstrap, q)
+      const request = new AbortController();
+      this.request = request;
+      runSuggest(this.bootstrap, q, undefined, request.signal)
         .then((r) => {
           if (token !== this.inflight) return; // superseded by a newer keystroke
+          this.pending = false;
           this.setRows(r);
         })
         .catch(() => {
           // Typeahead failures stay silent — the plain form submit still works.
+          // An abort lands here too, always for a superseded token.
           if (token !== this.inflight) return;
+          this.pending = false;
           this.setRows({ articles: [], entities: [] });
         });
     }, DEBOUNCE_MS);
@@ -289,7 +309,8 @@ export class HeaderSearch {
     this.listbox.textContent = '';
     this.rows.forEach((row, i) => this.listbox.appendChild(this.renderRow(row, i, q)));
     const hasSuggestions = this.rows.some((r) => r.kind !== 'search');
-    this.status.textContent = hasSuggestions ? '' : translateSuggest(this.locale, 'no_matches');
+    this.status.textContent =
+      hasSuggestions || this.pending ? '' : translateSuggest(this.locale, 'no_matches');
     this.renderHighlight();
     // Row content (and therefore the panel's width) just changed — re-clamp.
     if (this.isOpen) this.clampHorizontal();

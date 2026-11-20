@@ -219,4 +219,8 @@
     background: var(--surface-sunken, #f4f1ef);
     color: var(--ink, #13161c);
   }
+  .iwac-input__clear:focus-visible {
+    outline: var(--focus-outline, 2px solid #18298d);
+    outline-offset: 2px;
+  }
 </style>
