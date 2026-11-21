@@ -299,9 +299,9 @@
         <span class="iwac-facet__active-count" aria-hidden="true">{selected.length}</span>
         <span class="iwac-sr-only">{tp('n_active', selected.length)}</span>
       {/if}
-      <span class="iwac-facet__chevron" aria-hidden="true"
-        ><Icon name={collapsed ? 'chevron-right' : 'chevron-down'} /></span
-      >
+      <span class="iwac-facet__chevron" aria-hidden="true">
+        <Icon name={collapsed ? 'chevron-right' : 'chevron-down'} />
+      </span>
     </button>
   </div>
 

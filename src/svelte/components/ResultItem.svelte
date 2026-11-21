@@ -119,9 +119,11 @@
       aria-pressed={isActive(chip.field, chip.value)}
       aria-label={chipAria(chip)}
       onclick={() => toggle(chip.field, chip.value)}
-      >{#if icon}<span class="iwac-card__meta-icon" aria-hidden="true"><Icon name={icon} /></span
-        >{/if}{chip.display}</button
     >
+      {#if icon}<span class="iwac-card__meta-icon" aria-hidden="true">
+          <Icon name={icon} />
+        </span>{/if}{chip.display}
+    </button>
   </li>
 {/snippet}
 
@@ -140,8 +142,10 @@
         data-entity-type={cardData.doc.entity_type_s}
         aria-pressed={isActive(chip.field, chip.value)}
         aria-label={chipAria(chip)}
-        onclick={() => toggle(chip.field, chip.value)}>{chip.display}</button
+        onclick={() => toggle(chip.field, chip.value)}
       >
+        {chip.display}
+      </button>
     {/if}
   {:else}
     {@const chip = cardData.typeChip}
@@ -153,8 +157,10 @@
         data-type={cardData.typeTint}
         aria-pressed={isActive(chip.field, chip.value)}
         aria-label={chipAria(chip)}
-        onclick={() => toggle(chip.field, chip.value)}>{chip.display}</button
+        onclick={() => toggle(chip.field, chip.value)}
       >
+        {chip.display}
+      </button>
     {/if}
   {/if}
 {/snippet}
@@ -164,9 +170,9 @@
   {#if cardData.isEntity}
     <!-- A span, not <time>: "1989 – 2004" is a range, which datetime cannot hold. -->
     {#if cardData.yearRange}<span class="iwac-card__eyebrow">{cardData.yearRange}</span>{/if}
-  {:else if cardData.dateLabel}<time class="iwac-card__eyebrow" datetime={cardData.dateTime}
-      >{cardData.dateLabel}</time
-    >{/if}
+  {:else if cardData.dateLabel}<time class="iwac-card__eyebrow" datetime={cardData.dateTime}>
+      {cardData.dateLabel}
+    </time>{/if}
 {/snippet}
 
 <!-- Running time, for the audiovisual records that carry one. Sits at the end
@@ -174,8 +180,9 @@
 {#snippet eyebrowDuration()}
   {#if !cardData.isEntity && cardData.duration}
     <span class="iwac-card__eyebrow iwac-card__eyebrow--duration" title={t('duration')}>
-      <span class="iwac-card__meta-icon" aria-hidden="true"><Icon name="clock" /></span
-      >{cardData.duration}
+      <span class="iwac-card__meta-icon" aria-hidden="true">
+        <Icon name="clock" />
+      </span>{cardData.duration}
     </span>
   {/if}
 {/snippet}
@@ -192,9 +199,11 @@
         href={link.url}
         target="_blank"
         rel="noopener noreferrer external"
-        ><span class="iwac-card__meta-icon" aria-hidden="true"><Icon name="play" /></span
-        >{link.label}</a
       >
+        <span class="iwac-card__meta-icon" aria-hidden="true">
+          <Icon name="play" />
+        </span>{link.label}
+      </a>
     </li>
   {/if}
 {/snippet}
@@ -214,15 +223,16 @@
         rel="noopener noreferrer external"
         dir="ltr"
         translate="no"
-        ><span
+      >
+        <span
           class="iwac-id-mark iwac-id-mark--{link.scheme}"
           role="img"
           aria-label={link.label}
           title={link.label}
-        ></span>{link.id}<span class="iwac-card__external-icon" aria-hidden="true"
-          ><Icon name="external" /></span
-        ></a
-      >
+        ></span>{link.id}<span class="iwac-card__external-icon" aria-hidden="true">
+          <Icon name="external" />
+        </span>
+      </a>
     </li>
   {/each}
 {/snippet}
@@ -387,18 +397,21 @@
         {#if cardData.byline.chips.length > 0}
           <!-- Authors, or an edited volume's editors followed by "(eds.)". -->
           <p class="iwac-card__byline">
-            <span class="iwac-card__meta-icon" aria-hidden="true"><Icon name="person" /></span
-            >{#each cardData.byline.chips as chip, i (chip.field + '|' + chip.value)}<button
+            <span class="iwac-card__meta-icon" aria-hidden="true">
+              <Icon name="person" />
+            </span>{#each cardData.byline.chips as chip, i (chip.field + '|' + chip.value)}<button
                 type="button"
                 class="iwac-card__author"
                 class:is-active={isActive(chip.field, chip.value)}
                 aria-pressed={isActive(chip.field, chip.value)}
                 aria-label={chipAria(chip)}
-                onclick={() => toggle(chip.field, chip.value)}>{chip.display}</button
-              >{#if i < cardData.byline.chips.length - 1}<span class="iwac-card__byline-sep"
-                ></span>{/if}{/each}{#if cardData.byline.role}<span class="iwac-card__byline-role"
-                >{cardData.byline.role}</span
-              >{/if}
+                onclick={() => toggle(chip.field, chip.value)}
+              >
+                {chip.display}
+              </button>{#if i < cardData.byline.chips.length - 1}<span class="iwac-card__byline-sep"
+                ></span>{/if}{/each}{#if cardData.byline.role}<span class="iwac-card__byline-role">
+                {cardData.byline.role}
+              </span>{/if}
           </p>
         {/if}
 
@@ -406,9 +419,9 @@
           <!-- The journal / book / publisher and a chapter's editors are facet
                toggles, like the byline above; the rest is plain text. -->
           <p class="iwac-card__citation">
-            <span class="iwac-card__meta-icon" aria-hidden="true"
-              ><Icon name={cardData.citationIcon} /></span
-            >{#each cardData.citationParts as part, i (i)}{#if part.chip}{@const chip =
+            <span class="iwac-card__meta-icon" aria-hidden="true">
+              <Icon name={cardData.citationIcon} />
+            </span>{#each cardData.citationParts as part, i (i)}{#if part.chip}{@const chip =
                   part.chip}<button
                   type="button"
                   class="iwac-card__cite-link"
@@ -416,8 +429,10 @@
                   aria-pressed={isActive(chip.field, chip.value)}
                   aria-label={chipAria(chip)}
                   title={part.text}
-                  onclick={() => toggle(chip.field, chip.value)}>{part.text}</button
-                >{:else}{part.text}{/if}{/each}
+                  onclick={() => toggle(chip.field, chip.value)}
+                >
+                  {part.text}
+                </button>{:else}{part.text}{/if}{/each}
           </p>
         {/if}
 
@@ -437,12 +452,14 @@
         {#if cardData.matchedIn.length > 0}
           <p class="iwac-card__matched">
             <span class="iwac-card__matched-label">{t('matched_in')}</span>
-            {#each cardData.matchedIn as m, i (m.field)}<span class="iwac-card__matched-item"
-                ><span class="iwac-card__matched-field">{m.label}</span
-                ><!-- eslint-disable-next-line svelte/no-at-html-tags --><span
-                  class="iwac-card__matched-value">{@html m.snippet}</span
-                ></span
-              >{#if i < cardData.matchedIn.length - 1}<span class="iwac-card__matched-sep"
+            {#each cardData.matchedIn as m, i (m.field)}<span class="iwac-card__matched-item">
+                <span class="iwac-card__matched-field">
+                  {m.label}
+                </span><span class="iwac-card__matched-value">
+                  <!-- eslint-disable-next-line svelte/no-at-html-tags -->
+                  {@html m.snippet}
+                </span>
+              </span>{#if i < cardData.matchedIn.length - 1}<span class="iwac-card__matched-sep"
                 ></span>{/if}{/each}
           </p>
         {/if}

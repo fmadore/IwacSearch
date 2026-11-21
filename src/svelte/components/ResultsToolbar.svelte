@@ -108,13 +108,13 @@
                 : t('copy_link')}
           </span>
         </button>
-        <span class="iwac-search__copylink-status" role="status"
-          >{copyLink.status === 'copied'
+        <span class="iwac-search__copylink-status" role="status">
+          {copyLink.status === 'copied'
             ? t('link_copied')
             : copyLink.status === 'failed'
               ? t('copy_failed')
-              : ''}</span
-        >
+              : ''}
+        </span>
       {/if}
       {#if fetchDocs}
         <ExportMenu {fetchDocs} {query} {found} />

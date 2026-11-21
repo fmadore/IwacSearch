@@ -145,9 +145,9 @@
             placeholder={String(currentPage)}
             bind:value={jumpValue}
           />
-          <span class="iwac-pager__jump-total"
-            >{t('jump_of_total', { total: formatNumber(totalPages) })}</span
-          >
+          <span class="iwac-pager__jump-total">
+            {t('jump_of_total', { total: formatNumber(totalPages) })}
+          </span>
           <button type="submit" class="iwac-pager__jump-go iwac-quiet-btn">{t('jump_go')}</button>
         </form>
       {/if}

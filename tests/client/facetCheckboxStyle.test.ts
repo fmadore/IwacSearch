@@ -43,8 +43,14 @@ describe('facet checkbox theme isolation', () => {
 
     const checkboxStyle = getComputedStyle(checkbox);
     expect(checkboxStyle.transform).toBe('none');
-    expect(checkboxStyle.appearance).toBe('auto');
-    expect(checkboxStyle.display).toBe('inline-block');
+    // The rule writes `appearance: auto` then `-webkit-appearance: checkbox`.
+    // jsdom 31, like browsers, treats the prefixed name as an alias, so the
+    // later `checkbox` wins; either value is the native control, which is
+    // what matters: the theme's `none` is gone.
+    expect(['auto', 'checkbox']).toContain(checkboxStyle.appearance);
+    // `inline-block` on a grid item computes to `block` (CSS blockifies grid
+    // items; jsdom 31 does too). The theme's leaked `grid` would stay `grid`.
+    expect(checkboxStyle.display).toBe('block');
     expect(getComputedStyle(option).alignItems).toBe('center');
   });
 });

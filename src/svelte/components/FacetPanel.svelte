@@ -172,9 +172,9 @@
       <h2 class="iwac-facets__heading">{t('filters')}</h2>
     {/if}
     {#if hasActive}
-      <button type="button" class="iwac-facets__clear-all" onclick={handleClearAll}
-        >{t('clear_all')}</button
-      >
+      <button type="button" class="iwac-facets__clear-all" onclick={handleClearAll}>
+        {t('clear_all')}
+      </button>
     {/if}
   </header>
 
@@ -236,9 +236,9 @@
               {#if sentimentActiveCount > 0}
                 <span class="iwac-facets__group-count">{sentimentActiveCount}</span>
               {/if}
-              <span class="iwac-facets__group-chevron" aria-hidden="true"
-                ><Icon name={sentimentOpen ? 'chevron-down' : 'chevron-right'} /></span
-              >
+              <span class="iwac-facets__group-chevron" aria-hidden="true">
+                <Icon name={sentimentOpen ? 'chevron-down' : 'chevron-right'} />
+              </span>
             </button>
           </div>
           {#if sentimentOpen}

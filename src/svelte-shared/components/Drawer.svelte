@@ -190,8 +190,10 @@
             stroke-linecap="round"
             stroke-linejoin="round"
             aria-hidden="true"
-            focusable="false"><path d="M18 6 6 18" /><path d="m6 6 12 12" /></svg
+            focusable="false"
           >
+            <path d="M18 6 6 18" /><path d="m6 6 12 12" />
+          </svg>
         </button>
       </div>
     {/if}

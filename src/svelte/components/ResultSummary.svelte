@@ -118,9 +118,9 @@
           </li>
         {/each}
       </ul>
-      <button type="button" class="iwac-summary__clear" onclick={handleClearAll}
-        >{t('clear_all')}</button
-      >
+      <button type="button" class="iwac-summary__clear" onclick={handleClearAll}>
+        {t('clear_all')}
+      </button>
     {/if}
 
     {#if sortLabel}

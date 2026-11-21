@@ -150,8 +150,10 @@
       type="button"
       class="iwac-input__clear"
       aria-label={t('clear_search')}
-      onclick={handleClear}><Icon name="x" /></button
+      onclick={handleClear}
     >
+      <Icon name="x" />
+    </button>
   {/if}
 </div>
 

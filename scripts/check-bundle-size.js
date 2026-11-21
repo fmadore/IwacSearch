@@ -25,12 +25,16 @@ const DIST = join(dirname(fileURLToPath(import.meta.url)), '..', 'asset', 'dist'
  * Gzipped budgets in bytes, with headroom above the current size. The app's
  * went from 64 000 to 65 000 in November 2026, when the audit fixes (a sixth
  * sentiment model's labels, mounted live regions, the tab hand-off and the
- * SSR tab counts) took it to ~64 050 B.
+ * SSR tab counts) took it to ~64 050 B, then to 70 000 days later for
+ * Svelte 5.59.0: its custom renderer API routes the runtime's DOM operations
+ * through a layer tree-shaking cannot drop, ~4 000 B gzipped (64 058 B on
+ * 5.58.0, 68 068 B on 5.59.0, same source). Lower it again if a later Svelte
+ * gives those bytes back.
  */
 const BUDGETS = {
   'iwac-search-header.js': 7_000,
   'iwac-search-header.css': 1_500,
-  'iwac-search.js': 65_000,
+  'iwac-search.js': 70_000,
   'iwac-search.css': 10_000,
 };
 
