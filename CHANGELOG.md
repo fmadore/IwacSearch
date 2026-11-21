@@ -6,6 +6,10 @@ Versions that were never published (tagged and released) are folded into the nex
 
 ## [Unreleased]
 
+## [3.29.1] - 2026-11-21
+
+**Upgrade:** no reindex; install over 3.29.0. If 3.29.0 is not installed yet, its reindex still applies.
+
 ### Changed
 
 - Dependencies updated. The search bundle is built with Svelte 5.59.1 (from 5.57.3) and Vite 8.3.8. Svelte 5.59 adds a custom renderer API that the bundle cannot drop, about 4 KB gzipped for each visitor, so the bundle budget rises from 65 000 to 70 000 bytes. The PHP client moves to Guzzle 8.5.4 (from 8.3.1). The development tools move too: ESLint 10.15, typescript-eslint 8.73, Prettier 3.10.1 with prettier-plugin-svelte 4.2.0 (which reformats eight components; they compile to identical code), Vitest 5.1.1, jsdom 31, Playwright 1.65.1, PHPUnit 13.4.8 and PHPStan 2.3.7. TypeScript stays on 6.0, because typescript-eslint and svelte-check do not accept 7 yet, and `@types/node` stays on 24 to match the Node 24 runtime.

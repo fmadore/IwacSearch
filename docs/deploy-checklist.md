@@ -1,5 +1,14 @@
 # Deployment and acceptance checklist — 3.19.0
 
+## 3.29.1 (2026-11-21): a dependency refresh
+
+**No reindex** (the schemas are unchanged). The PHP client moves to Guzzle 8.5.4 and the search
+bundle is rebuilt with Svelte 5.59.1, which adds about 4 KB gzipped to it. Install over 3.29.0;
+if 3.29.0 is not installed yet, its reindex still applies.
+
+- [ ] Install the module update; `/discovery/health` answers ok.
+- [ ] `/search?q=imam` returns results, a facet filters them, and the header search box suggests as you type, with no console error.
+
 ## 3.29.0 (2026-11-21): the November 2026 audit fixes
 
 **Schema `iwac_v12` — a full reindex is required** (the entity schema is unchanged). The content
