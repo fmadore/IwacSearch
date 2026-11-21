@@ -1,6 +1,6 @@
 # Deployment and acceptance checklist — 3.19.0
 
-## Next release: the November 2026 audit fixes
+## 3.29.0 (2026-11-21): the November 2026 audit fixes
 
 **Schema `iwac_v12` — a full reindex is required** (the entity schema is unchanged). The content
 collection gains the sixth sentiment annotator, Claude Haiku 5.5 (`claude_haiku_5_5_*`), and the

@@ -6,6 +6,8 @@ Versions that were never published (tagged and released) are folded into the nex
 
 ## [Unreleased]
 
+## [3.29.0] - 2026-11-21
+
 **Upgrade:** the content schema becomes `iwac_v12`: run a full reindex right after installing (`discovery:reindex` or the admin button). It adds the sixth sentiment model and gives the articles of the newspapers added below their country.
 
 ### Added
