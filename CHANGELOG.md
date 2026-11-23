@@ -6,6 +6,14 @@ Versions that were never published (tagged and released) are folded into the nex
 
 ## [Unreleased]
 
+## [3.29.2] - 2026-11-23
+
+**Upgrade:** no reindex; install over 3.29.1.
+
+### Changed
+
+- The results toolbar on a phone is two rows instead of four. The view toggle shares the first row with Copy link and Export, now icon-only squares (their names are kept for screen readers). Filters and the sort order share the second row at equal width; the "Sort by" prefix is hidden there, since the menu already shows the order.
+
 ## [3.29.1] - 2026-11-21
 
 **Upgrade:** no reindex; install over 3.29.0. If 3.29.0 is not installed yet, its reindex still applies.

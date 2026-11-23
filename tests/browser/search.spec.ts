@@ -335,6 +335,32 @@ test.describe('the filter drawer on a phone', () => {
     await expect(trigger).toHaveAttribute('aria-expanded', 'false');
   });
 
+  test('lays the toolbar out in two rows: view + actions, then filters + sort', async ({
+    page,
+  }) => {
+    await serve(page, 'search');
+    await page.goto(SEARCH);
+    await expect(cards(page).first()).toBeVisible();
+    const box = async (name: string, locator: ReturnType<typeof page.locator>) => {
+      const b = await locator.boundingBox();
+      if (!b) throw new Error(`${name} is not rendered`);
+      return b;
+    };
+    const view = await box('view toggle', page.getByRole('radiogroup', { name: 'View' }));
+    const exportBtn = await box('export', page.getByRole('button', { name: 'Export the results' }));
+    const filters = await box('filters', page.getByRole('button', { name: 'Open filters' }));
+    const sort = await box('sort', page.getByRole('combobox', { name: 'Sort by' }));
+    // Through 3.29 these were four ragged rows; Filters and the sort now share
+    // the second row at equal width, the actions sit beside the view toggle.
+    expect(Math.abs(exportBtn.y - view.y)).toBeLessThan(2);
+    expect(Math.abs(filters.y - sort.y)).toBeLessThan(2);
+    expect(filters.y).toBeGreaterThan(view.y + view.height - 1);
+    expect(Math.abs(filters.width - sort.width)).toBeLessThan(2);
+    // The icon-only actions are square 44px targets.
+    expect(exportBtn.width).toBeGreaterThanOrEqual(44);
+    expect(Math.abs(exportBtn.width - exportBtn.height)).toBeLessThan(1);
+  });
+
   test('has no serious or critical axe violations with the drawer open', async ({ page }) => {
     await serve(page, 'search');
     await page.goto(SEARCH);
