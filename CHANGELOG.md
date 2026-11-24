@@ -6,6 +6,14 @@ Versions that were never published (tagged and released) are folded into the nex
 
 ## [Unreleased]
 
+## [3.29.3] - 2026-11-24
+
+**Upgrade:** no reindex; install over 3.29.2.
+
+### Fixed
+
+- An expanded or searched facet list leaves room between its scrollbar and the counts, which used to sit right against it.
+
 ## [3.29.2] - 2026-11-23
 
 **Upgrade:** no reindex; install over 3.29.1.

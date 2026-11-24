@@ -552,6 +552,7 @@
    * we don't reintroduce the old "a scrollbar on every facet" problem.
    * overscroll-behavior keeps the scroll from chaining into the sidebar at
    * the ends; the inline padding keeps option focus rings from being clipped.
+   * The end side is wider so the counts don't sit against the scrollbar.
    */
   .iwac-facet__list--bounded {
     max-height: min(24rem, 60vh);
@@ -559,7 +560,7 @@
     overscroll-behavior: contain;
     scrollbar-width: thin;
     scrollbar-gutter: stable;
-    padding-inline: 0.1875rem;
+    padding-inline: 0.1875rem var(--space-3, 0.75rem);
   }
   .iwac-facet__item {
     margin: 0;
