@@ -189,6 +189,65 @@ final class IncrementalApplyTest extends TestCase
         self::assertSame(['5'], array_column($this->server->collections['content'], 'id'));
     }
 
+    public function testAnAcceptedEntityDoesNotLetAWhollyRejectedContentBatchEmptyTheIndex(): void
+    {
+        // An authority edit journals the entity and every item linking it:
+        // the entity imports, the embedding model refuses all the content.
+        // Summing both collections' accepted counts let that through and
+        // deleted the content documents (#131).
+        $this->server->collections['content'][] = ['id' => '5', 'type_s' => 'article', 'title_txt' => 'live'];
+        $this->server->collections['content'][] = ['id' => '6', 'type_s' => 'article', 'title_txt' => 'live'];
+        $this->server->collections['index'][] = ['id' => '500', 'title' => 'Old name'];
+        $this->server->importDecision = static fn(array $doc): bool => !isset($doc['type_s']);
+        $snapshot = [...self::badAndGoodArticles(), ['id' => 500, 'content' => null, 'entity' => self::entity(500, 'New name')]];
+
+        try {
+            $this->indexer()->applySnapshot($snapshot, tolerateRejected: true);
+            self::fail('A collection with nothing accepted must throw.');
+        } catch (RuntimeException $e) {
+            self::assertStringContainsString('content', $e->getMessage());
+        }
+
+        self::assertSame(['5', '6'], array_column($this->server->collections['content'], 'id'));
+        self::assertSame(['500'], array_column($this->server->collections['index'], 'id'));
+    }
+
+    public function testAcceptedContentDoesNotLetAWhollyRejectedEntityBatchEmptyTheIndex(): void
+    {
+        $this->server->collections['content'][] = ['id' => '6', 'type_s' => 'article', 'title_txt' => 'old'];
+        $this->server->collections['index'][] = ['id' => '500', 'title' => 'Old name'];
+        $this->server->importDecision = static fn(array $doc): bool => isset($doc['type_s']);
+        $snapshot = [
+            ['id' => 6, 'content' => ['id' => '6', 'type_s' => 'article', 'is_public' => true], 'entity' => null],
+            ['id' => 500, 'content' => null, 'entity' => self::entity(500, 'New name')],
+        ];
+
+        try {
+            $this->indexer()->applySnapshot($snapshot, tolerateRejected: true);
+            self::fail('A collection with nothing accepted must throw.');
+        } catch (RuntimeException $e) {
+            self::assertStringContainsString('index', $e->getMessage());
+        }
+
+        self::assertSame(['500'], array_column($this->server->collections['index'], 'id'));
+        self::assertSame(['6'], array_column($this->server->collections['content'], 'id'));
+    }
+
+    public function testAPartialRejectionBesideAnAcceptedEntityRemovesOnlyTheRejected(): void
+    {
+        $this->server->collections['content'][] = ['id' => '5', 'type_s' => 'article', 'title_txt' => 'stale'];
+        $this->server->importDecision = static fn(array $doc): bool => !isset($doc['bad']);
+        $snapshot = [...self::badAndGoodArticles(), ['id' => 500, 'content' => null, 'entity' => self::entity(500)]];
+
+        $outcome = $this->indexer()->applySnapshot($snapshot, tolerateRejected: true);
+
+        self::assertSame(['6'], array_column($this->server->collections['content'], 'id'));
+        self::assertSame(['500'], array_column($this->server->collections['index'], 'id'));
+        self::assertSame([5], $outcome['rejected']);
+        self::assertSame([5 => null, 6 => 'article', 500 => null], $outcome['content']);
+        self::assertTrue($outcome['entity'][500]);
+    }
+
     public function testIdFiltersRefuseAnythingButDigits(): void
     {
         $this->expectException(RuntimeException::class);

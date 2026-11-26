@@ -120,6 +120,20 @@ $doc['embedding'] = [0.1, 0.2];
 $ops->flushBatch('iwac_current', [$doc]);
 check($ops->document('iwac_index_current', '10')['title'] === 'Authority', 'entity metadata indexed incrementally');
 
+// #131: the entity imports while Typesense rejects every content document (a
+// bool field sent an array stands in for the embedding model being down).
+// The drain must throw before deleting anything, so its rows stay pending.
+[$authorityChange] = $incremental->snapshot([10]);
+[$contentChange] = $incremental->snapshot([1]);
+$contentChange['content']['is_public'] = ['not-a-bool'];
+try {
+    $incremental->applySnapshot([$authorityChange, $contentChange], tolerateRejected: true);
+    $threw = false;
+} catch (RuntimeException) {
+    $threw = true;
+}
+check($threw && $ops->document('iwac_current', '1') !== null && $ops->document('iwac_index_current', '10') !== null, 'an accepted entity does not let a wholly rejected content batch empty the index');
+
 $journal = new ChangeJournal($db);
 $listener = new ItemEventListener($db, static function (): void {
 });

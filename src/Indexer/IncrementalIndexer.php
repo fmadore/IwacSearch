@@ -139,10 +139,11 @@ final class IncrementalIndexer
      * (fail closed: its old copy may show metadata that has since changed,
      * a withdrawal included) and reported, instead of failing the batch. One
      * bad record then no longer holds every later change in the journal
-     * behind it. When nothing in the snapshot was accepted, the failure is
-     * treated as server-side (the embedding model not loaded, a schema out of
-     * step) and still throws, so an outage never empties the index. The
-     * rebuild cutover stays strict.
+     * behind it. When a collection accepted none of the documents sent to it,
+     * the failure is treated as server-side (the embedding model not loaded, a
+     * schema out of step) and still throws before anything is removed from
+     * either collection, so an outage never empties the index — even when the
+     * other collection's import succeeded. The rebuild cutover stays strict.
      *
      * @param  list<array{id:int, content:?array<string,mixed>, entity:AuthorityEntity|null}> $snapshot
      * @return array{content: array<int, ?string>, entity: array<int, bool>, rejected: list<int>}
@@ -202,20 +203,23 @@ final class IncrementalIndexer
         $this->ops->deleteDocuments($this->collectionAlias, $contentDeletes);
 
         // Authority visibility/metadata is applied before potentially expensive content embeddings.
-        $accepted = 0;
-        $rejected = [];
+        $accepted = $rejected = [];
         if ($this->indexAlias !== null) {
-            [$ok, $rejected[$this->indexAlias]] = $this->import($this->indexAlias, $entityDocs, $tolerateRejected);
-            $accepted += $ok;
+            [$accepted[$this->indexAlias], $rejected[$this->indexAlias]] = $this->import($this->indexAlias, $entityDocs, $tolerateRejected);
         }
-        [$ok, $rejected[$this->collectionAlias]] = $this->import($this->collectionAlias, $docs, $tolerateRejected);
-        $accepted += $ok;
+        [$accepted[$this->collectionAlias], $rejected[$this->collectionAlias]] = $this->import($this->collectionAlias, $docs, $tolerateRejected);
+
+        // Judged per collection, before any delete: an entity accepted beside
+        // a content batch the embedding model refused wholesale must not let
+        // that refusal empty the content collection (#131).
+        foreach ($rejected as $collection => $ids) {
+            if ($ids !== [] && $accepted[$collection] === 0) {
+                throw new RuntimeException(sprintf('Typesense rejected every document sent to %s (%d); not removing them.', $collection, count($ids)));
+            }
+        }
 
         $rejectedIds = array_merge(...array_values($rejected));
         if ($rejectedIds !== []) {
-            if ($accepted === 0) {
-                throw new RuntimeException(sprintf('Typesense rejected every document in the batch (%d); not removing them.', count($rejectedIds)));
-            }
             foreach ($rejected as $collection => $ids) {
                 $this->ops->deleteDocuments($collection, $ids);
             }

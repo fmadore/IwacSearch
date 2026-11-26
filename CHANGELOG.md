@@ -6,6 +6,14 @@ Versions that were never published (tagged and released) are folded into the nex
 
 ## [Unreleased]
 
+## [3.29.4] - 2026-11-26
+
+**Upgrade:** no reindex; install over 3.29.3.
+
+### Fixed
+
+- Saving a record no longer removes items from search when Typesense refuses all of them at once (the embedding model not loaded, say) while it accepts an index entry changed in the same save, as happens when you edit an authority. The live update now stops and retries the whole save later, as it already did when nothing at all was accepted; a few records refused among others that are accepted are still removed until fixed.
+
 ## [3.29.3] - 2026-11-24
 
 **Upgrade:** no reindex; install over 3.29.2.
