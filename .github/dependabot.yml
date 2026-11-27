@@ -38,6 +38,13 @@ updates:
     labels:
       - 'dependencies'
       - 'javascript'
+    # @types/node follows the runtime, not the registry: .nvmrc and
+    # `engines` pin Node 24, and newer-major types would type-check APIs
+    # Node 24 lacks. Minor/patch updates on 24.x still arrive (grouped
+    # under `types`). Drop this when .nvmrc moves to the next major.
+    ignore:
+      - dependency-name: '@types/node'
+        update-types: ['version-update:semver-major']
     groups:
       svelte-toolchain:
         patterns:
